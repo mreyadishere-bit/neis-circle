@@ -268,7 +268,8 @@ document.addEventListener("click",async e=>{
 });
 $("#globalSearch").addEventListener("input",e=>{state.query=e.target.value;state.view=state.view==="messages"?"discover":state.view;render()});
 document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();$("#globalSearch").focus()}if(e.key==="Escape")closeModal()});
-applyPrefs();initSupabase().finally(render);
+/* Supabase starts after every enhancement layer is registered (v4Init below). */
+applyPrefs();
 </script>
 <script>
 /* NEIS Circle v3 — roles, gallery, bilingual publishing and admin workspace. */
