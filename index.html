@@ -457,7 +457,7 @@ const v5Home=home;
 home=function(){const original=state.posts;if(state.filter==='Latest')state.posts=[...original].sort((a,b)=>{const dates=(Date.parse(b.created_at||'')||0)-(Date.parse(a.created_at||'')||0);return dates||Number(b.id||0)-Number(a.id||0)});const html=v5Home();state.posts=original;return html};
 
 discover=function(){
-  const query=normalizeSearch(state.query),base=state.members.length?state.members.map(m=>({name:m.full_name||'Student',initials:initials(m.full_name),color:'#7056d8',grade:m.grade||'Student',branch:m.branch||'NEIS',interests:(m.interests||[]).join(' · ')||'Learning · Community'})):seed.people.map((p,i)=>({...p,branch:i%2?'Sadat Branch':'Main Branch'}));
+  const query=normalizeSearch(state.query),rawBase=state.members.length?state.members.map(m=>({name:m.full_name||'Student',initials:initials(m.full_name),color:'#7056d8',grade:m.grade||'Student',branch:m.branch||'NEIS',interests:(m.interests||[]).join(' · ')||'Learning · Community'})):seed.people.map((p,i)=>({...p,branch:i%2?'Sadat Branch':'Main Branch'})),seenPeople=new Set(),base=rawBase.filter(p=>{const key=normalizeSearch(`${p.name}|${p.grade}|${p.branch}`);if(seenPeople.has(key))return false;seenPeople.add(key);return true});
   let people=base.filter(p=>matchesSearch(query,p.name,p.grade,p.branch,p.interests));
   if(state.discoverFilter==='Grade 11')people=people.filter(p=>p.grade==='Grade 11');
   if(state.discoverFilter==='Same branch')people=people.filter(p=>p.branch===state.profile.branch);
