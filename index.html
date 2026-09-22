@@ -101,28 +101,6 @@
   @media(max-width:720px){.neis-crop-layer{padding:0}.neis-crop-dialog{width:100vw;height:100dvh;max-height:none;border:0;border-radius:0}.neis-crop-body{grid-template-columns:1fr;align-content:start;padding:14px}.neis-crop-stage{min-height:250px;padding:10px}.neis-crop-frame,.neis-crop-canvas{max-height:45vh}.neis-crop-controls{grid-template-columns:1fr 1fr}.neis-crop-help{grid-column:1/-1}.neis-crop-actions{padding-bottom:max(16px,env(safe-area-inset-bottom))}}
   @media(max-width:420px){.neis-crop-head{padding:14px}.neis-crop-title p{display:none}.neis-crop-body{gap:13px}.neis-crop-options button,.neis-crop-reset{min-height:37px}}
 </style>
-<style id="qa-fixes-v1">
-  /* Targeted QA fixes only — nothing else in the design changed */
-
-  /* 1. Prevent search suggestions overflowing narrow viewports */
-  .search-suggest{max-width:calc(100vw - 24px);left:0;right:0}
-
-  /* 2. Normalize icon-button sizing to match .round-btn family */
-  .post-menu button,.content-menu{width:36px;height:36px;min-width:36px;flex-shrink:0}
-
-  /* 3. Guarantee iframe height on iOS Safari dvh edge cases */
-  .meeting-room iframe{min-height:200px}
-  @supports (-webkit-touch-callout:none){
-    .modal.meeting-modal{height:min(820px,calc(100vh - 32px))}
-    @media(max-width:760px){.modal.meeting-modal{height:100vh}}
-  }
-
-  /* 4. Prevent avatar squish in long chat bubbles */
-  .chat-message .avatar,.chat-message .avatar.large{flex-shrink:0}
-
-  /* 5. Prevent badge/button compression in tight flex rows */
-  .suggested-person-follow,.thread .unread,.count-badge{flex-shrink:0}
-</style>
 </head>
 <body>
 <div class="grain"></div>
