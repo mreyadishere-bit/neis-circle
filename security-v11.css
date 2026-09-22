@@ -1,0 +1,12 @@
+/* Scoped account-safety surfaces. Existing product components are untouched. */
+.account-safety{display:grid;gap:12px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+.account-safety h3,.policy-section h3{margin:0;font-size:15px}.account-safety p,.policy-section p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.65}
+.account-safety-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.account-safety-actions button{width:100%}
+.policy-intro{padding:15px;border:1px solid var(--line);border-radius:17px;background:var(--soft);color:var(--muted);font-size:12px;line-height:1.7}
+.policy-list{display:grid;gap:12px;margin-top:14px}.policy-section{padding:16px;border:1px solid var(--line);border-radius:17px;background:var(--card)}
+.policy-section ul{margin:10px 0 0;padding-inline-start:20px;color:var(--muted);font-size:11px;line-height:1.8}
+.policy-accept{display:flex;align-items:flex-start;gap:10px;margin:16px 0 0;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--soft);font-size:11px;line-height:1.55}.policy-accept input{margin-top:2px}
+.account-state-shell{width:min(620px,calc(100% - 28px));margin:auto;padding:32px;border:1px solid var(--line);border-radius:28px;background:var(--card);box-shadow:var(--shadow);text-align:center}.account-state-shell h1{margin:8px 0}.account-state-shell p{color:var(--muted);line-height:1.7}.account-state-actions{display:flex;justify-content:center;gap:9px;margin-top:20px}
+.admin-access-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.8fr);gap:18px}.admin-access-form{display:grid;gap:10px}.admin-access-form .field{margin:0}.blocked-list{display:grid;gap:8px;max-height:360px;overflow:auto}.blocked-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:14px}.blocked-row b,.blocked-row small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.blocked-row small{margin-top:3px;color:var(--muted);font-size:9px}
+.student-card{overflow:hidden}
+@media(max-width:760px){.account-safety-actions,.admin-access-grid{grid-template-columns:1fr}.account-state-shell{padding:24px 18px}.account-state-actions{flex-direction:column}.account-state-actions button{width:100%}}
