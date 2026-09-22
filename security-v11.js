@@ -83,13 +83,15 @@
     safety.querySelector('[data-delete-account]').onclick=()=>confirmAction(tr('Delete your account permanently?','حذف حسابك نهائيًا؟'),tr('This permanently removes your account and associated content. This cannot be undone.','سيؤدي هذا إلى حذف حسابك والمحتوى المرتبط به نهائيًا، ولا يمكن التراجع.'),tr('Delete permanently','حذف نهائي'),deleteAccount,'DELETE');
   };
 
-  const baseOnboarding=onboardingScreen;
-  onboardingScreen=function(){
-    baseOnboarding();
-    const form=authRoot.querySelector('#onboardForm'),actions=form?.querySelector('.modal-actions');if(!form||!actions)return;
+  function enhanceOnboarding(){
+    const form=document.querySelector('#onboardForm'),actions=form?.querySelector('.modal-actions');if(!form||!actions||form.dataset.safetyReady)return;
+    form.dataset.safetyReady='true';
     const acceptance=document.createElement('label');acceptance.className='policy-accept';acceptance.innerHTML=`<input id="acceptPolicies" type="checkbox" required><span>${tr('I agree to use NEIS Circle only for formal, safe, educational and constructive purposes, and I accept the','أوافق على استخدام NEIS Circle فقط للأغراض الرسمية والآمنة والتعليمية والبنّاءة، وأقبل')} <button type="button" class="author-link" data-open-policies>${tr('community policies','سياسات المجتمع')}</button>.</span>`;form.insertBefore(acceptance,actions);acceptance.querySelector('[data-open-policies]').onclick=openPolicies;
     const original=form.onsubmit;form.onsubmit=async e=>{await original(e);if(state.onboardingComplete)await sb.rpc('accept_guidelines',{version:VERSION})};
-  };
+  }
+  const onboardingObserver=new MutationObserver(enhanceOnboarding);
+  onboardingObserver.observe(document.body,{childList:true,subtree:true});
+  enhanceOnboarding();
 
   const baseAdmin=admin;
   admin=function(){
