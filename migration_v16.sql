@@ -123,6 +123,7 @@ returns jsonb language sql stable security definer set search_path=public,auth a
 $$;
 
 -- Admin report identity: email is verified through Auth OTP; phone is registered/validated.
+drop function if exists public.admin_report_details();
 create or replace function public.admin_report_details()
 returns table(
   id uuid,status text,target_type text,target_id text,reason text,details text,created_at timestamptz,
