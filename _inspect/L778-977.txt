@@ -1,0 +1,200 @@
+﻿<script id="neis-image-editor-script">
+(function(){
+  'use strict';
+  var targets={
+    postImage:{preview:'postImagePreview',aspect:16/9},
+    galleryFile:{preview:'galleryPreview',aspect:4/3},
+    articleCover:{preview:'articleCoverPreview',aspect:16/9},
+    cpImage:{preview:'cpImagePreview',aspect:16/9}
+  };
+  var records=new WeakMap();
+  var active=false;
+  function arabic(){return document.documentElement.lang==='ar'||document.documentElement.dir==='rtl'}
+  function tr(en,ar){return arabic()?ar:en}
+  function tell(message){if(typeof window.toast==='function')window.toast(message);else window.alert(message)}
+  function loadImage(file){
+    return new Promise(function(resolve,reject){
+      var url=URL.createObjectURL(file),image=new Image();
+      image.onload=function(){URL.revokeObjectURL(url);resolve(image)};
+      image.onerror=function(){URL.revokeObjectURL(url);reject(new Error('image_decode_failed'))};
+      image.src=url;
+    });
+  }
+  function editor(file,preferredAspect,savedState){
+    return new Promise(async function(resolve){
+      var image;
+      try{image=await loadImage(file)}catch(error){tell(tr('This image could not be opened.','تعذر فتح هذه الصورة.'));resolve(null);return}
+      var natural=image.naturalWidth/image.naturalHeight;
+      var initialAspect=Number(preferredAspect)||natural;
+      var crop={
+        aspect:savedState&&savedState.aspect||initialAspect,
+        zoom:savedState&&savedState.zoom||1,
+        rotation:savedState&&savedState.rotation||0,
+        x:savedState&&savedState.x||0,
+        y:savedState&&savedState.y||0
+      };
+      var layer=document.createElement('div');
+      layer.className='neis-crop-layer';
+      layer.dir=arabic()?'rtl':'ltr';
+      layer.innerHTML='<section class="neis-crop-dialog" role="dialog" aria-modal="true" aria-labelledby="neisCropTitle">'+
+        '<header class="neis-crop-head"><div class="neis-crop-title"><h2 id="neisCropTitle">'+tr('Adjust image','ضبط الصورة')+'</h2><p>'+tr('Drag the image, then zoom or rotate it before applying.','اسحب الصورة، ثم كبّرها أو دوّرها قبل التطبيق.')+'</p></div><button type="button" class="neis-crop-close" data-neis-cancel aria-label="'+tr('Close','إغلاق')+'">×</button></header>'+
+        '<div class="neis-crop-body"><div class="neis-crop-stage"><div class="neis-crop-frame"><canvas class="neis-crop-canvas"></canvas><i class="neis-crop-grid"></i></div></div>'+
+        '<aside class="neis-crop-controls"><label class="neis-crop-control"><span class="neis-crop-label">'+tr('Zoom','التكبير')+'</span><input data-neis-zoom type="range" min="1" max="3" step="0.01" value="'+crop.zoom+'"></label>'+
+        '<div class="neis-crop-control"><span class="neis-crop-label">'+tr('Frame','الإطار')+'</span><div class="neis-crop-options"><button type="button" data-neis-aspect="1">1:1</button><button type="button" data-neis-aspect="1.333333">4:3</button><button type="button" data-neis-aspect="1.777778">16:9</button><button type="button" data-neis-aspect="natural">'+tr('Original','الأصلي')+'</button></div></div>'+
+        '<div class="neis-crop-control"><span class="neis-crop-label">'+tr('Rotate','التدوير')+'</span><div class="neis-crop-options"><button type="button" data-neis-rotate="-90">↶ 90°</button><button type="button" data-neis-rotate="90">↷ 90°</button></div></div>'+
+        '<button type="button" class="neis-crop-reset" data-neis-reset>'+tr('Reset','إعادة ضبط')+'</button><p class="neis-crop-help">'+tr('The framed area is exactly what will be uploaded.','المساحة داخل الإطار هي ما سيتم رفعه بالضبط.')+'</p></aside></div>'+
+        '<footer class="neis-crop-actions"><button type="button" class="neis-crop-cancel" data-neis-cancel>'+tr('Cancel','إلغاء')+'</button><button type="button" class="neis-crop-apply" data-neis-apply>'+tr('Apply crop','تطبيق القص')+'</button></footer></section>';
+      document.body.appendChild(layer);
+      var oldOverflow=document.body.style.overflow;
+      document.body.style.overflow='hidden';
+      var canvas=layer.querySelector('.neis-crop-canvas');
+      var context=canvas.getContext('2d');
+      var frame=layer.querySelector('.neis-crop-frame');
+      var zoom=layer.querySelector('[data-neis-zoom]');
+      var dragging=false,lastX=0,lastY=0,finished=false;
+      function sizeCanvas(){
+        var max=1600;
+        canvas.width=Math.max(64,Math.round(crop.aspect>=1?max:max*crop.aspect));
+        canvas.height=Math.max(64,Math.round(crop.aspect>=1?max/crop.aspect:max));
+        frame.style.aspectRatio=canvas.width+' / '+canvas.height;
+      }
+      function draw(){
+        var cw=canvas.width,ch=canvas.height;
+        var turned=Math.abs(crop.rotation%180)===90;
+        var rotatedWidth=turned?image.naturalHeight:image.naturalWidth;
+        var rotatedHeight=turned?image.naturalWidth:image.naturalHeight;
+        var scale=Math.max(cw/rotatedWidth,ch/rotatedHeight)*crop.zoom;
+        var boundsWidth=rotatedWidth*scale,boundsHeight=rotatedHeight*scale;
+        var maxX=Math.max(0,(boundsWidth-cw)/2),maxY=Math.max(0,(boundsHeight-ch)/2);
+        crop.x=Math.max(-maxX,Math.min(maxX,crop.x));
+        crop.y=Math.max(-maxY,Math.min(maxY,crop.y));
+        context.clearRect(0,0,cw,ch);
+        context.save();
+        context.translate(cw/2+crop.x,ch/2+crop.y);
+        context.rotate(crop.rotation*Math.PI/180);
+        context.drawImage(image,-image.naturalWidth*scale/2,-image.naturalHeight*scale/2,image.naturalWidth*scale,image.naturalHeight*scale);
+        context.restore();
+      }
+      function markAspect(){
+        layer.querySelectorAll('[data-neis-aspect]').forEach(function(button){
+          var value=button.dataset.neisAspect==='natural'?natural:Number(button.dataset.neisAspect);
+          button.classList.toggle('is-active',Math.abs(value-crop.aspect)<.002);
+        });
+      }
+      function finish(value){
+        if(finished)return;
+        finished=true;
+        document.removeEventListener('keydown',onKey);
+        document.body.style.overflow=oldOverflow;
+        layer.remove();
+        active=false;
+        resolve(value);
+      }
+      function onKey(event){if(event.key==='Escape')finish(null)}
+      sizeCanvas();markAspect();draw();
+      frame.addEventListener('pointerdown',function(event){dragging=true;lastX=event.clientX;lastY=event.clientY;frame.classList.add('is-dragging');frame.setPointerCapture(event.pointerId)});
+      frame.addEventListener('pointermove',function(event){
+        if(!dragging)return;
+        var box=canvas.getBoundingClientRect();
+        crop.x+=(event.clientX-lastX)*canvas.width/box.width;
+        crop.y+=(event.clientY-lastY)*canvas.height/box.height;
+        lastX=event.clientX;lastY=event.clientY;draw();
+      });
+      function stopDrag(){dragging=false;frame.classList.remove('is-dragging')}
+      frame.addEventListener('pointerup',stopDrag);frame.addEventListener('pointercancel',stopDrag);
+      frame.addEventListener('wheel',function(event){event.preventDefault();crop.zoom=Math.max(1,Math.min(3,crop.zoom+(event.deltaY<0?.08:-.08)));zoom.value=String(crop.zoom);draw()},{passive:false});
+      zoom.addEventListener('input',function(){crop.zoom=Number(zoom.value);draw()});
+      layer.querySelectorAll('[data-neis-aspect]').forEach(function(button){button.addEventListener('click',function(){
+        crop.aspect=button.dataset.neisAspect==='natural'?natural:Number(button.dataset.neisAspect);
+        crop.zoom=1;crop.x=0;crop.y=0;zoom.value='1';sizeCanvas();markAspect();draw();
+      })});
+      layer.querySelectorAll('[data-neis-rotate]').forEach(function(button){button.addEventListener('click',function(){crop.rotation=(crop.rotation+Number(button.dataset.neisRotate)+360)%360;crop.x=0;crop.y=0;draw()})});
+      layer.querySelector('[data-neis-reset]').addEventListener('click',function(){crop={aspect:initialAspect,zoom:1,rotation:0,x:0,y:0};zoom.value='1';sizeCanvas();markAspect();draw()});
+      layer.querySelectorAll('[data-neis-cancel]').forEach(function(button){button.addEventListener('click',function(){finish(null)})});
+      layer.addEventListener('mousedown',function(event){if(event.target===layer)finish(null)});
+      layer.querySelector('[data-neis-apply]').addEventListener('click',function(){
+        var apply=layer.querySelector('[data-neis-apply]');
+        apply.disabled=true;apply.textContent=tr('Preparing…','جارٍ التجهيز…');
+        var outputType=file.type==='image/png'?'image/png':'image/jpeg';
+        canvas.toBlob(function(blob){
+          if(!blob){apply.disabled=false;apply.textContent=tr('Apply crop','تطبيق القص');tell(tr('Could not prepare this image.','تعذر تجهيز الصورة.'));return}
+          var base=(file.name||'image').replace(/\.[^.]+$/,'');
+          var extension=outputType==='image/png'?'.png':'.jpg';
+          var edited=new File([blob],base+'-cropped'+extension,{type:outputType,lastModified:Date.now()});
+          finish({file:edited,state:{aspect:crop.aspect,zoom:crop.zoom,rotation:crop.rotation,x:crop.x,y:crop.y}});
+        },outputType,outputType==='image/jpeg'?.9:undefined);
+      });
+      document.addEventListener('keydown',onKey);
+      requestAnimationFrame(function(){layer.querySelector('.neis-crop-close').focus()});
+    });
+  }
+  function restorePreview(record){
+    var preview=record.preview;
+    if(!preview)return;
+    if(record.objectUrl){URL.revokeObjectURL(record.objectUrl);record.objectUrl=''}
+    preview.classList.remove('neis-edited-preview');
+    preview.style.removeProperty('aspect-ratio');
+    if(record.originalSrc){preview.src=record.originalSrc;preview.classList.toggle('hidden',record.originalHidden)}
+    else{preview.removeAttribute('src');preview.classList.add('hidden')}
+    if(record.adjust)record.adjust.remove();
+  }
+  function ensureAdjust(record){
+    if(record.adjust&&record.adjust.isConnected)return;
+    var button=document.createElement('button');
+    button.type='button';
+    button.className='secondary neis-image-adjust';
+    button.textContent=tr('Adjust crop','تعديل القص');
+    button.addEventListener('click',async function(){
+      if(active||!record.source)return;
+      active=true;
+      var result=await editor(record.source,record.config.aspect,record.state);
+      if(result)applyResult(record,result);
+    });
+    record.preview.insertAdjacentElement('afterend',button);
+    record.adjust=button;
+  }
+  function applyResult(record,result){
+    var transfer;
+    try{
+      transfer=new DataTransfer();
+      transfer.items.add(result.file);
+      record.input.files=transfer.files;
+    }catch(error){
+      tell(tr('Your browser could not attach the edited image. Please use a current Chrome, Edge, Safari, or Firefox version.','تعذر إرفاق الصورة المعدلة. استخدم إصدارًا حديثًا من Chrome أو Edge أو Safari أو Firefox.'));
+      return false;
+    }
+    if(record.objectUrl)URL.revokeObjectURL(record.objectUrl);
+    record.objectUrl=URL.createObjectURL(result.file);
+    record.state=result.state;
+    record.preview.src=record.objectUrl;
+    record.preview.classList.remove('hidden');
+    record.preview.classList.add('neis-edited-preview');
+    record.preview.style.aspectRatio=String(result.state.aspect);
+    ensureAdjust(record);
+    return true;
+  }
+  document.addEventListener('change',async function(event){
+    var input=event.target;
+    var config=input&&targets[input.id];
+    if(!config||active)return;
+    var file=input.files&&input.files[0];
+    if(!file)return;
+    event.stopImmediatePropagation();
+    if(!file.type.startsWith('image/')){input.value='';tell(tr('Choose a valid image file.','اختر ملف صورة صالحًا.'));return}
+    if(file.size>20*1024*1024){input.value='';tell(tr('Choose an image smaller than 20 MB before editing.','اختر صورة أقل من 20 ميجابايت قبل التعديل.'));return}
+    var preview=document.getElementById(config.preview);
+    if(!preview)return;
+    var previous=records.get(input);
+    if(previous)restorePreview(previous);
+    var record={
+      input:input,preview:preview,config:config,source:file,state:null,objectUrl:'',
+      originalSrc:preview.getAttribute('src')||'',originalHidden:preview.classList.contains('hidden'),adjust:null
+    };
+    records.set(input,record);
+    active=true;
+    var result=await editor(file,config.aspect,null);
+    if(result)applyResult(record,result);
+    else{input.value='';restorePreview(record)}
+  },true);
+})();
+</script>

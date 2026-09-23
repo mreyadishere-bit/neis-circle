@@ -1,0 +1,22 @@
+  .neis-crop-layer{position:fixed;z-index:10000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(4,14,11,.76);backdrop-filter:blur(8px)}
+  .neis-crop-dialog{width:min(920px,100%);max-height:calc(100dvh - 40px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid var(--line,#dbe5df);border-radius:24px;background:var(--card,#fff);color:var(--ink,#13231c);box-shadow:0 32px 100px rgba(0,0,0,.38)}
+  .neis-crop-head{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:18px 20px;border-bottom:1px solid var(--line,#dbe5df)}
+  .neis-crop-title{min-width:0}.neis-crop-title h2{margin:0;font-size:21px;line-height:1.25}.neis-crop-title p{margin:4px 0 0;color:var(--muted,#66756e);font-size:12px;line-height:1.5}
+  .neis-crop-close{width:40px;height:40px;flex:0 0 40px;display:grid;place-items:center;padding:0;border:1px solid var(--line,#dbe5df);border-radius:12px;background:var(--soft,#f1f6f3);color:inherit;font-size:24px;line-height:1;cursor:pointer}
+  .neis-crop-body{min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:18px;padding:18px;overflow:auto}
+  .neis-crop-stage{min-height:330px;display:grid;place-items:center;padding:16px;border-radius:18px;background:#101a16;overflow:hidden}
+  .neis-crop-frame{position:relative;max-width:100%;max-height:58vh;overflow:hidden;border-radius:12px;background:#dce4df;box-shadow:0 14px 42px rgba(0,0,0,.32);touch-action:none;cursor:grab;user-select:none}
+  .neis-crop-frame.is-dragging{cursor:grabbing}.neis-crop-canvas{display:block;max-width:100%;max-height:58vh}
+  .neis-crop-grid{pointer-events:none;position:absolute;inset:0;box-shadow:inset 0 0 0 2px rgba(255,255,255,.9);background:linear-gradient(to right,transparent 33.1%,rgba(255,255,255,.55) 33.2%,rgba(255,255,255,.55) 33.55%,transparent 33.65%,transparent 66.35%,rgba(255,255,255,.55) 66.45%,rgba(255,255,255,.55) 66.8%,transparent 66.9%),linear-gradient(to bottom,transparent 33.1%,rgba(255,255,255,.55) 33.2%,rgba(255,255,255,.55) 33.55%,transparent 33.65%,transparent 66.35%,rgba(255,255,255,.55) 66.45%,rgba(255,255,255,.55) 66.8%,transparent 66.9%)}
+  .neis-crop-controls{display:grid;align-content:start;gap:16px}.neis-crop-control{display:grid;gap:8px}.neis-crop-label{color:var(--muted,#66756e);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+  .neis-crop-control input[type=range]{width:100%;accent-color:var(--accent,#087b62)}
+  .neis-crop-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .neis-crop-options button,.neis-crop-reset{min-height:39px;padding:8px;border:1px solid var(--line,#dbe5df);border-radius:11px;background:var(--soft,#f1f6f3);color:inherit;font:inherit;font-size:11px;cursor:pointer}
+  .neis-crop-options button.is-active{border-color:var(--accent,#087b62);background:var(--accent2,#dff4ec);color:var(--accent,#087b62);font-weight:800}
+  .neis-crop-help{margin:0;padding:12px;border-radius:12px;background:var(--soft,#f1f6f3);color:var(--muted,#66756e);font-size:10px;line-height:1.55}
+  .neis-crop-actions{display:flex;justify-content:flex-end;gap:9px;padding:16px 20px;border-top:1px solid var(--line,#dbe5df)}
+  .neis-crop-actions button{min-height:42px;padding:10px 17px;border-radius:12px;font:inherit;font-weight:750;cursor:pointer}.neis-crop-actions button:disabled{opacity:.58;cursor:wait}
+  .neis-crop-cancel{border:1px solid var(--line,#dbe5df);background:var(--soft,#f1f6f3);color:inherit}.neis-crop-apply{border:1px solid var(--accent,#087b62);background:var(--accent,#087b62);color:#fff}
+  .neis-image-adjust{width:max-content;margin-top:9px}.upload-preview.neis-edited-preview{width:100%;object-fit:cover;background:var(--soft,#f1f6f3)}
+  @media(max-width:720px){.neis-crop-layer{padding:0}.neis-crop-dialog{width:100vw;height:100dvh;max-height:none;border:0;border-radius:0}.neis-crop-body{grid-template-columns:1fr;align-content:start;padding:14px}.neis-crop-stage{min-height:250px;padding:10px}.neis-crop-frame,.neis-crop-canvas{max-height:45vh}.neis-crop-controls{grid-template-columns:1fr 1fr}.neis-crop-help{grid-column:1/-1}.neis-crop-actions{padding-bottom:max(16px,env(safe-area-inset-bottom))}}
+  @media(max-width:420px){.neis-crop-head{padding:14px}.neis-crop-title p{display:none}.neis-crop-body{gap:13px}.neis-crop-options button,.neis-crop-reset{min-height:37px}}

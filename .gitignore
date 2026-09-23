@@ -1,0 +1,7 @@
+# Local scratch and generated output — never deployed, never committed
+_inspect/
+*.log
+*.err
+*.bak
+.DS_Store
+Thumbs.db
