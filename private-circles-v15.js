@@ -8,14 +8,19 @@
     var html=baseCircles();
     return html.replace('<button class="primary" data-new-circle>',`<button class="secondary" data-join-private-circle>${tr('Join Private Circle','انضم لمجتمع خاص')}</button><button class="primary" data-new-circle>`);
   };
-  var baseCircleView=circleView;
-  circleView=function(){
-    var html=baseCircleView(),circle=byId(state.circleRows,state.activeCircleId),mine=circle&&membership(circle.id);
-    if(circle?.privacy==='private'&&mine?.role==='owner'&&mine?.status==='active'){
-      html=html.replace(`<button class="secondary" data-share-circle="${circle.id}">`,`<button class="secondary" data-manage-circle-key="${circle.id}">${tr('Join key','مفتاح الانضمام')}</button><button class="secondary" data-share-circle="${circle.id}">`);
-    }
-    return html;
-  };
+  function injectOwnerKeyControl(){
+    var circle=(state.circleRows||[]).find(function(item){return String(item.id)===String(state.activeCircleId)});
+    if(!circle||circle.privacy!=='private'||!authUser)return;
+    var mine=(state.circleMembers||[]).find(function(item){return String(item.circle_id)===String(circle.id)&&String(item.user_id)===String(authUser.id)});
+    if(!mine||mine.role!=='owner'||mine.status!=='active'||document.querySelector('[data-manage-circle-key]'))return;
+    var share=document.querySelector(`[data-share-circle="${CSS.escape(String(circle.id))}"]`);
+    if(!share)return;
+    var button=document.createElement('button');
+    button.type='button';button.className='secondary';button.dataset.manageCircleKey=String(circle.id);button.textContent=tr('Join key','مفتاح الانضمام');
+    share.insertAdjacentElement('beforebegin',button);
+  }
+  var baseRender=render;
+  render=function(){var result=baseRender();requestAnimationFrame(injectOwnerKeyControl);return result};
   function copyText(value,success){
     navigator.clipboard.writeText(value).then(()=>toast(success)).catch(()=>toast(tr('Copy failed. Select the text and copy it manually.','تعذر النسخ. حدّد النص وانسخه يدويًا.')));
   }
