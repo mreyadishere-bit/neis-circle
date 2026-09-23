@@ -1,6 +1,8 @@
 /* NEIS Circle v15 — email OTP signup and server-validated registered mobile identity. */
 (function(){
   'use strict';
+  var authRoot=document.getElementById('authRoot');
+  var mode='signin';
   var pending={email:'',mode:'signin',phone:'',sentAt:0};
   var tr=(en,arText)=>state.lang==='ar'?arText:en;
   var errors={
@@ -23,41 +25,41 @@
   function authTools(){return `<div class="auth-tools"><button data-auth-lang>${state.lang==='ar'?'EN':'AR'}</button><button data-auth-theme>${state.theme==='light'?'◐':'☀'}</button></div>`}
   function story(){return `<div class="auth-story"><div class="auth-brand"><i>NC</i><span>NEIS Circle</span></div><div class="auth-story-copy"><h1>${tr('A better student network starts with you.','شبكة طلاب أفضل تبدأ بك.')}</h1><p>${tr('A private space for useful questions, real experiences and student communities.','مساحة خاصة للأسئلة المفيدة والخبرات الحقيقية والمجتمعات الطلابية.')}</p></div><div class="auth-points"><span>${tr('Email verified with a secure one-time code','بريد موثّق برمز آمن لمرة واحدة')}</span><span>${tr('Registered mobile identity kept private','رقم هاتف مسجّل ومحفوظ بخصوصية')}</span><span>${tr('Moderated communities and protected data','مجتمعات خاضعة للإشراف وبيانات محمية')}</span></div></div>`}
   function bindTools(){
-    var lang=document.querySelector('[data-auth-lang]');if(lang)lang.onclick=function(){state.lang=state.lang==='ar'?'en':'ar';state.articleLanguage=state.lang;applyPrefs();authScreen()};
-    var theme=document.querySelector('[data-auth-theme]');if(theme)theme.onclick=function(){state.theme=state.theme==='light'?'dark':'light';applyPrefs();authScreen()};
+    var lang=document.querySelector('[data-auth-lang]');if(lang)lang.onclick=function(){state.lang=state.lang==='ar'?'en':'ar';state.articleLanguage=state.lang;applyPrefs();emailAuthScreen()};
+    var theme=document.querySelector('[data-auth-theme]');if(theme)theme.onclick=function(){state.theme=state.theme==='light'?'dark':'light';applyPrefs();emailAuthScreen()};
   }
   function setError(value){var box=document.getElementById('emailAuthError');if(box){box.textContent=value;box.classList.remove('hidden')}}
   function authPanel(){
-    var signup=authMode==='signup';
+    var signup=mode==='signup';
     return `<div class="auth-panel">${authTools()}<h2>${signup?tr('Create your account','أنشئ حسابك'):tr('Welcome back','مرحبًا بعودتك')}</h2><p>${signup?tr('Verify your email and register a valid mobile number before entering.','وثّق بريدك وسجّل رقم هاتف صحيحًا قبل الدخول.'):tr('Use an email code or your existing Google account.','استخدم رمز البريد أو حساب Google الحالي.')}</p><div class="auth-choice"><button class="${!signup?'active':''}" data-auth-mode="signin">${tr('Sign in','تسجيل الدخول')}</button><button class="${signup?'active':''}" data-auth-mode="signup">${tr('Create account','إنشاء حساب')}</button></div><form id="emailAuthForm" class="identity-auth-form"><label class="field">${tr('Email address','البريد الإلكتروني')}<input id="authEmail" type="email" autocomplete="email" maxlength="254" required></label>${signup?`<label class="field">${tr('Mobile number with country code','رقم الهاتف مع كود الدولة')}<input id="authPhone" type="tel" inputmode="tel" autocomplete="tel" dir="ltr" placeholder="+201001234567" required></label><small class="identity-help">${tr('The number is validated and registered for account security. Phone ownership is not OTP-verified.','يتم التحقق من صيغة الرقم وتسجيله لأمان الحساب، لكن ملكية الهاتف لا يتم توثيقها برمز.')}</small>`:''}<div id="emailAuthError" class="form-error hidden" role="alert"></div><button id="emailAuthSubmit" class="primary">${signup?tr('Send email verification code','إرسال رمز تحقق البريد'):tr('Send sign-in code','إرسال رمز الدخول')}</button></form>${!signup?`<div class="auth-divider"><span>${tr('or','أو')}</span></div><button class="google-btn" data-auth-google><span class="google-mark">G</span>${tr('Continue with Google','المتابعة باستخدام Google')}</button>`:''}<p class="auth-note">${tr('Codes expire quickly, resend is rate-limited, and verification happens through Supabase Auth.','تنتهي صلاحية الرموز سريعًا، وإعادة الإرسال محدودة، والتحقق يتم عبر Supabase Auth.')}</p></div>`;
   }
-  window.authScreen=authScreen=function(){
+  function emailAuthScreen(){
     document.body.classList.remove('app-ready');
     authRoot.innerHTML=`<section class="auth-shell">${story()}${authPanel()}</section>`;
-    document.querySelectorAll('[data-auth-mode]').forEach(function(button){button.onclick=function(){authMode=button.dataset.authMode;pending={email:'',mode:authMode,phone:'',sentAt:0};authScreen()}});
+    document.querySelectorAll('[data-auth-mode]').forEach(function(button){button.onclick=function(){mode=button.dataset.authMode;pending={email:'',mode:mode,phone:'',sentAt:0};emailAuthScreen()}});
     var google=document.querySelector('[data-auth-google]');if(google)google.onclick=function(){if(!sb){toast(tr('Connection is not ready. Please refresh.','الاتصال غير جاهز. حدّث الصفحة.'));return}googleSignIn()};
     document.getElementById('emailAuthForm').onsubmit=startEmailAuth;bindTools();
-  };
+  }
   async function startEmailAuth(event){
     event.preventDefault();
     var button=document.getElementById('emailAuthSubmit'),email=document.getElementById('authEmail').value.trim().toLowerCase();
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){setError(errorText('invalid_email'));return}
     button.disabled=true;button.textContent=tr('Checking securely…','جارٍ التحقق بأمان…');
     var options={shouldCreateUser:false};
-    if(authMode==='signup'){
+    if(mode==='signup'){
       var phone=document.getElementById('authPhone').value.trim();
       var validation=await sb.functions.invoke('email-signup-validate',{body:{email:email,phone:phone}});
       if(validation.error||validation.data?.error){setError(errorText(validation.data?.error||validation.error));button.disabled=false;button.textContent=tr('Send email verification code','إرسال رمز تحقق البريد');return}
       pending.phone=validation.data.phone;options={shouldCreateUser:true,data:{signup_ticket:validation.data.ticket}};
     }
     var result=await sb.auth.signInWithOtp({email:email,options:options});
-    if(result.error){setError(errorText(result.error));button.disabled=false;button.textContent=authMode==='signup'?tr('Send email verification code','إرسال رمز تحقق البريد'):tr('Send sign-in code','إرسال رمز الدخول');return}
-    pending.email=email;pending.mode=authMode;pending.sentAt=Date.now();showOtp();
+    if(result.error){setError(errorText(result.error));button.disabled=false;button.textContent=mode==='signup'?tr('Send email verification code','إرسال رمز تحقق البريد'):tr('Send sign-in code','إرسال رمز الدخول');return}
+    pending.email=email;pending.mode=mode;pending.sentAt=Date.now();showOtp();
   }
   function showOtp(){
     document.body.classList.remove('app-ready');
     authRoot.innerHTML=`<section class="phone-verify-shell email-verify-shell"><div class="phone-verify-brand"><i>NC</i><span>NEIS Circle</span></div><span class="onboard-step">${tr('EMAIL VERIFICATION','توثيق البريد')}</span><h1>${tr('Enter the email code','أدخل رمز البريد')}</h1><p>${tr(`We sent a one-time code to ${pending.email}.`,`أرسلنا رمزًا لمرة واحدة إلى ${pending.email}.`)}</p><form id="emailOtpForm"><label class="field">${tr('Verification code','رمز التحقق')}<input id="emailOtpCode" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" maxlength="8" required autofocus></label><div id="emailAuthError" class="form-error hidden" role="alert"></div><div class="phone-verify-actions"><button type="button" class="secondary" data-back-auth>${tr('Back','رجوع')}</button><button id="emailOtpSubmit" class="primary">${tr('Verify & continue','تحقق وتابع')}</button></div></form><button type="button" class="phone-signout" data-resend-email>${tr('Resend code','إعادة إرسال الرمز')}</button><p class="phone-privacy">${tr('The code is verified server-side and is never stored in this page.','يتم التحقق من الرمز على الخادم ولا يتم تخزينه في الصفحة.')}</p></section>`;
-    document.querySelector('[data-back-auth]').onclick=authScreen;
+    document.querySelector('[data-back-auth]').onclick=emailAuthScreen;
     document.querySelector('[data-resend-email]').onclick=resendEmail;
     document.getElementById('emailOtpForm').onsubmit=verifyEmailOtp;
   }
@@ -85,5 +87,9 @@
     var status=await sb.rpc('identity_verification_status');
     if(!status.error&&status.data)state.identityVerification=status.data;
   };
-  if(!authUser)setTimeout(authScreen,0);
+  var previousRender=render;
+  render=function(){if(!authUser){emailAuthScreen();return}return previousRender()};
+  var previousSignOut=signOut;
+  signOut=async function(){await previousSignOut();emailAuthScreen()};
+  if(!authUser){setTimeout(emailAuthScreen,0);setTimeout(function(){if(!authUser)emailAuthScreen()},600)}
 })();
