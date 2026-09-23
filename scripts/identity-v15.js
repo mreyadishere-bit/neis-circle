@@ -8,7 +8,7 @@
     identity_unavailable:['This phone number cannot be used.','لا يمكن استخدام رقم الهاتف هذا.'],
     save_failed:['We could not save your number. Please try again.','تعذر حفظ رقمك. حاول مرة أخرى.']
   };
-  function authTools(){return `<div class="auth-tools"><button data-auth-lang>${state.lang==='ar'?'EN':'AR'}</button><button data-auth-theme>${state.theme==='light'?'◐':'☀'}</button></div>`}
+  function authTools(){return `<div class="auth-tools"><button data-auth-lang>${state.lang==='ar'?'EN':'AR'}</button><button class="theme-control" data-auth-theme aria-label="${tr('Toggle color theme','تغيير مظهر الألوان')}"><span aria-hidden="true"></span></button></div>`}
   function story(){return `<div class="auth-story"><div class="auth-brand"><i>NC</i><span>NEIS Circle</span></div><div class="auth-story-copy"><h1>${tr('A better student network starts with you.','شبكة طلاب أفضل تبدأ بك.')}</h1><p>${tr('A private space for useful questions, real experiences and student communities.','مساحة خاصة للأسئلة المفيدة والخبرات الحقيقية والمجتمعات الطلابية.')}</p></div><div class="auth-points"><span>${tr('Secure sign-in with your Google account','تسجيل دخول آمن بحساب Google')}</span><span>${tr('Registered mobile identity kept private','رقم هاتف مسجّل ومحفوظ بخصوصية')}</span><span>${tr('Moderated communities and protected data','مجتمعات خاضعة للإشراف وبيانات محمية')}</span></div></div>`}
   function bindTools(){
     var lang=document.querySelector('[data-auth-lang]');if(lang)lang.onclick=function(){state.lang=state.lang==='ar'?'en':'ar';state.articleLanguage=state.lang;applyPrefs();authScreen()};
