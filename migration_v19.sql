@@ -1,9 +1,8 @@
 -- NEIS Circle v19 — repair direct-message deletion and admin report workflows.
 begin;
 
--- Direct message identifiers are bigint in production. v18 accidentally exposed a uuid RPC.
-drop function if exists public.delete_direct_message(uuid);
-create or replace function public.delete_direct_message(message_id_input bigint)
+-- Recreate the UUID message-deletion RPC so its authorization and soft-delete behavior are deterministic.
+create or replace function public.delete_direct_message(message_id_input uuid)
 returns boolean language plpgsql security definer set search_path=public,auth as $$
 declare changed boolean:=false;
 begin
@@ -37,7 +36,7 @@ begin
     case when kind='post' then (select p.author_id from public.posts p where p.id=public.try_uuid(new.target_id)) end,
     case when kind in ('comment','reply') then (select c.author_id from public.comments c where c.id=public.try_uuid(new.target_id)) end,
     case when kind='circle' then (select c.owner_id from public.circles c where c.id=public.try_uuid(new.target_id)) end,
-    case when kind='message' then (select m.sender_id from public.messages m where m.id=public.try_bigint(new.target_id)) end,
+    case when kind='message' then (select m.sender_id from public.messages m where m.id=public.try_uuid(new.target_id)) end,
     case when kind='circle_message' then (select m.sender_id from public.circle_messages m where m.id=public.try_bigint(new.target_id)) end,
     case when kind='gallery' then (select g.author_id from public.gallery_items g where g.id=public.try_bigint(new.target_id)) end,
     case when kind='article' then (select a.author_id from public.articles a where a.id=public.try_bigint(new.target_id)) end,
@@ -64,7 +63,7 @@ begin
     case when kind='post' then (select left(concat_ws(' — ',p.title,p.body),1200) from public.posts p where p.id=public.try_uuid(new.target_id)) end,
     case when kind in ('comment','reply') then (select left(c.body,1200) from public.comments c where c.id=public.try_uuid(new.target_id)) end,
     case when kind='circle' then (select left(concat_ws(' — ',c.name,c.description),1200) from public.circles c where c.id=public.try_uuid(new.target_id)) end,
-    case when kind='message' then (select left(m.body,1200) from public.messages m where m.id=public.try_bigint(new.target_id)) end,
+    case when kind='message' then (select left(m.body,1200) from public.messages m where m.id=public.try_uuid(new.target_id)) end,
     case when kind='circle_message' then (select left(m.body,1200) from public.circle_messages m where m.id=public.try_bigint(new.target_id)) end,
     case when kind='gallery' then (select left(concat_ws(' — ',g.caption_en,g.caption_ar),1200) from public.gallery_items g where g.id=public.try_bigint(new.target_id)) end,
     case when kind='article' then (select left(concat_ws(' — ',a.title_en,a.title_ar,a.excerpt_en,a.excerpt_ar),1200) from public.articles a where a.id=public.try_bigint(new.target_id)) end,
@@ -85,7 +84,7 @@ update public.reports r set reported_user_id_snapshot=coalesce(
   case when r.target_type='post' then (select p.author_id from public.posts p where p.id=public.try_uuid(r.target_id)) end,
   case when r.target_type in ('comment','reply') then (select c.author_id from public.comments c where c.id=public.try_uuid(r.target_id)) end,
   case when r.target_type='circle' then (select c.owner_id from public.circles c where c.id=public.try_uuid(r.target_id)) end,
-  case when r.target_type='message' then (select m.sender_id from public.messages m where m.id=public.try_bigint(r.target_id)) end,
+  case when r.target_type='message' then (select m.sender_id from public.messages m where m.id=public.try_uuid(r.target_id)) end,
   case when r.target_type='circle_message' then (select m.sender_id from public.circle_messages m where m.id=public.try_bigint(r.target_id)) end,
   case when r.target_type='gallery' then (select g.author_id from public.gallery_items g where g.id=public.try_bigint(r.target_id)) end,
   case when r.target_type='article' then (select a.author_id from public.articles a where a.id=public.try_bigint(r.target_id)) end,
@@ -135,7 +134,7 @@ returns table(
       case when r.target_type='post' then (select left(concat_ws(' — ',px.title,px.body),1200) from public.posts px where px.id=public.try_uuid(r.target_id)) end,
       case when r.target_type in ('comment','reply') then (select left(cx.body,1200) from public.comments cx where cx.id=public.try_uuid(r.target_id)) end,
       case when r.target_type='circle' then (select left(concat_ws(' — ',cx.name,cx.description),1200) from public.circles cx where cx.id=public.try_uuid(r.target_id)) end,
-      case when r.target_type='message' then (select left(mx.body,1200) from public.messages mx where mx.id=public.try_bigint(r.target_id)) end,
+      case when r.target_type='message' then (select left(mx.body,1200) from public.messages mx where mx.id=public.try_uuid(r.target_id)) end,
       case when r.target_type='circle_message' then (select left(mx.body,1200) from public.circle_messages mx where mx.id=public.try_bigint(r.target_id)) end,
       case when r.target_type='gallery' then (select left(concat_ws(' — ',gx.caption_en,gx.caption_ar),1200) from public.gallery_items gx where gx.id=public.try_bigint(r.target_id)) end,
       case when r.target_type='article' then (select left(concat_ws(' — ',ax.title_en,ax.title_ar,ax.excerpt_en,ax.excerpt_ar),1200) from public.articles ax where ax.id=public.try_bigint(r.target_id)) end,
@@ -162,8 +161,8 @@ returns table(
   order by r.created_at desc;
 $$;
 
-revoke all on function public.delete_direct_message(bigint),public.admin_update_report_status(uuid,text),public.admin_report_details() from public,anon;
-grant execute on function public.delete_direct_message(bigint) to authenticated;
+revoke all on function public.delete_direct_message(uuid),public.admin_update_report_status(uuid,text),public.admin_report_details() from public,anon;
+grant execute on function public.delete_direct_message(uuid) to authenticated;
 grant execute on function public.admin_update_report_status(uuid,text),public.admin_report_details() to authenticated;
 
 commit;
