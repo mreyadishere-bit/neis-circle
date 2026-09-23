@@ -1,0 +1,10 @@
+.page-title > :last-child:has([data-new-circle]),.page-title > .page-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.private-key-panel{display:grid;gap:18px}
+.copy-field{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.copy-field input{min-width:0;font-variant-numeric:tabular-nums}
+.private-key-note{margin:0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,var(--accent2) 8%,var(--surface));color:var(--muted);font-size:.86rem;line-height:1.55}
+.private-key-state{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+.private-key-state div{display:grid;gap:4px}.private-key-state span{color:var(--muted);font-size:.82rem}
+.identity-auth-form{display:grid;gap:15px;margin-top:18px}.identity-auth-form>.primary{width:100%;min-height:46px}
+.identity-help{color:var(--muted);line-height:1.5;margin-top:-6px}.auth-divider{display:flex;align-items:center;gap:12px;color:var(--muted);margin:17px 0}.auth-divider:before,.auth-divider:after{content:"";height:1px;background:var(--line);flex:1}
+@media(max-width:560px){.copy-field{grid-template-columns:1fr}.copy-field button{width:100%}.private-key-state{align-items:flex-start;flex-direction:column}.private-key-state button{width:100%}}
