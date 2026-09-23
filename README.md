@@ -26,11 +26,16 @@ scripts/
   security-v11.js              layer: hardening (v11)
   replies-v12.js               layer: threaded replies (v12)
   navigation-v14.js            layer: mobile "More" sheet in #mobileNavRoot (v14)
-  identity-v15.js              layer: identity / verification (v15)
+  identity-v15.js              layer: Google-only sign-in + post-login mobile registration gate (v17)
   private-circles-v15.js       layer: private circles (v15)
 supabase/                      edge functions / SQL support files
 migration_*.sql                database migrations, applied in numeric order
 ```
+
+> Apply `migration_v17.sql` after v16. It fixes Google OAuth sign-up
+> (`Database error saving new user`), private-circle key regeneration
+> (pgcrypto `extensions` schema), and message soft-delete policies, and adds
+> the `register_own_phone` RPC used by the post-login mobile gate.
 
 ## Why the styles and scripts are still classic (non-module) files
 
