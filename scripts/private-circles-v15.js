@@ -6,7 +6,7 @@
   var baseCircles=circles;
   circles=function(){
     var html=baseCircles();
-    return html.replace('<button class="primary" data-new-circle>',`<button class="secondary" data-join-private-circle>${tr('Join Private Circle','انضم لمجتمع خاص')}</button><button class="primary" data-new-circle>`);
+    return html.replace(/(<button class="primary" data-new-circle>[\s\S]*?<\/button>)/,`<div class="page-actions"><button class="secondary" data-join-private-circle>${tr('Join Private Circle','انضم لمجتمع خاص')}</button>$1</div>`);
   };
   function injectOwnerKeyControl(){
     var circle=(state.circleRows||[]).find(function(item){return String(item.id)===String(state.activeCircleId)});
