@@ -3,7 +3,7 @@
 
 /* Desktop rail: one continuous tool list, including Settings. */
 .rail{padding-block:18px;gap:14px}
-.rail-nav{min-height:0;flex:1;justify-content:flex-start;gap:8px;overflow-y:auto;overflow-x:hidden;padding-block:2px;scrollbar-width:none}
+.rail-nav{min-height:0;flex:1;align-content:start;justify-content:center;gap:8px;margin-top:14px;overflow-y:auto;overflow-x:hidden;padding-block:2px;scrollbar-width:none}
 .rail-nav::-webkit-scrollbar{display:none}
 .rail .nav-btn{width:42px;height:42px;min-height:42px;flex:0 0 42px;margin:0}
 .rail .nav-btn svg{width:19px;height:19px}
@@ -31,7 +31,7 @@
 .reply-actions{display:grid;grid-auto-flow:column;grid-auto-columns:max-content;justify-content:start;align-items:center;gap:7px;margin:0}
 .reply-actions button{height:32px;min-height:32px;margin:0!important;padding:0 11px}
 .reply-actions [data-delete-reply]{border-color:#efd1cb;background:#fff8f6;color:#9b3b30}
-.reply-composer{position:sticky;bottom:-1px;z-index:2;margin:28px 0 2px;padding:8px;border:1px solid var(--line);background:var(--card);box-shadow:0 -12px 24px color-mix(in srgb,var(--card) 88%,transparent)}
+.reply-composer{position:relative;z-index:2;margin:32px 0 4px;padding:8px;border:1px solid var(--line);background:var(--card);box-shadow:0 8px 22px color-mix(in srgb,var(--ink) 8%,transparent)}
 
 /* Mobile navigation: five touch targets plus a complete, scrollable More sheet. */
 .bottom-nav button{min-width:0;min-height:48px;padding:4px 7px;border-radius:12px}
