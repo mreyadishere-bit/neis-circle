@@ -90,3 +90,16 @@
     .onboard-head .auth-tools{flex:0 0 auto}.onboard-head .auth-tools button{min-width:max-content;white-space:nowrap}
     body.rtl .auth-story{direction:rtl}body.rtl .auth-story-copy{width:100%;max-width:560px}body.rtl .auth-story h1{max-width:100%;font-size:clamp(36px,4.2vw,56px);line-height:1.24;letter-spacing:0;word-break:normal;overflow-wrap:normal;text-wrap:balance}
     @media(max-width:760px){.admin-report-head{align-items:flex-start}.report-head-actions{width:100%;margin-inline-start:0;justify-content:flex-start}.report-head-actions select{flex:1}.chat-head .chat-delete{flex-basis:38px}.onboard-head{align-items:flex-start}.onboard-head .auth-tools{margin-bottom:0}}
+
+    /* v21 — screenshot-led identity alignment and safe card spacing. */
+    .suggested-person .suggested-person-profile{min-height:48px;align-items:center;justify-items:start}
+    .suggested-person .suggested-person-copy{width:100%;align-content:center;justify-items:start;gap:4px;line-height:1.2}
+    .suggested-person .suggested-person-copy b,.suggested-person .suggested-person-copy small{display:block;width:100%;margin:0;padding:0;text-align:start;justify-self:start}
+    .suggested-person .suggested-person-copy:has(b:only-child){align-self:center}
+    .article-card .author-link,.reader .author-link{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;justify-items:start;gap:12px;width:fit-content;max-width:100%;margin:18px 0 0;padding:0;border:0;background:transparent;text-align:start}
+    .article-card .author-link .author-copy,.reader .author-link .author-copy{min-width:0;display:grid;grid-template-columns:minmax(0,1fr);align-content:center;justify-items:start;gap:3px;width:100%}
+    .article-card .author-link .author-copy>* ,.reader .author-link .author-copy>*{display:block;width:100%;margin:0;padding:0;text-align:start;justify-self:start;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .article-card .author-link .author-copy b,.reader .author-link .author-copy b{color:var(--ink);font-size:13px;line-height:1.25}
+    .article-card .author-link .author-copy small,.reader .author-link .author-copy small{color:var(--muted);font-size:10px;line-height:1.35}
+    .admin-report-head select:disabled{opacity:.6;cursor:wait}
+    body.rtl .suggested-person .suggested-person-copy,body.rtl .suggested-person .suggested-person-copy>*,body.rtl .article-card .author-copy,body.rtl .article-card .author-copy>*,body.rtl .reader .author-copy,body.rtl .reader .author-copy>*{text-align:start;justify-items:start;justify-self:start}
