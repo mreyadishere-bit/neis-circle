@@ -1,6 +1,7 @@
 -- NEIS Circle v14 — private verified identities, dual-identity bans and admin-only report identity details.
 -- Data-preserving and safe to apply before the WhatsApp provider is activated.
 begin;
+alter table public.reports alter column target_id type text using target_id::text;
 
 create table if not exists public.private_user_identities (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -203,17 +204,17 @@ returns bigint language plpgsql immutable as $$ begin return value::bigint; exce
 
 create or replace function public.admin_report_details()
 returns table(
-  id bigint,status text,target_type text,target_id text,reason text,details text,created_at timestamptz,
+  id uuid,status text,target_type text,target_id text,reason text,details text,created_at timestamptz,
   reported_content text,reported_user_id uuid,reported_display_name text,reported_username text,
   reported_email text,reported_phone text,reporter_id uuid,reporter_display_name text,reporter_username text
 ) language sql stable security definer set search_path=public,auth as $$
   select r.id,r.status,r.target_type,r.target_id,r.reason,r.details,r.created_at,
     coalesce(
       case when r.target_type='profile' then rp.full_name end,
-      case when r.target_type='post' then (select left(concat_ws(' — ',p.title,p.body),1200) from public.posts p where p.id=public.try_bigint(r.target_id)) end,
-      case when r.target_type='comment' then (select left(c.body,1200) from public.comments c where c.id=public.try_bigint(r.target_id)) end,
+      case when r.target_type='post' then (select left(concat_ws(' — ',p.title,p.body),1200) from public.posts p where p.id=public.try_uuid(r.target_id)) end,
+      case when r.target_type='comment' then (select left(c.body,1200) from public.comments c where c.id=public.try_uuid(r.target_id)) end,
       case when r.target_type='circle' then (select left(concat_ws(' — ',c.name,c.description),1200) from public.circles c where c.id=public.try_uuid(r.target_id)) end,
-      case when r.target_type='message' then (select left(m.body,1200) from public.messages m where m.id=public.try_bigint(r.target_id)) end,
+      case when r.target_type='message' then (select left(m.body,1200) from public.messages m where m.id=public.try_uuid(r.target_id)) end,
       case when r.target_type='circle_message' then (select left(m.body,1200) from public.circle_messages m where m.id=public.try_bigint(r.target_id)) end,
       case when r.target_type='gallery' then (select left(concat_ws(' — ',g.caption_en,g.caption_ar),1200) from public.gallery_items g where g.id=public.try_bigint(r.target_id)) end,
       case when r.target_type='article' then (select left(concat_ws(' — ',a.title_en,a.title_ar,a.excerpt_en,a.excerpt_ar),1200) from public.articles a where a.id=public.try_bigint(r.target_id)) end,
@@ -227,10 +228,10 @@ returns table(
   from public.reports r
   cross join lateral (select coalesce(
     case when r.target_type='profile' then public.try_uuid(r.target_id) end,
-    case when r.target_type='post' then (select p.author_id from public.posts p where p.id=public.try_bigint(r.target_id)) end,
-    case when r.target_type='comment' then (select c.author_id from public.comments c where c.id=public.try_bigint(r.target_id)) end,
+    case when r.target_type='post' then (select p.author_id from public.posts p where p.id=public.try_uuid(r.target_id)) end,
+    case when r.target_type='comment' then (select c.author_id from public.comments c where c.id=public.try_uuid(r.target_id)) end,
     case when r.target_type='circle' then (select c.owner_id from public.circles c where c.id=public.try_uuid(r.target_id)) end,
-    case when r.target_type='message' then (select m.sender_id from public.messages m where m.id=public.try_bigint(r.target_id)) end,
+    case when r.target_type='message' then (select m.sender_id from public.messages m where m.id=public.try_uuid(r.target_id)) end,
     case when r.target_type='circle_message' then (select m.sender_id from public.circle_messages m where m.id=public.try_bigint(r.target_id)) end,
     case when r.target_type='gallery' then (select g.author_id from public.gallery_items g where g.id=public.try_bigint(r.target_id)) end,
     case when r.target_type='article' then (select a.author_id from public.articles a where a.id=public.try_bigint(r.target_id)) end,
