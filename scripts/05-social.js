@@ -3,7 +3,7 @@
 const t=(en,arabic)=>state.lang==='ar'?arabic:en;
 const same=(a,b)=>String(a)===String(b);
 const byId=(arr,id)=>arr.find(x=>same(x.id,id));
-const normalize=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g,'').trim();
+const normalize=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u0640\u064b-\u065f\u0670]/g,'').trim();
 const match=(query,...values)=>!query||normalize(values.flat().join(' ')).includes(query);
 const blank=(title,copy)=>`<div class="empty"><b>${title}</b><span>${copy}</span></div>`;
 const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
