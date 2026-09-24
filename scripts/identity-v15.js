@@ -6,7 +6,8 @@
   var errors={
     invalid_phone:['Enter a valid mobile number with country code, for example +201001234567.','أدخل رقم هاتف محمول صحيحًا مع كود الدولة، مثل +201001234567.'],
     identity_unavailable:['This phone number cannot be used.','لا يمكن استخدام رقم الهاتف هذا.'],
-    save_failed:['We could not save your number. Please try again.','تعذر حفظ رقمك. حاول مرة أخرى.']
+    save_failed:['We could not save your number. Please try again.','تعذر حفظ رقمك. حاول مرة أخرى.'],
+    save_unconfirmed:['Your number was not confirmed in the database. Please try again.','لم يتم تأكيد حفظ رقمك في قاعدة البيانات. حاول مرة أخرى.']
   };
   function authTools(){return `<div class="auth-tools"><button data-auth-lang>${state.lang==='ar'?'EN':'AR'}</button><button class="theme-control" data-auth-theme aria-label="${tr('Toggle color theme','تغيير مظهر الألوان')}"><span aria-hidden="true"></span></button></div>`}
   function story(){return `<div class="auth-story"><div class="auth-brand"><i>NC</i><span>NEIS Circle</span></div><div class="auth-story-copy"><h1>${tr('A better student network starts with you.','شبكة طلاب أفضل تبدأ بك.')}</h1><p>${tr('A private space for useful questions, real experiences and student communities.','مساحة خاصة للأسئلة المفيدة والخبرات الحقيقية والمجتمعات الطلابية.')}</p></div><div class="auth-points"><span>${tr('Secure sign-in with your Google account','تسجيل دخول آمن بحساب Google')}</span><span>${tr('Registered mobile identity kept private','رقم هاتف مسجّل ومحفوظ بخصوصية')}</span><span>${tr('Moderated communities and protected data','مجتمعات خاضعة للإشراف وبيانات محمية')}</span></div></div>`}
@@ -44,17 +45,28 @@
     event.preventDefault();
     var button=document.getElementById('phoneGateSubmit'),errorBox=document.getElementById('phoneGateError');
     var phone=document.getElementById('gatePhone').value.trim();
+    var normalizedPhone=phone.replace(/[\s\-().]/g,'');
     function fail(pair){errorBox.textContent=tr(pair[0],pair[1]);errorBox.classList.remove('hidden');button.disabled=false;button.textContent=tr('Save & continue','حفظ ومتابعة')}
-    if(!/^\+[1-9][0-9]{7,14}$/.test(phone.replace(/[\s\-().]/g,''))){fail(errors.invalid_phone);return}
+    if(!/^\+[1-9][0-9]{7,14}$/.test(normalizedPhone)){fail(errors.invalid_phone);return}
     button.disabled=true;button.textContent=tr('Saving…','جارٍ الحفظ…');
-    var result=await sb.rpc('register_own_phone',{phone_input:phone});
+    var result=await sb.rpc('register_own_phone',{phone_input:normalizedPhone});
     if(result.error){
       var code=String(result.error.message||'');
       fail(/invalid_phone/.test(code)?errors.invalid_phone:/identity_unavailable/.test(code)?errors.identity_unavailable:errors.save_failed);
       return;
     }
-    state.identityVerification={__loaded:true,phone_validated:true};
-    await loadLiveData();render();toast(tr('Mobile number registered. Welcome!','تم تسجيل رقم الهاتف. أهلًا بك!'));
+    var saved=result.data||{};
+    if(!(saved.phone_validated||saved.phone_verified)){fail(errors.save_unconfirmed);return}
+    var status=await sb.rpc('identity_verification_status');
+    if(status.error||!(status.data?.phone_validated||status.data?.phone_verified)||!status.data?.phone_masked){
+      fail(errors.save_unconfirmed);return;
+    }
+    state.identityVerification=Object.assign({},status.data,{__loaded:true});
+    await loadLiveData();
+    if(!(state.identityVerification?.phone_validated||state.identityVerification?.phone_verified)){
+      fail(errors.save_unconfirmed);return;
+    }
+    render();toast(tr('Mobile number registered. Welcome!','تم تسجيل رقم الهاتف. أهلًا بك!'));
   }
 
   state.identityVerification=state.identityVerification||{};
