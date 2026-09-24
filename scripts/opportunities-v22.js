@@ -9,6 +9,7 @@ const eq=(a,b)=>String(a)===String(b);
 const find=id=>(state.opportunitiesData||[]).find(x=>eq(x.id,id));
 const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
 const parseDay=value=>value?new Date(`${value}T00:00:00`):null;
+const opportunitySearchKey=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u0640\u064b-\u065f\u0670]/g,'').trim();
 const isExpired=o=>o.status==='closed'||(o.deadline&&parseDay(o.deadline)<today());
 const cleanUrl=value=>{const raw=String(value||'').trim();if(!raw)return '';try{const u=new URL(raw);return /^https?:$/.test(u.protocol)?u.href:''}catch{return ''}};
 const dateLabel=value=>value?new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',year:'numeric'}).format(parseDay(value)||new Date(value)):tr('Not specified','غير محدد');
@@ -23,8 +24,8 @@ Object.assign(state,{
 });
 
 function filtered(){
-  let rows=[...(state.opportunitiesData||[])],q=String(state.opportunitySearch||'').trim().toLocaleLowerCase(state.lang==='ar'?'ar':'en');
-  if(q)rows=rows.filter(o=>[o.title,o.description,o.organization,o.opportunity_type,o.location].some(v=>String(v||'').toLocaleLowerCase().includes(q)));
+  let rows=[...(state.opportunitiesData||[])],q=opportunitySearchKey(state.opportunitySearch);
+  if(q)rows=rows.filter(o=>[o.title,o.description,o.organization,o.opportunity_type,o.location].some(v=>opportunitySearchKey(v).includes(q)));
   if(state.opportunityType!=='All')rows=rows.filter(o=>o.opportunity_type===state.opportunityType);
   if(!state.showExpired)rows=rows.filter(o=>!isExpired(o));
   const now=today(),tomorrow=new Date(now);tomorrow.setDate(now.getDate()+1);
