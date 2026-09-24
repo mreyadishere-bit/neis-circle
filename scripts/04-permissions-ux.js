@@ -2,7 +2,7 @@
 (function(){
 const v5Ar=()=>state.lang==='ar';
 const v5Text=(en,arabic)=>v5Ar()?arabic:en;
-const normalizeSearch=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g,'').trim();
+const normalizeSearch=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u0640\u064b-\u065f\u0670]/g,'').trim();
 const matchesSearch=(query,...values)=>!query||normalizeSearch(values.flat().join(' ')).includes(query);
 const emptyState=(title,copy)=>`<div class="empty"><b>${title}</b><span>${copy}</span></div>`;
 
