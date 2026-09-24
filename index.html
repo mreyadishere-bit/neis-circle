@@ -12,7 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="styles/security-v11.css?v=11.1">
-  <link rel="stylesheet" href="styles/app.css?v=21.1">
+  <link rel="stylesheet" href="styles/app.css?v=23.0">
   <link rel="stylesheet" href="styles/image-editor.css" data-legacy-style="neis-image-editor-style">
   <link rel="stylesheet" href="styles/ui-v13.css?v=13.1">
   <link rel="stylesheet" href="styles/ui-v14.css?v=14.0">
@@ -60,7 +60,7 @@
 
   <header class="top">
     <div class="wordmark"><b>NEIS Circle</b><span>student network</span></div>
-    <form id="globalSearchForm" class="search" role="search"><svg><use href="#i-search"/></svg><input id="globalSearch" placeholder="Search people, posts, circles…" autocomplete="off" aria-autocomplete="list" aria-controls="searchSuggestions"><kbd>⌘ K</kbd><button class="search-submit" aria-label="Search" type="submit"><svg><use href="#i-search"/></svg></button><div id="searchSuggestions" class="search-suggest hidden" role="listbox"></div></form>
+    <form id="globalSearchForm" class="search" role="search"><svg><use href="#i-search"/></svg><input id="globalSearch" dir="auto" placeholder="Search people, posts, circles…" autocomplete="off" aria-autocomplete="list" aria-controls="searchSuggestions"><button class="search-clear hidden" data-global-search-clear type="button" aria-label="Clear search">×</button><kbd>⌘ K</kbd><button class="search-submit" aria-label="Search" type="submit"><svg><use href="#i-search"/></svg></button><div id="searchSuggestions" class="search-suggest hidden" role="listbox"></div></form>
     <div class="top-actions"><button class="round-btn" data-action="language" title="Language">AR</button><button class="round-btn theme-control" data-action="theme" title="Theme" aria-label="Toggle color theme"><span aria-hidden="true"></span></button><button class="round-btn" data-action="notifications" title="Notifications"><svg><use href="#i-bell"/></svg></button><button id="topAvatar" class="mini-avatar" data-action="profile">EY</button></div>
   </header>
 
@@ -78,10 +78,10 @@
 <div id="modalRoot"></div><div id="toast" class="toast"></div>
 
   <script src="scripts/01-core.js?v=18.0"></script>
-  <script src="scripts/02-content-admin.js?v=21.0"></script>
+  <script src="scripts/02-content-admin.js?v=23.0"></script>
   <script src="scripts/03-auth-i18n.js?v=18.0"></script>
   <script src="scripts/04-permissions-ux.js?v=18.0"></script>
-  <script src="scripts/05-social.js?v=21.2"></script>
+  <script src="scripts/05-social.js?v=23.0"></script>
   <script src="scripts/hotfix-v21.js?v=21.0"></script>
   <script src="scripts/06-image-editor.js?v=18.0"></script>
   <script src="scripts/security-v11.js?v=11.1"></script>
