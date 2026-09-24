@@ -8,7 +8,7 @@ Object.assign(state,{articles:[],gallery:[],members:[],isAdmin:false,articleAuth
 state.profile.branch=state.profile.branch||"Main Branch";state.profile.role=state.profile.role||"student";
 let neisRealtimeReady=false;
 const initials=n=>(n||"Student").split(/\s+/).map(x=>x[0]).join("").slice(0,2).toUpperCase();
-const normalizeArticleSearch=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g,'').trim();
+const normalizeArticleSearch=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u0640\u064b-\u065f\u0670]/g,'').trim();
 const formatDate=d=>new Intl.DateTimeFormat(state.lang==="ar"?"ar-EG":"en-GB",{day:"numeric",month:"short",year:"numeric"}).format(new Date(d||Date.now()));
 function safeRich(html){const t=document.createElement("template");t.innerHTML=String(html||"");const allowed=new Set(["P","BR","STRONG","B","EM","I","U","S","H2","H3","H4","UL","OL","LI","BLOCKQUOTE","A","DIV","SPAN"]);[...t.content.querySelectorAll("*")].forEach(el=>{if(!allowed.has(el.tagName)){el.replaceWith(...el.childNodes);return}[...el.attributes].forEach(a=>{if(a.name==="href"&&el.tagName==="A"){if(!/^https?:\/\//i.test(a.value))el.removeAttribute(a.name)}else if(a.name==="dir"&&(a.value==="rtl"||a.value==="ltr")){}else if(a.name==="style"&&/^(text-align:\s*(left|right|center);?)$/i.test(a.value)){}else el.removeAttribute(a.name)})});return t.innerHTML}
 function authorName(a){return a?.full_name||a?.name||"NEIS Student"}
