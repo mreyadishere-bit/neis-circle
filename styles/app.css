@@ -103,3 +103,10 @@
     .article-card .author-link .author-copy small,.reader .author-link .author-copy small{color:var(--muted);font-size:10px;line-height:1.35}
     .admin-report-head select:disabled{opacity:.6;cursor:wait}
     body.rtl .suggested-person .suggested-person-copy,body.rtl .suggested-person .suggested-person-copy>*,body.rtl .article-card .author-copy,body.rtl .article-card .author-copy>*,body.rtl .reader .author-copy,body.rtl .reader .author-copy>*{text-align:start;justify-items:start;justify-self:start}
+
+
+    /* v21.1 — restore profile actions without affecting identity-copy alignment. */
+    .profile-hero>.profile-hero-actions{min-width:max-content;display:flex;grid-template-columns:none;align-items:center;align-content:center;justify-content:flex-end;justify-items:stretch;gap:8px;width:auto}
+    .profile-hero>.profile-hero-actions button{min-width:104px;height:46px;margin:0;white-space:nowrap}
+    @media(max-width:900px){.profile-hero>.profile-hero-actions{grid-column:1/-1;width:100%;min-width:0;justify-content:flex-start;flex-wrap:wrap}}
+    @media(max-width:560px){.profile-hero>.profile-hero-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.profile-hero>.profile-hero-actions button{width:100%;min-width:0}.profile-hero>.profile-hero-actions button:nth-child(3){grid-column:1/-1}}
