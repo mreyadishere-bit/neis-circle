@@ -1,0 +1,126 @@
+/* NEIS Circle v22 — database-backed Opportunities board. */
+(function(){
+'use strict';
+const TYPES=['Volunteering','Internship','Scholarship','Event','Competition','Course','Other'];
+const TYPE_AR={Volunteering:'تطوع',Internship:'تدريب',Scholarship:'منحة',Event:'فعالية',Competition:'مسابقة',Course:'دورة',Other:'أخرى'};
+const tr=(en,ar)=>state.lang==='ar'?ar:en;
+const typeLabel=value=>state.lang==='ar'?(TYPE_AR[value]||value):value;
+const eq=(a,b)=>String(a)===String(b);
+const find=id=>(state.opportunitiesData||[]).find(x=>eq(x.id,id));
+const today=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+const parseDay=value=>value?new Date(`${value}T00:00:00`):null;
+const isExpired=o=>o.status==='closed'||(o.deadline&&parseDay(o.deadline)<today());
+const cleanUrl=value=>{const raw=String(value||'').trim();if(!raw)return '';try{const u=new URL(raw);return /^https?:$/.test(u.protocol)?u.href:''}catch{return ''}};
+const dateLabel=value=>value?new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',year:'numeric'}).format(parseDay(value)||new Date(value)):tr('Not specified','غير محدد');
+const createdLabel=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',year:'numeric'}).format(new Date(value));
+const svg=(name)=>name==='search'?'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>':name==='place'?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"/><circle cx="12" cy="9" r="2.2"/></svg>':name==='calendar'?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v14H3V6a2 2 0 0 1 2-2Zm2-2v4m10-4v4M3 9h18"/></svg>':'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="m3 16 5-5 4 4 3-3 6 6M8 9h.01"/></svg>';
+
+Object.assign(state,{
+  opportunitiesData:state.opportunitiesData||[],opportunitySearch:state.opportunitySearch||'',
+  opportunityType:state.opportunityType||'All',opportunityDate:state.opportunityDate||'All',
+  opportunitySort:state.opportunitySort||'Newest',showExpired:!!state.showExpired,
+  opportunityRangeStart:state.opportunityRangeStart||'',opportunityRangeEnd:state.opportunityRangeEnd||''
+});
+
+function filtered(){
+  let rows=[...(state.opportunitiesData||[])],q=String(state.opportunitySearch||'').trim().toLocaleLowerCase(state.lang==='ar'?'ar':'en');
+  if(q)rows=rows.filter(o=>[o.title,o.description,o.organization,o.opportunity_type,o.location].some(v=>String(v||'').toLocaleLowerCase().includes(q)));
+  if(state.opportunityType!=='All')rows=rows.filter(o=>o.opportunity_type===state.opportunityType);
+  if(!state.showExpired)rows=rows.filter(o=>!isExpired(o));
+  const now=today(),tomorrow=new Date(now);tomorrow.setDate(now.getDate()+1);
+  if(state.opportunityDate==='Today')rows=rows.filter(o=>{const d=new Date(o.created_at);return d>=now&&d<tomorrow});
+  if(state.opportunityDate==='This Week'){const limit=new Date(now);limit.setDate(now.getDate()+7);rows=rows.filter(o=>{const d=new Date(o.created_at);return d>=now&&d<limit})}
+  if(state.opportunityDate==='This Month')rows=rows.filter(o=>{const d=new Date(o.created_at);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()});
+  if(state.opportunityDate==='Upcoming')rows=rows.filter(o=>{const d=parseDay(o.start_date||o.deadline);return d&&d>=now&&!isExpired(o)});
+  if(state.opportunityDate==='Deadline Soon'){const limit=new Date(now);limit.setDate(now.getDate()+14);rows=rows.filter(o=>{const d=parseDay(o.deadline);return d&&d>=now&&d<=limit&&!isExpired(o)})}
+  if(state.opportunityDate==='Custom'){const start=parseDay(state.opportunityRangeStart),end=parseDay(state.opportunityRangeEnd);if(start)rows=rows.filter(o=>new Date(o.created_at)>=start);if(end){end.setHours(23,59,59,999);rows=rows.filter(o=>new Date(o.created_at)<=end)}}
+  rows.sort((a,b)=>state.opportunitySort==='Oldest'?new Date(a.created_at)-new Date(b.created_at):state.opportunitySort==='Deadline Soon'?((parseDay(a.deadline)?.getTime()||Infinity)-(parseDay(b.deadline)?.getTime()||Infinity)):new Date(b.created_at)-new Date(a.created_at));
+  return rows;
+}
+
+function card(o){
+  const expired=isExpired(o),image=(o.image_urls||[])[0],canManage=eq(o.author_id,authUser?.id)||state.isAdmin;
+  return `<article class="opportunity-card" data-opportunity-card="${esc(o.id)}">
+    <div class="opportunity-media">${image?`<img src="${esc(image)}" alt="${esc(o.title)}" loading="lazy" onerror="this.remove()">`:`<span class="opportunity-media-fallback">${svg('image')}</span>`}<span class="opportunity-status ${expired?'closed':''}">${expired?tr('Expired / Closed','منتهية / مغلقة'):tr('Open','متاحة')}</span></div>
+    <div class="opportunity-card-body"><div class="opportunity-card-top"><span class="opportunity-type">${esc(typeLabel(o.opportunity_type))}</span><time datetime="${esc(o.created_at)}">${createdLabel(o.created_at)}</time></div>
+    <h3>${esc(o.title)}</h3><p class="opportunity-org">${esc(o.organization)}</p><p class="opportunity-excerpt">${esc(o.description)}</p>
+    <div class="opportunity-meta"><span>${svg('place')}${esc(o.location)}</span>${o.deadline?`<span class="${expired?'urgent':''}">${svg('calendar')}${tr('Deadline','آخر موعد')}: ${dateLabel(o.deadline)}</span>`:''}</div>
+    <div class="opportunity-card-actions"><button class="primary" data-view-opportunity="${esc(o.id)}">${tr('View Details','عرض التفاصيل')}</button>${canManage?`<button class="secondary icon-only" data-edit-opportunity="${esc(o.id)}" aria-label="${tr('Edit opportunity','تعديل الفرصة')}">✎</button>`:''}</div></div>
+  </article>`
+}
+
+opportunities=function(){
+  const rows=filtered(),custom=state.opportunityDate==='Custom';
+  return `${pageTitle(tr('Opportunities','الفرص'),tr('Student-shared volunteering, scholarships, events, courses and more.','فرص تطوع ومنح وفعاليات ودورات يشاركها الطلاب.'),`<button class="primary" data-new-opportunity>+ ${tr('Post Opportunity','نشر فرصة')}</button>`)}
+    <section class="opportunities-toolbar" aria-label="${tr('Opportunity filters','فلاتر الفرص')}"><label class="opportunities-search">${svg('search')}<input id="opportunitySearch" value="${esc(state.opportunitySearch)}" placeholder="${tr('Search title, details, organization or type…','ابحث في العنوان أو التفاصيل أو الجهة أو النوع…')}"></label>
+      <div class="opportunities-filters">
+        <label class="field"><span>${tr('Type','النوع')}</span><select id="opportunityType"><option value="All">${tr('All types','كل الأنواع')}</option>${TYPES.map(x=>`<option value="${x}" ${state.opportunityType===x?'selected':''}>${typeLabel(x)}</option>`).join('')}</select></label>
+        <label class="field"><span>${tr('Date','التاريخ')}</span><select id="opportunityDate">${[['All','All'],['Today','Today'],['This Week','This Week'],['This Month','This Month'],['Upcoming','Upcoming'],['Deadline Soon','Deadline Soon'],['Custom','Custom Date Range']].map(([v,l])=>`<option value="${v}" ${state.opportunityDate===v?'selected':''}>${tr(l,({All:'الكل',Today:'اليوم','This Week':'هذا الأسبوع','This Month':'هذا الشهر',Upcoming:'قادمة','Deadline Soon':'تنتهي قريبًا','Custom Date Range':'نطاق مخصص'})[l])}</option>`).join('')}</select></label>
+        <label class="field"><span>${tr('Sort','الترتيب')}</span><select id="opportunitySort">${[['Newest','Newest'],['Oldest','Oldest'],['Deadline Soon','Deadline Soon']].map(([v,l])=>`<option value="${v}" ${state.opportunitySort===v?'selected':''}>${tr(l,({Newest:'الأحدث',Oldest:'الأقدم','Deadline Soon':'الأقرب انتهاءً'})[l])}</option>`).join('')}</select></label>
+        <label class="opportunity-expired-toggle"><input id="showExpiredOpportunities" type="checkbox" ${state.showExpired?'checked':''}>${tr('Show expired opportunities','إظهار الفرص المنتهية')}</label>
+      </div>
+      <div class="opportunity-range ${custom?'':'hidden'}"><label class="field"><span>${tr('From publication date','من تاريخ النشر')}</span><input id="opportunityRangeStart" type="date" value="${esc(state.opportunityRangeStart)}"></label><label class="field"><span>${tr('To publication date','إلى تاريخ النشر')}</span><input id="opportunityRangeEnd" type="date" value="${esc(state.opportunityRangeEnd)}"></label></div>
+    </section>
+    <div class="opportunities-summary"><span><b>${rows.length}</b> ${tr(rows.length===1?'opportunity':'opportunities','فرصة')}</span><span>${tr('Newest opportunities appear first by default.','تظهر أحدث الفرص أولًا افتراضيًا.')}</span></div>
+    ${rows.length?`<div class="opportunities-grid">${rows.map(card).join('')}</div>`:emptyState(tr('No opportunities found','لا توجد فرص'),state.opportunitiesData.length?tr('Try changing the search or filters.','جرّب تغيير البحث أو الفلاتر.'):tr('Be the first to share a useful opportunity.','كن أول من يشارك فرصة مفيدة.'),!state.opportunitiesData.length?`<button class="primary" data-new-opportunity>${tr('Post the first opportunity','انشر أول فرصة')}</button>`:'')}`
+};
+
+function emptyState(title,copy,action=''){return `<div class="empty"><b>${title}</b><span>${copy}</span>${action}</div>`}
+function opportunityConfirm(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-opp-confirm="no">×</button></div><div class="modal-actions"><button class="secondary" data-opp-confirm="no">${tr('Cancel','إلغاء')}</button><button class="primary danger" data-opp-confirm="yes">${tr('Delete','حذف')}</button></div>`);$$('[data-opp-confirm]').forEach(b=>b.onclick=()=>{const yes=b.dataset.oppConfirm==='yes';closeModal();resolve(yes)})})}
+
+function details(id){
+  const o=find(id);if(!o)return;const images=(o.image_urls||[]).filter(Boolean),expired=isExpired(o),canManage=eq(o.author_id,authUser?.id)||state.isAdmin,url=cleanUrl(o.external_url);
+  openModal(`<section class="opportunity-detail">${images.length?`<div class="opportunity-detail-gallery ${images.length===1?'single':''}">${images.slice(0,3).map((x,i)=>`<img src="${esc(x)}" alt="${esc(o.title)} ${i+1}" onerror="this.remove()">`).join('')}</div>`:''}
+    <div class="opportunity-detail-head"><div><span class="opportunity-type">${esc(typeLabel(o.opportunity_type))}</span><h2>${esc(o.title)}</h2><p>${esc(o.organization)} · ${createdLabel(o.created_at)}</p></div><button class="close" data-close aria-label="${tr('Close','إغلاق')}">×</button></div>
+    <dl class="opportunity-detail-facts"><div><dt>${tr('Status','الحالة')}</dt><dd>${expired?tr('Expired / Closed','منتهية / مغلقة'):tr('Open','متاحة')}</dd></div><div><dt>${tr('Location','الموقع')}</dt><dd>${esc(o.location)}</dd></div><div><dt>${tr('Deadline','آخر موعد')}</dt><dd>${dateLabel(o.deadline)}</dd></div><div><dt>${tr('Starts','البداية')}</dt><dd>${dateLabel(o.start_date)}</dd></div><div><dt>${tr('Ends','النهاية')}</dt><dd>${dateLabel(o.end_date)}</dd></div><div><dt>${tr('Posted by','نشرها')}</dt><dd>${esc(o.author?.full_name||o.author?.username||'NEIS Student')}</dd></div></dl>
+    <div class="opportunity-description">${esc(o.description)}</div>
+    <div class="modal-actions">${url&&!expired?`<a class="primary" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${tr('Apply / Open Link','التقديم / فتح الرابط')}</a>`:''}<button class="secondary" data-close>${tr('Close','إغلاق')}</button></div>
+    ${canManage?`<div class="opportunity-owner-actions"><button class="secondary" data-edit-opportunity="${esc(o.id)}">${tr('Edit','تعديل')}</button>${o.status==='open'?`<button class="secondary" data-close-opportunity="${esc(o.id)}">${tr('Mark as Closed','تحديد كمغلقة')}</button>`:''}<button class="secondary danger" data-delete-opportunity="${esc(o.id)}">${tr('Delete','حذف')}</button></div>`:''}
+  </section>`,true);bindOpportunityControls($('#modalRoot'))
+}
+
+function editor(o=null){
+  if(!requireAccount())return;const editing=!!o;if(editing&&!eq(o.author_id,authUser.id)&&!state.isAdmin){toast(tr('You cannot edit this opportunity.','لا يمكنك تعديل هذه الفرصة.'));return}
+  openModal(`<div class="modal-head"><div><h2>${editing?tr('Edit opportunity','تعديل الفرصة'):tr('Post an opportunity','نشر فرصة')}</h2><p>${tr('Share accurate details and a trustworthy external link.','شارك تفاصيل دقيقة ورابطًا خارجيًا موثوقًا.')}</p></div><button class="close" data-close>×</button></div>
+    <form id="opportunityForm" class="opportunity-form"><input id="opportunityId" type="hidden" value="${esc(o?.id||'')}">
+      <label class="field">${tr('Title','العنوان')}<input id="oppTitle" required minlength="3" maxlength="180" value="${esc(o?.title||'')}"></label>
+      <label class="field">${tr('Full description','الوصف الكامل')}<textarea id="oppDescription" required minlength="10" maxlength="10000" rows="7">${esc(o?.description||'')}</textarea></label>
+      <div class="row"><label class="field">${tr('Opportunity type','نوع الفرصة')}<select id="oppType">${TYPES.map(x=>`<option value="${x}" ${o?.opportunity_type===x?'selected':''}>${typeLabel(x)}</option>`).join('')}</select></label><label class="field">${tr('Organization','الجهة / المنظمة')}<input id="oppOrganization" required minlength="2" maxlength="180" value="${esc(o?.organization||'')}"></label></div>
+      <div class="row"><label class="field">${tr('Location or Online','الموقع أو Online')}<input id="oppLocation" required maxlength="180" value="${esc(o?.location||'Online')}"></label><label class="field">${tr('External link (optional)','رابط خارجي (اختياري)')}<input id="oppUrl" type="url" inputmode="url" placeholder="https://…" value="${esc(o?.external_url||'')}"></label></div>
+      <div class="row"><label class="field">${tr('Deadline (optional)','آخر موعد (اختياري)')}<input id="oppDeadline" type="date" value="${esc(o?.deadline||'')}"></label><label class="field">${tr('Start date (optional)','تاريخ البداية (اختياري)')}<input id="oppStart" type="date" value="${esc(o?.start_date||'')}"></label></div>
+      <label class="field">${tr('End date (optional)','تاريخ النهاية (اختياري)')}<input id="oppEnd" type="date" value="${esc(o?.end_date||'')}"></label>
+      ${(o?.image_urls||[]).length?`<div><p class="field-label">${tr('Current images','الصور الحالية')}</p><div class="opportunity-existing-images">${o.image_urls.map((url,i)=>`<figure class="opportunity-preview-item" data-existing-opportunity-image="${esc(url)}"><img src="${esc(url)}" alt="${esc(o.title)} ${i+1}"><button type="button" data-remove-existing-image aria-label="${tr('Remove image','إزالة الصورة')}">×</button></figure>`).join('')}</div></div>`:''}
+      <label class="field">${tr('Images (up to 6)','الصور (حتى 6)')}<input id="oppImages" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple><small>${tr('Each image must be smaller than 8 MB. Preview appears before publishing.','يجب أن تكون كل صورة أقل من 8 ميجابايت، وستظهر معاينة قبل النشر.')}</small></label><div id="oppImagePreviews" class="opportunity-image-previews"></div>
+      <div class="modal-actions"><button type="button" class="secondary" data-close>${tr('Cancel','إلغاء')}</button><button id="oppSubmit" class="primary">${editing?tr('Save changes','حفظ التغييرات'):tr('Publish opportunity','نشر الفرصة')}</button></div>
+    </form>`,true);bindOpportunityForm(o)
+}
+
+function bindOpportunityForm(existing){
+  const input=$('#oppImages'),previews=$('#oppImagePreviews');let selected=[];
+  function draw(){previews.innerHTML=selected.map((f,i)=>`<figure class="opportunity-preview-item"><img src="${URL.createObjectURL(f)}" alt=""><button type="button" data-remove-new-image="${i}">×</button></figure>`).join('');previews.querySelectorAll('[data-remove-new-image]').forEach(b=>b.onclick=()=>{selected.splice(Number(b.dataset.removeNewImage),1);draw()})}
+  input.onchange=()=>{const incoming=[...input.files];for(const file of incoming){if(!file.type.startsWith('image/')){toast(tr('Choose valid image files.','اختر ملفات صور صالحة.'));continue}if(file.size>8*1024*1024){toast(tr('Each image must be smaller than 8 MB.','يجب أن تكون كل صورة أقل من 8 ميجابايت.'));continue}selected.push(file)}selected=selected.slice(0,6);input.value='';draw()};
+  $$('[data-remove-existing-image]').forEach(b=>b.onclick=()=>b.closest('[data-existing-opportunity-image]').classList.toggle('is-removed'));
+  $('#opportunityForm').onsubmit=async e=>{e.preventDefault();const button=$('#oppSubmit'),start=$('#oppStart').value,end=$('#oppEnd').value,rawUrl=$('#oppUrl').value.trim(),url=cleanUrl(rawUrl),kept=$$('[data-existing-opportunity-image]:not(.is-removed)').map(x=>x.dataset.existingOpportunityImage),removed=$$('[data-existing-opportunity-image].is-removed').map(x=>x.dataset.existingOpportunityImage);if(rawUrl&&!url){toast(tr('Enter a valid http or https link.','أدخل رابط http أو https صالحًا.'));return}if(start&&end&&end<start){toast(tr('End date cannot be before the start date.','لا يمكن أن يسبق تاريخ النهاية تاريخ البداية.'));return}if(kept.length+selected.length>6){toast(tr('You can keep up to 6 images.','يمكن الاحتفاظ بحد أقصى 6 صور.'));return}button.disabled=true;button.classList.add('button-loading');const uploaded=[];for(const file of selected){const media=await uploadMedia(file,'opportunities');if(!media){for(const x of uploaded)await removeOpportunityMedia(x);button.disabled=false;button.classList.remove('button-loading');return}uploaded.push(media)}const payload={title:$('#oppTitle').value.trim(),description:$('#oppDescription').value.trim(),opportunity_type:$('#oppType').value,organization:$('#oppOrganization').value.trim(),location:$('#oppLocation').value.trim(),external_url:url||null,image_urls:[...kept,...uploaded],deadline:$('#oppDeadline').value||null,start_date:start||null,end_date:end||null};let result;if(existing)result=await sb.from('opportunities').update(payload).eq('id',existing.id).select('id').maybeSingle();else result=await sb.from('opportunities').insert({...payload,author_id:authUser.id}).select('id').single();if(result.error||!result.data){for(const x of uploaded)await removeOpportunityMedia(x);toast(window.neisFriendlyError?.(result.error,existing?'update this opportunity':'publish this opportunity')||tr('Could not save the opportunity.','تعذر حفظ الفرصة.'));button.disabled=false;button.classList.remove('button-loading');return}for(const x of removed)await removeOpportunityMedia(x);closeModal();await loadLiveData();state.view='opportunities';render();toast(existing?tr('Opportunity updated.','تم تحديث الفرصة.'):tr('Opportunity published.','تم نشر الفرصة.'))}
+}
+
+async function removeOpportunityMedia(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
+async function removeOpportunity(id){const o=find(id);if(!o||(!eq(o.author_id,authUser.id)&&!state.isAdmin))return;if(!await opportunityConfirm(tr('Delete opportunity?','حذف الفرصة؟'),tr('This permanently removes the opportunity and its uploaded images.','سيؤدي ذلك إلى حذف الفرصة وصورها نهائيًا.')))return;const {data,error}=await sb.from('opportunities').delete().eq('id',o.id).select('id');if(error||!data?.length){toast(window.neisFriendlyError?.(error,'delete this opportunity')||tr('Could not delete the opportunity.','تعذر حذف الفرصة.'));return}for(const url of o.image_urls||[])await removeOpportunityMedia(url);closeModal();await loadLiveData();render();toast(tr('Opportunity deleted.','تم حذف الفرصة.'))}
+async function closeOpportunity(id){const o=find(id);if(!o||(!eq(o.author_id,authUser.id)&&!state.isAdmin))return;const {data,error}=await sb.from('opportunities').update({status:'closed'}).eq('id',o.id).select('id');if(error||!data?.length){toast(window.neisFriendlyError?.(error,'close this opportunity')||tr('Could not close the opportunity.','تعذر إغلاق الفرصة.'));return}closeModal();await loadLiveData();render();toast(tr('Opportunity marked as closed.','تم تحديد الفرصة كمغلقة.'))}
+
+let searchTimer=null;
+function bindOpportunityControls(root=document){
+  root.querySelectorAll('[data-new-opportunity]').forEach(b=>b.onclick=()=>editor());
+  root.querySelectorAll('[data-view-opportunity]').forEach(b=>b.onclick=e=>{e.stopPropagation();details(b.dataset.viewOpportunity)});
+  root.querySelectorAll('[data-edit-opportunity]').forEach(b=>b.onclick=e=>{e.stopPropagation();const o=find(b.dataset.editOpportunity);if(o){closeModal();editor(o)}});
+  root.querySelectorAll('[data-delete-opportunity]').forEach(b=>b.onclick=e=>{e.stopPropagation();removeOpportunity(b.dataset.deleteOpportunity)});
+  root.querySelectorAll('[data-close-opportunity]').forEach(b=>b.onclick=e=>{e.stopPropagation();closeOpportunity(b.dataset.closeOpportunity)});
+}
+
+const priorBind=bindDynamic;
+bindDynamic=function(){priorBind();bindOpportunityControls(document);const search=$('#opportunitySearch'),type=$('#opportunityType'),date=$('#opportunityDate'),sort=$('#opportunitySort'),expired=$('#showExpiredOpportunities'),from=$('#opportunityRangeStart'),to=$('#opportunityRangeEnd');if(search)search.oninput=()=>{state.opportunitySearch=search.value;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{render();const n=$('#opportunitySearch');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}},180)};if(type)type.onchange=()=>{state.opportunityType=type.value;render()};if(date)date.onchange=()=>{state.opportunityDate=date.value;render()};if(sort)sort.onchange=()=>{state.opportunitySort=sort.value;render()};if(expired)expired.onchange=()=>{state.showExpired=expired.checked;render()};if(from)from.onchange=()=>{state.opportunityRangeStart=from.value;render()};if(to)to.onchange=()=>{state.opportunityRangeEnd=to.value;render()}}
+
+const priorLoad=loadLiveData;let opportunityChannel=null;
+loadLiveData=async function(){await priorLoad();if(!sb||!authUser)return;const {data,error}=await sb.from('opportunities').select('*,author:profiles!opportunities_author_id_fkey(id,full_name,username,grade,branch,avatar_url)').order('created_at',{ascending:false}).limit(500);if(!error)state.opportunitiesData=data||[];else{state.opportunitiesData=[];state.dataErrors=state.dataErrors||{};state.dataErrors.opportunities=error}if(!opportunityChannel){opportunityChannel=sb.channel(`neis-opportunities-${authUser.id}`).on('postgres_changes',{event:'*',schema:'public',table:'opportunities'},async()=>{await loadLiveData();if(state.view==='opportunities')render()}).subscribe()}}
+
+setTimeout(async()=>{if(authUser){await loadLiveData();if(state.view==='opportunities')render()}},350);
+})();
