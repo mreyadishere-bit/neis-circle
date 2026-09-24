@@ -62,6 +62,18 @@ alter table public.opportunities alter column category set default 'Other';
 alter table public.opportunities alter column approved set default true;
 
 do $$ begin
+  if not exists(select 1 from pg_constraint where conname='opportunities_title_length_check') then
+    alter table public.opportunities add constraint opportunities_title_length_check check (char_length(trim(title)) between 3 and 180);
+  end if;
+  if not exists(select 1 from pg_constraint where conname='opportunities_description_length_check') then
+    alter table public.opportunities add constraint opportunities_description_length_check check (char_length(trim(description)) between 10 and 10000);
+  end if;
+  if not exists(select 1 from pg_constraint where conname='opportunities_organization_length_check') then
+    alter table public.opportunities add constraint opportunities_organization_length_check check (char_length(trim(organization)) between 2 and 180);
+  end if;
+  if not exists(select 1 from pg_constraint where conname='opportunities_location_length_check') then
+    alter table public.opportunities add constraint opportunities_location_length_check check (char_length(trim(location)) between 2 and 180);
+  end if;
   if not exists(select 1 from pg_constraint where conname='opportunities_type_check') then
     alter table public.opportunities add constraint opportunities_type_check check (opportunity_type in ('Volunteering','Internship','Scholarship','Event','Competition','Course','Other'));
   end if;
