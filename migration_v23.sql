@@ -26,7 +26,6 @@ as $$
   with input as (
     select
       trim(coalesce(search_query, '')) as term,
-      '%' || replace(replace(replace(trim(coalesce(search_query, '')), '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' as pattern,
       greatest(1, least(coalesce(result_limit, 30), 60)) as max_rows
   ), candidates as (
     select
@@ -39,13 +38,13 @@ as $$
       case
         when lower(coalesce(p.username, '')) = lower(i.term) then 120
         when lower(coalesce(p.full_name, '')) = lower(i.term) then 115
-        when p.username ilike i.pattern escape '\\' then 100
-        when p.full_name ilike i.pattern escape '\\' then 95
+        when position(lower(i.term) in lower(coalesce(p.username, ''))) > 0 then 100
+        when position(lower(i.term) in lower(coalesce(p.full_name, ''))) > 0 then 95
         else 60
       end::integer as relevance
     from public.profiles p cross join input i
     where char_length(i.term) >= 2
-      and concat_ws(' ', p.full_name, p.username, p.grade, p.branch, p.bio, array_to_string(p.interests, ' ')) ilike i.pattern escape '\\'
+      and position(lower(i.term) in lower(concat_ws(' ', p.full_name, p.username, p.grade, p.branch, p.bio, array_to_string(p.interests, ' ')))) > 0
 
     union all
 
@@ -58,15 +57,15 @@ as $$
       p.created_at,
       case
         when lower(coalesce(p.title, '')) = lower(i.term) then 105
-        when p.title ilike i.pattern escape '\\' then 90
-        when array_to_string(p.tags, ' ') ilike i.pattern escape '\\' then 80
+        when position(lower(i.term) in lower(coalesce(p.title, ''))) > 0 then 90
+        when position(lower(i.term) in lower(coalesce(array_to_string(p.tags, ' '), ''))) > 0 then 80
         else 55
       end::integer
     from public.posts p
     left join public.profiles pr on pr.id = p.author_id
     cross join input i
     where char_length(i.term) >= 2
-      and concat_ws(' ', p.title, p.body, array_to_string(p.tags, ' '), p.kind, pr.full_name) ilike i.pattern escape '\\'
+      and position(lower(i.term) in lower(concat_ws(' ', p.title, p.body, array_to_string(p.tags, ' '), p.kind, pr.full_name))) > 0
 
     union all
 
@@ -79,12 +78,12 @@ as $$
       c.created_at,
       case
         when lower(c.name) = lower(i.term) then 110
-        when c.name ilike i.pattern escape '\\' then 92
+        when position(lower(i.term) in lower(c.name)) > 0 then 92
         else 50
       end::integer
     from public.circles c cross join input i
     where char_length(i.term) >= 2
-      and concat_ws(' ', c.name, c.description, c.category) ilike i.pattern escape '\\'
+      and position(lower(i.term) in lower(concat_ws(' ', c.name, c.description, c.category))) > 0
   )
   select c.type, c.id, c.title, c.subtitle, c.preview, c.created_at, c.relevance
   from candidates c cross join input i
