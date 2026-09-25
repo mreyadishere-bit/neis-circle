@@ -9,7 +9,13 @@
   let autosaveContext=null;
   let articleCommentChannel=null;
   let commentRequest=0;
+  let engagementRequest=0;
   let deepLinkOpened='';
+
+  function contentDirection(...values){
+    const text=values.join(' ').replace(/<[^>]*>/g,' '),arabic=(text.match(/[\u0600-\u06ff]/g)||[]).length,latin=(text.match(/[A-Za-z]/g)||[]).length;
+    return arabic>latin?'rtl':'ltr';
+  }
 
   const originalCloseModal=closeModal;
   closeModal=function(){
@@ -178,7 +184,7 @@
     toast(status==='published'?tr('Article published.','تم نشر المقال.'):tr('Draft saved to your account.','تم حفظ المسودة في حسابك.'));
   };
 
-  function stopArticleCommentRealtime(){if(articleCommentChannel&&sb)sb.removeChannel(articleCommentChannel);articleCommentChannel=null}
+  function stopArticleCommentRealtime(){engagementRequest++;if(articleCommentChannel&&sb)sb.removeChannel(articleCommentChannel);articleCommentChannel=null}
   function commentAvatar(profile){return avatar({name:profile?.full_name||tr('Student','طالب'),initials:(profile?.full_name||'ST').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(),color:'#7056d8'})}
   function commentTime(value){return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value))}
   function renderArticleComment(item,all){
@@ -203,20 +209,69 @@
     container.querySelectorAll('[data-article-edit]').forEach(button=>button.onclick=()=>{const card=button.closest('.article-comment'),item=comments.find(row=>same(row.id,button.dataset.articleEdit));if(card.querySelector('.article-comment-edit'))return;card.querySelector('.article-comment-body').classList.add('hidden');card.querySelector('.article-comment-actions').classList.add('hidden');card.insertAdjacentHTML('beforeend',`<form class="article-comment-edit"><textarea maxlength="4000" dir="auto">${esc(item.body)}</textarea><div class="article-comment-actions"><button type="button" data-cancel-edit>${tr('Cancel','إلغاء')}</button><button class="primary" type="submit">${tr('Save changes','حفظ التعديل')}</button></div></form>`);const form=card.querySelector('.article-comment-edit');form.querySelector('[data-cancel-edit]').onclick=()=>{form.remove();card.querySelector('.article-comment-body').classList.remove('hidden');card.querySelector('.article-comment-actions').classList.remove('hidden')};form.onsubmit=async event=>{event.preventDefault();const saveButton=form.querySelector('[type=submit]'),body=form.querySelector('textarea').value.trim();if(!body)return;saveButton.disabled=true;const {error}=await sb.from('article_comments').update({body}).eq('id',item.id).eq('author_id',uid());if(error){toast(window.neisFriendlyError?.(error,'edit this comment')||error.message);saveButton.disabled=false;return}await loadArticleComments(articleId);toast(tr('Comment updated.','تم تعديل التعليق.'))}});
     container.querySelectorAll('[data-article-delete]').forEach(button=>button.onclick=()=>{const card=button.closest('.article-comment'),item=comments.find(row=>same(row.id,button.dataset.articleDelete));if(card.querySelector('.article-comment-confirm'))return;card.insertAdjacentHTML('beforeend',`<div class="article-comment-confirm"><span>${item.parent_id?tr('Delete this reply permanently?','حذف هذا الرد نهائيًا؟'):tr('Delete this comment and its replies?','حذف هذا التعليق وردوده؟')}</span><div><button type="button" data-cancel-delete>${tr('Cancel','إلغاء')}</button><button type="button" class="danger" data-confirm-delete>${tr('Delete','حذف')}</button></div></div>`);const confirm=card.querySelector('.article-comment-confirm');confirm.querySelector('[data-cancel-delete]').onclick=()=>confirm.remove();confirm.querySelector('[data-confirm-delete]').onclick=async event=>{event.currentTarget.disabled=true;const {data,error}=await sb.from('article_comments').delete().eq('id',item.id).select('id');if(error||!data?.length){toast(error?(window.neisFriendlyError?.(error,'delete this comment')||error.message):tr('This comment could not be deleted.','تعذر حذف التعليق.'));event.currentTarget.disabled=false;return}await loadArticleComments(articleId);toast(tr('Comment deleted.','تم حذف التعليق.'))}});
   }
+  async function loadArticleEngagement(articleId){
+    const request=++engagementRequest,likeButton=$('[data-article-like]'),shareButton=$('[data-article-share]');
+    if(!likeButton||!shareButton)return;
+    const [likesResult,sharesResult]=await Promise.all([
+      sb.from('article_reactions').select('user_id').eq('article_id',articleId),
+      sb.from('article_shares').select('id').eq('article_id',articleId)
+    ]);
+    if(request!==engagementRequest||!$('[data-article-like]'))return;
+    if(likesResult.error||sharesResult.error){
+      console.error('[NEIS article engagement]',likesResult.error||sharesResult.error);
+      return;
+    }
+    const likes=likesResult.data||[],liked=likes.some(item=>same(item.user_id,uid()));
+    likeButton.classList.toggle('active',liked);likeButton.setAttribute('aria-pressed',String(liked));
+    likeButton.querySelector('b').textContent=String(likes.length);
+    shareButton.querySelector('b').textContent=String((sharesResult.data||[]).length);
+  }
+  async function toggleArticleLike(article){
+    const button=$('[data-article-like]');if(!button||button.disabled)return;
+    button.disabled=true;const liked=button.classList.contains('active');
+    const query=liked
+      ?sb.from('article_reactions').delete().eq('article_id',article.id).eq('user_id',uid())
+      :sb.from('article_reactions').insert({article_id:article.id,user_id:uid()});
+    const {error}=await query;
+    if(error)toast(window.neisFriendlyError?.(error,liked?'remove this like':'like this article')||error.message);
+    else await loadArticleEngagement(article.id);
+    button.disabled=false;
+  }
+  async function copyArticleLink(url){
+    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);return}
+    const input=document.createElement('textarea');input.value=url;input.setAttribute('readonly','');input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();
+  }
+  async function shareArticle(article,title){
+    const button=$('[data-article-share]');if(!button||button.disabled)return;
+    button.disabled=true;const url=`${location.origin}${location.pathname}#/articles/${article.id}`;
+    let method='copy';
+    try{
+      if(navigator.share){await navigator.share({title,text:tr('Read this article on NEIS Circle','اقرأ هذا المقال على NEIS Circle'),url});method='native'}
+      else{await copyArticleLink(url);toast(tr('Article link copied.','تم نسخ رابط المقال.'))}
+      const {error}=await sb.from('article_shares').insert({article_id:article.id,user_id:uid(),method});
+      if(error)console.error('[NEIS article share tracking]',error);else await loadArticleEngagement(article.id);
+    }catch(error){
+      if(error?.name!=='AbortError')toast(tr('The article could not be shared.','تعذرت مشاركة المقال.'));
+    }finally{button.disabled=false}
+  }
   function setupArticleComments(article){
     const form=$('#articleCommentForm');if(!form)return;
     form.onsubmit=async event=>{event.preventDefault();const input=$('#articleCommentInput'),button=form.querySelector('[type=submit]'),body=input.value.trim();if(!body||button.disabled)return;button.disabled=true;const {error}=await sb.from('article_comments').insert({article_id:article.id,parent_id:$('#articleCommentParent').value||null,author_id:uid(),body});if(error){toast(window.neisFriendlyError?.(error,'post this comment')||error.message);button.disabled=false;return}input.value='';$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden');await loadArticleComments(article.id);toast(tr('Comment posted.','تم نشر التعليق.'))};
-    loadArticleComments(article.id);
     stopArticleCommentRealtime();
-    articleCommentChannel=sb.channel(`article-comments-${article.id}-${uid()}`).on('postgres_changes',{event:'*',schema:'public',table:'article_comments',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleComments(article.id)}).subscribe();
+    loadArticleComments(article.id);loadArticleEngagement(article.id);
+    articleCommentChannel=sb.channel(`article-activity-${article.id}-${uid()}`)
+      .on('postgres_changes',{event:'*',schema:'public',table:'article_comments',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleComments(article.id)})
+      .on('postgres_changes',{event:'*',schema:'public',table:'article_reactions',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleEngagement(article.id)})
+      .on('postgres_changes',{event:'*',schema:'public',table:'article_shares',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleEngagement(article.id)})
+      .subscribe();
   }
 
   readArticle=function(id){
     const article=state.articles.find(item=>same(item.id,id));if(!article)return;
-    const arabic=state.articleLanguage==='ar',title=(arabic?article.title_ar:article.title_en)||article.title_en||article.title_ar,body=safeRich((arabic?article.content_ar:article.content_en)||article.content_en||article.content_ar),editable=same(article.author_id,uid())||state.isAdmin,published=article.status==='published';
-    openModal(`<article class="reader" dir="${arabic?'rtl':'ltr'}">${article.cover_url?`<img class="reader-cover" src="${esc(article.cover_url)}" alt="${esc(title)}">`:''}<div class="article-meta" style="margin-top:18px"><span class="post-kind">${arabic?'مقال':'Article'}</span>${article.category?`<span>${esc(article.category)}</span>`:''}<span>${formatDate(article.published_at||article.created_at)}</span></div><h1>${esc(title)}</h1><button class="author-link" data-author="${article.author_id}">${avatar({name:authorName(article.author),initials:initials(authorName(article.author)),color:'#006f5b'},true)}<span class="author-copy"><b>${esc(authorName(article.author))}</b><small>${esc(authorMeta(article.author))}</small></span></button>${article.tags?.length?`<div class="tag-row">${article.tags.map(tag=>`<span>#${esc(tag)}</span>`).join('')}</div>`:''}<div class="reader-body">${body}</div>${published?`<section id="articleComments" class="article-comments"><header class="article-comments-head"><div><h2>${tr('Comments','التعليقات')} <span id="articleCommentCount">0</span></h2><p>${tr('Join the discussion respectfully and constructively.','شارك في النقاش باحترام وبشكل بنّاء.')}</p></div></header><div id="articleCommentsBody"><div class="loading-card"></div></div><form id="articleCommentForm" class="article-comment-composer"><input type="hidden" id="articleCommentParent"><div id="articleCommentReplying" class="article-comment-replying hidden"><span id="articleCommentReplyingText"></span><button type="button" data-cancel-article-reply>${tr('Cancel reply','إلغاء الرد')}</button></div><textarea id="articleCommentInput" required maxlength="4000" dir="auto" placeholder="${tr('Write a thoughtful comment…','اكتب تعليقًا مفيدًا…')}"></textarea><footer><small>${tr('Your name and profile will appear with your comment.','سيظهر اسمك وملفك الشخصي مع التعليق.')}</small><button class="primary" type="submit">${tr('Post comment','نشر التعليق')}</button></footer></form></section>`:''}<div class="modal-actions"><button class="secondary" data-close>${tr('Close','إغلاق')}</button>${editable?`<button class="primary" data-edit-article="${article.id}">${tr('Edit article','تعديل المقال')}</button>`:''}</div></article>`,true);
+    const requestedArabic=state.articleLanguage==='ar',title=(requestedArabic?article.title_ar:article.title_en)||article.title_en||article.title_ar,rawBody=(requestedArabic?article.content_ar:article.content_en)||article.content_en||article.content_ar,body=safeRich(rawBody),direction=contentDirection(title,rawBody),articleArabic=direction==='rtl',editable=same(article.author_id,uid())||state.isAdmin,published=article.status==='published';
+    openModal(`<article class="reader" dir="${direction}" lang="${articleArabic?'ar':'en'}">${article.cover_url?`<img class="reader-cover" src="${esc(article.cover_url)}" alt="${esc(title)}">`:''}<div class="article-meta" style="margin-top:18px"><span class="post-kind">${articleArabic?'مقال':'Article'}</span>${article.category?`<span>${esc(article.category)}</span>`:''}<span>${formatDate(article.published_at||article.created_at)}</span></div><h1>${esc(title)}</h1><button class="author-link" data-author="${article.author_id}">${avatar({name:authorName(article.author),initials:initials(authorName(article.author)),color:'#006f5b'},true)}<span class="author-copy"><b>${esc(authorName(article.author))}</b><small>${esc(authorMeta(article.author))}</small></span></button>${article.tags?.length?`<div class="tag-row">${article.tags.map(tag=>`<span>#${esc(tag)}</span>`).join('')}</div>`:''}<div class="reader-body">${body}</div>${published?`<section id="articleComments" class="article-comments"><div class="article-engagement" dir="${state.lang==='ar'?'rtl':'ltr'}"><button type="button" data-article-like aria-pressed="false">${icon('heart')}<span>${tr('Like','إعجاب')}</span><b>0</b></button><button type="button" data-article-comments-jump>${icon('chat')}<span>${tr('Comments','التعليقات')}</span><b id="articleCommentCount">0</b></button><button type="button" data-article-share>${icon('share')}<span>${tr('Share','مشاركة')}</span><b>0</b></button></div><header class="article-comments-head" dir="${state.lang==='ar'?'rtl':'ltr'}"><div><h2>${tr('Comments','التعليقات')}</h2><p>${tr('Join the discussion respectfully and constructively.','شارك في النقاش باحترام وبشكل بنّاء.')}</p></div></header><div id="articleCommentsBody"><div class="loading-card"></div></div><form id="articleCommentForm" class="article-comment-composer" dir="${state.lang==='ar'?'rtl':'ltr'}"><input type="hidden" id="articleCommentParent"><div id="articleCommentReplying" class="article-comment-replying hidden"><span id="articleCommentReplyingText"></span><button type="button" data-cancel-article-reply>${tr('Cancel reply','إلغاء الرد')}</button></div><textarea id="articleCommentInput" required maxlength="4000" dir="auto" placeholder="${tr('Write a thoughtful comment…','اكتب تعليقًا مفيدًا…')}"></textarea><footer><small>${tr('Your name and profile will appear with your comment.','سيظهر اسمك وملفك الشخصي مع التعليق.')}</small><button class="primary" type="submit">${tr('Post comment','نشر التعليق')}</button></footer></form></section>`:''}<div class="modal-actions" dir="${state.lang==='ar'?'rtl':'ltr'}"><button class="secondary" data-close>${tr('Close','إغلاق')}</button>${editable?`<button class="primary" data-edit-article="${article.id}">${tr('Edit article','تعديل المقال')}</button>`:''}</div></article>`,true);
     $$('[data-author]').forEach(button=>button.onclick=()=>{state.articleAuthor=button.dataset.author;closeModal();nav('articles')});$$('[data-edit-article]').forEach(button=>button.onclick=()=>openArticleEditor(article));
-    if(published)setupArticleComments(article);
+    if(published){setupArticleComments(article);$('[data-article-like]').onclick=()=>toggleArticleLike(article);$('[data-article-share]').onclick=()=>shareArticle(article,title);$('[data-article-comments-jump]').onclick=()=>$('#articleCommentsBody')?.scrollIntoView({behavior:'smooth',block:'start'})}
   };
 
   window.addEventListener('beforeunload',event=>{if(autosaveContext&&(autosaveContext.saveFailed||autosaveContext.dirty||autosaveContext.timer)){persistArticleAutosave(true);if(autosaveContext?.saveFailed){event.preventDefault();event.returnValue=''}}});
