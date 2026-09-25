@@ -54,6 +54,7 @@
     authRoot.querySelector('[data-state-signout]').onclick=signOut;
     const reactivate=authRoot.querySelector('[data-reactivate]');if(reactivate)reactivate.onclick=async()=>{reactivate.disabled=true;const {error}=await sb.rpc('reactivate_my_account');if(error){toast(error);reactivate.disabled=false;return}state.accountAccess={status:'active',reason:'',guidelines_version:state.accountAccess.guidelines_version};await loadLiveData();render();toast(tr('Account reactivated.','تمت إعادة تفعيل الحساب.'))};
   }
+  window.neisAccountStateScreen=accountStateScreen;
 
   const baseLoad=loadLiveData;
   loadLiveData=async function(){
@@ -67,7 +68,7 @@
     if(!accessRes.error&&accessRes.data)state.accountAccess=accessRes.data;
     if(!termsRes.error)state.moderationTerms=termsRes.data||[];
     if(!blocksRes.error)state.blockedAccounts=blocksRes.data||[];
-    if(['blocked','deactivated'].includes(state.accountAccess.status))setTimeout(()=>accountStateScreen(state.accountAccess.status,state.accountAccess.reason),0);
+    if(['blocked','deactivated'].includes(state.accountAccess.status))accountStateScreen(state.accountAccess.status,state.accountAccess.reason);
   };
 
   const baseSettings=settings;
