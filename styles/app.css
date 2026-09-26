@@ -141,3 +141,11 @@ body.image-lightbox-open{overflow:hidden}
 #liveChatInput,#circleChatInput,.message-text{unicode-bidi:plaintext;text-align:start}
 
 .reply-editor{margin-top:12px}.reply-editor textarea{display:block;width:100%;min-height:110px;padding:13px 14px;resize:vertical;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;line-height:1.6;unicode-bidi:plaintext;text-align:start}.reply-editor-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+
+/* Polished inline comment controls */
+.reply-editor-actions button,.reply-delete-confirm button{min-height:42px;padding:0 16px;border-radius:12px;font:inherit;font-weight:700}
+.reply-editor-actions button:not(.primary),.reply-delete-confirm .secondary{border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.reply-delete-confirm{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:12px 14px;border:1px solid #efc8c1;border-radius:14px;background:#fff9f7}
+.reply-delete-confirm>span{font-weight:700}.reply-delete-confirm>div{display:flex;gap:8px}
+.reply-delete-confirm .danger{border:1px solid #e5a99f;background:#fff2ef;color:#a42d20}
+@media(max-width:560px){.reply-delete-confirm{align-items:stretch;flex-direction:column}.reply-delete-confirm>div{justify-content:flex-end}}
