@@ -13,6 +13,7 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
 
 /* Mobile create buttons: keep the compact + visually centered. */
 @media(max-width:480px){
-  .page-title>.primary{display:grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;line-height:1;font-size:0;border-radius:16px}
-  .page-title>.primary:after{content:"+";display:block;font-size:24px;font-weight:700;line-height:1;transform:translateY(-1px)}
+  .page-title{grid-template-columns:minmax(0,1fr) 52px;column-gap:12px}
+  .page-title>.primary{grid-column:2;grid-row:1 / span 2;align-self:start;justify-self:end;display:grid;place-items:center;box-sizing:border-box;width:52px;height:52px;min-width:52px;min-height:52px;padding:0!important;line-height:1;font-size:0;border-radius:16px}
+  .page-title>.primary:after{content:"+";display:grid;place-items:center;width:100%;height:100%;font-size:24px;font-weight:700;line-height:1;transform:none}
 }
