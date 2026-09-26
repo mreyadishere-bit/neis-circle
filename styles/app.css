@@ -129,3 +129,13 @@ body.image-lightbox-open{overflow:hidden}
 .image-lightbox img{display:block;width:auto;height:auto;max-width:100%;max-height:100%;object-fit:contain;cursor:default}
 .image-lightbox-close{position:fixed;top:max(16px,env(safe-area-inset-top));right:16px;z-index:1;width:46px;height:46px;border:0;border-radius:50%;background:rgba(255,255,255,.94);color:#14211d;font-size:27px;line-height:1;cursor:pointer}
 @media(max-width:720px){.image-lightbox{padding:12px}.image-lightbox-close{right:12px;width:44px;height:44px}}
+
+/* Targeted mobile article-card recovery */
+@media(max-width:760px){
+  .article-grid{grid-template-columns:1fr}
+  .article-card{height:auto;min-height:0;grid-template-columns:1fr}
+  .article-cover{height:210px;min-height:210px}
+  .article-copy{min-height:230px}
+}
+/* Mixed Arabic/English chat: browser resolves each message/input from its first strong character */
+#liveChatInput,#circleChatInput,.message-text{unicode-bidi:plaintext;text-align:start}
