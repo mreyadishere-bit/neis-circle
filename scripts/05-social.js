@@ -281,7 +281,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-message-user]').forEach(el=>el.onclick=e=>{e.stopPropagation();startConversation(el.dataset.messageUser)});
   root.querySelectorAll('[data-open-conversation]').forEach(el=>el.onclick=()=>{state.activeConversationId=el.dataset.openConversation;routeTo(`messages/${state.activeConversationId}`);markConversationRead(state.activeConversationId)});
   root.querySelectorAll('[data-new-chat]').forEach(el=>el.onclick=openNewConversation);
-  root.querySelectorAll('[data-mobile-threads]').forEach(el=>el.onclick=()=>{state.activeConversationId='';render()});
+  root.querySelectorAll('[data-mobile-threads]').forEach(el=>el.onclick=()=>{state.activeConversationId='';routeTo('messages',true);requestAnimationFrame(()=>{const shell=document.querySelector('.messages');if(shell)shell.classList.remove('mobile-thread-open')})});
   root.querySelectorAll('[data-connection-tab]').forEach(el=>el.onclick=()=>routeTo(`connections/${el.dataset.connectionTab}`));
   root.querySelectorAll('[data-follow-request]').forEach(el=>el.onclick=async e=>{e.stopPropagation();const accepted=el.dataset.followRequest==='accept',q=accepted?sb.from('follows').update({status:'accepted'}).match({follower_id:el.dataset.user,following_id:authUser.id}):sb.from('follows').delete().match({follower_id:el.dataset.user,following_id:authUser.id}),{error}=await q;if(error){toast(safeError(error,accepted?'accept this request':'reject this request'));return}await loadLiveData();render();toast(accepted?t('Request accepted.','تم قبول الطلب.'):t('Request rejected.','تم رفض الطلب.'))});
   root.querySelectorAll('[data-open-circle]').forEach(el=>el.onclick=e=>{e.stopPropagation();routeTo(`circles/${el.dataset.openCircle}/home`)});
