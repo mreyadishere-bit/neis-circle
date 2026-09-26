@@ -10,3 +10,9 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
 .profile-interest-block{justify-items:center}.profile-interest-block .tag-row{justify-content:center}body.rtl .profile-interest-block{justify-items:center}}
 @media(max-width:600px){.top{height:auto!important;min-height:116px;padding:10px 13px!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:44px 48px;gap:8px 10px;align-content:center}.wordmark{grid-column:1;grid-row:1;min-width:0}.wordmark b{font-size:17px;white-space:nowrap}.top-actions{grid-column:2;grid-row:1;justify-self:end;min-width:0}.top-actions .round-btn,.top-actions .mini-avatar{width:38px;height:38px;flex-basis:38px;border-radius:12px}.top-actions .round-btn svg{width:17px;height:17px}.search{grid-column:1/-1;grid-row:2;width:100%;max-width:none;height:46px;margin:0}.search input{min-width:0;font-size:14px}.search .search-submit{width:38px;height:38px;flex:0 0 38px} .messages{height:calc(100dvh - 244px);min-height:0}.chat-flow{padding:14px 10px}.chat-form{margin-inline:10px!important}}
 @media(max-width:430px){.discover-filter-panel{grid-template-columns:1fr;gap:11px}.discover-filter-reset{grid-column:auto}.page-title>.page-actions{grid-template-columns:minmax(0,1fr) 44px}.page-title>.page-actions .primary{width:44px;min-width:44px}.profile-hero{padding-inline:18px}.profile-interest-block .tag-row{gap:6px}.profile-interest-block .tag-row span{font-size:9px}}
+
+/* Mobile create buttons: keep the compact + visually centered. */
+@media(max-width:480px){
+  .page-title>.primary{display:grid;place-items:center;width:52px;height:52px;min-width:52px;padding:0!important;line-height:1;font-size:0;border-radius:16px}
+  .page-title>.primary:after{content:"+";display:block;font-size:24px;font-weight:700;line-height:1;transform:translateY(-1px)}
+}
