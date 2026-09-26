@@ -101,13 +101,13 @@ async function initSupabase(){
 async function loadLiveData(){
   if(!sb||!authUser)return;
   const [postRes,commentRes,reactionRes,bookmarkRes,profileRes]=await Promise.all([
-    sb.from("posts").select("id,kind,title,body,tags,created_at,author_id,profiles!posts_author_id_fkey(full_name,grade,campus)").order("created_at",{ascending:false}),
+    sb.from("posts").select("id,kind,title,body,tags,created_at,author_id,circle_id,profiles!posts_author_id_fkey(full_name,grade,campus)").order("created_at",{ascending:false}),
     sb.from("comments").select("post_id"),sb.from("reactions").select("post_id,user_id"),sb.from("bookmarks").select("post_id,user_id").eq("user_id",authUser.id),
     sb.from("profiles").select("full_name,username,grade,campus,bio,interests").eq("id",authUser.id).maybeSingle()
   ]);
   if(postRes.error){console.error(postRes.error);return}
   const commentCount={},reactionCount={};(commentRes.data||[]).forEach(x=>commentCount[x.post_id]=(commentCount[x.post_id]||0)+1);(reactionRes.data||[]).forEach(x=>reactionCount[x.post_id]=(reactionCount[x.post_id]||0)+1);
-  state.posts=(postRes.data||[]).map(p=>{const n=p.profiles?.full_name||"NEIS Student";return {id:p.id,user:n,initials:n.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase(),color:"#006f5b",meta:[p.profiles?.grade,p.profiles?.campus].filter(Boolean).join(" · ")||"NEIS Circle",time:new Date(p.created_at).toLocaleDateString(),kind:p.kind,title:p.title,body:p.body,tags:p.tags||[],likes:reactionCount[p.id]||0,comments:commentCount[p.id]||0}});
+  state.posts=(postRes.data||[]).map(p=>{const n=p.profiles?.full_name||"NEIS Student";return {id:p.id,author_id:p.author_id,circle_id:p.circle_id||null,is_live:true,user:n,initials:n.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase(),color:"#006f5b",meta:[p.profiles?.grade,p.profiles?.campus].filter(Boolean).join(" · ")||"NEIS Circle",time:new Date(p.created_at).toLocaleDateString(),kind:p.kind,title:p.title,body:p.body,tags:p.tags||[],likes:reactionCount[p.id]||0,comments:commentCount[p.id]||0}});
   state.liked=(reactionRes.data||[]).filter(x=>x.user_id===authUser.id).map(x=>x.post_id);state.saved=(bookmarkRes.data||[]).map(x=>x.post_id);
   if(profileRes.data){const p=profileRes.data;state.profile={name:p.full_name||authUser.user_metadata?.full_name||"Student",username:p.username||"",grade:p.grade||"",campus:p.campus||"",bio:p.bio||"",interests:(p.interests||[]).join(", ")}}
   save();
