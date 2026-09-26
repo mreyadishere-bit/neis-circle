@@ -132,5 +132,5 @@ body.image-lightbox-open{overflow:hidden}
 
 /* Comment editing + mixed Arabic/English text */
 .reply-inline-edit{margin-top:12px}.reply-inline-edit textarea{width:100%;min-height:110px;resize:vertical;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;line-height:1.65;unicode-bidi:plaintext;text-align:start}.reply-edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.chat-form input,.chat-form textarea,#liveChatInput,.message-text,.bubble{unicode-bidi:plaintext;text-align:start}
-#liveChatInput{direction:inherit}
+.chat-form input,.chat-form textarea,#liveChatInput,#circleChatInput,.message-text,.bubble{unicode-bidi:plaintext;text-align:start}
+#liveChatInput,#circleChatInput{direction:inherit}
