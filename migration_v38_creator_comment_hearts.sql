@@ -1,0 +1,1 @@
+-- Feature #6 creator hearts were applied to production. See Supabase migration creator_comment_hearts for the independently persisted post/article creator-heart tables and author-only RLS policies.
