@@ -8,6 +8,7 @@ const bi=(en,arabic)=>ar()?arabic:en;
 const NEIS_BRANCHES=Object.freeze([
   'El-Obour','El-Shorouk','Al-Andalus','Al-Yasmine','6th of October','Sheikh Zayed','El-Sadat','Port Said','New Damietta','Minya','New Assiut','Qena','New Tiba – Luxor','New Aswan','10th of Ramadan','New Administrative Capital','Suez','Sharm El-Sheikh','Luxor'
 ]);
+window.NEIS_BRANCHES=NEIS_BRANCHES;
 const LEGACY_BRANCH_NAMES=Object.freeze({
   'Sadat Branch':'El-Sadat','Sadat':'El-Sadat','El Sadat':'El-Sadat','El-Sadat Branch':'El-Sadat',
   'El Shorouk Branch':'El-Shorouk','El Shorouk':'El-Shorouk','El-Shorouk Branch':'El-Shorouk',
