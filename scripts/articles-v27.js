@@ -198,7 +198,7 @@
     if(request!==commentRequest||!$('#articleCommentsBody'))return;
     if(error){root.innerHTML=`<div class="article-comment-error">${esc(window.neisFriendlyError?.(error,'load article comments')||tr('Comments could not load.','تعذر تحميل التعليقات.'))}</div>`;return}
     const comments=data||[],roots=comments.filter(item=>!item.parent_id); const {data:commentLikes,error:likesError}=comments.length?await sb.from('article_comment_likes').select('comment_id,user_id').in('comment_id',comments.map(x=>x.id)):{data:[],error:null}; if(likesError)console.warn('[NEIS article comment likes]',likesError); const likesByComment=new Map();(commentLikes||[]).forEach(x=>{const key=String(x.comment_id),row=likesByComment.get(key)||{count:0,mine:false};row.count++;if(same(x.user_id,uid()))row.mine=true;likesByComment.set(key,row)});
-    root.innerHTML=`<div class="article-comment-list">${roots.length?roots.map(item=>renderArticleComment(item,comments,likesByComment)).join('):`<div class="empty"><b>${tr('No comments yet','لا توجد تعليقات بعد')}</b><span>${tr('Start a thoughtful conversation about this article.','ابدأ نقاشًا مفيدًا حول هذا المقال.')}</span></div>`}</div>`;
+    root.innerHTML=`<div class="article-comment-list">${roots.length?roots.map(item=>renderArticleComment(item,comments,likesByComment)).join(''):`<div class="empty"><b>${tr('No comments yet','لا توجد تعليقات بعد')}</b><span>${tr('Start a thoughtful conversation about this article.','ابدأ نقاشًا مفيدًا حول هذا المقال.')}</span></div>`}</div>`;
     $('#articleCommentCount').textContent=String(comments.length);
     bindArticleCommentActions(articleId,comments);
   }
