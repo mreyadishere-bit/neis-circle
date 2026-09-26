@@ -149,3 +149,24 @@ body.image-lightbox-open{overflow:hidden}
 .reply-delete-confirm>span{font-weight:700}.reply-delete-confirm>div{display:flex;gap:8px}
 .reply-delete-confirm .danger{border:1px solid #e5a99f;background:#fff2ef;color:#a42d20}
 @media(max-width:560px){.reply-delete-confirm{align-items:stretch;flex-direction:column}.reply-delete-confirm>div{justify-content:flex-end}}
+
+
+/* Post header identity alignment: keep avatar + author copy together inside the left grid cell. */
+.post .post-top>.post-author{
+  display:inline-grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  justify-self:start;
+  justify-content:start;
+  gap:11px;
+  width:max-content;
+  max-width:100%;
+}
+.post .post-top>.post-author>.post-person{
+  width:auto;
+  min-width:0;
+  justify-self:start;
+}
+.post .post-top>.post-meta-actions{
+  justify-self:end;
+}
