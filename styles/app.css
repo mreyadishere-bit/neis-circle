@@ -113,3 +113,10 @@
     .profile-hero>.profile-hero-actions button{min-width:104px;height:46px;margin:0;white-space:nowrap}
     @media(max-width:900px){.profile-hero>.profile-hero-actions{grid-column:1/-1;width:100%;min-width:0;justify-content:flex-start;flex-wrap:wrap}}
     @media(max-width:560px){.profile-hero>.profile-hero-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.profile-hero>.profile-hero-actions button{width:100%;min-width:0}.profile-hero>.profile-hero-actions button:nth-child(3){grid-column:1/-1}}
+
+.reply-actions [data-comment-like],.article-comment-actions [data-article-comment-like]{display:inline-flex;align-items:center;gap:6px}
+.like-heart{display:inline-grid;place-items:center;font-size:16px;line-height:1}
+.reply-actions [data-comment-like] b,.article-comment-actions [data-article-comment-like] b{font-size:12px;font-weight:700;min-width:8px}
+.creator-heart{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;font-size:15px;color:#e5484d;background:#fff0f0;border:1px solid #ffd1d3}
+.creator-heart-toggle{display:inline-grid!important;place-items:center;width:34px;height:34px;padding:0!important;border-radius:10px!important;color:#8b9691}
+.creator-heart-toggle.active{color:#e5484d!important;background:#fff0f0!important;border-color:#ffd1d3!important}
