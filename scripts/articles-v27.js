@@ -308,6 +308,8 @@
       .on('postgres_changes',{event:'*',schema:'public',table:'article_comments',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleComments(article.id)})
       .on('postgres_changes',{event:'*',schema:'public',table:'article_reactions',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleEngagement(article.id)})
       .on('postgres_changes',{event:'*',schema:'public',table:'article_shares',filter:`article_id=eq.${article.id}`},()=>{if($('#articleComments'))loadArticleEngagement(article.id)})
+      .on('postgres_changes',{event:'*',schema:'public',table:'article_comment_likes'},()=>{if($('#articleComments'))loadArticleComments(article.id)})
+      .on('postgres_changes',{event:'*',schema:'public',table:'article_comment_creator_hearts'},()=>{if($('#articleComments'))loadArticleComments(article.id)})
       .subscribe();
   }
 
