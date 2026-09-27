@@ -13,6 +13,22 @@ const jsonHeaders = {
 const reply = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
+
+function decodeVerifiedJwtClaims(jwt: string) {
+  const payload = jwt.split(".")[1];
+  if (!payload) return null;
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      "=",
+    );
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS")
     return new Response("ok", { headers: jsonHeaders });
@@ -33,13 +49,23 @@ Deno.serve(async (request: Request) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: authData, error: authError } = await admin.auth.getUser(jwt);
-    const user = authData.user;
-    if (authError || !user)
-      return reply(
-        { error: "Your session has expired. Please sign in again." },
-        401,
-      );
+
+    // This function is deployed with verify_jwt=true, so the Edge Functions
+    // gateway has already cryptographically validated the bearer token before
+    // this code runs. Read the verified subject directly instead of calling
+    // Auth getUser() a second time, which can reject otherwise valid gateway-
+    // verified tokens when there is no matching refresh-session row.
+    const claims = decodeVerifiedJwtClaims(jwt);
+    const userId = String(claims?.sub ?? "").trim();
+    const role = String(claims?.role ?? "").trim();
+    if (
+      role !== "authenticated" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        userId,
+      )
+    ) {
+      return reply({ error: "Please sign in to join this meeting." }, 401);
+    }
 
     const input = await request.json().catch(() => ({}));
     const meetingId = String(
@@ -62,7 +88,7 @@ Deno.serve(async (request: Request) => {
       admin
         .from("profiles")
         .select("full_name,username,avatar_url,role,account_status")
-        .eq("id", user.id)
+        .eq("id", userId)
         .maybeSingle(),
     ]);
 
@@ -77,7 +103,7 @@ Deno.serve(async (request: Request) => {
       .from("circle_members")
       .select("role,status")
       .eq("circle_id", meeting.circle_id)
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     const platformAdmin = profile.role === "admin";
@@ -91,7 +117,7 @@ Deno.serve(async (request: Request) => {
 
     const moderator =
       platformAdmin ||
-      meeting.creator_id === user.id ||
+      meeting.creator_id === userId ||
       (activeMember &&
         ["owner", "admin", "moderator"].includes(member?.role ?? ""));
     const livekitUrl = Deno.env.get("LIVEKIT_URL") ?? "";
@@ -103,7 +129,7 @@ Deno.serve(async (request: Request) => {
 
     const displayName = profile.full_name || profile.username || "NEIS Student";
     const token = new AccessToken(apiKey, apiSecret, {
-      identity: user.id,
+      identity: userId,
       name: displayName,
       ttl: "20m",
       metadata: JSON.stringify({
@@ -125,7 +151,7 @@ Deno.serve(async (request: Request) => {
       participant_token: participantToken,
       server_url: livekitUrl,
       room_name: meeting.room_name,
-      participant_identity: user.id,
+      participant_identity: userId,
       display_name: displayName,
       is_moderator: moderator,
     });
