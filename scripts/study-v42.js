@@ -10,7 +10,7 @@
   };
   let searchTimer=null;
 
-  function friendly(error){console.error('[NEIS Study]',error);return window.neisFriendlyError?.(error,'load Study resources')||tr('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')}
+  function friendly(error,action='load Study resources'){console.error('[NEIS Study]',error);return window.neisFriendlyError?.(error,action)||tr('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')}
   function clean(value){return String(value||'').trim()}
   function validUrl(value){try{const url=new URL(value);return url.protocol==='http:'||url.protocol==='https:'}catch{return false}}
   function option(value,label,current){return `<option value="${esc(value)}" ${value===current?'selected':''}>${esc(label)}</option>`}
@@ -96,9 +96,8 @@
       const title=study.tab==='saved'?tr('No saved resources','لا توجد مصادر محفوظة'):study.tab==='my'?tr('You have not shared a resource yet','لم تشارك مصدرًا بعد'):tr('No resources found','لم يتم العثور على مصادر');
       return empty(title,tr('Try different filters or share a useful link.','جرّب فلاتر أخرى أو شارك رابطًا مفيدًا.'),`<button class="primary" data-study-new>${tr('Share a resource','مشاركة مصدر')}</button>`);
     }
-    const pages=Math.max(1,Math.ceil(study.total/PAGE_SIZE));
-    return `<div class="study-results-head"><b>${study.total} ${tr(study.total===1?'resource':'resources','مصدر')}</b><span>${tr('Page','صفحة')} ${study.page+1} / ${pages}</span></div><div class="study-grid">${study.resources.map(resourceCard).join('')}</div>
-      <nav class="study-pagination" aria-label="${tr('Study pages','صفحات Study')}"><button class="secondary" data-study-page="${study.page-1}" ${study.page===0?'disabled':''}>${tr('Previous','السابق')}</button><button class="secondary" data-study-page="${study.page+1}" ${study.page+1>=pages?'disabled':''}>${tr('Next','التالي')}</button></nav>`;
+    const pages=Math.max(1,Math.ceil(study.total/PAGE_SIZE)),pageMeta=pages>1?`<span>${tr('Page','صفحة')} ${study.page+1} / ${pages}</span>`:'',pagination=pages>1?`<nav class="study-pagination" aria-label="${tr('Study pages','صفحات Study')}"><button class="secondary" data-study-page="${study.page-1}" ${study.page===0?'disabled':''}>${tr('Previous','السابق')}</button><button class="secondary" data-study-page="${study.page+1}" ${study.page+1>=pages?'disabled':''}>${tr('Next','التالي')}</button></nav>`:'';
+    return `<div class="study-results-head"><b>${study.total} ${tr(study.total===1?'resource':'resources','مصدر')}</b>${pageMeta}</div><div class="study-grid">${study.resources.map(resourceCard).join('')}</div>${pagination}`;
   }
 
   function studyView(){
@@ -140,7 +139,7 @@
     const payload={title:clean($('#studyFormTitle').value),description:clean($('#studyFormDescription').value),subject:clean($('#studyFormSubject').value),unit:clean($('#studyFormUnit').value),external_url:externalUrl,resource_type:$('#studyFormType').value,language:$('#studyFormLanguage').value,link_access_confirmed:true};
     const query=resource?sb.from('study_resources').update(payload).eq('id',resource.id).select('*').single():sb.from('study_resources').insert({...payload,author_id:authUser.id}).select('*').single();
     const {data,error}=await query;
-    if(error){button.disabled=false;toast(friendly(error));return}
+    if(error){button.disabled=false;toast(friendly(error,resource?'update this Study resource':'publish this Study resource'));return}
     closeModal();study.subject=data.subject;study.unit=data.unit;study.page=0;study.tab='resources';
     study.subjects=await loadValues('subject');study.units=await loadValues('unit');await loadResources();
     toast(resource?tr('Resource updated.','تم تحديث المصدر.'):tr('Resource published.','تم نشر المصدر.'));
@@ -156,10 +155,16 @@
 
   async function toggleAction(id,kind,button){
     if(button.disabled)return;button.disabled=true;
-    const current=study.actions.get(String(id))||{helpful:false,saved:false},next={helpful:!!current.helpful,saved:!!current.saved};next[kind]=!next[kind];
-    let result;if(!next.helpful&&!next.saved)result=await sb.from('study_resource_actions').delete().match({resource_id:id,user_id:authUser.id});
-    else result=await sb.from('study_resource_actions').upsert({resource_id:id,user_id:authUser.id,helpful:next.helpful,saved:next.saved},{onConflict:'resource_id,user_id'});
-    if(result.error){button.disabled=false;toast(friendly(result.error));return}
+    const current=study.actions.get(String(id))||{helpful:false,saved:false},exists=study.actions.has(String(id)),next={helpful:!!current.helpful,saved:!!current.saved};next[kind]=!next[kind];
+    let result;
+    if(!next.helpful&&!next.saved){
+      result=exists?await sb.from('study_resource_actions').delete().match({resource_id:id,user_id:authUser.id}):{error:null};
+    }else if(exists){
+      result=await sb.from('study_resource_actions').update({helpful:next.helpful,saved:next.saved}).match({resource_id:id,user_id:authUser.id});
+    }else{
+      result=await sb.from('study_resource_actions').insert({resource_id:id,user_id:authUser.id,helpful:next.helpful,saved:next.saved});
+    }
+    if(result.error){button.disabled=false;toast(friendly(result.error,kind==='helpful'?'update Helpful':'update Saved Resources'));return}
     const resource=study.resources.find(item=>same(item.id,id));if(resource&&kind==='helpful')resource.helpful_count=Math.max(0,Number(resource.helpful_count||0)+(next.helpful?1:-1));
     if(next.helpful||next.saved)study.actions.set(String(id),{resource_id:id,...next});else study.actions.delete(String(id));
     if(study.tab==='saved'&&kind==='saved'&&!next.saved){study.resources=study.resources.filter(item=>!same(item.id,id));study.total=Math.max(0,study.total-1)}
