@@ -16,7 +16,7 @@
 
   document.addEventListener('click',async event=>{
     const button=event.target.closest('[data-delete-reply]');
-    if(!button)return;
+    if(!button||button.closest('#replyContent'))return;
     event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
     const reply=state.allComments.find(item=>String(item.id)===String(button.dataset.deleteReply));
     if(!reply)return;
