@@ -29,3 +29,5 @@
 @media(max-width:760px){
   .livekit-tile.screen-focused{inset:8px}
 }
+
+.livekit-persistent-audio{position:fixed;width:1px;height:1px;left:-9999px;top:-9999px;overflow:hidden;opacity:0;pointer-events:none}
