@@ -33,11 +33,15 @@ serve(async (request) => {
     });
   }
 
-  const resendKey = Deno.env.get("RESEND_API_KEY") ?? "";
-  const from = Deno.env.get("NOTIFICATION_FROM_EMAIL") ?? "";
-  if (!resendKey || !from) {
+  const brevoKey = Deno.env.get("BREVO_API_KEY") ?? "";
+  const rawFrom = Deno.env.get("NOTIFICATION_FROM_EMAIL") ?? "";
+  const configuredName = Deno.env.get("NOTIFICATION_FROM_NAME") ?? "NEIS Circle";
+  const fromMatch = rawFrom.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  const fromEmail = (fromMatch?.[2] ?? rawFrom).trim();
+  const senderName = (fromMatch?.[1] || configuredName).trim() || "NEIS Circle";
+  if (!brevoKey || !fromEmail) {
     return new Response(
-      JSON.stringify({ error: "Email provider is not configured" }),
+      JSON.stringify({ error: "Brevo email provider is not configured" }),
       { status: 503, headers: cors },
     );
   }
@@ -88,21 +92,26 @@ serve(async (request) => {
       if (accountError || !email || !account.user?.email_confirmed_at)
         throw new Error("Recipient email is unavailable");
       const target = `${siteUrl}${job.action_path}`;
-      const provider = await fetch("https://api.resend.com/emails", {
+      const provider = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
-          authorization: `Bearer ${resendKey}`,
+          "api-key": brevoKey,
+          accept: "application/json",
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          from,
-          to: [email],
+          sender: { email: fromEmail, name: senderName },
+          to: [{ email }],
           subject: job.subject,
-          html: `<div style="margin:0;background:#f3f7f5;padding:28px 12px;font-family:Arial,sans-serif;color:#092d26"><div style="margin:0 auto;max-width:600px;overflow:hidden;border:1px solid #dce8e3;border-radius:24px;background:#ffffff"><img src="${escapeHtml(posterUrl)}" alt="NEIS Circle community" width="600" style="display:block;width:100%;height:auto;max-height:260px;object-fit:cover"><div style="padding:28px"><div style="display:flex;align-items:center;margin-bottom:22px"><img src="${escapeHtml(logoUrl)}" alt="NEIS Circle" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:15px"><div style="padding-left:12px"><strong style="display:block;font-size:16px">NEIS Circle</strong><span style="color:#71827e;font-size:12px">Student community</span></div></div><h1 style="margin:0 0 14px;font-size:24px;line-height:1.35">${escapeHtml(job.subject)}</h1><p style="margin:0 0 24px;line-height:1.75;color:#526963;white-space:pre-line">${escapeHtml(job.preview)}</p><a href="${escapeHtml(target)}" style="display:inline-block;padding:13px 20px;border-radius:12px;background:#007c68;color:#fff;text-decoration:none;font-weight:700">Open NEIS Circle · افتح المنصة</a><p style="margin:26px 0 0;padding-top:18px;border-top:1px solid #e5eeea;font-size:11px;line-height:1.6;color:#71827e">You received this email because of activity connected to your NEIS Circle account.</p></div></div></div>`,
+          htmlContent: `<div style="margin:0;background:#f3f7f5;padding:28px 12px;font-family:Arial,sans-serif;color:#092d26"><div style="margin:0 auto;max-width:600px;overflow:hidden;border:1px solid #dce8e3;border-radius:24px;background:#ffffff"><img src="${escapeHtml(posterUrl)}" alt="NEIS Circle community" width="600" style="display:block;width:100%;height:auto;max-height:260px;object-fit:cover"><div style="padding:28px"><div style="display:flex;align-items:center;margin-bottom:22px"><img src="${escapeHtml(logoUrl)}" alt="NEIS Circle" width="48" height="48" style="display:block;width:48px;height:48px;border-radius:15px"><div style="padding-left:12px"><strong style="display:block;font-size:16px">NEIS Circle</strong><span style="color:#71827e;font-size:12px">Student community</span></div></div><h1 style="margin:0 0 14px;font-size:24px;line-height:1.35">${escapeHtml(job.subject)}</h1><p style="margin:0 0 24px;line-height:1.75;color:#526963;white-space:pre-line">${escapeHtml(job.preview)}</p><a href="${escapeHtml(target)}" style="display:inline-block;padding:13px 20px;border-radius:12px;background:#007c68;color:#fff;text-decoration:none;font-weight:700">Open NEIS Circle · افتح المنصة</a><p style="margin:26px 0 0;padding-top:18px;border-top:1px solid #e5eeea;font-size:11px;line-height:1.6;color:#71827e">You received this email because of activity connected to your NEIS Circle account.</p></div></div></div>`,
         }),
       });
-      if (!provider.ok)
-        throw new Error(`Provider rejected delivery (${provider.status})`);
+      if (!provider.ok) {
+        const providerMessage = (await provider.text()).slice(0, 220);
+        throw new Error(
+          `Brevo rejected delivery (${provider.status})${providerMessage ? `: ${providerMessage}` : ""}`,
+        );
+      }
       await supabase
         .from("email_notification_outbox")
         .update({
