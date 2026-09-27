@@ -80,10 +80,10 @@
       <div class="study-author"><span class="avatar">${esc(initials(author.full_name||'Student'))}</span><div><b>${esc(author.full_name||tr('NEIS Student','طالب NEIS'))}</b><small>@${esc(author.username||'student')} · ${esc(languageLabel(resource.language))}</small></div></div>
       <div class="study-actions">
         <a class="primary" href="${esc(resource.external_url)}" target="_blank" rel="noopener noreferrer">${tr('Open resource','فتح المصدر')} ↗</a>
-        <button class="action ${action.helpful?'active':''}" data-study-helpful="${esc(resource.id)}" aria-pressed="${action.helpful?'true':'false'}">${icon('heart')}<span>${tr('Helpful','مفيد')}</span><b>${Number(resource.helpful_count||0)}</b></button>
-        <button class="action ${action.saved?'active':''}" data-study-save="${esc(resource.id)}" aria-pressed="${action.saved?'true':'false'}">${icon('save')}<span>${action.saved?tr('Saved','محفوظ'):tr('Save','حفظ')}</span></button>
+        <button type="button" class="action ${action.helpful?'active':''}" data-study-helpful="${esc(resource.id)}" aria-pressed="${action.helpful?'true':'false'}">${icon('heart')}<span>${tr('Helpful','مفيد')}</span><b>${Number(resource.helpful_count||0)}</b></button>
+        <button type="button" class="action ${action.saved?'active':''}" data-study-save="${esc(resource.id)}" aria-pressed="${action.saved?'true':'false'}">${icon('save')}<span>${action.saved?tr('Saved','محفوظ'):tr('Save','حفظ')}</span></button>
         <button class="action" data-study-share="${esc(resource.id)}">${icon('share')}<span>${tr('Share','مشاركة')}</span></button>
-        ${editable?`<button class="action" data-study-edit="${esc(resource.id)}">${tr('Edit','تعديل')}</button><button class="action danger" data-study-delete="${esc(resource.id)}">${tr('Delete','حذف')}</button>`:`<button class="action" data-study-report="${esc(resource.id)}">${tr('Report','إبلاغ')}</button>`}
+        ${editable?`<button type="button" class="action" data-study-edit="${esc(resource.id)}">${tr('Edit','تعديل')}</button><button type="button" class="action danger" data-study-delete="${esc(resource.id)}">${tr('Delete','حذف')}</button>`:`<button type="button" class="action" data-study-report="${esc(resource.id)}">${tr('Report','إبلاغ')}</button>`}
       </div>
     </article>`;
   }
@@ -184,14 +184,19 @@
     if(unit)unit.onchange=()=>{study.unit=unit.value;study.page=0;loadResources()};
     const search=$('#studySearch');if(search)search.oninput=()=>{study.search=search.value;study.page=0;clearTimeout(searchTimer);searchTimer=setTimeout(loadResources,350)};
     [['studyType','type'],['studyLanguage','language'],['studySort','sort']].forEach(([id,key])=>{const field=$('#'+id);if(field)field.onchange=()=>{study[key]=field.value;study.page=0;loadResources()}});
-    $$('[data-study-page]').forEach(button=>button.onclick=()=>{study.page=Number(button.dataset.studyPage);loadResources();scrollTo({top:0,behavior:'smooth'})});
-    $$('[data-study-helpful]').forEach(button=>button.onclick=()=>toggleAction(button.dataset.studyHelpful,'helpful',button));
-    $$('[data-study-save]').forEach(button=>button.onclick=()=>toggleAction(button.dataset.studySave,'saved',button));
-    $$('[data-study-share]').forEach(button=>button.onclick=()=>shareResource(button.dataset.studyShare));
-    $$('[data-study-edit]').forEach(button=>button.onclick=()=>editor(study.resources.find(item=>same(item.id,button.dataset.studyEdit))));
-    $$('[data-study-delete]').forEach(button=>button.onclick=()=>removeResource(button.dataset.studyDelete));
-    $$('[data-study-report]').forEach(button=>button.onclick=()=>reportResource(button.dataset.studyReport));
-    $('[data-study-retry]')?.addEventListener('click',loadResources);
+    const view=$('#view');
+    if(view)view.onclick=event=>{
+      const button=event.target.closest('button,a');
+      if(!button||!view.contains(button))return;
+      if(button.matches('[data-study-page]')){event.preventDefault();study.page=Number(button.dataset.studyPage);loadResources();scrollTo({top:0,behavior:'smooth'});return}
+      if(button.matches('[data-study-helpful]')){event.preventDefault();toggleAction(button.dataset.studyHelpful,'helpful',button);return}
+      if(button.matches('[data-study-save]')){event.preventDefault();toggleAction(button.dataset.studySave,'saved',button);return}
+      if(button.matches('[data-study-share]')){event.preventDefault();shareResource(button.dataset.studyShare);return}
+      if(button.matches('[data-study-edit]')){event.preventDefault();editor(study.resources.find(item=>same(item.id,button.dataset.studyEdit)));return}
+      if(button.matches('[data-study-delete]')){event.preventDefault();removeResource(button.dataset.studyDelete);return}
+      if(button.matches('[data-study-report]')){event.preventDefault();reportResource(button.dataset.studyReport);return}
+      if(button.matches('[data-study-retry]')){event.preventDefault();loadResources();return}
+    };
   }
 
   const previousRender=render;
