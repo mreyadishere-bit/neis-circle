@@ -34,7 +34,7 @@
     if(!shouldLoadResources()){study.resources=[];study.actions=new Map();study.total=0;study.loading=false;study.error='';renderStudyPage();return}
     study.loading=true;study.error='';renderStudyPage();
     const {data,error}=await sb.rpc('study_resource_page',{
-      mode_input:study.tab,subject_input:study.subject||null,unit_input:study.unit||null,lesson_input:null,
+      mode_input:study.tab,subject_input:study.subject||null,unit_input:study.unit||null,
       search_input:clean(study.search)||null,type_input:study.type||null,language_input:study.language||null,
       oldest_input:study.sort==='oldest',page_size_input:PAGE_SIZE,offset_input:study.page*PAGE_SIZE
     });
