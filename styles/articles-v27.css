@@ -32,7 +32,7 @@
 .article-comment-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .article-comment-actions button{height:31px;padding:0 9px;border:1px solid var(--line);border-radius:9px;background:var(--soft);color:var(--muted);font-size:9px;font-weight:750}
 .article-comment-actions button.danger{margin-inline-start:auto}
-.article-comment-edit{display:grid;gap:9px;margin-top:11px}.article-comment-edit textarea{width:100%;min-height:90px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);font:inherit;line-height:1.6;resize:vertical}
+.article-comment-edit{display:grid;gap:9px;margin-top:11px}.article-comment-edit textarea{width:100%;min-height:90px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);font:inherit;line-height:1.6;resize:vertical;unicode-bidi:plaintext;text-align:start}
 .article-comment-confirm{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:11px;padding:10px;border-radius:11px;background:var(--soft);font-size:9px}
 .article-comment-confirm div{display:flex;gap:6px}
 .article-comment-composer{display:grid;gap:10px;margin-top:20px;padding:15px;border:1px solid var(--line);border-radius:17px;background:var(--soft)}
