@@ -55,6 +55,7 @@ const coreLoad=loadLiveData;
 loadLiveData=async function(){
   if(!sb||!authUser)return;
   await coreLoad();
+  if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const uid=authUser.id;
   const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,notificationRes,commentRes,reportRes]=await Promise.all([
     sb.from('follows').select('*').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
@@ -88,12 +89,53 @@ loadLiveData=async function(){
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at').limit(500);if(!cm.error)state.circleMessages=cm.data||[]}
   if(v6Channel)await sb.removeChannel(v6Channel);
-  v6Channel=sb.channel(`neis-v7-${uid}`).on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'comments'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6).on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6).subscribe();
+  v6Channel=sb.channel(`neis-v7-${uid}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6)
+    .subscribe();
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };
-let refreshBusy=false;
-async function refreshV6(){if(refreshBusy)return;refreshBusy=true;try{await loadLiveData();render()}finally{refreshBusy=false}}
+let refreshBusy=false,refreshQueued=false;
+async function refreshV6(){
+  if(refreshBusy){refreshQueued=true;return}
+  refreshBusy=true;
+  try{
+    do{
+      refreshQueued=false;
+      const active=document.activeElement;
+      const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
+      const liveDraft=liveInput?.value??null,circleDraft=circleInput?.value??null;
+      const liveSel=liveInput?[liveInput.selectionStart,liveInput.selectionEnd]:null;
+      const circleSel=circleInput?[circleInput.selectionStart,circleInput.selectionEnd]:null;
+      const keepLiveFocus=active===liveInput,keepCircleFocus=active===circleInput;
+      const flow=$('#chatFlow'),circleFlow=$('#circleChatFlow');
+      const flowBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight:null;
+      const circleBottom=circleFlow?circleFlow.scrollHeight-circleFlow.scrollTop-circleFlow.clientHeight:null;
+      await loadLiveData();
+      render();
+      requestAnimationFrame(()=>{
+        const nextLive=$('#liveChatInput'),nextCircle=$('#circleChatInput');
+        if(nextLive&&liveDraft!==null){nextLive.value=liveDraft;if(keepLiveFocus){nextLive.focus({preventScroll:true});if(liveSel)nextLive.setSelectionRange(liveSel[0],liveSel[1])}}
+        if(nextCircle&&circleDraft!==null){nextCircle.value=circleDraft;if(keepCircleFocus){nextCircle.focus({preventScroll:true});if(circleSel)nextCircle.setSelectionRange(circleSel[0],circleSel[1])}}
+        const nextFlow=$('#chatFlow'),nextCircleFlow=$('#circleChatFlow');
+        if(nextFlow&&flowBottom!==null)nextFlow.scrollTop=Math.max(0,nextFlow.scrollHeight-nextFlow.clientHeight-flowBottom);
+        if(nextCircleFlow&&circleBottom!==null)nextCircleFlow.scrollTop=Math.max(0,nextCircleFlow.scrollHeight-nextCircleFlow.clientHeight-circleBottom);
+      });
+    }while(refreshQueued)
+  }finally{refreshBusy=false}
+}
 
 const originalPostCard=postCard;
 postCard=function(p){
