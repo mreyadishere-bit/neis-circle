@@ -49,7 +49,7 @@ function applyRoute(){
   else if(head==='search'){state.view='search';const q=(new URLSearchParams(queryPart).get('q')||state.query||'').trim();state.query=q;const input=$('#globalSearch');if(input)input.value=q;performSearch(q,false)}
   else if(head==='post'&&parts[1]){state.view='home';setTimeout(()=>comments(parts[1]),80)}
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
-  else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','admin','notifications'].includes(head)?head:'home'}
+  else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
   render();
 }
 const priorNav=nav;

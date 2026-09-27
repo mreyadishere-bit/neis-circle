@@ -8,6 +8,7 @@
     ['opportunities','calendar','Opportunities','الفرص'],
     ['gallery','image','Gallery','المعرض'],
     ['articles','article','Articles','المقالات'],
+    ['study','book','Study','الدراسة'],
     ['admin','shield','Admin','الإدارة','admin']
   ];
   function isArabic(){return document.documentElement.lang==='ar'||document.documentElement.dir==='rtl'}
