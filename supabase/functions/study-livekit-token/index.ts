@@ -42,11 +42,12 @@ Deno.serve(async (request: Request) => {
       return reply({ error: "Please sign in to join this meeting." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    if (!supabaseUrl || !serviceRoleKey)
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!supabaseUrl || !anonKey)
       return reply({ error: "Meeting service is unavailable." }, 503);
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
+    const client = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
@@ -79,19 +80,30 @@ Deno.serve(async (request: Request) => {
       return reply({ error: "This meeting is unavailable." }, 400);
     }
 
-    const [{ data: meeting }, { data: profile }] = await Promise.all([
-      admin
+    const [
+      { data: meeting, error: meetingError },
+      { data: profile, error: profileError },
+    ] = await Promise.all([
+      client
         .from("circle_meetings")
         .select("id,circle_id,creator_id,title,room_name,cancelled_at,ended_at")
         .eq("id", meetingId)
         .maybeSingle(),
-      admin
+      client
         .from("profiles")
         .select("full_name,username,avatar_url,role,account_status")
         .eq("id", userId)
         .maybeSingle(),
     ]);
 
+    if (meetingError) {
+      console.error("LiveKit meeting lookup failed", meetingError.message);
+      return reply({ error: "Meeting could not be verified. Please try again." }, 503);
+    }
+    if (profileError) {
+      console.error("LiveKit profile lookup failed", profileError.message);
+      return reply({ error: "Meeting access could not be verified." }, 503);
+    }
     if (!meeting || meeting.cancelled_at || meeting.ended_at) {
       return reply({ error: "This meeting has ended or is unavailable." }, 404);
     }
@@ -99,12 +111,17 @@ Deno.serve(async (request: Request) => {
       return reply({ error: "This account cannot join meetings." }, 403);
     }
 
-    const { data: member } = await admin
+    const { data: member, error: memberError } = await client
       .from("circle_members")
       .select("role,status")
       .eq("circle_id", meeting.circle_id)
       .eq("user_id", userId)
       .maybeSingle();
+
+    if (memberError) {
+      console.error("LiveKit membership lookup failed", memberError.message);
+      return reply({ error: "Meeting membership could not be verified." }, 503);
+    }
 
     const platformAdmin = profile.role === "admin";
     const activeMember = member?.status === "active";
