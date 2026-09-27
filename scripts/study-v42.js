@@ -120,7 +120,7 @@
 
   function lessonRow(value='',index=0){return `<div class="study-lesson-row"><input class="study-lesson-input" required maxlength="160" value="${esc(value)}" dir="auto" placeholder="${tr('Lesson / Topic','الدرس / الموضوع')} ${index+1}"><button type="button" class="secondary" data-study-remove-lesson aria-label="${tr('Remove lesson','حذف الدرس')}">×</button></div>`}
   function syncLessonRows(){
-    const rows=[...$('.study-lesson-row')];
+    const rows=[...document.querySelectorAll('.study-lesson-row')];
     rows.forEach((row,index)=>{
       const input=row.querySelector('.study-lesson-input'),remove=row.querySelector('[data-study-remove-lesson]');
       if(input)input.placeholder=`${tr('Lesson / Topic','الدرس / الموضوع')} ${index+1}`;
@@ -155,7 +155,7 @@
     const externalUrl=clean($('#studyFormUrl').value);
     if(!validUrl(externalUrl)){toast(tr('Enter a valid http:// or https:// link.','أدخل رابطًا صحيحًا يبدأ بـ http:// أو https://.'));return}
     if(!$('#studyFormConfirmed').checked){toast(tr('Confirm that other students can access the link.','أكد أن الطلاب الآخرين يمكنهم فتح الرابط.'));return}
-    const lessons=[...$('.study-lesson-input')].map(input=>clean(input.value)).filter(Boolean).filter((value,index,array)=>array.findIndex(item=>item.toLowerCase()===value.toLowerCase())===index);
+    const lessons=[...document.querySelectorAll('.study-lesson-input')].map(input=>clean(input.value)).filter(Boolean).filter((value,index,array)=>array.findIndex(item=>item.toLowerCase()===value.toLowerCase())===index);
     if(!lessons.length){toast(tr('Add at least one lesson or topic.','أضف درسًا أو موضوعًا واحدًا على الأقل.'));return}
     button.disabled=true;
     const payload={title:clean($('#studyFormTitle').value),description:clean($('#studyFormDescription').value),subject:clean($('#studyFormSubject').value),unit:clean($('#studyFormUnit').value),lesson:lessons[0],lessons,external_url:externalUrl,resource_type:$('#studyFormType').value,language:$('#studyFormLanguage').value,link_access_confirmed:true};
