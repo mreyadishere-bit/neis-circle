@@ -257,42 +257,55 @@ comments=async function(postId){
 
   const bindDiscussionManagement=()=>{
     const scope=$('#replyContent');if(!scope)return;
+    scope.onclick=async event=>{
+      const editButton=event.target.closest('[data-edit-reply]');
+      if(editButton&&scope.contains(editButton)){
+        event.preventDefault();event.stopPropagation();
+        const item=replies.find(row=>same(row.id,editButton.dataset.editReply)),card=editButton.closest('.reply-card');
+        if(!item||!card||card.querySelector('.reply-inline-edit'))return;
+        const bodyEl=card.querySelector('.reply-body'),actions=card.querySelector('.reply-actions');
+        bodyEl?.classList.add('hidden');actions?.classList.add('hidden');
+        card.insertAdjacentHTML('beforeend',`<form class="reply-inline-edit"><textarea maxlength="4000" dir="auto">${esc(item.body||'')}</textarea><div class="reply-edit-actions"><button type="button" data-cancel-reply-edit>${t('Cancel','إلغاء')}</button><button class="primary" type="submit">${t('Save changes','حفظ التعديل')}</button></div></form>`);
+        const form=card.querySelector('.reply-inline-edit'),textarea=form.querySelector('textarea'),save=form.querySelector('[type=submit]');
+        textarea.focus();textarea.setSelectionRange(textarea.value.length,textarea.value.length);
+        form.querySelector('[data-cancel-reply-edit]').onclick=()=>{form.remove();bodyEl?.classList.remove('hidden');actions?.classList.remove('hidden')};
+        form.onsubmit=async submitEvent=>{
+          submitEvent.preventDefault();
+          const body=textarea.value.trim();
+          if(!body){toast(t('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
+          save.disabled=true;
+          const {data:updated,error:updateError}=await sb.from('comments').update({body,updated_at:new Date().toISOString()}).eq('id',item.id).eq('author_id',authUser.id).select('id');
+          if(updateError||!updated?.length){toast(updateError?safeError(updateError,'edit your reply'):t('This reply could not be updated.','تعذر تعديل هذا الرد.'));save.disabled=false;return}
+          await loadLiveData();await comments(postId);toast(t('Reply updated.','تم تعديل الرد.'));
+        };
+        return;
+      }
 
-    scope.querySelectorAll('[data-edit-reply]').forEach(button=>button.onclick=()=>{
-      const item=replies.find(row=>same(row.id,button.dataset.editReply)),card=button.closest('.reply-card');
-      if(!item||!card||card.querySelector('.reply-inline-edit'))return;
-      const bodyEl=card.querySelector('.reply-body'),actions=card.querySelector('.reply-actions');
-      bodyEl?.classList.add('hidden');actions?.classList.add('hidden');
-      card.insertAdjacentHTML('beforeend',`<form class="reply-inline-edit"><textarea maxlength="4000" dir="auto">${esc(item.body||'')}</textarea><div class="reply-edit-actions"><button type="button" data-cancel-reply-edit>${t('Cancel','إلغاء')}</button><button class="primary" type="submit">${t('Save changes','حفظ التعديل')}</button></div></form>`);
-      const form=card.querySelector('.reply-inline-edit'),textarea=form.querySelector('textarea'),save=form.querySelector('[type=submit]');
-      textarea.focus();textarea.setSelectionRange(textarea.value.length,textarea.value.length);
-      form.querySelector('[data-cancel-reply-edit]').onclick=()=>{form.remove();bodyEl?.classList.remove('hidden');actions?.classList.remove('hidden')};
-      form.onsubmit=async event=>{
-        event.preventDefault();
-        const body=textarea.value.trim();
-        if(!body){toast(t('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
-        save.disabled=true;
-        const {data:updated,error:updateError}=await sb.from('comments').update({body,updated_at:new Date().toISOString()}).eq('id',item.id).eq('author_id',authUser.id).select('id');
-        if(updateError||!updated?.length){toast(updateError?safeError(updateError,'edit your reply'):t('This reply could not be updated.','تعذر تعديل هذا الرد.'));save.disabled=false;return}
-        await loadLiveData();await comments(postId);toast(t('Reply updated.','تم تعديل الرد.'));
-      };
-    });
-
-    scope.querySelectorAll('[data-delete-reply]').forEach(button=>button.onclick=async()=>{
-      const item=replies.find(row=>same(row.id,button.dataset.deleteReply));
-      if(!item||button.disabled)return;
-      if(!window.confirm(t('Delete this comment?','حذف هذا التعليق؟')))return;
-      button.disabled=true;
-      const {data:deleted,error:deleteError}=await sb.from('comments').update({deleted_at:new Date().toISOString(),body:'',updated_at:new Date().toISOString()}).eq('id',item.id).select('id');
-      if(deleteError||!deleted?.length){toast(deleteError?safeError(deleteError,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));button.disabled=false;return}
-      await loadLiveData();await comments(postId);toast(t('Reply deleted.','تم حذف الرد.'));
-    });
+      const deleteButton=event.target.closest('[data-delete-reply]');
+      if(deleteButton&&scope.contains(deleteButton)){
+        event.preventDefault();event.stopPropagation();
+        const item=replies.find(row=>same(row.id,deleteButton.dataset.deleteReply));
+        if(!item||deleteButton.disabled)return;
+        if(deleteButton.dataset.confirmDelete!=='1'){
+          deleteButton.dataset.confirmDelete='1';
+          deleteButton.dataset.originalText=deleteButton.textContent;
+          deleteButton.textContent=t('Confirm delete','تأكيد الحذف');
+          deleteButton.classList.add('danger');
+          setTimeout(()=>{if(deleteButton.isConnected&&deleteButton.dataset.confirmDelete==='1'){deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||t('Delete','حذف')}},5000);
+          return;
+        }
+        deleteButton.disabled=true;
+        const {data:deleted,error:deleteError}=await sb.from('comments').update({deleted_at:new Date().toISOString(),body:'',updated_at:new Date().toISOString()}).eq('id',item.id).select('id');
+        if(deleteError||!deleted?.length){toast(deleteError?safeError(deleteError,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));deleteButton.disabled=false;deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||t('Delete','حذف');return}
+        await loadLiveData();await comments(postId);toast(t('Reply deleted.','تم حذف الرد.'));
+      }
+    };
   };
 
   const roots=replies.filter(r=>!r.parent_id);
   $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(r=>renderNode(r)).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><input id="replyInput" required maxlength="4000" placeholder="${t('Add a useful reply…','أضف ردًا مفيدًا…')}" dir="auto"><button aria-label="${t('Send reply','إرسال الرد')}">→</button></form>`;
-  bindV6($('#modalRoot'));
   bindDiscussionManagement();
+  bindV6($('#modalRoot'));
 
   $('#replyContent').querySelectorAll('[data-reply-to]').forEach(button=>button.onclick=()=>{const reply=replies.find(row=>same(row.id,button.dataset.replyTo)),input=$('#replyInput'),parent=$('#replyParent');if(!reply||!input||!parent)return;parent.value=reply.id;input.placeholder=`${t('Reply to','رد على')} ${reply.profile?.full_name||t('Student','طالب')}…`;input.focus();input.scrollIntoView({block:'nearest',behavior:'smooth'})});
   $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.creatorHeart,hearted=heartsByComment.has(String(commentId));const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}await comments(postId)});
@@ -365,7 +378,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-report-status]').forEach(el=>el.onchange=async()=>{const report=state.reports.find(r=>same(r.id,el.dataset.reportStatus)),previous=report?.status||'open',next=normalizedReportStatus(el.value);el.disabled=true;const {data,error}=await sb.rpc('admin_update_report_status',{report_id_input:el.dataset.reportStatus,status_input:next});if(error||!data){el.value=previous;el.disabled=false;toast(error?safeError(error,'update this report'):t('This report could not be updated.','تعذر تحديث هذا البلاغ.'));return}if(report)report.status=next;render();await loadLiveData();render();toast(t('Report status updated.','تم تحديث حالة البلاغ.'))});
   root.querySelectorAll('[data-delete-report]').forEach(el=>el.onclick=()=>deleteResolvedReport(el.dataset.deleteReport));
   root.querySelectorAll('[data-reply-to]').forEach(el=>el.onclick=()=>{const r=byId(state.allComments,el.dataset.replyTo),input=$('#replyInput');$('#replyParent').value=el.dataset.replyTo;input.placeholder=`${t('Reply to','رد على')} ${r?.profile?.full_name||'Student'}…`;input.focus()});
-  root.querySelectorAll('[data-delete-reply]').forEach(el=>{if(el.closest('#replyContent'))return;el.onclick=async()=>{const r=byId(state.allComments,el.dataset.deleteReply);if(!r||el.disabled)return;if(!window.confirm(t('Delete this comment?','حذف هذا التعليق؟')))return;el.disabled=true;const {data,error}=await sb.from('comments').update({deleted_at:new Date().toISOString(),body:'',updated_at:new Date().toISOString()}).eq('id',r.id).select('id');if(error||!data?.length){toast(error?safeError(error,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));el.disabled=false;return}await loadLiveData();render();toast(t('Reply deleted.','تم حذف الرد.'))}});
+  root.querySelectorAll('[data-delete-reply]').forEach(el=>{if(el.closest('#replyContent'))return;el.onclick=async()=>{const r=byId(state.allComments,el.dataset.deleteReply);if(!r||el.disabled)return;if(el.dataset.confirmDelete!=='1'){el.dataset.confirmDelete='1';el.dataset.originalText=el.textContent;el.textContent=t('Confirm delete','تأكيد الحذف');setTimeout(()=>{if(el.isConnected&&el.dataset.confirmDelete==='1'){el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف')}},5000);return}el.disabled=true;const {data,error}=await sb.from('comments').update({deleted_at:new Date().toISOString(),body:'',updated_at:new Date().toISOString()}).eq('id',r.id).select('id');if(error||!data?.length){toast(error?safeError(error,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));el.disabled=false;el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف');return}await loadLiveData();render();toast(t('Reply deleted.','تم حذف الرد.'))}});
   root.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=async()=>{const {error}=await sb.from('circle_members').update({role:el.value}).match({circle_id:state.activeCircleId,user_id:el.dataset.memberRole});if(error)toast(safeError(error,'change this role'));else{await loadLiveData();render()}});
   root.querySelectorAll('[data-remove-member]').forEach(el=>el.onclick=async()=>{const p=profileData(el.dataset.removeMember);if(!await confirmAction(t('Remove member?','إزالة العضو؟'),p.full_name||'Student'))return;const {error}=await sb.from('circle_members').delete().match({circle_id:state.activeCircleId,user_id:el.dataset.removeMember});if(error)toast(safeError(error,'remove this member'));else{await loadLiveData();render()}});
   root.querySelectorAll('[data-topic]').forEach(el=>el.onclick=()=>{$('#globalSearch').value=el.dataset.topic;state.query=el.dataset.topic;routeTo(`search?q=${encodeURIComponent(state.query)}`)});
