@@ -54,7 +54,7 @@ loadLiveData=async function(){
     sb.from('circle_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').order('joined_at'),
     sb.from('circle_meetings').select('*,creator:profiles(id,full_name,username,avatar_url)').order('starts_at'),
     sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
-    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles(id,full_name,username,grade,branch,avatar_url)').order('created_at'),
+    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at'),
     state.isAdmin?sb.rpc('admin_report_details'):Promise.resolve({data:[],error:null})
   ]);
   if(!followRes.error)state.follows=followRes.data||[];else state.dataErrors.connections=followRes.error;
@@ -73,7 +73,7 @@ loadLiveData=async function(){
   if(!circleMemberRes.error)state.circleMembers=circleMemberRes.data||[];
   if(!meetingRes.error)state.circleMeetings=meetingRes.data||[];else state.dataErrors.meetings=meetingRes.error;
   if(!notificationRes.error)state.notifications=notificationRes.data||[];
-  if(!commentRes.error){state.allComments=commentRes.data||[];state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)&&!c.deleted_at).length)}
+  if(!commentRes.error){state.allComments=commentRes.data||[];state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
   if(!reportRes.error)state.reports=reportRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
@@ -237,7 +237,7 @@ async function deleteResolvedReport(id){
 
 comments=async function(postId){
   const p=state.posts.find(x=>same(x.id,postId));if(!p)return;openModal(`<div class="modal-head"><div><h2>${t('Discussion','النقاش')}</h2><p>${esc(p.title)}</p></div><button class="close" data-close>×</button></div><div id="replyContent"><div class="loading-card"></div></div>`,true);
-  const {data,error}=await sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').eq('post_id',postId).order('created_at');
+  const {data,error}=await sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').eq('post_id',postId).is('deleted_at',null).order('created_at');
   if(error){console.error('Discussion comments load failed',error);$('#replyContent').innerHTML=`<div class="error-state">${t('Replies could not load. Try again.','تعذر تحميل الردود. حاول مرة أخرى.')}</div>`;return}
   const authorIds=[...new Set((data||[]).map(r=>r.author_id).filter(Boolean))];
   let discussionProfiles={};
