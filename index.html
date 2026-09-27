@@ -23,8 +23,9 @@
   <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-circles" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2.2"/><circle cx="17" cy="6" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="M3.5 11.3c.7-1.7 2-2.7 3.5-2.7s2.8 1 3.5 2.7M13.5 11.3c.7-1.7 2-2.7 3.5-2.7s2.8 1 3.5 2.7M8.5 22c.7-1.7 2-2.7 3.5-2.7s2.8 1 3.5 2.7"/><path d="M9.4 4.2c1.7-.8 3.5-.8 5.2 0M5.6 13.2c.2 1.6.8 3 1.9 4.1M18.4 13.2c-.2 1.6-.8 3-1.9 4.1"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></symbol>
-  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5Z"/><path d="M4 5.5v14"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M3.5 5.5c2.8-.8 5.7-.5 8.5 1.2v13c-2.8-1.8-5.7-2.1-8.5-1.2Z"/><path d="M20.5 5.5c-2.8-.8-5.7-.5-8.5 1.2v13c2.8-1.8 5.7-2.1 8.5-1.2Z"/><path d="M12 6.7v13"/></symbol>
   <symbol id="i-library" viewBox="0 0 24 24"><path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2Z"/><path d="M8 4v10l3-2 3 2V4M18 7h1a2 2 0 0 1 2 2v11h-3"/></symbol>
   <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></symbol>
   <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
@@ -46,7 +47,7 @@
     <nav class="rail-nav" aria-label="Main navigation">
       <button class="nav-btn active" data-nav="home" title="Home"><svg><use href="#i-home"/></svg></button>
       <button class="nav-btn" data-nav="discover" title="Discover"><svg><use href="#i-search"/></svg></button>
-      <button class="nav-btn" data-nav="circles" title="Circles"><svg><use href="#i-users"/></svg></button>
+      <button class="nav-btn" data-nav="circles" title="Circles"><svg><use href="#i-circles"/></svg></button>
       <button class="nav-btn" data-nav="messages" title="Messages"><svg><use href="#i-chat"/></svg><i></i></button>
       <button class="nav-btn" data-nav="connections" title="Connections"><svg><use href="#i-users"/></svg></button>
       <button class="nav-btn" data-nav="library" title="Saved"><svg><use href="#i-library"/></svg></button>
@@ -70,7 +71,7 @@
   <nav class="bottom-nav" aria-label="Mobile navigation">
     <button class="active" data-nav="home"><svg><use href="#i-home"/></svg><span>Home</span></button>
     <button data-nav="discover"><svg><use href="#i-search"/></svg><span>Discover</span></button>
-    <button data-nav="circles"><svg><use href="#i-users"/></svg><span>Circles</span></button>
+    <button data-nav="circles"><svg><use href="#i-circles"/></svg><span>Circles</span></button>
     <button data-nav="messages"><svg><use href="#i-chat"/></svg><span>Messages</span></button>
     <button type="button" data-mobile-more aria-haspopup="dialog" aria-expanded="false"><span class="more-glyph" aria-hidden="true">•••</span><span>More</span></button>
   </nav>
