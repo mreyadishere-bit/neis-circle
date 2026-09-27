@@ -76,14 +76,17 @@
     return `<article class="study-card" data-study-resource="${esc(resource.id)}">
       <header><span class="study-type">${esc(typeLabel(resource.resource_type))}</span><time>${date(resource.created_at)}</time></header>
       <div class="study-card-copy" dir="auto"><h3>${esc(resource.title)}</h3><p>${esc(resource.description||tr('Shared academic resource','مصدر أكاديمي مشترك'))}</p></div>
-      <div class="study-breadcrumb"><span>${esc(resource.subject)}</span><b>›</b><span>${esc(resource.unit)}</span></div>
+      <div class="study-meta-chips"><span>${esc(resource.subject)}</span><span>${tr('Block','البلوك')} ${esc(resource.unit)}</span></div>
       <div class="study-author"><span class="avatar">${esc(initials(author.full_name||'Student'))}</span><div><b>${esc(author.full_name||tr('NEIS Student','طالب NEIS'))}</b><small>@${esc(author.username||'student')} · ${esc(languageLabel(resource.language))}</small></div></div>
       <div class="study-actions">
-        <a class="primary" href="${esc(resource.external_url)}" target="_blank" rel="noopener noreferrer">${tr('Open resource','فتح المصدر')} ↗</a>
-        <button type="button" class="action ${action.helpful?'active':''}" data-study-helpful="${esc(resource.id)}" aria-pressed="${action.helpful?'true':'false'}">${icon('heart')}<span>${tr('Helpful','مفيد')}</span><b>${Number(resource.helpful_count||0)}</b></button>
-        <button type="button" class="action ${action.saved?'active':''}" data-study-save="${esc(resource.id)}" aria-pressed="${action.saved?'true':'false'}">${icon('save')}<span>${action.saved?tr('Saved','محفوظ'):tr('Save','حفظ')}</span></button>
-        <button class="action" data-study-share="${esc(resource.id)}">${icon('share')}<span>${tr('Share','مشاركة')}</span></button>
-        ${editable?`<button type="button" class="action" data-study-edit="${esc(resource.id)}">${tr('Edit','تعديل')}</button><button type="button" class="action danger" data-study-delete="${esc(resource.id)}">${tr('Delete','حذف')}</button>`:`<button type="button" class="action" data-study-report="${esc(resource.id)}">${tr('Report','إبلاغ')}</button>`}
+        <a class="primary study-open" href="${esc(resource.external_url)}" target="_blank" rel="noopener noreferrer">${tr('Open resource','فتح المصدر')} ↗</a>
+        <div class="study-action-group">
+          <button type="button" class="action ${action.helpful?'active':''}" data-study-helpful="${esc(resource.id)}" aria-pressed="${action.helpful?'true':'false'}">${icon('heart')}<span>${tr('Helpful','مفيد')}</span><b>${Number(resource.helpful_count||0)}</b></button>
+          <button type="button" class="action ${action.saved?'active':''}" data-study-save="${esc(resource.id)}" aria-pressed="${action.saved?'true':'false'}">${icon('save')}<span>${action.saved?tr('Saved','محفوظ'):tr('Save','حفظ')}</span></button>
+          <button type="button" class="action" data-study-share="${esc(resource.id)}">${icon('share')}<span>${tr('Share','مشاركة')}</span></button>
+          ${editable?`<button type="button" class="action" data-study-edit="${esc(resource.id)}">${tr('Edit','تعديل')}</button>`:`<button type="button" class="action" data-study-report="${esc(resource.id)}">${tr('Report','إبلاغ')}</button>`}
+        </div>
+        ${editable?`<button type="button" class="study-delete" data-study-delete="${esc(resource.id)}">${tr('Delete','حذف')}</button>`:''}
       </div>
     </article>`;
   }
