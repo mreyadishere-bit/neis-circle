@@ -67,7 +67,7 @@ async function signOut(){if(sb)await sb.auth.signOut();authUser=null;state.isAdm
 
 loadLiveData=async function(){if(!sb||!authUser)return;const [postRes,commentRes,reactionRes,bookmarkRes,profileRes,articleRes,galleryRes,memberRes]=await Promise.all([
 sb.from('posts').select('id,kind,title,body,tags,image_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(full_name,grade,branch,campus)').order('created_at',{ascending:false}),
-sb.from('comments').select('post_id'),sb.from('reactions').select('post_id,user_id'),sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),
+sb.from('comments').select('post_id').is('deleted_at',null),sb.from('reactions').select('post_id,user_id'),sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),
 sb.from('profiles').select('full_name,username,grade,branch,campus,bio,interests,role').eq('id',authUser.id).maybeSingle(),
 sb.from('articles').select('*,author:profiles!articles_author_id_fkey(full_name,username,grade,branch)').order('created_at',{ascending:false}),
 sb.from('gallery_items').select('*,author:profiles!gallery_items_author_id_fkey(full_name,username,grade,branch)').order('created_at',{ascending:false}),
