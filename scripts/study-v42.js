@@ -5,8 +5,8 @@
   const tr=(en,ar)=>state.lang==='ar'?ar:en;
   const same=(a,b)=>String(a)===String(b);
   const study=state.studyLibrary={
-    tab:'resources',subject:'',unit:'',lesson:'',type:'',language:'',sort:'newest',search:'',
-    subjects:[],units:[],lessons:[],resources:[],actions:new Map(),total:0,page:0,loading:false,error:'',ready:false,request:0
+    tab:'resources',subject:'',unit:'',type:'',language:'',sort:'newest',search:'',
+    subjects:[],units:[],resources:[],actions:new Map(),total:0,page:0,loading:false,error:'',ready:false,request:0
   };
   let searchTimer=null;
 
@@ -21,22 +21,20 @@
   function empty(title,copy,button=''){return `<div class="study-empty"><span class="study-empty-icon">${icon('book')}</span><h3>${esc(title)}</h3><p>${esc(copy)}</p>${button}</div>`}
 
   async function loadValues(level){
-    const args={level_input:level,subject_input:level==='subject'?null:study.subject||null,unit_input:level==='lesson'?study.unit||null:null};
+    const args={level_input:level,subject_input:level==='subject'?null:study.subject||null,unit_input:null};
     const {data,error}=await sb.rpc('study_filter_values',args);
     if(error){study.error=friendly(error);return []}
     return (data||[]).map(row=>row.value).filter(Boolean);
   }
   async function loadSubjects(){study.subjects=await loadValues('subject');study.ready=true;renderStudyPage()}
   async function loadUnits(){study.units=study.subject?await loadValues('unit'):[];renderStudyPage()}
-  async function loadLessons(){study.lessons=study.subject&&study.unit?await loadValues('lesson'):[];renderStudyPage()}
-
-  function shouldLoadResources(){return study.tab!=='resources'||!!study.lesson||clean(study.search).length>=2}
+  function shouldLoadResources(){return study.tab!=='resources'||!!study.unit||clean(study.search).length>=2}
   async function loadResources(){
     const request=++study.request;
     if(!shouldLoadResources()){study.resources=[];study.actions=new Map();study.total=0;study.loading=false;study.error='';renderStudyPage();return}
     study.loading=true;study.error='';renderStudyPage();
     const {data,error}=await sb.rpc('study_resource_page',{
-      mode_input:study.tab,subject_input:study.subject||null,unit_input:study.unit||null,lesson_input:study.lesson||null,
+      mode_input:study.tab,subject_input:study.subject||null,unit_input:study.unit||null,lesson_input:null,
       search_input:clean(study.search)||null,type_input:study.type||null,language_input:study.language||null,
       oldest_input:study.sort==='oldest',page_size_input:PAGE_SIZE,offset_input:study.page*PAGE_SIZE
     });
@@ -58,13 +56,10 @@
   function hierarchy(){
     const subjectOptions=study.subjects.map(value=>option(value,value,study.subject)).join('');
     const unitOptions=study.units.map(value=>option(value,value,study.unit)).join('');
-    const lessonOptions=study.lessons.map(value=>option(value,value,study.lesson)).join('');
     return `<section class="study-path" aria-label="${tr('Resource hierarchy','تسلسل المصادر')}">
       <label><span>1 · ${tr('Subject','المادة')}</span><select id="studySubject">${option('',tr('Choose subject','اختر المادة'),study.subject)}${subjectOptions}</select></label>
       <span class="study-path-arrow">→</span>
       <label><span>2 · ${tr('Block','البلوك')}</span><select id="studyUnit" ${study.subject?'':'disabled'}>${option('',tr('Choose block','اختر البلوك'),study.unit)}${unitOptions}</select></label>
-      <span class="study-path-arrow">→</span>
-      <label><span>3 · ${tr('Lesson / Topic','الدرس / الموضوع')}</span><select id="studyLesson" ${study.unit?'':'disabled'}>${option('',tr('Choose lesson','اختر الدرس'),study.lesson)}${lessonOptions}</select></label>
     </section>`;
   }
   function toolbar(){return `<section class="study-toolbar">
@@ -81,7 +76,7 @@
     return `<article class="study-card" data-study-resource="${esc(resource.id)}">
       <header><span class="study-type">${esc(typeLabel(resource.resource_type))}</span><time>${date(resource.created_at)}</time></header>
       <div class="study-card-copy" dir="auto"><h3>${esc(resource.title)}</h3><p>${esc(resource.description||tr('Shared academic resource','مصدر أكاديمي مشترك'))}</p></div>
-      <div class="study-breadcrumb"><span>${esc(resource.subject)}</span><b>›</b><span>${esc(resource.unit)}</span><b>›</b><span title="${esc((resource.lessons||[resource.lesson]).filter(Boolean).join(', '))}">${esc((resource.lessons||[resource.lesson]).filter(Boolean).join(', '))}</span></div>
+      <div class="study-breadcrumb"><span>${esc(resource.subject)}</span><b>›</b><span>${esc(resource.unit)}</span></div>
       <div class="study-author"><span class="avatar">${esc(initials(author.full_name||'Student'))}</span><div><b>${esc(author.full_name||tr('NEIS Student','طالب NEIS'))}</b><small>@${esc(author.username||'student')} · ${esc(languageLabel(resource.language))}</small></div></div>
       <div class="study-actions">
         <a class="primary" href="${esc(resource.external_url)}" target="_blank" rel="noopener noreferrer">${tr('Open resource','فتح المصدر')} ↗</a>
@@ -96,7 +91,7 @@
   function results(){
     if(study.loading)return `<div class="study-grid">${Array.from({length:6},()=>'<div class="study-card study-skeleton"></div>').join('')}</div>`;
     if(study.error)return empty(tr('Study could not load','تعذر تحميل Study'),study.error,`<button class="primary" data-study-retry>${tr('Try again','حاول مرة أخرى')}</button>`);
-    if(!shouldLoadResources())return empty(tr('Choose a lesson to begin','اختر درسًا للبدء'),tr('Resources load only after you choose Subject, Block, and Lesson. You can also search directly.','لا يتم تحميل المصادر إلا بعد اختيار المادة والبلوك والدرس، ويمكنك أيضًا البحث مباشرة.'));
+    if(!shouldLoadResources())return empty(tr('Choose a block to begin','اختر بلوك للبدء'),tr('Resources load after you choose Subject and Block. You can also search directly.','يتم تحميل المصادر بعد اختيار المادة والبلوك، ويمكنك أيضًا البحث مباشرة.'));
     if(!study.resources.length){
       const title=study.tab==='saved'?tr('No saved resources','لا توجد مصادر محفوظة'):study.tab==='my'?tr('You have not shared a resource yet','لم تشارك مصدرًا بعد'):tr('No resources found','لم يتم العثور على مصادر');
       return empty(title,tr('Try different filters or share a useful link.','جرّب فلاتر أخرى أو شارك رابطًا مفيدًا.'),`<button class="primary" data-study-new>${tr('Share a resource','مشاركة مصدر')}</button>`);
@@ -107,7 +102,7 @@
   }
 
   function studyView(){
-    return `<section class="study-head"><div><p class="kicker"><i></i>${tr('Shared academic library','مكتبة أكاديمية مشتركة')}</p><h1>Study</h1><p>${tr('Useful links organized by subject, block, and lesson — without file storage or noise.','روابط مفيدة منظّمة حسب المادة والبلوك والدرس، دون تخزين ملفات أو تشتيت.')}</p></div><button class="primary study-create" data-study-new><span>+</span>${tr('Share resource','مشاركة مصدر')}</button></section>
+    return `<section class="study-head"><div><p class="kicker"><i></i>${tr('Shared academic library','مكتبة أكاديمية مشتركة')}</p><h1>Study</h1><p>${tr('Useful links organized by subject and block — without file storage or noise.','روابط مفيدة منظّمة حسب المادة والبلوك، دون تخزين ملفات أو تشتيت.')}</p></div><button class="primary study-create" data-study-new><span>+</span>${tr('Share resource','مشاركة مصدر')}</button></section>
       <div class="tabs study-tabs">${[['resources',tr('Resources','المصادر')],['saved',tr('Saved Resources','المصادر المحفوظة')],['my',tr('My Resources','مصادري')]].map(([value,label])=>`<button class="${study.tab===value?'active':''}" data-study-tab="${value}">${label}</button>`).join('')}</div>
       ${study.tab==='resources'?hierarchy():''}${toolbar()}<div id="studyResults">${results()}</div>`;
   }
@@ -118,25 +113,14 @@
     view.innerHTML=studyView();$$('[data-nav]').forEach(button=>button.classList.toggle('active',button.dataset.nav==='study'));bindStudy();if(typeof syncChrome==='function')syncChrome();
   }
 
-  function lessonRow(value='',index=0){return `<div class="study-lesson-row"><input class="study-lesson-input" required maxlength="160" value="${esc(value)}" dir="auto" placeholder="${tr('Lesson / Topic','الدرس / الموضوع')} ${index+1}"><button type="button" class="secondary" data-study-remove-lesson aria-label="${tr('Remove lesson','حذف الدرس')}">×</button></div>`}
-  function syncLessonRows(){
-    const rows=[...document.querySelectorAll('.study-lesson-row')];
-    rows.forEach((row,index)=>{
-      const input=row.querySelector('.study-lesson-input'),remove=row.querySelector('[data-study-remove-lesson]');
-      if(input)input.placeholder=`${tr('Lesson / Topic','الدرس / الموضوع')} ${index+1}`;
-      if(remove)remove.disabled=rows.length===1;
-    });
-  }
   function editor(resource=null){
     if(!authUser)return;
     const editing=!!resource;if(editing&&!canEdit(resource)){toast(tr('You cannot edit this resource.','لا يمكنك تعديل هذا المصدر.'));return}
-    const resourceLessons=(resource?.lessons?.length?resource.lessons:[resource?.lesson||study.lesson||'']).filter(Boolean);
     openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${tr('External link only','رابط خارجي فقط')}</p><h2>${editing?tr('Edit resource','تعديل المصدر'):tr('Share a Study resource','مشاركة مصدر دراسي')}</h2><p>${tr('Add a clear path so students can find it later.','أضف مسارًا واضحًا ليتمكن الطلاب من العثور عليه لاحقًا.')}</p></div><button class="close" data-close>×</button></div>
       <form id="studyResourceForm" class="study-form">
         <label class="field">${tr('Title','العنوان')}<input id="studyFormTitle" required minlength="3" maxlength="180" value="${esc(resource?.title||'')}" dir="auto"></label>
         <label class="field">${tr('Description','الوصف')}<textarea id="studyFormDescription" rows="5" maxlength="3000" dir="auto">${esc(resource?.description||'')}</textarea></label>
         <div class="study-form-grid study-form-grid-two"><label class="field">${tr('Subject','المادة')}<input id="studyFormSubject" required minlength="2" maxlength="100" value="${esc(resource?.subject||study.subject)}" dir="auto"></label><label class="field">${tr('Block','البلوك')}<input id="studyFormUnit" required maxlength="120" value="${esc(resource?.unit||study.unit)}" dir="auto"></label></div>
-        <div class="study-lessons-field"><div class="study-lessons-head"><span>${tr('Lessons / Topics','الدروس / الموضوعات')}</span><button type="button" class="secondary" data-study-add-lesson>+${tr(' Add lesson',' إضافة درس')}</button></div><div id="studyLessonRows">${(resourceLessons.length?resourceLessons:['']).map((value,index)=>lessonRow(value,index)).join('')}</div><small>${tr('A resource can belong to several lessons. It will appear when any one of them is selected.','يمكن أن ينتمي المصدر إلى عدة دروس، وسيظهر عند اختيار أي درس منها.')}</small></div>
         <div class="study-form-grid"><label class="field">${tr('Resource type','نوع المصدر')}<select id="studyFormType">${['document','pdf','video','website','presentation','other'].map(value=>option(value,typeLabel(value),resource?.resource_type||'document')).join('')}</select></label><label class="field">${tr('Language','اللغة')}<select id="studyFormLanguage">${['en','ar','both','other'].map(value=>option(value,languageLabel(value),resource?.language||state.lang)).join('')}</select></label></div>
         <label class="field">${tr('External link','الرابط الخارجي')}<input id="studyFormUrl" required type="url" inputmode="url" maxlength="2048" value="${esc(resource?.external_url||'')}" placeholder="https://…" dir="ltr"></label>
         <div class="study-link-warning"><b>${tr('Before publishing','قبل النشر')}</b><p>${tr('Make sure this link is set to “Anyone with the link can access/view” so other students can open it.','تأكد من ضبط الرابط على «أي شخص لديه الرابط يمكنه الوصول/العرض» حتى يستطيع الطلاب الآخرون فتحه.')}</p></div>
@@ -144,9 +128,6 @@
         <div class="modal-actions"><button type="button" class="secondary" data-close>${tr('Cancel','إلغاء')}</button><button class="primary" id="studyFormSubmit">${editing?tr('Update resource','تحديث المصدر'):tr('Publish resource','نشر المصدر')}</button></div>
       </form>`,true);
     $('#studyResourceForm').onsubmit=event=>saveResource(event,resource);
-    $('[data-study-add-lesson]')?.addEventListener('click',()=>{const rows=$('#studyLessonRows');if(!rows)return;if(rows.querySelectorAll('.study-lesson-row').length>=20){toast(tr('You can add up to 20 lessons.','يمكنك إضافة حتى 20 درسًا.'));return}rows.insertAdjacentHTML('beforeend',lessonRow('',rows.querySelectorAll('.study-lesson-row').length));syncLessonRows();rows.querySelector('.study-lesson-row:last-child .study-lesson-input')?.focus()});
-    $('#studyLessonRows')?.addEventListener('click',event=>{const button=event.target.closest('[data-study-remove-lesson]');if(!button||button.disabled)return;button.closest('.study-lesson-row')?.remove();syncLessonRows()});
-    syncLessonRows();
     $('#modalRoot .modal')?.classList.add('study-editor-modal');
   }
 
@@ -155,15 +136,13 @@
     const externalUrl=clean($('#studyFormUrl').value);
     if(!validUrl(externalUrl)){toast(tr('Enter a valid http:// or https:// link.','أدخل رابطًا صحيحًا يبدأ بـ http:// أو https://.'));return}
     if(!$('#studyFormConfirmed').checked){toast(tr('Confirm that other students can access the link.','أكد أن الطلاب الآخرين يمكنهم فتح الرابط.'));return}
-    const lessons=[...document.querySelectorAll('.study-lesson-input')].map(input=>clean(input.value)).filter(Boolean).filter((value,index,array)=>array.findIndex(item=>item.toLowerCase()===value.toLowerCase())===index);
-    if(!lessons.length){toast(tr('Add at least one lesson or topic.','أضف درسًا أو موضوعًا واحدًا على الأقل.'));return}
     button.disabled=true;
-    const payload={title:clean($('#studyFormTitle').value),description:clean($('#studyFormDescription').value),subject:clean($('#studyFormSubject').value),unit:clean($('#studyFormUnit').value),lesson:lessons[0],lessons,external_url:externalUrl,resource_type:$('#studyFormType').value,language:$('#studyFormLanguage').value,link_access_confirmed:true};
+    const payload={title:clean($('#studyFormTitle').value),description:clean($('#studyFormDescription').value),subject:clean($('#studyFormSubject').value),unit:clean($('#studyFormUnit').value),external_url:externalUrl,resource_type:$('#studyFormType').value,language:$('#studyFormLanguage').value,link_access_confirmed:true};
     const query=resource?sb.from('study_resources').update(payload).eq('id',resource.id).select('*').single():sb.from('study_resources').insert({...payload,author_id:authUser.id}).select('*').single();
     const {data,error}=await query;
     if(error){button.disabled=false;toast(friendly(error));return}
-    closeModal();study.subject=data.subject;study.unit=data.unit;study.lesson=(data.lessons?.[0]||data.lesson||'');study.page=0;study.tab='resources';
-    study.subjects=await loadValues('subject');study.units=await loadValues('unit');study.lessons=await loadValues('lesson');await loadResources();
+    closeModal();study.subject=data.subject;study.unit=data.unit;study.page=0;study.tab='resources';
+    study.subjects=await loadValues('subject');study.units=await loadValues('unit');await loadResources();
     toast(resource?tr('Resource updated.','تم تحديث المصدر.'):tr('Resource published.','تم نشر المصدر.'));
   }
 
@@ -199,11 +178,10 @@
 
   function bindStudy(){
     $$('[data-study-new]').forEach(button=>button.onclick=()=>editor());
-    $$('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;if(study.tab!=='resources'){study.subject='';study.unit='';study.lesson=''}loadResources()});
-    const subject=$('#studySubject'),unit=$('#studyUnit'),lesson=$('#studyLesson');
-    if(subject)subject.onchange=async()=>{study.subject=subject.value;study.unit='';study.lesson='';study.page=0;study.units=[];study.lessons=[];study.resources=[];await loadUnits()};
-    if(unit)unit.onchange=async()=>{study.unit=unit.value;study.lesson='';study.page=0;study.lessons=[];study.resources=[];await loadLessons()};
-    if(lesson)lesson.onchange=()=>{study.lesson=lesson.value;study.page=0;loadResources()};
+    $('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;if(study.tab!=='resources'){study.subject='';study.unit=''}loadResources()});
+    const subject=$('#studySubject'),unit=$('#studyUnit');
+    if(subject)subject.onchange=async()=>{study.subject=subject.value;study.unit='';study.page=0;study.units=[];study.resources=[];await loadUnits()};
+    if(unit)unit.onchange=()=>{study.unit=unit.value;study.page=0;loadResources()};
     const search=$('#studySearch');if(search)search.oninput=()=>{study.search=search.value;study.page=0;clearTimeout(searchTimer);searchTimer=setTimeout(loadResources,350)};
     [['studyType','type'],['studyLanguage','language'],['studySort','sort']].forEach(([id,key])=>{const field=$('#'+id);if(field)field.onchange=()=>{study[key]=field.value;study.page=0;loadResources()}});
     $$('[data-study-page]').forEach(button=>button.onclick=()=>{study.page=Number(button.dataset.studyPage);loadResources();scrollTo({top:0,behavior:'smooth'})});
