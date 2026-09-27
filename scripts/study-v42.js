@@ -178,7 +178,7 @@
 
   function bindStudy(){
     $$('[data-study-new]').forEach(button=>button.onclick=()=>editor());
-    $('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;if(study.tab!=='resources'){study.subject='';study.unit=''}loadResources()});
+    $$('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;if(study.tab!=='resources'){study.subject='';study.unit=''}loadResources()});
     const subject=$('#studySubject'),unit=$('#studyUnit');
     if(subject)subject.onchange=async()=>{study.subject=subject.value;study.unit='';study.page=0;study.units=[];study.resources=[];await loadUnits()};
     if(unit)unit.onchange=()=>{study.unit=unit.value;study.page=0;loadResources()};
