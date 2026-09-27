@@ -204,41 +204,54 @@
   }
   function bindArticleCommentActions(articleId,comments){
     const container=$('#articleComments');if(!container)return;
+
     container.querySelectorAll('[data-article-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.articleCreatorHeart,hearted=button.classList.contains('active');const {error}=hearted?await sb.from('article_comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('article_comment_creator_hearts').insert({comment_id:commentId,creator_id:uid()});if(error){toast(window.neisFriendlyError?.(error,'creator heart')||error);button.disabled=false;return}await loadArticleComments(articleId)});
     container.querySelectorAll('[data-article-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.articleCommentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('article_comment_likes').delete().match({comment_id:commentId,user_id:uid()}):await sb.from('article_comment_likes').insert({comment_id:commentId,user_id:uid()});if(error){toast(window.neisFriendlyError?.(error,mine?'unlike this comment':'like this comment')||error);button.disabled=false;return}await loadArticleComments(articleId)});
     container.querySelectorAll('[data-article-reply]').forEach(button=>button.onclick=()=>{const item=comments.find(row=>same(row.id,button.dataset.articleReply)),parent=$('#articleCommentParent'),notice=$('#articleCommentReplying'),noticeText=$('#articleCommentReplyingText'),input=$('#articleCommentInput');if(!item||!parent||!notice||!noticeText||!input)return;parent.value=item.id;notice.classList.remove('hidden');noticeText.textContent=`${tr('Replying to','الرد على')} ${item.profile?.full_name||tr('Student','طالب')}`;input.focus();input.scrollIntoView({block:'nearest',behavior:'smooth'})});
     $('[data-cancel-article-reply]')?.addEventListener('click',()=>{$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden')});
 
-    container.querySelectorAll('[data-article-edit]').forEach(button=>button.onclick=()=>{
-      const card=button.closest('.article-comment'),item=comments.find(row=>same(row.id,button.dataset.articleEdit));
-      if(!card||!item||card.querySelector('.article-comment-edit'))return;
-      const bodyEl=card.querySelector('.article-comment-body'),actions=card.querySelector('.article-comment-actions');
-      bodyEl?.classList.add('hidden');actions?.classList.add('hidden');
-      card.insertAdjacentHTML('beforeend',`<form class="article-comment-edit"><textarea maxlength="4000" dir="auto">${esc(item.body||'')}</textarea><div class="article-comment-actions"><button type="button" data-cancel-edit>${tr('Cancel','إلغاء')}</button><button class="primary" type="submit">${tr('Save changes','حفظ التعديل')}</button></div></form>`);
-      const form=card.querySelector('.article-comment-edit'),textarea=form.querySelector('textarea'),saveButton=form.querySelector('[type=submit]');
-      textarea.focus();textarea.setSelectionRange(textarea.value.length,textarea.value.length);
-      form.querySelector('[data-cancel-edit]').onclick=()=>{form.remove();bodyEl?.classList.remove('hidden');actions?.classList.remove('hidden')};
-      form.onsubmit=async event=>{
-        event.preventDefault();
-        const body=textarea.value.trim();
-        if(!body){toast(tr('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
-        saveButton.disabled=true;
-        const {data:updated,error}=await sb.from('article_comments').update({body}).eq('id',item.id).eq('author_id',uid()).select('id');
-        if(error||!updated?.length){toast(error?(window.neisFriendlyError?.(error,'edit this comment')||error.message):tr('This comment could not be updated.','تعذر تعديل التعليق.'));saveButton.disabled=false;return}
-        await loadArticleComments(articleId);toast(tr('Comment updated.','تم تعديل التعليق.'));
-      };
-    });
+    container.onclick=async event=>{
+      const editButton=event.target.closest('[data-article-edit]');
+      if(editButton&&container.contains(editButton)){
+        event.preventDefault();event.stopPropagation();
+        const card=editButton.closest('.article-comment'),item=comments.find(row=>same(row.id,editButton.dataset.articleEdit));
+        if(!card||!item||card.querySelector('.article-comment-edit'))return;
+        const bodyEl=card.querySelector('.article-comment-body'),actions=card.querySelector('.article-comment-actions');
+        bodyEl?.classList.add('hidden');actions?.classList.add('hidden');
+        card.insertAdjacentHTML('beforeend',`<form class="article-comment-edit"><textarea maxlength="4000" dir="auto">${esc(item.body||'')}</textarea><div class="article-comment-actions"><button type="button" data-cancel-edit>${tr('Cancel','إلغاء')}</button><button class="primary" type="submit">${tr('Save changes','حفظ التعديل')}</button></div></form>`);
+        const form=card.querySelector('.article-comment-edit'),textarea=form.querySelector('textarea'),saveButton=form.querySelector('[type=submit]');
+        textarea.focus();textarea.setSelectionRange(textarea.value.length,textarea.value.length);
+        form.querySelector('[data-cancel-edit]').onclick=()=>{form.remove();bodyEl?.classList.remove('hidden');actions?.classList.remove('hidden')};
+        form.onsubmit=async submitEvent=>{
+          submitEvent.preventDefault();
+          const body=textarea.value.trim();
+          if(!body){toast(tr('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
+          saveButton.disabled=true;
+          const {data:updated,error}=await sb.from('article_comments').update({body}).eq('id',item.id).eq('author_id',uid()).select('id');
+          if(error||!updated?.length){toast(error?(window.neisFriendlyError?.(error,'edit this comment')||error.message):tr('This comment could not be updated.','تعذر تعديل التعليق.'));saveButton.disabled=false;return}
+          await loadArticleComments(articleId);toast(tr('Comment updated.','تم تعديل التعليق.'));
+        };
+        return;
+      }
 
-    container.querySelectorAll('[data-article-delete]').forEach(button=>button.onclick=async()=>{
-      const item=comments.find(row=>same(row.id,button.dataset.articleDelete));
-      if(!item||button.disabled)return;
-      const message=item.parent_id?tr('Delete this reply permanently?','حذف هذا الرد نهائيًا؟'):tr('Delete this comment and its replies?','حذف هذا التعليق وردوده؟');
-      if(!window.confirm(message))return;
-      button.disabled=true;
-      const {data:deleted,error}=await sb.from('article_comments').delete().eq('id',item.id).select('id');
-      if(error||!deleted?.length){toast(error?(window.neisFriendlyError?.(error,'delete this comment')||error.message):tr('This comment could not be deleted.','تعذر حذف التعليق.'));button.disabled=false;return}
-      await loadArticleComments(articleId);toast(tr('Comment deleted.','تم حذف التعليق.'));
-    });
+      const deleteButton=event.target.closest('[data-article-delete]');
+      if(deleteButton&&container.contains(deleteButton)){
+        event.preventDefault();event.stopPropagation();
+        const item=comments.find(row=>same(row.id,deleteButton.dataset.articleDelete));
+        if(!item||deleteButton.disabled)return;
+        if(deleteButton.dataset.confirmDelete!=='1'){
+          deleteButton.dataset.confirmDelete='1';
+          deleteButton.dataset.originalText=deleteButton.textContent;
+          deleteButton.textContent=tr('Confirm delete','تأكيد الحذف');
+          setTimeout(()=>{if(deleteButton.isConnected&&deleteButton.dataset.confirmDelete==='1'){deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||tr('Delete','حذف')}},5000);
+          return;
+        }
+        deleteButton.disabled=true;
+        const {data:deleted,error}=await sb.from('article_comments').delete().eq('id',item.id).select('id');
+        if(error||!deleted?.length){toast(error?(window.neisFriendlyError?.(error,'delete this comment')||error.message):tr('This comment could not be deleted.','تعذر حذف التعليق.'));deleteButton.disabled=false;deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||tr('Delete','حذف');return}
+        await loadArticleComments(articleId);toast(tr('Comment deleted.','تم حذف التعليق.'));
+      }
+    };
   }
 
   async function loadArticleEngagement(articleId){
