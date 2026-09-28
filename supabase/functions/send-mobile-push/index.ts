@@ -79,12 +79,22 @@ Deno.serve(async (req: Request) => {
     return new Response("Bad Request", { status: 400 });
   }
 
-  if (!FIREBASE_JSON) {
-    return Response.json({ ok: false, reason: "firebase_not_configured" }, { status: 503 });
+  let firebaseJson = FIREBASE_JSON;
+  if (!firebaseJson) {
+    const { data: vaultB64, error: vaultError } = await db.rpc("get_firebase_service_account_secret");
+    if (vaultError || !vaultB64) {
+      return Response.json({ ok: false, reason: "firebase_not_configured" }, { status: 503 });
+    }
+    try {
+      const bytes = Uint8Array.from(atob(String(vaultB64)), (ch) => ch.charCodeAt(0));
+      firebaseJson = new TextDecoder().decode(bytes);
+    } catch {
+      return Response.json({ ok: false, reason: "firebase_config_invalid" }, { status: 503 });
+    }
   }
 
   let service: any;
-  try { service = JSON.parse(FIREBASE_JSON); } catch {
+  try { service = JSON.parse(firebaseJson); } catch {
     return Response.json({ ok: false, reason: "firebase_config_invalid" }, { status: 503 });
   }
   if (!service.project_id || !service.client_email || !service.private_key) {
