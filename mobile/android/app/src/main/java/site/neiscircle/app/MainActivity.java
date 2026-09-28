@@ -1,0 +1,239 @@
+package site.neiscircle.app;
+
+import android.Manifest;
+import android.app.Activity;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import androidx.browser.customtabs.CustomTabsIntent;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.firebase.messaging.FirebaseMessaging;
+
+import org.json.JSONObject;
+
+public class MainActivity extends Activity {
+    private static final String SITE_URL = "https://neiscircle.site/";
+    private static final int REQUEST_NOTIFICATIONS = 5001;
+    private static final int REQUEST_FILE = 5002;
+
+    private WebView webView;
+    private ValueCallback<Uri[]> fileCallback;
+    private boolean pageReady = false;
+    private String pendingRoute;
+    private String pendingAuthUrl;
+
+    @Override
+    protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                getWindow().getDecorView().getSystemUiVisibility() | 8192
+            );
+        }
+
+        NotificationHelper.createChannels(this);
+
+        webView = new WebView(this);
+        setContentView(webView);
+
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setAllowFileAccess(true);
+        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.0");
+
+        webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                try {
+                    Intent intent = params.createIntent();
+                    startActivityForResult(Intent.createChooser(intent, "Choose file"), REQUEST_FILE);
+                    return true;
+                } catch (Exception error) {
+                    fileCallback = null;
+                    return false;
+                }
+            }
+        });
+
+        webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) -> openExternal(url));
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return handleNavigation(request.getUrl());
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return handleNavigation(Uri.parse(url));
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                pageReady = true;
+                flushPendingEvents();
+            }
+        });
+
+        handleIntent(getIntent());
+        webView.loadUrl(SITE_URL);
+    }
+
+    private boolean handleNavigation(Uri uri) {
+        if (uri == null) return false;
+        String scheme = uri.getScheme() == null ? "" : uri.getScheme();
+        String host = uri.getHost() == null ? "" : uri.getHost();
+
+        if ("neiscircle".equalsIgnoreCase(scheme)) {
+            pendingAuthUrl = uri.toString();
+            flushPendingEvents();
+            return true;
+        }
+
+        if ("https".equalsIgnoreCase(scheme) &&
+            ("neiscircle.site".equalsIgnoreCase(host) || "www.neiscircle.site".equalsIgnoreCase(host))) {
+            return false;
+        }
+
+        openExternal(uri.toString());
+        return true;
+    }
+
+    private void openExternal(String url) {
+        runOnUiThread(() -> {
+            try {
+                new CustomTabsIntent.Builder().build().launchUrl(this, Uri.parse(url));
+            } catch (Exception error) {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+            }
+        });
+    }
+
+    private void requestPushToken() {
+        runOnUiThread(() -> {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+                return;
+            }
+            deliverCurrentToken();
+        });
+    }
+
+    private void deliverCurrentToken() {
+        FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+            if (!task.isSuccessful() || task.getResult() == null) return;
+            String token = task.getResult();
+            getSharedPreferences("neis_mobile", MODE_PRIVATE).edit().putString("fcm_token", token).apply();
+            sendTokenToWeb(token);
+        });
+    }
+
+    private void sendTokenToWeb(String token) {
+        if (!pageReady || token == null || token.isEmpty()) return;
+        String script = "window.NEISMobile&&window.NEISMobile.receivePushToken(" + JSONObject.quote(token) + ");";
+        webView.post(() -> webView.evaluateJavascript(script, null));
+    }
+
+    private void flushPendingEvents() {
+        if (!pageReady || webView == null) return;
+
+        String savedToken = getSharedPreferences("neis_mobile", MODE_PRIVATE).getString("fcm_token", "");
+        if (!savedToken.isEmpty()) sendTokenToWeb(savedToken);
+
+        if (pendingRoute != null && !pendingRoute.isEmpty()) {
+            String route = pendingRoute;
+            pendingRoute = null;
+            webView.evaluateJavascript(
+                "window.NEISMobile&&window.NEISMobile.openRoute(" + JSONObject.quote(route) + ");", null);
+        }
+
+        if (pendingAuthUrl != null && !pendingAuthUrl.isEmpty()) {
+            String url = pendingAuthUrl;
+            pendingAuthUrl = null;
+            webView.evaluateJavascript(
+                "window.NEISMobile&&window.NEISMobile.handleAuthCallback(" + JSONObject.quote(url) + ");", null);
+        }
+    }
+
+    private void handleIntent(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data != null && "neiscircle".equalsIgnoreCase(data.getScheme())) {
+            pendingAuthUrl = data.toString();
+        }
+        String route = intent.getStringExtra("route");
+        if (route != null && !route.isEmpty()) pendingRoute = route;
+        flushPendingEvents();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIntent(intent);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQUEST_NOTIFICATIONS && results.length > 0 &&
+            results[0] == PackageManager.PERMISSION_GRANTED) {
+            deliverCurrentToken();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_FILE) {
+            if (fileCallback != null) {
+                fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode, data));
+                fileCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
+
+    public class NativeBridge {
+        @JavascriptInterface public boolean isNative() { return true; }
+        @JavascriptInterface public void openExternal(String url) { MainActivity.this.openExternal(url); }
+        @JavascriptInterface public void requestPushToken() { MainActivity.this.requestPushToken(); }
+        @JavascriptInterface public void pushRegistrationComplete() { }
+        @JavascriptInterface public void openNotificationSettings() {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName());
+                startActivity(intent);
+            });
+        }
+    }
+}
