@@ -46,14 +46,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
+        String savedSystemTheme = getSharedPreferences("neis_mobile", MODE_PRIVATE)
+            .getString("system_theme", "light");
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         getWindow().setStatusBarColor(Color.TRANSPARENT);
         getWindow().setNavigationBarColor(Color.TRANSPARENT);
-        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        if (bars != null) {
-            bars.setAppearanceLightStatusBars(true);
-            bars.setAppearanceLightNavigationBars(true);
-        }
+        applySystemTheme(savedSystemTheme);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             getWindow().setStatusBarContrastEnforced(false);
             getWindow().setNavigationBarContrastEnforced(false);
@@ -62,8 +60,8 @@ public class MainActivity extends Activity {
         NotificationHelper.createChannels(this);
 
         webView = new WebView(this);
-        webView.setBackgroundColor(Color.WHITE);
         setContentView(webView);
+        applySystemTheme(savedSystemTheme);
         ViewCompat.setOnApplyWindowInsetsListener(webView, (view, insets) -> {
             Insets barsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
             nativeTopInset = barsInsets.top;
@@ -120,6 +118,22 @@ public class MainActivity extends Activity {
 
         handleIntent(getIntent());
         webView.loadUrl(SITE_URL);
+    }
+
+    private void applySystemTheme(String theme) {
+        boolean dark = "dark".equalsIgnoreCase(theme);
+        getSharedPreferences("neis_mobile", MODE_PRIVATE)
+            .edit().putString("system_theme", dark ? "dark" : "light").apply();
+
+        WindowInsetsControllerCompat bars =
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (bars != null) {
+            bars.setAppearanceLightStatusBars(!dark);
+            bars.setAppearanceLightNavigationBars(!dark);
+        }
+        if (webView != null) {
+            webView.setBackgroundColor(Color.parseColor(dark ? "#0B1B17" : "#F6F8F7"));
+        }
     }
 
     private void applyNativeInsets() {
@@ -233,8 +247,18 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
+        if (webView == null) {
+            super.onBackPressed();
+            return;
+        }
+        webView.evaluateJavascript(
+            "(function(){try{return !!(window.NEISMobile&&window.NEISMobile.handleNativeBack&&window.NEISMobile.handleNativeBack())}catch(e){return false}})()",
+            handled -> {
+                if ("true".equals(handled)) return;
+                if (webView.canGoBack()) webView.goBack();
+                else MainActivity.super.onBackPressed();
+            }
+        );
     }
 
     @Override
@@ -263,6 +287,9 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void openExternal(String url) { MainActivity.this.openExternal(url); }
         @JavascriptInterface public void requestPushToken() { MainActivity.this.requestPushToken(); }
         @JavascriptInterface public void pushRegistrationComplete() { }
+        @JavascriptInterface public void setSystemTheme(String theme) {
+            runOnUiThread(() -> MainActivity.this.applySystemTheme(theme));
+        }
         @JavascriptInterface public void openNotificationSettings() {
             runOnUiThread(() -> {
                 Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
