@@ -14,7 +14,7 @@ const state={
   discoverFilter:"Recommended", opportunityFilter:"All",
   profile:load("neis-profile-v2",{name:"Eyad",username:"eyad",grade:"Grade 11",campus:"Main Campus",bio:"Curious about physics, technology and design.",interests:"Physics, ICT, Design, AI"})
 };
-let sb=null,authUser=null,realtimeChannel=null;
+let sb=null,authUser=null,realtimeChannel=null,supabaseAuthSubscription=null,supabaseInitPromise=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const icon=id=>`<svg><use href="#i-${id}"/></svg>`;
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
@@ -93,10 +93,73 @@ function newCircle(){
   openModal(`<div class="modal-head"><div><h2>Request a new circle</h2><p>New spaces are reviewed before becoming visible.</p></div><button class="close" data-close>×</button></div><form id="circleForm"><label class="field">Circle name<input id="circleName" required placeholder="Example: Astronomy Club"></label><label class="field">Purpose<textarea id="circlePurpose" required rows="5" placeholder="What useful conversations will happen here?"></textarea></label><label class="field">Proposed rules<textarea id="circleRules" rows="3" placeholder="Be respectful, stay on topic…"></textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>Cancel</button><button class="primary">Submit request</button></div></form>`);
   $("#circleForm").onsubmit=e=>{e.preventDefault();closeModal();toast("Circle request submitted for review")}
 }
+function loadSupabaseLibrary(){
+  if(window.supabase?.createClient)return Promise.resolve(true);
+  if(window.__neisSupabaseLoader)return window.__neisSupabaseLoader;
+  const sources=[
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
+    "https://unpkg.com/@supabase/supabase-js@2"
+  ];
+  window.__neisSupabaseLoader=(async()=>{
+    for(const src of sources){
+      if(window.supabase?.createClient)return true;
+      try{
+        await new Promise((resolve,reject)=>{
+          const existing=[...document.scripts].find(s=>s.src===src);
+          if(existing){
+            if(window.supabase?.createClient){resolve();return}
+            existing.addEventListener("load",resolve,{once:true});
+            existing.addEventListener("error",reject,{once:true});
+            setTimeout(()=>window.supabase?.createClient?resolve():reject(new Error("Supabase CDN timeout")),4500);
+            return;
+          }
+          const script=document.createElement("script");
+          script.src=src;
+          script.async=true;
+          script.crossOrigin="anonymous";
+          script.onload=resolve;
+          script.onerror=reject;
+          document.head.appendChild(script);
+          setTimeout(()=>window.supabase?.createClient?resolve():reject(new Error("Supabase CDN timeout")),4500);
+        });
+      }catch(error){console.warn("[NEIS] Supabase library source failed",src,error)}
+    }
+    return !!window.supabase?.createClient;
+  })().finally(()=>{window.__neisSupabaseLoader=null});
+  return window.__neisSupabaseLoader;
+}
 async function initSupabase(){
-  const u=window.NEIS_CONFIG.supabaseUrl||localStorage.getItem("neis-sb-url"),k=window.NEIS_CONFIG.supabaseAnonKey||localStorage.getItem("neis-sb-key");
-  if(!u||!k||!window.supabase)return false;
-  try{sb=window.supabase.createClient(u,k);const {data,error}=await sb.auth.getSession();if(error)throw error;authUser=data.session?.user||null;sb.auth.onAuthStateChange(async(_event,session)=>{authUser=session?.user||null;if(authUser)await loadLiveData();render()});if(authUser)await loadLiveData();return true}catch(e){console.error(e);sb=null;authUser=null;return false}
+  if(sb)return true;
+  if(supabaseInitPromise)return supabaseInitPromise;
+  supabaseInitPromise=(async()=>{
+    const u=window.NEIS_CONFIG.supabaseUrl||localStorage.getItem("neis-sb-url"),k=window.NEIS_CONFIG.supabaseAnonKey||localStorage.getItem("neis-sb-key");
+    if(!u||!k)return false;
+    if(!window.supabase?.createClient){
+      const loaded=await loadSupabaseLibrary();
+      if(!loaded)return false;
+    }
+    try{
+      sb=window.supabase.createClient(u,k);
+      const {data,error}=await sb.auth.getSession();
+      if(error)throw error;
+      authUser=data.session?.user||null;
+      if(!supabaseAuthSubscription){
+        const listener=sb.auth.onAuthStateChange(async(_event,session)=>{
+          authUser=session?.user||null;
+          if(authUser)await loadLiveData();
+          render();
+        });
+        supabaseAuthSubscription=listener?.data?.subscription||true;
+      }
+      if(authUser)await loadLiveData();
+      return true;
+    }catch(e){
+      console.error("[NEIS] Supabase initialization failed",e);
+      sb=null;authUser=null;
+      return false;
+    }
+  })();
+  try{return await supabaseInitPromise}finally{supabaseInitPromise=null}
 }
 async function loadLiveData(){
   if(!sb||!authUser)return;
