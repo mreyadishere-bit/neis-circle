@@ -453,3 +453,79 @@ body.image-lightbox-open{overflow:hidden}
   }
 }
 
+
+
+/* v58.1 — discussion action alignment + restore card motion */
+.reply-actions .creator-heart,
+.reply-actions .creator-heart-toggle{
+  flex:0 0 28px;
+  width:28px;
+  height:28px;
+  min-width:28px;
+  min-height:28px;
+  margin:0 2px;
+  padding:0!important;
+  display:inline-grid!important;
+  place-items:center;
+  border-radius:50%!important;
+  line-height:1;
+  vertical-align:middle;
+}
+.reply-actions .creator-heart-toggle{
+  border:1px solid var(--line)!important;
+  background:transparent!important;
+  color:#8b9691;
+  font-size:15px;
+}
+.reply-actions .creator-heart-toggle:hover,
+.reply-actions .creator-heart-toggle.active{
+  border-color:#ffd1d3!important;
+  background:#fff0f0!important;
+  color:#e5484d!important;
+}
+
+/* Bring back the original lightweight lift/hover feel across card surfaces. */
+.post,
+.side-card,
+.module-card,
+.student-card,
+.gallery-card,
+.article-card,
+.opportunity,
+.meeting-card,
+.circle-panel,
+.profile-card,
+.admin-report-card{
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+@media (hover:hover) and (pointer:fine){
+  .post:hover,
+  .side-card:hover,
+  .module-card:hover,
+  .student-card:hover,
+  .gallery-card:hover,
+  .article-card:hover,
+  .opportunity:hover,
+  .meeting-card:hover,
+  .circle-panel:hover,
+  .profile-card:hover,
+  .admin-report-card:hover{
+    transform:translateY(-2px);
+    box-shadow:var(--shadow);
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .post,
+  .side-card,
+  .module-card,
+  .student-card,
+  .gallery-card,
+  .article-card,
+  .opportunity,
+  .meeting-card,
+  .circle-panel,
+  .profile-card,
+  .admin-report-card{
+    transition:none!important;
+  }
+}
