@@ -529,3 +529,346 @@ body.image-lightbox-open{overflow:hidden}
     transition:none!important;
   }
 }
+
+
+/* v59 — unified comments everywhere: posts, Circle posts and article comments */
+.reply-actions .native-mention-action,
+.article-comment-actions .article-mention-action{
+  color:var(--accent);
+  font-weight:750;
+}
+
+/* Article comments now use the same flat, single-indent discussion language as posts. */
+.article-comments{
+  width:100%;
+  min-width:0;
+  margin-top:30px;
+}
+.article-comments-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:14px;
+}
+.article-comments-head h2{margin:0;font-size:20px}
+.article-comments-head p{margin:4px 0 0;color:var(--muted);font-size:11px}
+.article-comment-list{display:grid;gap:0;width:100%;min-width:0}
+.article-comment-thread{
+  width:100%;
+  min-width:0;
+  border-bottom:1px solid var(--line);
+}
+.article-comment-thread:last-child{border-bottom:0}
+.article-comment,
+.article-comment.is-reply{
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:16px 2px 14px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.article-comment.is-reply{padding-block:13px}
+.article-comment-head{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+}
+.article-comment-head .avatar{
+  width:42px;
+  height:42px;
+  flex:0 0 42px;
+  border-radius:14px;
+}
+.article-comment.is-reply .article-comment-head .avatar{
+  width:36px;
+  height:36px;
+  flex-basis:36px;
+  border-radius:12px;
+}
+.article-comment-identity{
+  min-width:0;
+  flex:1;
+  display:grid;
+  gap:2px;
+  align-content:center;
+}
+.article-comment-identity b{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  line-height:1.35;
+}
+.article-comment-identity small{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.35;
+}
+.article-comment-body{
+  margin:8px 0 7px 52px;
+  max-width:760px;
+  color:var(--ink);
+  font-size:12.5px;
+  line-height:1.65;
+  overflow-wrap:anywhere;
+  unicode-bidi:plaintext;
+  text-align:start;
+  white-space:pre-wrap;
+}
+.rtl .article-comment-body{
+  margin:8px 52px 7px 0;
+}
+.article-comment.is-reply .article-comment-body{margin-inline-start:46px}
+.rtl .article-comment.is-reply .article-comment-body{
+  margin-inline-start:0;
+  margin-inline-end:46px;
+}
+.article-comment-actions{
+  margin-inline-start:52px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:2px;
+}
+.rtl .article-comment-actions{
+  margin-inline-start:0;
+  margin-inline-end:52px;
+}
+.article-comment.is-reply .article-comment-actions{margin-inline-start:46px}
+.rtl .article-comment.is-reply .article-comment-actions{
+  margin-inline-start:0;
+  margin-inline-end:46px;
+}
+.article-comment-actions button{
+  width:auto;
+  min-width:0;
+  min-height:30px;
+  padding:4px 7px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  font-size:9.5px;
+  font-weight:700;
+  box-shadow:none;
+}
+.article-comment-actions button:hover{
+  background:var(--soft);
+  color:var(--ink);
+}
+.article-comment-actions button.active{color:var(--accent)}
+.article-comment-actions button.danger{color:#a53a2d}
+.article-comment-actions button.danger:hover{
+  background:color-mix(in srgb,#a53a2d 8%,transparent);
+  color:#923126;
+}
+.article-comment-actions .creator-heart,
+.article-comment-actions .creator-heart-toggle{
+  flex:0 0 28px;
+  width:28px;
+  height:28px;
+  min-width:28px;
+  min-height:28px;
+  margin:0 2px;
+  padding:0!important;
+  display:inline-grid!important;
+  place-items:center;
+  border-radius:50%!important;
+  line-height:1;
+}
+.article-comment-actions .creator-heart-toggle{
+  border:1px solid var(--line)!important;
+  background:transparent!important;
+  color:#8b9691;
+  font-size:15px;
+}
+.article-comment-actions .creator-heart-toggle:hover,
+.article-comment-actions .creator-heart-toggle.active{
+  border-color:#ffd1d3!important;
+  background:#fff0f0!important;
+  color:#e5484d!important;
+}
+.article-comment-replies{
+  width:calc(100% - 52px);
+  margin-inline-start:52px;
+  padding:0;
+  border:0;
+}
+.rtl .article-comment-replies{
+  margin-inline-start:0;
+  margin-inline-end:52px;
+}
+.article-replies-toggle{
+  appearance:none;
+  -webkit-appearance:none;
+  display:inline-flex;
+  width:auto;
+  min-width:0;
+  align-items:center;
+  justify-content:flex-start;
+  gap:8px;
+  margin:7px 0 11px 52px;
+  padding:4px 0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:750;
+  line-height:1.2;
+  box-shadow:none;
+}
+.rtl .article-replies-toggle{margin:7px 52px 11px 0}
+.article-replies-toggle:hover{color:var(--ink)}
+.article-replies-toggle>span:first-child{
+  width:28px;
+  height:1px;
+  flex:0 0 28px;
+  background:var(--line);
+}
+.article-comment-edit{margin:10px 0 2px 52px}
+.rtl .article-comment-edit{margin:10px 52px 2px 0}
+.article-comment-edit textarea{
+  width:100%;
+  min-height:86px;
+  resize:vertical;
+  padding:12px 13px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--card);
+  color:var(--ink);
+  font:inherit;
+  line-height:1.6;
+  unicode-bidi:plaintext;
+  text-align:start;
+}
+.article-comment-composer{
+  display:grid;
+  gap:9px;
+  margin-top:16px;
+  padding-top:14px;
+  border-top:1px solid var(--line);
+}
+.article-comment-composer textarea{
+  width:100%;
+  min-height:96px;
+  max-height:220px;
+  resize:vertical;
+  padding:13px 14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--card);
+  color:var(--ink);
+  font:inherit;
+  line-height:1.6;
+  unicode-bidi:plaintext;
+  text-align:start;
+}
+.article-comment-composer footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.article-comment-composer footer small{color:var(--muted);font-size:10px}
+.article-comment-replying{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:var(--soft);
+  color:var(--muted);
+  font-size:10px;
+}
+.article-comment-replying button{
+  border:0;
+  background:transparent;
+  color:var(--accent);
+  font-size:10px;
+  font-weight:750;
+}
+
+/* Mobile web: keep every comment surface full-width, readable and one-indent only. */
+@media(max-width:760px){
+  .modal.wide:has(#replyContent){
+    width:100vw;
+    max-width:none;
+    height:min(92dvh,820px);
+    max-height:92dvh;
+    margin:0;
+    border-radius:22px 22px 0 0;
+  }
+  .modal-layer:has(#replyContent){
+    align-items:end;
+    padding:0;
+  }
+  .modal.wide:has(#replyContent) .reply-tree{
+    padding-inline:14px;
+  }
+  .reply-children,
+  .article-comment-replies{
+    width:calc(100% - 42px);
+    margin-inline-start:42px;
+  }
+  .rtl .reply-children,
+  .rtl .article-comment-replies{
+    margin-inline-start:0;
+    margin-inline-end:42px;
+  }
+  .article-comments{
+    width:100%;
+    min-width:0;
+    margin-top:24px;
+  }
+  .article-comments-head{align-items:flex-start}
+  .article-comment{padding-block:14px 12px}
+  .article-comment-head .avatar{
+    width:40px;
+    height:40px;
+    flex-basis:40px;
+  }
+  .article-comment-body{
+    margin-inline-start:50px;
+    font-size:13px;
+  }
+  .rtl .article-comment-body{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+  .article-comment-actions{margin-inline-start:50px}
+  .rtl .article-comment-actions{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+  .article-replies-toggle{margin-inline-start:50px}
+  .rtl .article-replies-toggle{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+  .article-comment-composer textarea{
+    min-height:88px;
+    resize:none;
+  }
+  .article-comment-composer footer{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .article-comment-composer footer .primary{
+    align-self:flex-end;
+    min-width:120px;
+  }
+}
