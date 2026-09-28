@@ -49,8 +49,8 @@ public class MainActivity extends Activity {
         String savedSystemTheme = getSharedPreferences("neis_mobile", MODE_PRIVATE)
             .getString("system_theme", "light");
         WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
-        getWindow().setStatusBarColor(Color.parseColor("#F6F8F7"));
-        getWindow().setNavigationBarColor(Color.parseColor("#F6F8F7"));
+        getWindow().setStatusBarColor(Color.parseColor("#F3F6F2"));
+        getWindow().setNavigationBarColor(Color.parseColor("#F3F6F2"));
         applySystemTheme(savedSystemTheme);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             getWindow().setStatusBarContrastEnforced(false);
@@ -131,7 +131,7 @@ public class MainActivity extends Activity {
             bars.setAppearanceLightStatusBars(!dark);
             bars.setAppearanceLightNavigationBars(!dark);
         }
-        int chromeColor = Color.parseColor(dark ? "#0B1B17" : "#F6F8F7");
+        int chromeColor = Color.parseColor(dark ? "#0D1512" : "#F3F6F2");
         getWindow().setStatusBarColor(chromeColor);
         getWindow().setNavigationBarColor(chromeColor);
         if (webView != null) {
