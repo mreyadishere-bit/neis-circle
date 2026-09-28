@@ -781,3 +781,43 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   }
   .dm-reply-preview{margin-inline:9px!important}
 }
+
+
+/* v85 — WhatsApp-style swipe-right to reply in mobile DMs */
+@media(max-width:760px){
+  #chatFlow>.chat-message{
+    position:relative;
+    transform:translateX(var(--swipe-reply-x,0));
+    transition:transform .16s ease;
+    will-change:transform;
+  }
+  #chatFlow>.chat-message.swipe-reply-active{
+    transition:none;
+  }
+  #chatFlow>.chat-message::before{
+    content:"↩";
+    position:absolute;
+    top:50%;
+    left:-32px;
+    width:24px;
+    height:24px;
+    display:grid;
+    place-items:center;
+    transform:translateY(-50%) scale(.85);
+    border-radius:50%;
+    background:var(--accent);
+    color:#fff;
+    opacity:0;
+    font-size:13px;
+    font-weight:800;
+    pointer-events:none;
+    transition:opacity .12s ease,transform .12s ease;
+  }
+  #chatFlow>.chat-message.swipe-reply-active::before{
+    opacity:.55;
+  }
+  #chatFlow>.chat-message.swipe-reply-ready::before{
+    opacity:1;
+    transform:translateY(-50%) scale(1);
+  }
+}
