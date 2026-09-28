@@ -7,7 +7,6 @@ _inspect/
 Thumbs.db
 
 # Android private build credentials
-mobile/android/app/google-services.json
 mobile/android/app/release.keystore
 *.jks
 *.keystore
