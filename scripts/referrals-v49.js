@@ -65,7 +65,7 @@
   function whatsappMessage(link){
     if(state.lang==='ar'){
       return [
-        'مرحبًا! ✨',
+        'مرحبًا!',
         'أعتقد أن *NEIS Circle* قد يعجبك',
         '',
         'هو مجتمع لطلاب مدارس النيل المصرية نقدر من خلاله:',
@@ -79,7 +79,7 @@
       ].join('\n');
     }
     return [
-      'Hey! ✨',
+      'Hey!',
       'I thought you might like *NEIS Circle*',
       '',
       'It’s a student community for NEIS students where we can:',
@@ -180,8 +180,6 @@
     const builder=result.data.community_builder===true||count>=2;
     const link=inviteLink(code);
 
-    try{await loadPosterFile()}catch(_){/* text invite remains available */}
-
     openModal(`
       <div class="modal-head referral-head">
         <div>
@@ -191,7 +189,6 @@
         <button class="close" data-close>×</button>
       </div>
       <section class="referral-panel">
-        ${posterObjectUrl?`<img class="referral-poster" src="${esc(posterObjectUrl)}" alt="${tr('NEIS Circle student invite poster','بوستر دعوة NEIS Circle')}" loading="eager">`:''}
         <div class="referral-stat">
           <div><span>${tr('Successful invites','الدعوات الناجحة')}</span><b>${count}</b></div>
           ${builder
@@ -207,23 +204,13 @@
             <span aria-hidden="true">↗</span>
             ${tr('Invite via WhatsApp','دعوة عبر واتساب')}
           </button>
-          <button type="button" class="secondary referral-poster-share" data-share-poster>
-            ${tr('Share poster image','مشاركة صورة البوستر')}
-          </button>
-          <button type="button" class="secondary" data-copy-referral>
-            ${tr('Copy link','نسخ الرابط')}
-          </button>
         </div>
-        <p class="referral-note">${tr('WhatsApp opens directly with your ready invite message and referral link. Use “Share poster image” if you also want to send the poster.','يفتح واتساب مباشرة برسالة الدعوة الجاهزة ورابطك. استخدم «مشاركة صورة البوستر» إذا أردت إرسال البوستر أيضًا.')}</p>
+        <p class="referral-note">${tr('WhatsApp opens directly with your ready invite message and referral link.','يفتح واتساب مباشرة برسالة الدعوة الجاهزة ورابطك.')}</p>
       </section>
     `);
 
-    const copy=document.querySelector('[data-copy-referral]');
-    if(copy)copy.onclick=()=>copyText(link);
     const whatsapp=document.querySelector('[data-open-whatsapp]');
     if(whatsapp)whatsapp.onclick=()=>openWhatsAppInvite(link);
-    const poster=document.querySelector('[data-share-poster]');
-    if(poster)poster.onclick=()=>sharePosterImage();
     if(typeof translateTree==='function')translateTree(document.getElementById('modalRoot'));
   }
 
