@@ -1186,3 +1186,30 @@ html.neis-native-app .app{
     min-height:28px!important;
   }
 }
+
+
+/* v64 — native app uses the exact same comment visual system */
+@media(max-width:1180px){
+  html.neis-native-app .reply-children,
+  html.neis-native-app .article-comment-replies{
+    width:calc(100% - 16px)!important;
+    margin-inline-start:16px!important;
+  }
+  html.neis-native-app body.rtl .reply-children,
+  html.neis-native-app body.rtl .article-comment-replies{
+    margin-inline-start:0!important;
+    margin-inline-end:16px!important;
+  }
+  html.neis-native-app .reply-actions,
+  html.neis-native-app .article-comment-actions{
+    flex-wrap:nowrap!important;
+    gap:2px!important;
+  }
+  html.neis-native-app .reply-actions button,
+  html.neis-native-app .article-comment-actions button{
+    height:30px!important;
+    min-height:30px!important;
+    padding:3px 6px!important;
+    font-size:9px!important;
+  }
+}
