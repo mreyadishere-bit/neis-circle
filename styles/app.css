@@ -1090,3 +1090,9 @@ body.image-lightbox-open{overflow:hidden}
   flex:0 0 28px!important;
   background:var(--line)!important;
 }
+
+
+/* v71 — post/discussion comments: Arabic text is also visually left-aligned */
+.reply-body[dir="auto"]{
+  text-align:left!important;
+}
