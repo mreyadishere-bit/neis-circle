@@ -10,7 +10,7 @@ const load=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??f}catch{retur
 const state={
   view:"home", lang:localStorage.getItem("neis-lang")||"en", theme:localStorage.getItem("neis-theme")||"light",
   posts:[], saved:[], liked:[], joined:[], following:[], rsvp:[],
-  threads:[], activeThread:null, query:"", filter:"Latest",
+  threads:[], activeThread:null, query:"", filter:"For you",
   discoverFilter:"Recommended", opportunityFilter:"All",
   profile:load("neis-profile-v2",{name:"Eyad",username:"eyad",grade:"Grade 11",campus:"Main Campus",bio:"Curious about physics, technology and design.",interests:"Physics, ICT, Design, AI"})
 };
@@ -20,7 +20,7 @@ const icon=id=>`<svg><use href="#i-${id}"/></svg>`;
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const save=()=>{localStorage.setItem("neis-posts-v2",JSON.stringify(state.posts));localStorage.setItem("neis-saved-v2",JSON.stringify(state.saved));localStorage.setItem("neis-liked-v2",JSON.stringify(state.liked));localStorage.setItem("neis-joined-v2",JSON.stringify(state.joined));localStorage.setItem("neis-follow-v2",JSON.stringify(state.following));localStorage.setItem("neis-rsvp-v2",JSON.stringify(state.rsvp));localStorage.setItem("neis-threads-v2",JSON.stringify(state.threads));localStorage.setItem("neis-profile-v2",JSON.stringify(state.profile))};
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),2200)}
-function applyPrefs(){document.documentElement.dataset.theme=state.theme;document.body.classList.toggle("rtl",state.lang==="ar");document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==="ar"?"rtl":"ltr";localStorage.setItem("neis-theme",state.theme);localStorage.setItem("neis-lang",state.lang);try{window.NeisAndroid?.setSystemTheme?.(state.theme)}catch(_){};window.dispatchEvent(new CustomEvent("neis:themechange",{detail:{theme:state.theme}}))}
+function applyPrefs(){document.documentElement.dataset.theme=state.theme;document.body.classList.toggle("rtl",state.lang==="ar");document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==="ar"?"rtl":"ltr";localStorage.setItem("neis-theme",state.theme);localStorage.setItem("neis-lang",state.lang)}
 function nav(v){state.view=v;state.query="";$("#globalSearch").value="";$$("[data-nav]").forEach(b=>b.classList.toggle("active",b.dataset.nav===v));render();scrollTo({top:0,behavior:"smooth"})}
 function setupBanner(){if(!sb)return `<div class="setup-banner"><span class="online-dot"></span><b>${L[state.lang].setup}</b><button data-action="setup">${L[state.lang].connect} →</button></div>`;if(!authUser)return `<div class="setup-banner"><span class="online-dot"></span><b>Sign in to publish, reply and sync your saved items on every device.</b><button data-action="login">Continue with Google →</button></div>`;return ""}
 function avatar(p,large=false){return `<span class="avatar ${large?"large":""}" style="--avatar:${p.color||"#7056d8"}">${esc(p.initials||p.name?.split(" ").map(x=>x[0]).join("").slice(0,2)||"ST")}</span>`}
