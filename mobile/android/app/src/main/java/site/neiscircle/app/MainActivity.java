@@ -48,9 +48,9 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         String savedSystemTheme = getSharedPreferences("neis_mobile", MODE_PRIVATE)
             .getString("system_theme", "light");
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
-        getWindow().setStatusBarColor(Color.TRANSPARENT);
-        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
+        getWindow().setStatusBarColor(Color.parseColor("#F6F8F7"));
+        getWindow().setNavigationBarColor(Color.parseColor("#F6F8F7"));
         applySystemTheme(savedSystemTheme);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             getWindow().setStatusBarContrastEnforced(false);
@@ -77,7 +77,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.0");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.1");
 
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
@@ -131,8 +131,11 @@ public class MainActivity extends Activity {
             bars.setAppearanceLightStatusBars(!dark);
             bars.setAppearanceLightNavigationBars(!dark);
         }
+        int chromeColor = Color.parseColor(dark ? "#0B1B17" : "#F6F8F7");
+        getWindow().setStatusBarColor(chromeColor);
+        getWindow().setNavigationBarColor(chromeColor);
         if (webView != null) {
-            webView.setBackgroundColor(Color.parseColor(dark ? "#0B1B17" : "#F6F8F7"));
+            webView.setBackgroundColor(chromeColor);
         }
     }
 
