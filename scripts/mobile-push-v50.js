@@ -241,7 +241,8 @@
       const messageText=bubble.querySelector('.message-text')?.textContent||'';
       const messageId=row.dataset?.messageId||'';
 
-      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button></div>`);
+      const canDelete=row.dataset?.messageDeletable==='1';
+      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
       document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
 
       const reply=document.querySelector('[data-native-reply-message]');
@@ -257,6 +258,8 @@
           toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'));
         }
       };
+      const del=document.querySelector('[data-native-delete-message]');
+      if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
     };
 
     const begin=(eventTarget,x,y)=>{
