@@ -185,7 +185,7 @@
     button.type='button';
     button.className='account-row';
     button.dataset.mobileNotificationSettings='';
-    button.classList.add('settings-row');button.innerHTML=`<span class="settings-row-label">${lang('Mobile notifications','إشعارات الموبايل')}</span><span class="settings-row-end"><b class="settings-row-value">${lang('Sound & alerts','الصوت والتنبيهات')}</b><i class="settings-chevron" aria-hidden="true">›</i></span>`;
+    button.classList.add('settings-row');button.innerHTML=`<span class="settings-row-label">${lang('Mobile notifications','إشعارات الموبايل')}</span><span class="settings-row-end"><b class="settings-row-value">${lang('Sound & alerts','الصوت والتنبيهات')}</b><i class="settings-chevron" aria-hidden="true"></i></span>`;
     menu.appendChild(button);
     button.onclick=openMobileNotificationSettings;
   }
