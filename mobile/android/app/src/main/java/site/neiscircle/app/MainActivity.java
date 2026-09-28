@@ -45,6 +45,8 @@ public class MainActivity extends Activity {
     private int nativeBottomInset = 0;
     private long backgroundedAtMs = 0L;
     private boolean updateCheckRunning = false;
+    private float lastTouchX = 0f;
+    private float lastTouchY = 0f;
 
     public static boolean isAppForeground() {
         return appForeground;
@@ -96,7 +98,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.2");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.3");
 
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
@@ -113,6 +115,22 @@ public class MainActivity extends Activity {
                     return false;
                 }
             }
+        });
+
+        webView.setOnTouchListener((view, event) -> {
+            lastTouchX = event.getX();
+            lastTouchY = event.getY();
+            return false;
+        });
+        webView.setOnLongClickListener(view -> {
+            if (webView == null || !pageReady) return false;
+            final float density = getResources().getDisplayMetrics().density;
+            final float cssX = lastTouchX / density;
+            final float cssY = lastTouchY / density;
+            String script = "window.NEISMobile&&window.NEISMobile.openMessageActionsAt&&window.NEISMobile.openMessageActionsAt(" +
+                cssX + "," + cssY + ")";
+            webView.evaluateJavascript(script, null);
+            return true;
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) -> openExternal(url));
