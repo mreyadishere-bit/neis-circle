@@ -1254,3 +1254,18 @@ html.neis-native-app .app{
     padding-inline-end:10px!important;
   }
 }
+
+
+/* v76 — Android: place tiny delete at the message's outer top corner */
+@media(max-width:1180px){
+  html.neis-native-app .messages.mobile-thread-open .chat-message .content-menu{
+    top:-6px!important;
+    inset-inline-start:-8px!important;
+    inset-inline-end:auto!important;
+    transform:none!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message:not(.mine) .content-menu{
+    inset-inline-start:auto!important;
+    inset-inline-end:-8px!important;
+  }
+}
