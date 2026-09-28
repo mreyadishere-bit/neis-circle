@@ -276,12 +276,108 @@ html.neis-native-app .app{
     align-items:center;
     gap:12px;
   }
+  html.neis-native-app [data-author-like-email-setting],
+  html.neis-native-app [data-admin-dm-email-setting],
+  html.neis-native-app [data-admin-post-email-setting]{
+    margin-top:12px!important;
+    padding:15px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title{
+    margin-bottom:8px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title h2,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title h2,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title h2{
+    font-size:18px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title p,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title p,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title p{
+    margin-top:4px!important;
+    font-size:10px!important;
+    line-height:1.45!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>p,
+  html.neis-native-app [data-admin-dm-email-setting]>p,
+  html.neis-native-app [data-admin-post-email-setting]>p{
+    font-size:9.5px!important;
+    line-height:1.5!important;
+  }
   html.neis-native-app [data-author-like-email-toggle],
   html.neis-native-app [data-admin-dm-email-toggle],
   html.neis-native-app [data-admin-post-email-toggle]{
+    position:relative;
     width:50px;min-width:50px;height:30px;min-height:30px;
     padding:0;border:0;border-radius:999px;
     font-size:0;color:transparent;background:var(--line)!important;
+  }
+  html.neis-native-app [data-author-like-email-toggle]::before,
+  html.neis-native-app [data-admin-dm-email-toggle]::before,
+  html.neis-native-app [data-admin-post-email-toggle]::before{
+    content:"";
+    position:absolute;top:3px;left:3px;
+    width:24px;height:24px;border-radius:50%;
+    background:#fff;box-shadow:0 2px 7px rgba(0,0,0,.16);
+    transition:transform .16s ease;
+  }
+  html.neis-native-app [data-author-like-email-toggle].primary,
+  html.neis-native-app [data-admin-dm-email-toggle].primary,
+  html.neis-native-app [data-admin-post-email-toggle].primary{
+    background:var(--accent)!important;
+  }
+  html.neis-native-app [data-author-like-email-toggle].primary::before,
+  html.neis-native-app [data-admin-dm-email-toggle].primary::before,
+  html.neis-native-app [data-admin-post-email-toggle].primary::before{
+    transform:translateX(20px);
+  }
+  html.neis-native-app body.rtl [data-author-like-email-toggle].primary::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle].primary::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle].primary::before{
+    transform:translateX(-20px);
+  }
+  html.neis-native-app body.rtl [data-author-like-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle]::before{
+    left:auto;right:3px;
+  }
+
+  /* Message action sheet and discussion use bottom-sheet geometry on native. */
+  html.neis-native-app .modal-layer:has(.native-message-action-head){
+    align-items:end;
+    padding:0!important;
+  }
+  html.neis-native-app .modal-layer:has(.native-message-action-head) .modal{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    border-radius:22px 22px 0 0!important;
+    padding-bottom:calc(18px + var(--native-safe-bottom))!important;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent){
+    align-items:end;
+    padding:0!important;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) .modal{
+    width:100%!important;
+    max-width:none!important;
+    height:min(90dvh,820px);
+    margin:0!important;
+    border-radius:22px 22px 0 0!important;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) #replyContent{
+    min-height:0;
+    display:flex;
+    flex:1;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) .reply-tree{
+    min-height:0;flex:1;overflow-y:auto;
   }
 
   /* Admin moderation stays compact when expanded. */
