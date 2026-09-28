@@ -339,9 +339,9 @@ html.neis-native-app .grain{display:none!important}
   html.neis-native-app .stat{min-height:110px;padding:15px;border-radius:18px}
   html.neis-native-app .stat strong{font-size:28px}
   html.neis-native-app .stat small{font-size:11px}
-  html.neis-native-app .module-card{margin-inline:12px;padding:16px;border:1px solid var(--line);background:var(--card)}
-  html.neis-native-app .module-card>.page-title{padding:0 0 12px}
-  html.neis-native-app .module-card>h2{margin:0 0 12px;font-size:21px}
+  html.neis-native-app .admin-hero~.module-card{margin-inline:12px;padding:16px;border:1px solid var(--line);background:var(--card)}
+  html.neis-native-app .admin-hero~.module-card>.page-title{padding:0 0 12px}
+  html.neis-native-app .admin-hero~.module-card>h2{margin:0 0 12px;font-size:21px}
 
   html.neis-native-app .admin-content-list{gap:8px}
   html.neis-native-app .admin-content-row{
