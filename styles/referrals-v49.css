@@ -1,0 +1,16 @@
+/* NEIS Circle v49 — referral invite modal */
+.referral-head{align-items:flex-start}
+.referral-panel{display:grid;gap:16px}
+.referral-stat{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--soft)}
+.referral-stat span{color:var(--muted);font-size:11px;font-weight:700}
+.referral-stat b{font-size:22px;line-height:1;color:var(--accent)}
+.referral-link-field input{font-size:11px}
+.referral-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.referral-actions>*{min-height:44px}
+.referral-whatsapp{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.referral-note{margin:0;color:var(--muted);font-size:10px;line-height:1.6}
+.rtl .referral-panel,.rtl .referral-head{text-align:right}
+@media(max-width:520px){
+  .referral-actions{grid-template-columns:1fr}
+  .referral-actions>*{width:100%}
+}
