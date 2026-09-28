@@ -1394,3 +1394,131 @@ body.rtl .reply-thread-toggle{
   flex:0 0 28px!important;
   background:var(--line)!important;
 }
+
+
+/* v82 — compact mobile Settings and WhatsApp-like message actions/replies */
+#modalRoot .modal:has([data-setting-plus]){
+  width:min(520px,calc(100vw - 22px))!important;
+  max-height:min(82dvh,720px)!important;
+  padding:20px!important;
+  border-radius:24px!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .modal-head{margin-bottom:10px!important}
+#modalRoot .modal:has([data-setting-plus]) .modal-head h2{font-size:24px!important}
+#modalRoot .modal:has([data-setting-plus]) .modal-head p{display:none!important}
+#modalRoot .modal:has([data-setting-plus]) .account-menu{gap:0!important}
+#modalRoot .modal:has([data-setting-plus]) .account-row{
+  min-height:52px!important;
+  padding:12px 4px!important;
+  border:0!important;
+  border-bottom:1px solid var(--line)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  text-align:start!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .account-row:first-child{
+  margin-bottom:6px!important;
+  padding:13px 4px!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .account-row>span,
+#modalRoot .modal:has([data-setting-plus]) .settings-row-label{
+  font-size:13px!important;
+  font-weight:650!important;
+  text-align:start!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .account-row>b,
+#modalRoot .modal:has([data-setting-plus]) .settings-row-value{
+  width:auto!important;
+  font-size:11px!important;
+  color:var(--muted)!important;
+  text-align:end!important;
+  white-space:nowrap!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .settings-row-end{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  width:auto!important;
+}
+#modalRoot .modal:has([data-setting-plus]) .signout{
+  min-height:48px!important;
+  margin-top:14px!important;
+  border-radius:14px!important;
+}
+
+#modalRoot .message-actions-modal{
+  width:min(390px,calc(100vw - 30px))!important;
+  padding:18px!important;
+  border-radius:24px!important;
+}
+#modalRoot .message-actions-modal .modal-head{
+  margin-bottom:8px!important;
+}
+#modalRoot .message-actions-modal .modal-head h2{
+  font-size:20px!important;
+}
+#modalRoot .message-actions-modal .modal-head p{display:none!important}
+.mobile-message-action-list,
+.native-message-action-list{
+  display:grid!important;
+  gap:0!important;
+}
+.mobile-message-action-list .account-row,
+.native-message-action-list .account-row{
+  width:100%!important;
+  min-height:52px!important;
+  padding:12px 6px!important;
+  border:0!important;
+  border-bottom:1px solid var(--line)!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:var(--ink)!important;
+}
+.mobile-message-action-list .account-row:last-child,
+.native-message-action-list .account-row:last-child{border-bottom:0!important}
+.mobile-message-action-list .account-row span,
+.native-message-action-list .account-row span{font-size:13px!important;font-weight:650!important}
+.mobile-message-action-list .account-row b,
+.native-message-action-list .account-row b{width:auto!important;color:var(--muted)!important;font-size:16px!important}
+
+.dm-reply-preview{
+  flex:0 0 auto;
+  margin:0 12px -3px;
+  padding:8px 10px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  border-inline-start:3px solid var(--accent);
+  border-radius:12px 12px 4px 4px;
+  background:var(--soft);
+}
+.dm-reply-preview>div{min-width:0;display:grid;gap:2px}
+.dm-reply-preview b{font-size:10px;color:var(--accent)}
+.dm-reply-preview span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:var(--muted)}
+.dm-reply-preview button{
+  width:28px;height:28px;padding:0;border:0;border-radius:50%;
+  background:transparent;color:var(--muted);font-size:18px;
+}
+.message-reply-quote{
+  margin:0 0 6px;
+  padding:6px 8px;
+  display:grid;
+  gap:1px;
+  border-inline-start:3px solid currentColor;
+  border-radius:8px;
+  background:color-mix(in srgb,var(--card) 22%,transparent);
+  opacity:.9;
+}
+.message-reply-quote b{font-size:9px;line-height:1.25}
+.message-reply-quote span{
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:9px;
+  opacity:.78;
+}
+.chat-message .content-menu{display:none!important}
