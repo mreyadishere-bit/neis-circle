@@ -460,6 +460,7 @@ comments=async function(postId){
           ?`<button class="reply-action creator-heart-toggle ${heartsByComment.has(String(r.id))?'active':''}" data-creator-heart="${r.id}" aria-label="${t('Creator heart','قلب الناشر')}">♥</button>`
           :heartsByComment.has(String(r.id))?`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
         <button class="reply-action" data-reply-to="${r.id}">${t('Reply','رد')}</button>
+        ${profile?.username?`<button class="reply-action native-mention-action" data-native-mention data-comment-mention="${r.id}">@ ${t('Mention','منشن')}</button>`:''}
         ${own?`<button class="reply-action" data-edit-reply="${r.id}">${t('Edit','تعديل')}</button>`:''}
         ${deletable?`<button class="reply-action danger-text" data-delete-reply="${r.id}">${t('Delete','حذف')}</button>`:`<button class="reply-action" data-report-target="comment" data-report-id="${r.id}">${t('Report','إبلاغ')}</button>`}
       </div>`:''}
@@ -557,6 +558,15 @@ comments=async function(postId){
     const mention=username?`@${username} `:'';
     if(mention&&!input.value.includes(mention))input.value=(input.value.trim()?input.value.replace(/\s*$/,' '):'')+mention;
     input.placeholder=`${t('Reply to','رد على')} ${reply.profile?.full_name||t('Student','طالب')}…`;
+    input.focus();
+    try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
+    input.scrollIntoView({block:'nearest',behavior:'smooth'});
+  });
+  $('#replyContent').querySelectorAll('[data-comment-mention]').forEach(button=>button.onclick=()=>{
+    const reply=replies.find(row=>same(row.id,button.dataset.commentMention)),input=$('#replyInput');if(!reply||!input)return;
+    const username=reply.profile?.username||'',mention=username?`@${username}`:'';
+    if(mention&&!input.value.includes(mention))input.value=input.value.trim()?input.value.replace(/\s*$/,' ') + mention + ' ':mention+' ';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
     input.focus();
     try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
     input.scrollIntoView({block:'nearest',behavior:'smooth'});
