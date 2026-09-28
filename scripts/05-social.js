@@ -957,7 +957,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   window.__neisMobileWebMessageLongPressV67=true;
   let timer=null,startX=0,startY=0,target=null,consumed=false;
 
-  const mobileWeb=()=>window.matchMedia('(max-width:760px)').matches&&!document.documentElement.classList.contains('neis-native-app');
+  const mobileWeb=()=>window.matchMedia('(max-width:760px)').matches;
   const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
 
   const rowAtY=(eventTarget,y)=>{
@@ -1032,6 +1032,29 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     if(!consumed)showActions(current.row,current.bubble);
     consumed=false;
   });
+
+  let touchTimer=null,touchTarget=null,touchX=0,touchY=0;
+  const clearTouch=()=>{if(touchTimer){clearTimeout(touchTimer);touchTimer=null}touchTarget=null};
+  document.addEventListener('touchstart',event=>{
+    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
+    const touch=event.touches?.[0];if(!touch)return;
+    const current=resolveTarget(event.target,touch.clientY);if(!current)return;
+    clearTouch();touchTarget=current;touchX=touch.clientX;touchY=touch.clientY;
+    touchTimer=setTimeout(()=>{
+      const selected=touchTarget;touchTimer=null;
+      if(!selected?.row||!selected?.bubble)return;
+      if(navigator.vibrate)navigator.vibrate(18);
+      showActions(selected.row,selected.bubble);
+      touchTarget=null;
+    },500);
+  },{passive:true});
+  document.addEventListener('touchmove',event=>{
+    if(!touchTimer)return;
+    const touch=event.touches?.[0];
+    if(!touch||Math.abs(touch.clientX-touchX)>12||Math.abs(touch.clientY-touchY)>12)clearTouch();
+  },{passive:true});
+  document.addEventListener('touchend',clearTouch,{passive:true});
+  document.addEventListener('touchcancel',clearTouch,{passive:true});
 })();
 
 /* v83 — expose DM delete action for mobile action sheets */
