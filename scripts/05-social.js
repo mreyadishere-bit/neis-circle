@@ -226,6 +226,40 @@ function connectionsView(){
 function requestCard(p){return `<article class="module-card profile-card" data-open-profile="${p.id}" tabindex="0"><div class="identity-line">${profileAvatar(p,true)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')}</p></div></div><p>${esc(p.grade||'')} · ${esc(p.branch||'')}</p><div class="profile-actions"><button class="primary" data-follow-request="accept" data-user="${p.id}">${t('Accept','قبول')}</button><button class="secondary danger" data-follow-request="reject" data-user="${p.id}">${t('Reject','رفض')}</button></div></article>`}
 
 
+
+let dmKeyboardViewportBound=false,dmKeyboardLastHeight=0;
+function scrollActiveDmToBottom(options={}){
+  const flow=document.querySelector('#chatFlow');
+  if(!flow)return;
+  const run=()=>{flow.scrollTop=flow.scrollHeight};
+  if(options.immediate)run();
+  requestAnimationFrame(()=>{run();setTimeout(run,70);setTimeout(run,180)});
+}
+function bindDmKeyboardBottom(){
+  if(dmKeyboardViewportBound)return;
+  dmKeyboardViewportBound=true;
+  const vv=window.visualViewport;
+  if(vv){
+    dmKeyboardLastHeight=vv.height;
+    vv.addEventListener('resize',()=>{
+      const input=document.querySelector('#liveChatInput');
+      if(document.activeElement!==input){dmKeyboardLastHeight=vv.height;return}
+      const opening=vv.height<dmKeyboardLastHeight-20;
+      dmKeyboardLastHeight=vv.height;
+      if(opening||document.querySelector('.messages.mobile-thread-open'))scrollActiveDmToBottom();
+    },{passive:true});
+    vv.addEventListener('scroll',()=>{
+      const input=document.querySelector('#liveChatInput');
+      if(document.activeElement===input)scrollActiveDmToBottom();
+    },{passive:true});
+  }else{
+    window.addEventListener('resize',()=>{
+      const input=document.querySelector('#liveChatInput');
+      if(document.activeElement===input)scrollActiveDmToBottom();
+    },{passive:true});
+  }
+}
+
 const DM_DRAFTS_KEY='neis-dm-drafts-v1';
 function loadDmDrafts(){
   try{return JSON.parse(sessionStorage.getItem(DM_DRAFTS_KEY)||'{}')||{}}catch(_){return {}}
@@ -731,7 +765,7 @@ function bindV6(root=document){
   root.querySelectorAll('[role="link"][tabindex="0"]').forEach(el=>el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}});
   root.querySelectorAll('[data-v6-follow]').forEach(el=>el.onclick=async e=>{e.stopPropagation();const id=el.dataset.v6Follow,on=isFollowing(id);el.disabled=true;const q=on?sb.from('follows').delete().match({follower_id:authUser.id,following_id:id}):sb.from('follows').upsert({follower_id:authUser.id,following_id:id,status:'accepted'});const {error}=await q;if(error){toast(safeError(error,on?'unfollow':'follow'));el.disabled=false;return}await loadLiveData();render();toast(on?t('Unfollowed.','تم إلغاء المتابعة.'):t('Following.','تتم المتابعة.'))});
   root.querySelectorAll('[data-message-user]').forEach(el=>el.onclick=e=>{e.stopPropagation();startConversation(el.dataset.messageUser)});
-  root.querySelectorAll('[data-open-conversation]').forEach(el=>el.onclick=()=>{state.activeConversationId=el.dataset.openConversation;routeTo(`messages/${state.activeConversationId}`);markConversationRead(state.activeConversationId)});
+  root.querySelectorAll('[data-open-conversation]').forEach(el=>el.onclick=()=>{state.activeConversationId=el.dataset.openConversation;routeTo(`messages/${state.activeConversationId}`);markConversationRead(state.activeConversationId);requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}))});
   root.querySelectorAll('[data-new-chat]').forEach(el=>el.onclick=openNewConversation);
   root.querySelectorAll('[data-mobile-threads]').forEach(el=>el.onclick=()=>{state.activeConversationId='';routeTo('messages',true);requestAnimationFrame(()=>{const shell=document.querySelector('.messages');if(shell)shell.classList.remove('mobile-thread-open')})});
   root.querySelectorAll('[data-connection-tab]').forEach(el=>el.onclick=()=>routeTo(`connections/${el.dataset.connectionTab}`));
@@ -779,7 +813,13 @@ function bindV6(root=document){
   root.querySelectorAll('[data-clear-circle-search]').forEach(el=>el.onclick=()=>{state.circleQuery='';render()});
   const ts=root.querySelector('#conversationSearch');if(ts)ts.oninput=()=>rerenderSearchInput(ts,'conversationQuery');
   const liveDraftInput=root.querySelector('#liveChatInput');
-  if(liveDraftInput)liveDraftInput.oninput=()=>setDmDraft(state.activeConversationId,liveDraftInput.value);
+  if(liveDraftInput){
+    bindDmKeyboardBottom();
+    liveDraftInput.oninput=()=>setDmDraft(state.activeConversationId,liveDraftInput.value);
+    liveDraftInput.addEventListener('focus',()=>scrollActiveDmToBottom(),{passive:true});
+    liveDraftInput.addEventListener('click',()=>scrollActiveDmToBottom(),{passive:true});
+  }
+  if(root.querySelector('#liveChatForm'))requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}));
   const chat=root.querySelector('#liveChatForm');if(chat)chat.onsubmit=async e=>{
     e.preventDefault();
     const input=$('#liveChatInput'),button=chat.querySelector('button'),conversationId=state.activeConversationId,body=input.value.trim();
