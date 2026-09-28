@@ -1,0 +1,604 @@
+/* NEIS Circle v52 — production mobile-app UX pass.
+   Scoped to the installed Android app only. */
+
+@media(max-width:760px){
+  /* Core app chrome */
+  html.neis-native-app .top{
+    min-height:58px!important;
+    height:58px!important;
+    padding:5px 14px!important;
+    grid-template-rows:48px!important;
+  }
+  html.neis-native-app .wordmark b{font-size:19px}
+  html.neis-native-app .top-actions .round-btn,
+  html.neis-native-app .top-actions .mini-avatar{
+    width:38px!important;height:38px!important;min-width:38px;flex-basis:38px!important;
+  }
+  html.neis-native-app .stage{
+    padding-top:0!important;
+    padding-bottom:calc(66px + env(safe-area-inset-bottom))!important;
+  }
+  html.neis-native-app .bottom-nav{
+    height:calc(64px + env(safe-area-inset-bottom));
+    padding-top:3px;
+  }
+  html.neis-native-app .bottom-nav button{
+    height:56px;
+    grid-template-rows:30px 15px;
+    font-size:9.5px;
+  }
+  html.neis-native-app .bottom-nav button svg{width:23px;height:23px}
+
+  /* Consistent touch targets */
+  html.neis-native-app .primary,
+  html.neis-native-app .secondary{
+    min-height:44px;
+  }
+  html.neis-native-app .page-title>.primary,
+  html.neis-native-app .opportunities-create{
+    width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;
+    border-radius:15px!important;
+    box-shadow:none!important;
+  }
+
+  /* Page rhythm */
+  html.neis-native-app .page-title{
+    padding:18px 16px 12px;
+    margin:0;
+  }
+  html.neis-native-app .page-title h1{
+    font-size:27px;
+    line-height:1.05;
+  }
+  html.neis-native-app .page-title p{
+    margin-top:5px;
+    font-size:12px;
+    line-height:1.55;
+  }
+  html.neis-native-app .section-head{
+    padding-inline:16px;
+  }
+
+  /* Home: denser, more app-like */
+  html.neis-native-app .hero{
+    margin:12px 12px 10px;
+  }
+  html.neis-native-app .hero-main{
+    min-height:0;
+    padding:20px 18px;
+    border-radius:18px;
+  }
+  html.neis-native-app .hero h1{font-size:28px}
+  html.neis-native-app .hero-main p{font-size:11.5px}
+  html.neis-native-app .hero-main .primary,
+  html.neis-native-app .hero-main .secondary{
+    min-height:42px;
+    padding-inline:14px;
+    border-radius:13px;
+  }
+  html.neis-native-app .dashboard .section-head{
+    padding-top:14px;
+    padding-bottom:8px;
+  }
+  html.neis-native-app .article-grid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:0!important;
+  }
+  html.neis-native-app .article-card{
+    width:100%;
+    min-height:118px!important;
+    height:auto!important;
+    display:grid!important;
+    grid-template-columns:112px minmax(0,1fr)!important;
+    border-top:1px solid var(--line)!important;
+    border-bottom:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  html.neis-native-app .article-card:last-child{border-bottom:1px solid var(--line)!important}
+  html.neis-native-app .article-card .article-cover{
+    width:112px!important;
+    height:118px!important;
+    min-height:118px!important;
+    border-radius:0!important;
+  }
+  html.neis-native-app .article-card .article-copy{
+    min-width:0;
+    padding:13px 14px!important;
+  }
+  html.neis-native-app .article-card .article-copy h3{
+    font-size:15px!important;
+    line-height:1.3;
+  }
+
+  /* Circle header: compact identity block, no clipped controls */
+  html.neis-native-app .circle-hero{
+    display:grid!important;
+    grid-template-columns:58px minmax(0,1fr)!important;
+    gap:12px!important;
+    align-items:center!important;
+    padding:16px!important;
+    margin:0!important;
+    border-top:0!important;
+    border-bottom:1px solid var(--line)!important;
+    background:var(--card)!important;
+    text-align:start!important;
+  }
+  html.neis-native-app .circle-hero .circle-logo,
+  html.neis-native-app .circle-hero .module-icon{
+    width:58px!important;height:58px!important;
+    margin:0!important;
+    border-radius:18px!important;
+    font-size:18px!important;
+  }
+  html.neis-native-app .circle-hero-copy{
+    min-width:0;
+    display:block!important;
+  }
+  html.neis-native-app .circle-hero h1{
+    display:inline;
+    font-size:26px!important;
+    line-height:1.08;
+  }
+  html.neis-native-app .circle-hero .identity-line{
+    display:inline-flex!important;
+    width:auto!important;
+    margin-inline-start:6px;
+    vertical-align:middle;
+  }
+  html.neis-native-app .circle-hero .role-pill{
+    padding:4px 8px;
+    font-size:8px;
+  }
+  html.neis-native-app .circle-hero-copy>p{
+    margin:5px 0 7px!important;
+    font-size:11.5px!important;
+    line-height:1.45;
+  }
+  html.neis-native-app .circle-hero .profile-stats{
+    gap:6px!important;
+    margin-top:6px!important;
+    justify-content:flex-start!important;
+  }
+  html.neis-native-app .circle-hero .profile-stats span{
+    min-height:24px!important;
+    padding:4px 8px!important;
+    font-size:9px!important;
+  }
+  html.neis-native-app .circle-hero .profile-stats b{font-size:10px!important}
+  html.neis-native-app .circle-hero .profile-hero-actions{
+    grid-column:1/-1!important;
+    width:100%!important;
+    display:grid!important;
+    grid-template-columns:1.35fr 1fr 1fr 46px!important;
+    gap:7px!important;
+    margin-top:4px;
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions button{
+    width:100%!important;
+    min-width:0!important;
+    height:44px!important;
+    padding:0 8px!important;
+    margin:0!important;
+    border-radius:13px!important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:11px;
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions button:last-child{
+    width:46px!important;
+    padding:0!important;
+  }
+
+  /* Circle tabs become a proper scrollable tab bar */
+  html.neis-native-app .circle-tabs{
+    position:sticky;
+    z-index:55;
+    top:58px;
+    width:100%;
+    margin:0!important;
+    padding:7px 10px!important;
+    display:flex!important;
+    gap:6px!important;
+    overflow-x:auto!important;
+    overscroll-behavior-x:contain;
+    scroll-snap-type:x proximity;
+    border-bottom:1px solid var(--line);
+    background:color-mix(in srgb,var(--card) 98%,transparent);
+    backdrop-filter:blur(16px);
+    scrollbar-width:none;
+  }
+  html.neis-native-app .circle-tabs::-webkit-scrollbar{display:none}
+  html.neis-native-app .circle-tabs button{
+    flex:0 0 auto;
+    min-height:38px;
+    padding:0 14px;
+    border-radius:999px;
+    scroll-snap-align:start;
+    font-size:11px;
+    white-space:nowrap;
+  }
+
+  /* Circle search */
+  html.neis-native-app .circle-toolbar{
+    width:100%;
+    margin:0!important;
+    padding:9px 12px!important;
+    gap:7px!important;
+    border-bottom:1px solid var(--line);
+    background:var(--card);
+  }
+  html.neis-native-app .circle-toolbar .field{max-width:none!important}
+  html.neis-native-app .circle-toolbar input{
+    height:42px!important;
+    border:0!important;
+    border-radius:13px!important;
+    background:var(--soft)!important;
+    padding-inline:13px!important;
+  }
+  html.neis-native-app .circle-toolbar .secondary{
+    min-height:42px!important;height:42px!important;
+  }
+
+  /* Circle posts */
+  html.neis-native-app .circle-toolbar+.page-title{
+    padding-top:14px!important;
+  }
+  html.neis-native-app .circle-toolbar+.page-title h2{
+    margin:0;
+    font-size:23px!important;
+  }
+  html.neis-native-app .circle-toolbar+.page-title p{
+    margin:2px 0 0!important;
+    font-size:10px!important;
+  }
+  html.neis-native-app .circle-toolbar+.page-title .primary{
+    align-self:center;
+  }
+
+  /* Empty states: useful but not dominant */
+  html.neis-native-app .empty{
+    min-height:132px!important;
+    margin:10px 14px!important;
+    padding:28px 18px!important;
+    border-radius:16px!important;
+  }
+  html.neis-native-app .empty b{font-size:17px!important}
+  html.neis-native-app .empty span{font-size:11px!important}
+
+  /* Circle Chat = chat screen, not a giant card */
+  html.neis-native-app .circle-panel.circle-chat{
+    height:calc(100dvh - 58px - 53px - 61px - 64px - env(safe-area-inset-bottom))!important;
+    min-height:300px;
+    display:flex!important;
+    flex-direction:column;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    background:var(--card)!important;
+  }
+  html.neis-native-app .circle-chat>.section-head{
+    flex:0 0 auto;
+    min-height:56px;
+    padding:11px 14px!important;
+    border-bottom:1px solid var(--line);
+  }
+  html.neis-native-app .circle-chat>.section-head h2{
+    margin:0;
+    font-size:19px!important;
+  }
+  html.neis-native-app .circle-chat>.section-head p{
+    margin:2px 0 0!important;
+    font-size:9px!important;
+    line-height:1.35;
+  }
+  html.neis-native-app .circle-chat .chat-flow{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    padding:10px 10px 8px!important;
+    background:color-mix(in srgb,var(--soft) 32%,var(--card));
+  }
+  html.neis-native-app .circle-chat .chat-flow>.empty{
+    align-self:center;
+    width:calc(100% - 20px);
+    min-height:120px!important;
+    margin:auto 10px!important;
+    background:transparent;
+  }
+  html.neis-native-app .circle-chat .chat-form{
+    flex:0 0 auto!important;
+    margin:7px 9px calc(7px + env(safe-area-inset-bottom))!important;
+  }
+
+  /* Direct messages: use the full phone width */
+  html.neis-native-app .messages{
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    height:calc(100dvh - 58px - 64px - env(safe-area-inset-bottom))!important;
+    margin:0!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-list{
+    display:flex!important;
+    width:100%!important;
+    max-width:none!important;
+    height:100%;
+    flex-direction:column;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .chat{display:none!important}
+  html.neis-native-app .messages.mobile-thread-open .thread-list{display:none!important}
+  html.neis-native-app .messages.mobile-thread-open .chat{
+    display:flex!important;
+    width:100%!important;
+    height:100%;
+  }
+  html.neis-native-app .thread-head{
+    width:100%;
+    min-height:58px!important;height:58px!important;
+    padding:0 16px!important;
+  }
+  html.neis-native-app .thread-head h2{font-size:22px!important}
+  html.neis-native-app .thread-search{
+    width:calc(100% - 24px)!important;
+    height:44px!important;
+    margin:10px 12px!important;
+    border:0!important;
+    border-radius:14px!important;
+    background:var(--soft)!important;
+    font-size:13px;
+  }
+  html.neis-native-app .thread-list-scroll{
+    width:100%!important;
+    height:auto!important;
+    flex:1;
+    overflow-y:auto;
+  }
+  html.neis-native-app .thread{
+    width:100%!important;
+    min-height:72px!important;
+    padding:10px 14px!important;
+    border-bottom:1px solid var(--line)!important;
+  }
+  html.neis-native-app .thread .avatar{
+    width:48px!important;height:48px!important;
+    border-radius:15px!important;
+  }
+  html.neis-native-app .thread b{font-size:13px!important}
+  html.neis-native-app .thread small{font-size:10.5px!important}
+
+  /* Replies: flatten deep nesting and preserve readable width */
+  html.neis-native-app .modal:has(#replyContent){
+    height:min(88dvh,780px);
+    max-height:88dvh;
+    display:flex;
+    flex-direction:column;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom))!important;
+  }
+  html.neis-native-app #replyContent{
+    min-height:0;
+    display:flex;
+    flex:1;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  html.neis-native-app #replyContent>.reply-tree{
+    min-height:0;
+    flex:1;
+    overflow-y:auto;
+    padding:0 4px 8px;
+    gap:0!important;
+  }
+  html.neis-native-app .reply-card{
+    width:100%;
+    min-width:0;
+    padding:13px 6px!important;
+    border:0!important;
+    border-bottom:1px solid var(--line)!important;
+    border-radius:0!important;
+    background:var(--card)!important;
+  }
+  html.neis-native-app .reply-card .reply-card{
+    width:calc(100% - 18px)!important;
+    margin-inline-start:18px!important;
+    padding:12px 0 12px 11px!important;
+    border-bottom:0!important;
+    border-inline-start:2px solid color-mix(in srgb,var(--accent) 42%,var(--line))!important;
+  }
+  html.neis-native-app body.rtl .reply-card .reply-card{
+    padding:12px 11px 12px 0!important;
+  }
+  html.neis-native-app .reply-card .reply-card .reply-card{
+    width:100%!important;
+    margin-inline-start:0!important;
+    border-inline-start:0!important;
+    padding-inline-start:0!important;
+  }
+  html.neis-native-app .reply-head{
+    min-width:0;
+    gap:8px!important;
+  }
+  html.neis-native-app .reply-head .avatar{
+    width:38px!important;height:38px!important;
+    border-radius:12px!important;
+  }
+  html.neis-native-app .reply-card .reply-card .reply-head .avatar{
+    width:32px!important;height:32px!important;
+  }
+  html.neis-native-app .reply-head>div{
+    min-width:0!important;
+    display:block!important;
+  }
+  html.neis-native-app .reply-head .author-link{
+    max-width:100%;
+  }
+  html.neis-native-app .reply-head b{
+    font-size:12px!important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  html.neis-native-app .reply-head small{
+    display:block;
+    margin-top:1px;
+    font-size:8.5px!important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  html.neis-native-app .reply-body{
+    margin:8px 0!important;
+    font-size:12.5px!important;
+    line-height:1.65!important;
+    unicode-bidi:plaintext;
+    text-align:start!important;
+    overflow-wrap:anywhere;
+  }
+  html.neis-native-app .reply-actions{
+    display:flex!important;
+    flex-wrap:wrap!important;
+    gap:5px!important;
+  }
+  html.neis-native-app .reply-actions button{
+    min-height:34px!important;
+    padding:5px 9px!important;
+    border-radius:10px!important;
+    font-size:9.5px!important;
+  }
+  html.neis-native-app .reply-composer{
+    flex:0 0 auto!important;
+    margin:7px 0 0!important;
+  }
+
+  /* Opportunities: show content before a wall of filters */
+  html.neis-native-app .opportunities-header{
+    margin:0!important;
+    padding:18px 16px 14px!important;
+    gap:8px!important;
+    border-bottom:1px solid var(--line)!important;
+  }
+  html.neis-native-app .opportunities-eyebrow{
+    margin-bottom:5px!important;
+    font-size:8px!important;
+  }
+  html.neis-native-app .opportunities-heading{
+    padding-inline-end:52px!important;
+  }
+  html.neis-native-app .opportunities-heading h1{
+    font-size:30px!important;
+  }
+  html.neis-native-app .opportunities-heading p{
+    margin-top:7px!important;
+    font-size:11px!important;
+    line-height:1.5!important;
+  }
+  html.neis-native-app .opportunities-create{
+    top:16px!important;
+    inset-inline-end:14px!important;
+  }
+  html.neis-native-app .opportunities-toolbar{
+    margin:0!important;
+    padding:10px 12px!important;
+    gap:9px!important;
+    border:0!important;
+    border-bottom:1px solid var(--line)!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  html.neis-native-app .opportunities-search input{
+    height:44px!important;
+    border:0!important;
+    border-radius:14px!important;
+    font-size:12px!important;
+  }
+  html.neis-native-app .opportunities-filters{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+  html.neis-native-app .opportunities-filters .field{
+    min-width:0;
+  }
+  html.neis-native-app .opportunities-filters .field>span{
+    margin-bottom:4px;
+    font-size:8px!important;
+  }
+  html.neis-native-app .opportunities-filters select{
+    width:100%;
+    height:42px!important;
+    border:0!important;
+    border-radius:12px!important;
+    font-size:10.5px!important;
+  }
+  html.neis-native-app .opportunity-expired-toggle{
+    grid-column:1/-1!important;
+    height:40px!important;
+    min-height:40px!important;
+    padding:0 10px!important;
+    border:0!important;
+    background:var(--soft)!important;
+    font-size:10px!important;
+  }
+  html.neis-native-app .opportunities-summary{
+    min-height:34px!important;
+    margin:0!important;
+    padding:7px 14px!important;
+  }
+  html.neis-native-app .opportunities-grid{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:0!important;
+  }
+  html.neis-native-app .opportunity-card{
+    border-inline:0!important;
+    border-top:1px solid var(--line)!important;
+    border-bottom:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+
+  /* Gallery / generic lists */
+  html.neis-native-app .gallery-grid{
+    grid-template-columns:1fr 1fr!important;
+    gap:2px!important;
+    padding:0 2px;
+  }
+  html.neis-native-app .gallery-card{
+    min-height:190px!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  html.neis-native-app .gallery-copy{
+    left:12px!important;right:12px!important;bottom:10px!important;
+  }
+  html.neis-native-app .gallery-copy h3{font-size:13px!important}
+
+  /* Native bottom sheets should remain easy to dismiss */
+  html.neis-native-app .modal:not(.meeting-modal){
+    max-height:90dvh!important;
+    border-radius:22px 22px 0 0!important;
+  }
+  html.neis-native-app .modal-head{
+    gap:12px;
+  }
+  html.neis-native-app .modal-head h2{
+    font-size:21px!important;
+    line-height:1.15;
+  }
+  html.neis-native-app .modal-head p{
+    font-size:10px!important;
+    line-height:1.45;
+  }
+}
+
+@media(max-width:430px){
+  html.neis-native-app .circle-hero .profile-hero-actions{
+    grid-template-columns:1.25fr 1fr 46px!important;
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions button:nth-child(3){
+    display:none;
+  }
+}
