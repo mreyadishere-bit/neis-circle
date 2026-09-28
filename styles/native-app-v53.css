@@ -286,6 +286,12 @@ html.neis-native-app .grain{display:none!important}
   html.neis-native-app .circle-hero .profile-hero-actions button{
     width:100%;min-width:0;height:44px;padding:0 8px;border-radius:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px
   }
+  html.neis-native-app .circle-hero .profile-hero-actions:has([data-manage-circle-key]){
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions:has([data-manage-circle-key])>button:first-child{
+    grid-column:1/-1;
+  }
   html.neis-native-app .circle-tabs{
     position:sticky;z-index:55;top:58px;width:100%;margin:0;padding:7px 10px;
     display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;
