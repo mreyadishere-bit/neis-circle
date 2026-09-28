@@ -32,8 +32,11 @@
   async function joinByKey(event){
     event.preventDefault();var button=document.getElementById('privateCircleJoinSubmit'),errorBox=document.getElementById('privateCircleError');
     button.disabled=true;button.textContent=tr('Checking securely…','جارٍ التحقق بأمان…');
-    var result=await sb.rpc('join_private_circle_by_key',{circle_name_input:document.getElementById('privateCircleName').value.trim(),circle_key_input:document.getElementById('privateCircleKey').value.trim()});
-    if(result.error||!result.data){errorBox.textContent=tr('Circle name or key is incorrect.','اسم المجتمع أو المفتاح غير صحيح.');errorBox.classList.remove('hidden');button.disabled=false;button.textContent=tr('Join Circle','الانضمام');return}
+    var nameInput=document.getElementById('privateCircleName').value.replace(/\u00a0/g,' ').trim();
+    var keyInput=document.getElementById('privateCircleKey').value.replace(/[‐‑‒–—−]/g,'-').replace(/\s+/g,'').toUpperCase();
+    document.getElementById('privateCircleKey').value=keyInput;
+    var result=await sb.rpc('join_private_circle_by_key',{circle_name_input:nameInput,circle_key_input:keyInput});
+    if(result.error||!result.data){errorBox.textContent=tr('The Circle name or key does not match. The owner may have regenerated the key — ask them for the latest one.','اسم المجتمع أو المفتاح غير مطابق. ربما غيّر المالك المفتاح — اطلب منه أحدث مفتاح.');errorBox.classList.remove('hidden');button.disabled=false;button.textContent=tr('Join Circle','الانضمام');return}
     var id=result.data;closeModal();await loadLiveData();state.circleFilter='joined';routeTo(`circles/${id}/home`);toast(tr('You joined the private Circle.','تم انضمامك إلى المجتمع الخاص.'));
   }
   async function keyStatus(id){
