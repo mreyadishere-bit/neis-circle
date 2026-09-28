@@ -1,3 +1,4 @@
+function lockDocumentTitle(){if(document.title!=='NEIS Circle')document.title='NEIS Circle'}
 /* Public project values only. Never put a Google Client Secret or Supabase service-role key here. */
 window.NEIS_CONFIG = window.NEIS_CONFIG || { supabaseUrl:"https://ydieijgynqlckaczalju.supabase.co", supabaseAnonKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkaWVpamd5bnFsY2thY3phbGp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MTA5OTcsImV4cCI6MjEwNTQ4Njk5N30.-R1cyhVDY1WqHBHmkqCH8Y9pR8Z5-CHOjs93g4ojd2A", allowedEmailDomain:"" };
 
@@ -197,3 +198,5 @@ $("#globalSearch").addEventListener("input",e=>{state.query=e.target.value});
 document.addEventListener("keydown",e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){e.preventDefault();$("#globalSearch").focus()}if(e.key==="Escape")closeModal()});
 /* Supabase starts after every enhancement layer is registered (v4Init below). */
 applyPrefs();
+
+window.addEventListener('hashchange',lockDocumentTitle);window.addEventListener('popstate',lockDocumentTitle);window.addEventListener('DOMContentLoaded',lockDocumentTitle);lockDocumentTitle();
