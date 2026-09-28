@@ -16,7 +16,7 @@
   }
 
   async function registerStoredToken(){
-    if(!nativeAvailable()||!window.sb||!window.authUser)return;
+    if(!nativeAvailable()||!sb||!authUser)return;
     const token=localStorage.getItem(TOKEN_KEY)||'';
     if(token.length<20)return;
     const {error}=await sb.rpc('register_push_device',{
@@ -45,7 +45,7 @@
   }
 
   async function handleAuthCallback(url){
-    if(!window.sb)return;
+    if(!sb)return;
     try{
       const parsed=new URL(String(url||''));
       const code=parsed.searchParams.get('code');
@@ -61,7 +61,7 @@
   }
 
   async function startNativeGoogleSignIn(){
-    if(!window.sb||!nativeAvailable())return false;
+    if(!sb||!nativeAvailable())return false;
     const {data,error}=await sb.auth.signInWithOAuth({
       provider:'google',
       options:{
@@ -101,18 +101,18 @@
 
   if(nativeAvailable()){
     document.documentElement.classList.add('neis-native-app');
-    const previousLoad=window.loadLiveData;
+    const previousLoad=loadLiveData;
     if(typeof previousLoad==='function'){
-      window.loadLiveData=async function(){
+      loadLiveData=async function(){
         const result=await previousLoad.apply(this,arguments);
         await registerStoredToken();
-        if(window.authUser){
+        if(authUser){
           try{nativeBridge.requestPushToken?.()}catch(_){}
         }
         return result;
       };
     }
-    if(window.authUser){
+    if(authUser){
       setTimeout(()=>{
         try{nativeBridge.requestPushToken?.()}catch(_){}
         registerStoredToken();
