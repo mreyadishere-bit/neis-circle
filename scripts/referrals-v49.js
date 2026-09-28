@@ -4,7 +4,7 @@
 
   const STORAGE_KEY='neis-referral-code-v1';
   const CODE_RE=/^nc-[a-z0-9]{10}$/;
-  const POSTER_B64_URL='assets/referral-poster.webp.b64?v=49.1';
+  const POSTER_URL='assets/referral-poster.webp?v=49.4';
   let claimBusy=false;
   let posterFilePromise=null;
   let posterObjectUrl='';
@@ -24,6 +24,7 @@
         const code=cleanCode(incoming);
         if(code)localStorage.setItem(STORAGE_KEY,code);
         url.searchParams.delete('ref');
+        url.searchParams.delete('invite');
         const next=url.pathname+(url.search?url.search:'')+(url.hash||'');
         history.replaceState(history.state,'',next);
       }
@@ -57,6 +58,7 @@
   function inviteLink(code){
     const url=new URL(location.origin+location.pathname);
     url.searchParams.set('ref',code);
+    url.searchParams.set('invite','1');
     return url.toString();
   }
 
@@ -94,13 +96,10 @@
   async function loadPosterFile(){
     if(posterFilePromise)return posterFilePromise;
     posterFilePromise=(async()=>{
-      const response=await fetch(POSTER_B64_URL,{cache:'force-cache'});
+      const response=await fetch(POSTER_URL,{cache:'force-cache'});
       if(!response.ok)throw new Error('poster_load_failed');
-      const raw=(await response.text()).trim();
-      const binary=atob(raw);
-      const bytes=new Uint8Array(binary.length);
-      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-      const file=new File([bytes],'neis-circle-invite.webp',{type:'image/webp'});
+      const blob=await response.blob();
+      const file=new File([blob],'neis-circle-invite.webp',{type:blob.type||'image/webp'});
       if(!posterObjectUrl)posterObjectUrl=URL.createObjectURL(file);
       return file;
     })();
