@@ -631,3 +631,31 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     min-height:28px!important;
   }
 }
+
+
+/* v64 — mobile keeps the same unified comment geometry */
+@media(max-width:760px){
+  .reply-children,
+  .article-comment-replies{
+    width:calc(100% - 16px)!important;
+    margin-inline-start:16px!important;
+  }
+  .rtl .reply-children,
+  .rtl .article-comment-replies{
+    margin-inline-start:0!important;
+    margin-inline-end:16px!important;
+  }
+  .reply-actions,
+  .article-comment-actions{
+    flex-wrap:nowrap!important;
+    gap:2px!important;
+  }
+  .reply-actions .reply-action,
+  .reply-actions button,
+  .article-comment-actions button{
+    height:30px!important;
+    min-height:30px!important;
+    padding:3px 6px!important;
+    font-size:9px!important;
+  }
+}
