@@ -187,27 +187,102 @@
   function stopArticleCommentRealtime(){engagementRequest++;if(articleCommentChannel&&sb)sb.removeChannel(articleCommentChannel);articleCommentChannel=null}
   function commentAvatar(profile){return avatar({name:profile?.full_name||tr('Student','طالب'),initials:(profile?.full_name||'ST').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(),color:'#7056d8'})}
   function commentTime(value){return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value))}
-  function renderArticleComment(item,all,likesByComment=new Map(),heartsByComment=new Map(),articleAuthorId=''){
-    const children=all.filter(child=>same(child.parent_id,item.id)),own=same(item.author_id,uid()),canDelete=own||state.isAdmin,profile=item.profile||{},like=likesByComment.get(String(item.id))||{count:0,mine:false};
-    return `<article class="article-comment" data-article-comment="${esc(item.id)}"><div class="article-comment-head">${commentAvatar(profile)}<div class="article-comment-identity"><b>${esc(profile.full_name||tr('NEIS Student','طالب NEIS'))}</b><small>${profile.username?`@${esc(profile.username)} · `:''}${commentTime(item.created_at)}${item.updated_at&&new Date(item.updated_at)-new Date(item.created_at)>1000?` · ${tr('edited','معدّل')}`:''}</small></div></div><p class="article-comment-body" dir="auto">${esc(item.body)}</p><div class="article-comment-actions"><button class="${like.mine?'active':''}" data-article-comment-like="${esc(item.id)}" aria-pressed="${like.mine?'true':'false'}"><span class="like-heart">♡</span><span>${tr('Like','إعجاب')}</span><b>${like.count}</b></button>${heartsByComment.has(String(item.id))?`<span class="creator-heart" title="${tr('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}${same(articleAuthorId,uid())&&!same(item.author_id,uid())?`<button class="creator-heart-toggle ${heartsByComment.has(String(item.id))?'active':''}" data-article-creator-heart="${esc(item.id)}">♥</button>`:''}<button data-article-reply="${esc(item.id)}">${tr('Reply','رد')}</button>${own?`<button data-article-edit="${esc(item.id)}">${tr('Edit','تعديل')}</button>`:''}${canDelete?`<button class="danger" data-article-delete="${esc(item.id)}">${tr('Delete','حذف')}</button>`:''}</div>${children.length?`<div class="article-comment-children">${children.map(child=>renderArticleComment(child,all,likesByComment,heartsByComment,articleAuthorId)).join('')}</div>`:''}</article>`;
+  function renderArticleComment(item,isReply,likesByComment=new Map(),heartsByComment=new Map(),articleAuthorId=''){
+    const own=same(item.author_id,uid()),canDelete=own||state.isAdmin,profile=item.profile||{},like=likesByComment.get(String(item.id))||{count:0,mine:false};
+    const creatorCanHeart=same(articleAuthorId,uid())&&!same(item.author_id,uid()),hearted=heartsByComment.has(String(item.id));
+    return `<article class="article-comment ${isReply?'is-reply':''}" data-article-comment="${esc(item.id)}">
+      <div class="article-comment-head">
+        ${commentAvatar(profile)}
+        <div class="article-comment-identity">
+          <b>${esc(profile.full_name||tr('NEIS Student','طالب NEIS'))}</b>
+          <small>${profile.username?`@${esc(profile.username)} · `:''}${commentTime(item.created_at)}${item.updated_at&&new Date(item.updated_at)-new Date(item.created_at)>1000?` · ${tr('edited','معدّل')}`:''}</small>
+        </div>
+      </div>
+      <p class="article-comment-body" dir="auto">${esc(item.body)}</p>
+      <div class="article-comment-actions">
+        <button class="${like.mine?'active':''}" data-article-comment-like="${esc(item.id)}" aria-pressed="${like.mine?'true':'false'}"><span class="like-heart">♡</span><span>${tr('Like','إعجاب')}</span><b>${like.count}</b></button>
+        ${creatorCanHeart?`<button class="creator-heart-toggle ${hearted?'active':''}" data-article-creator-heart="${esc(item.id)}" aria-label="${tr('Creator heart','قلب الناشر')}">♥</button>`:hearted?`<span class="creator-heart" title="${tr('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
+        <button data-article-reply="${esc(item.id)}">${tr('Reply','رد')}</button>
+        ${profile.username?`<button class="article-mention-action" data-article-mention="${esc(item.id)}">@ ${tr('Mention','منشن')}</button>`:''}
+        ${own?`<button data-article-edit="${esc(item.id)}">${tr('Edit','تعديل')}</button>`:''}
+        ${canDelete?`<button class="danger" data-article-delete="${esc(item.id)}">${tr('Delete','حذف')}</button>`:''}
+      </div>
+    </article>`;
   }
+
+  function buildArticleCommentThreads(comments,likesByComment,heartsByComment,articleAuthorId){
+    const childrenByParent=new Map();
+    comments.forEach(item=>{
+      const key=item.parent_id?String(item.parent_id):'__root__';
+      const list=childrenByParent.get(key)||[];
+      list.push(item);
+      childrenByParent.set(key,list);
+    });
+    const roots=childrenByParent.get('__root__')||[];
+    const descendantsOf=root=>{
+      const out=[];
+      const walk=rows=>rows.forEach(row=>{out.push(row);walk(childrenByParent.get(String(row.id))||[])});
+      walk(childrenByParent.get(String(root.id))||[]);
+      return out;
+    };
+    return roots.map(root=>{
+      const descendants=descendantsOf(root);
+      return `<section class="article-comment-thread" data-article-thread="${esc(root.id)}">
+        ${renderArticleComment(root,false,likesByComment,heartsByComment,articleAuthorId)}
+        ${descendants.length?`<button type="button" class="article-replies-toggle" data-article-toggle-replies="${esc(root.id)}" aria-expanded="false"><span aria-hidden="true"></span><span class="article-replies-label">${tr('View replies','عرض الردود')} (${descendants.length})</span></button><div class="article-comment-replies hidden" data-article-replies="${esc(root.id)}">${descendants.map(child=>renderArticleComment(child,true,likesByComment,heartsByComment,articleAuthorId)).join('')}</div>`:''}
+      </section>`;
+    }).join('');
+  }
+
   async function loadArticleComments(articleId){
     const root=$('#articleCommentsBody'),request=++commentRequest;if(!root)return;
     root.innerHTML='<div class="loading-card"></div>';
     const {data,error}=await sb.from('article_comments').select('id,article_id,parent_id,author_id,body,created_at,updated_at,profile:profiles!article_comments_author_id_fkey(id,full_name,username,avatar_url)').eq('article_id',articleId).order('created_at');
     if(request!==commentRequest||!$('#articleCommentsBody'))return;
     if(error){root.innerHTML=`<div class="article-comment-error">${esc(window.neisFriendlyError?.(error,'load article comments')||tr('Comments could not load.','تعذر تحميل التعليقات.'))}</div>`;return}
-    const comments=data||[],roots=comments.filter(item=>!item.parent_id); const article=state.articles.find(x=>same(x.id,articleId)); const {data:commentLikes,error:likesError}=comments.length?await sb.from('article_comment_likes').select('comment_id,user_id').in('comment_id',comments.map(x=>x.id)):{data:[],error:null}; if(likesError)console.warn('[NEIS article comment likes]',likesError); const likesByComment=new Map();(commentLikes||[]).forEach(x=>{const key=String(x.comment_id),row=likesByComment.get(key)||{count:0,mine:false};row.count++;if(same(x.user_id,uid()))row.mine=true;likesByComment.set(key,row)}); const {data:creatorHearts}=comments.length?await sb.from('article_comment_creator_hearts').select('comment_id,creator_id').in('comment_id',comments.map(x=>x.id)):{data:[]}; const heartsByComment=new Map((creatorHearts||[]).map(x=>[String(x.comment_id),x]));
-    root.innerHTML=`<div class="article-comment-list">${roots.length?roots.map(item=>renderArticleComment(item,comments,likesByComment,heartsByComment,article?.author_id||'')).join(''):`<div class="empty"><b>${tr('No comments yet','لا توجد تعليقات بعد')}</b><span>${tr('Start a thoughtful conversation about this article.','ابدأ نقاشًا مفيدًا حول هذا المقال.')}</span></div>`}</div>`;
+    const comments=data||[],article=state.articles.find(x=>same(x.id,articleId));
+    const {data:commentLikes,error:likesError}=comments.length?await sb.from('article_comment_likes').select('comment_id,user_id').in('comment_id',comments.map(x=>x.id)):{data:[],error:null};
+    if(likesError)console.warn('[NEIS article comment likes]',likesError);
+    const likesByComment=new Map();(commentLikes||[]).forEach(x=>{const key=String(x.comment_id),row=likesByComment.get(key)||{count:0,mine:false};row.count++;if(same(x.user_id,uid()))row.mine=true;likesByComment.set(key,row)});
+    const {data:creatorHearts}=comments.length?await sb.from('article_comment_creator_hearts').select('comment_id,creator_id').in('comment_id',comments.map(x=>x.id)):{data:[]};
+    const heartsByComment=new Map((creatorHearts||[]).map(x=>[String(x.comment_id),x]));
+    root.innerHTML=`<div class="article-comment-list">${comments.length?buildArticleCommentThreads(comments,likesByComment,heartsByComment,article?.author_id||''):`<div class="empty"><b>${tr('No comments yet','لا توجد تعليقات بعد')}</b><span>${tr('Start a thoughtful conversation about this article.','ابدأ نقاشًا مفيدًا حول هذا المقال.')}</span></div>`}</div>`;
     $('#articleCommentCount').textContent=String(comments.length);
     bindArticleCommentActions(articleId,comments);
   }
+
   function bindArticleCommentActions(articleId,comments){
     const container=$('#articleComments');if(!container)return;
 
+    const insertMention=(input,item)=>{
+      const username=item?.profile?.username;if(!input||!username)return;
+      const mention='@'+username,current=String(input.value||'');
+      if(!current.includes(mention))input.value=current.trim()?current.replace(/\s*$/,' ') + mention + ' ':mention+' ';
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+      input.focus();
+      try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
+      input.scrollIntoView({block:'nearest',behavior:'smooth'});
+    };
+
+    container.querySelectorAll('[data-article-toggle-replies]').forEach(button=>button.onclick=()=>{
+      const replies=container.querySelector(`[data-article-replies="${CSS.escape(button.dataset.articleToggleReplies)}"]`);if(!replies)return;
+      const opening=replies.classList.contains('hidden'),count=replies.querySelectorAll('.article-comment').length,label=button.querySelector('.article-replies-label');
+      replies.classList.toggle('hidden',!opening);
+      button.setAttribute('aria-expanded',opening?'true':'false');
+      if(label)label.textContent=`${opening?tr('Hide replies','إخفاء الردود'):tr('View replies','عرض الردود')} (${count})`;
+    });
+
     container.querySelectorAll('[data-article-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.articleCreatorHeart,hearted=button.classList.contains('active');const {error}=hearted?await sb.from('article_comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('article_comment_creator_hearts').insert({comment_id:commentId,creator_id:uid()});if(error){toast(window.neisFriendlyError?.(error,'creator heart')||error);button.disabled=false;return}await loadArticleComments(articleId)});
     container.querySelectorAll('[data-article-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.articleCommentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('article_comment_likes').delete().match({comment_id:commentId,user_id:uid()}):await sb.from('article_comment_likes').insert({comment_id:commentId,user_id:uid()});if(error){toast(window.neisFriendlyError?.(error,mine?'unlike this comment':'like this comment')||error);button.disabled=false;return}await loadArticleComments(articleId)});
-    container.querySelectorAll('[data-article-reply]').forEach(button=>button.onclick=()=>{const item=comments.find(row=>same(row.id,button.dataset.articleReply)),parent=$('#articleCommentParent'),notice=$('#articleCommentReplying'),noticeText=$('#articleCommentReplyingText'),input=$('#articleCommentInput');if(!item||!parent||!notice||!noticeText||!input)return;parent.value=item.id;notice.classList.remove('hidden');noticeText.textContent=`${tr('Replying to','الرد على')} ${item.profile?.full_name||tr('Student','طالب')}`;input.focus();input.scrollIntoView({block:'nearest',behavior:'smooth'})});
+
+    container.querySelectorAll('[data-article-reply]').forEach(button=>button.onclick=()=>{
+      const item=comments.find(row=>same(row.id,button.dataset.articleReply)),parent=$('#articleCommentParent'),notice=$('#articleCommentReplying'),noticeText=$('#articleCommentReplyingText'),input=$('#articleCommentInput');if(!item||!parent||!notice||!noticeText||!input)return;
+      parent.value=item.id;notice.classList.remove('hidden');noticeText.textContent=`${tr('Replying to','الرد على')} ${item.profile?.full_name||tr('Student','طالب')}`;
+      insertMention(input,item);
+    });
+    container.querySelectorAll('[data-article-mention]').forEach(button=>button.onclick=()=>{
+      const item=comments.find(row=>same(row.id,button.dataset.articleMention));insertMention($('#articleCommentInput'),item);
+    });
     $('[data-cancel-article-reply]')?.addEventListener('click',()=>{$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden')});
 
     container.onclick=async event=>{
@@ -223,8 +298,7 @@
         textarea.focus();textarea.setSelectionRange(textarea.value.length,textarea.value.length);
         form.querySelector('[data-cancel-edit]').onclick=()=>{form.remove();bodyEl?.classList.remove('hidden');actions?.classList.remove('hidden')};
         form.onsubmit=async submitEvent=>{
-          submitEvent.preventDefault();
-          const body=textarea.value.trim();
+          submitEvent.preventDefault();const body=textarea.value.trim();
           if(!body){toast(tr('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
           saveButton.disabled=true;
           const {data:updated,error}=await sb.from('article_comments').update({body}).eq('id',item.id).eq('author_id',uid()).select('id');
@@ -240,11 +314,8 @@
         const item=comments.find(row=>same(row.id,deleteButton.dataset.articleDelete));
         if(!item||deleteButton.disabled)return;
         if(deleteButton.dataset.confirmDelete!=='1'){
-          deleteButton.dataset.confirmDelete='1';
-          deleteButton.dataset.originalText=deleteButton.textContent;
-          deleteButton.textContent=tr('Confirm delete','تأكيد الحذف');
-          setTimeout(()=>{if(deleteButton.isConnected&&deleteButton.dataset.confirmDelete==='1'){deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||tr('Delete','حذف')}},5000);
-          return;
+          deleteButton.dataset.confirmDelete='1';deleteButton.dataset.originalText=deleteButton.textContent;deleteButton.textContent=tr('Confirm delete','تأكيد الحذف');
+          setTimeout(()=>{if(deleteButton.isConnected&&deleteButton.dataset.confirmDelete==='1'){deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||tr('Delete','حذف')}},5000);return;
         }
         deleteButton.disabled=true;
         const {data:deleted,error}=await sb.from('article_comments').delete().eq('id',item.id).select('id');
