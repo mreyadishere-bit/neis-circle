@@ -98,6 +98,69 @@
     });
   }
 
+  function usernameFromCard(card){
+    const text=card?.querySelector('.reply-head small,.article-comment-identity small')?.textContent||'';
+    const match=text.match(/@([^\s·]+)/);
+    return match?.[1]?.trim()||'';
+  }
+
+  function insertMention(input,username){
+    if(!input||!username)return;
+    const mention='@'+username;
+    const current=String(input.value||'');
+    if(!current.includes(mention)){
+      input.value=current.trim()?current.replace(/\s*$/,' ') + mention + ' ':mention+' ';
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    }
+    input.focus();
+    try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
+    input.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+
+  function enhanceCommentMentions(){
+    document.querySelectorAll('#replyContent .reply-card').forEach(card=>{
+      const actions=card.querySelector('.reply-actions');
+      if(!actions)return;
+      const username=usernameFromCard(card);
+      const replyButton=actions.querySelector('[data-reply-to]');
+      if(replyButton&&replyButton.dataset.nativeMentionHook!=='1'){
+        replyButton.dataset.nativeMentionHook='1';
+        replyButton.addEventListener('click',()=>setTimeout(()=>insertMention(document.querySelector('#replyInput'),username),0));
+      }
+      if(username&&!actions.querySelector('[data-native-mention]')){
+        const mention=document.createElement('button');
+        mention.type='button';
+        mention.className='native-mention-action';
+        mention.dataset.nativeMention='';
+        mention.textContent=lang('@ Mention','@ منشن');
+        mention.onclick=()=>insertMention(document.querySelector('#replyInput'),username);
+        const anchor=replyButton||actions.lastElementChild;
+        anchor?.after(mention);
+      }
+    });
+
+    document.querySelectorAll('#articleComments .article-comment').forEach(card=>{
+      const actions=card.querySelector('.article-comment-actions');
+      if(!actions)return;
+      const username=usernameFromCard(card);
+      const replyButton=actions.querySelector('[data-article-reply]');
+      if(replyButton&&replyButton.dataset.nativeMentionHook!=='1'){
+        replyButton.dataset.nativeMentionHook='1';
+        replyButton.addEventListener('click',()=>setTimeout(()=>insertMention(document.querySelector('#articleCommentInput'),username),0));
+      }
+      if(username&&!actions.querySelector('[data-native-mention]')){
+        const mention=document.createElement('button');
+        mention.type='button';
+        mention.className='native-mention-action';
+        mention.dataset.nativeMention='';
+        mention.textContent=lang('@ Mention','@ منشن');
+        mention.onclick=()=>insertMention(document.querySelector('#articleCommentInput'),username);
+        const anchor=replyButton||actions.lastElementChild;
+        anchor?.after(mention);
+      }
+    });
+  }
+
   function collapseModeration(){
     document.querySelectorAll('.module-card').forEach(card=>{
       if(card.dataset.nativeModerationReady==='1')return;
@@ -137,6 +200,7 @@
     adaptSettings();
     flattenReplyTree();
     flattenArticleComments();
+    enhanceCommentMentions();
     collapseModeration();
   }
 
