@@ -684,20 +684,41 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 })();
 
 
-/* v62 — mobile-web message actions: delete/copy only after a deliberate long press. */
+/* v67 — WhatsApp-like mobile message long press: the whole row is the hit area. */
 (function installMobileWebMessageLongPress(){
-  if(window.__neisMobileWebMessageLongPress)return;
-  window.__neisMobileWebMessageLongPress=true;
+  if(window.__neisMobileWebMessageLongPressV67)return;
+  window.__neisMobileWebMessageLongPressV67=true;
   let timer=null,startX=0,startY=0,target=null,consumed=false;
 
   const mobileWeb=()=>window.matchMedia('(max-width:760px)').matches&&!document.documentElement.classList.contains('neis-native-app');
   const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
 
+  const rowAtY=(eventTarget,y)=>{
+    const flow=eventTarget?.closest?.('.chat-flow');
+    if(!flow)return null;
+    const rows=[...flow.querySelectorAll(':scope > .chat-message')];
+    for(let index=0;index<rows.length;index++){
+      const row=rows[index],rect=row.getBoundingClientRect();
+      const prev=index?rows[index-1].getBoundingClientRect():null;
+      const next=index<rows.length-1?rows[index+1].getBoundingClientRect():null;
+      const top=prev?(prev.bottom+rect.top)/2:rect.top-5;
+      const bottom=next?(rect.bottom+next.top)/2:rect.bottom+5;
+      if(y>=top&&y<=bottom)return row;
+    }
+    return null;
+  };
+
+  const resolveTarget=(eventTarget,y)=>{
+    const row=eventTarget?.closest?.('.chat-message')||rowAtY(eventTarget,y);
+    const bubble=row?.querySelector?.('.bubble');
+    return row&&bubble?{row,bubble}:null;
+  };
+
   const showActions=(row,bubble)=>{
     const deleteButton=row?.querySelector?.('[data-delete-message],[data-delete-circle-message]');
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
     if(typeof openModal!=='function')return;
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2><p>${t('Press and hold a message to manage it.','اضغط ضغطة مطولة على الرسالة لإدارتها.')}</p></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⌘</b></button>${deleteButton?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2><p>${t('Choose what you want to do with this message.','اختر ما تريد فعله بهذه الرسالة.')}</p></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⌘</b></button>${deleteButton?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     const copy=document.querySelector('[data-mobile-copy-message]');
     if(copy)copy.onclick=async()=>{
       try{
@@ -711,34 +732,33 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   };
 
   document.addEventListener('pointerdown',event=>{
-    if(!mobileWeb())return;
-    const bubble=event.target?.closest?.('.messages.mobile-thread-open .chat-message .bubble');
-    if(!bubble)return;
-    clear();consumed=false;
-    target={row:bubble.closest('.chat-message'),bubble};
+    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
+    const current=resolveTarget(event.target,event.clientY);
+    if(!current)return;
+    clear();consumed=false;target=current;
     startX=event.clientX;startY=event.clientY;
     timer=setTimeout(()=>{
-      const current=target;timer=null;
-      if(!current?.row||!current?.bubble)return;
+      const selected=target;timer=null;
+      if(!selected?.row||!selected?.bubble)return;
       consumed=true;
       if(navigator.vibrate)navigator.vibrate(18);
-      showActions(current.row,current.bubble);
+      showActions(selected.row,selected.bubble);
       target=null;
-    },480);
+    },500);
   },{passive:true});
 
   document.addEventListener('pointermove',event=>{
     if(!timer)return;
-    if(Math.abs(event.clientX-startX)>10||Math.abs(event.clientY-startY)>10)clear();
+    if(Math.abs(event.clientX-startX)>12||Math.abs(event.clientY-startY)>12)clear();
   },{passive:true});
   document.addEventListener('pointerup',clear,{passive:true});
   document.addEventListener('pointercancel',clear,{passive:true});
   document.addEventListener('contextmenu',event=>{
-    if(!mobileWeb())return;
-    const bubble=event.target?.closest?.('.messages.mobile-thread-open .chat-message .bubble');
-    if(!bubble)return;
+    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
+    const current=resolveTarget(event.target,event.clientY);
+    if(!current)return;
     event.preventDefault();
-    if(!consumed)showActions(bubble.closest('.chat-message'),bubble);
+    if(!consumed)showActions(current.row,current.bubble);
     consumed=false;
   });
 })();
