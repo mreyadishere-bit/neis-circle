@@ -43,6 +43,8 @@ public class MainActivity extends Activity {
     private String pendingAuthUrl;
     private int nativeTopInset = 0;
     private int nativeBottomInset = 0;
+    private long backgroundedAtMs = 0L;
+    private boolean updateCheckRunning = false;
 
     public static boolean isAppForeground() {
         return appForeground;
@@ -94,7 +96,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.1");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.2");
 
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
@@ -135,6 +137,43 @@ public class MainActivity extends Activity {
 
         handleIntent(getIntent());
         webView.loadUrl(SITE_URL);
+    }
+
+    private void checkForWebUpdate() {
+        if (!pageReady || webView == null || updateCheckRunning) return;
+        updateCheckRunning = true;
+        final String script =
+            "(async function(){try{" +
+            "const fresh=await fetch('/index.html?__neis_update='+Date.now(),{cache:'no-store',credentials:'same-origin'});" +
+            "if(!fresh.ok)return 'skip';" +
+            "const html=await fresh.text();" +
+            "const parsed=new DOMParser().parseFromString(html,'text/html');" +
+            "const clean=u=>{try{const x=new URL(u,location.href);return x.pathname+x.search}catch(e){return String(u||'')}};" +
+            "const wanted=[...parsed.querySelectorAll('script[src],link[rel=\\\"stylesheet\\\"][href]')]" +
+            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')&&!x.includes('mobile-push-v50.js')&&!x.includes('native-app-v56.js')).sort();" +
+            "const current=[...document.querySelectorAll('script[src],link[rel=\\\"stylesheet\\\"][href]')]" +
+            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')&&!x.includes('mobile-push-v50.js')&&!x.includes('native-app-v56.js')).sort();" +
+            "const a=wanted.join('|'),b=current.join('|');" +
+            "if(a&&b&&a!==b){location.reload();return 'reloaded'}" +
+            "return 'same';" +
+            "}catch(e){return 'error'}})();";
+        webView.evaluateJavascript(script, value -> updateCheckRunning = false);
+    }
+
+    @Override
+    protected void onPause() {
+        backgroundedAtMs = System.currentTimeMillis();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (backgroundedAtMs <= 0L) return;
+        long awayFor = System.currentTimeMillis() - backgroundedAtMs;
+        backgroundedAtMs = 0L;
+        if (awayFor < 1500L || webView == null) return;
+        webView.postDelayed(this::checkForWebUpdate, 350L);
     }
 
     private void applySystemTheme(String theme) {
