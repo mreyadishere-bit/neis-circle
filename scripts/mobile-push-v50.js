@@ -1,6 +1,13 @@
 /* NEIS Circle v50 — Android native bridge: push registration, deep links, OAuth handoff. */
 (function(){
   'use strict';
+  function syncNativeSystemBars(){
+    try{
+      const theme=localStorage.getItem('neis-theme')||document.documentElement.dataset.theme||'light';
+      window.NeisAndroid?.setSystemTheme?.(theme);
+    }catch(_){}
+  }
+
 
   const nativeBridge=window.NeisAndroid;
   const TOKEN_KEY='neis-native-push-token-v1';
@@ -348,4 +355,8 @@
       },250);
     }
   }
+  syncNativeSystemBars();
+  new MutationObserver(syncNativeSystemBars).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+  window.addEventListener('storage',event=>{if(event.key==='neis-theme')syncNativeSystemBars()});
+
 })();
