@@ -48,10 +48,23 @@
     if(!sb)return;
     try{
       const parsed=new URL(String(url||''));
-      const code=parsed.searchParams.get('code');
-      if(!code)return;
-      const {error}=await sb.auth.exchangeCodeForSession(code);
-      if(error)throw error;
+      const query=parsed.searchParams;
+      const hash=new URLSearchParams((parsed.hash||'').replace(/^#/,''));
+      const callbackError=query.get('error_description')||hash.get('error_description')||query.get('error')||hash.get('error');
+      if(callbackError)throw new Error(callbackError);
+
+      const code=query.get('code');
+      if(code){
+        const {error}=await sb.auth.exchangeCodeForSession(code);
+        if(error)throw error;
+      }else{
+        const accessToken=hash.get('access_token')||query.get('access_token');
+        const refreshToken=hash.get('refresh_token')||query.get('refresh_token');
+        if(!accessToken||!refreshToken)throw new Error('missing_auth_session');
+        const {error}=await sb.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
+        if(error)throw error;
+      }
+
       if(typeof loadLiveData==='function')await loadLiveData();
       if(typeof render==='function')render();
     }catch(error){
