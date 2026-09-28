@@ -596,9 +596,15 @@
 
 @media(max-width:430px){
   html.neis-native-app .circle-hero .profile-hero-actions{
-    grid-template-columns:1.25fr 1fr 46px!important;
+    grid-template-columns:repeat(3,minmax(0,1fr)) 42px!important;
+    gap:5px!important;
   }
-  html.neis-native-app .circle-hero .profile-hero-actions button:nth-child(3){
-    display:none;
+  html.neis-native-app .circle-hero .profile-hero-actions button{
+    min-width:0!important;
+    padding-inline:5px!important;
+    font-size:9.5px!important;
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions button:last-child{
+    width:42px!important;
   }
 }
