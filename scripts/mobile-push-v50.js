@@ -5,6 +5,7 @@
   const nativeBridge=window.NeisAndroid;
   const TOKEN_KEY='neis-native-push-token-v1';
   const APP_VERSION='1.0.0';
+  let signOutHookInstalled=false;
 
   function nativeAvailable(){
     return !!nativeBridge&&typeof nativeBridge.isNative==='function'&&nativeBridge.isNative();
@@ -15,8 +16,22 @@
     return /^[A-Za-z0-9_\-/?=&.%]+$/.test(route)?route:'';
   }
 
+  function installSignOutHook(){
+    if(signOutHookInstalled||!sb?.auth?.signOut)return;
+    signOutHookInstalled=true;
+    const original=sb.auth.signOut.bind(sb.auth);
+    sb.auth.signOut=async function(){
+      const token=localStorage.getItem(TOKEN_KEY)||'';
+      if(token.length>=20&&authUser){
+        try{await sb.rpc('disable_push_device',{token_input:token})}catch(_){}
+      }
+      return original.apply(this,arguments);
+    };
+  }
+
   async function registerStoredToken(){
     if(!nativeAvailable()||!sb||!authUser)return;
+    installSignOutHook();
     const token=localStorage.getItem(TOKEN_KEY)||'';
     if(token.length<20)return;
     const {error}=await sb.rpc('register_push_device',{
