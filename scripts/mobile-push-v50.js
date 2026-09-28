@@ -202,42 +202,89 @@
   function installNativeMessageActions(){
     if(!nativeAvailable()||document.documentElement.dataset.neisMessageActions==='1')return;
     document.documentElement.dataset.neisMessageActions='1';
-    let timer=null,startX=0,startY=0,target=null;
 
+    let timer=null,startX=0,startY=0,target=null,lastTouchAt=0;
     const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
 
     const openActions=(row,bubble)=>{
+      if(!row||!bubble)return;
       const deleteButton=row.querySelector('[data-delete-message],[data-delete-circle-message]');
       const messageText=bubble.querySelector('.message-text')?.textContent||'';
+
       openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2><p>${lang('Choose what you want to do with this message.','اختر ما تريد فعله بهذه الرسالة.')}</p></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⌘</b></button>${deleteButton?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+
       const copy=document.querySelector('[data-native-copy-message]');
-      if(copy)copy.onclick=async()=>{try{await navigator.clipboard.writeText(messageText);closeModal();toast(lang('Message copied.','تم نسخ الرسالة.'))}catch(_){toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'))}};
+      if(copy)copy.onclick=async()=>{
+        try{
+          await navigator.clipboard.writeText(messageText);
+          closeModal();
+          toast(lang('Message copied.','تم نسخ الرسالة.'));
+        }catch(_){
+          toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'));
+        }
+      };
+
       const del=document.querySelector('[data-native-delete-message]');
-      if(del)del.onclick=()=>{closeModal();setTimeout(()=>deleteButton?.click(),0)};
+      if(del)del.onclick=()=>{
+        closeModal();
+        setTimeout(()=>deleteButton?.click(),0);
+      };
     };
 
-    document.addEventListener('pointerdown',(event)=>{
-      const bubble=event.target?.closest?.('.chat-message .bubble');
-      if(!bubble)return;
+    const begin=(bubble,x,y)=>{
       clear();
-      target={row:bubble.closest('.chat-message'),bubble};
-      startX=event.clientX;startY=event.clientY;
+      const row=bubble?.closest?.('.chat-message');
+      if(!row)return;
+      target={row,bubble};
+      startX=x;startY=y;
       timer=setTimeout(()=>{
         const current=target;
         timer=null;
         if(!current?.row||!current?.bubble)return;
-        if(navigator.vibrate)navigator.vibrate(18);
+        if(navigator.vibrate)navigator.vibrate(22);
         openActions(current.row,current.bubble);
         target=null;
-      },460);
+      },500);
+    };
+
+    document.addEventListener('pointerdown',event=>{
+      if(Date.now()-lastTouchAt<700)return;
+      const bubble=event.target?.closest?.('.chat-message .bubble');
+      if(!bubble)return;
+      begin(bubble,event.clientX,event.clientY);
     },{passive:true});
 
-    document.addEventListener('pointermove',(event)=>{
+    document.addEventListener('pointermove',event=>{
       if(!timer)return;
-      if(Math.abs(event.clientX-startX)>10||Math.abs(event.clientY-startY)>10)clear();
+      if(Math.abs(event.clientX-startX)>12||Math.abs(event.clientY-startY)>12)clear();
     },{passive:true});
     document.addEventListener('pointerup',clear,{passive:true});
     document.addEventListener('pointercancel',clear,{passive:true});
+
+    // Some Android WebViews can be inconsistent with Pointer Events during long-press.
+    // Touch fallback keeps the feature reliable without showing delete permanently.
+    document.addEventListener('touchstart',event=>{
+      const touch=event.touches?.[0];
+      const bubble=event.target?.closest?.('.chat-message .bubble');
+      if(!touch||!bubble)return;
+      lastTouchAt=Date.now();
+      begin(bubble,touch.clientX,touch.clientY);
+    },{passive:true});
+
+    document.addEventListener('touchmove',event=>{
+      if(!timer)return;
+      const touch=event.touches?.[0];
+      if(!touch){clear();return}
+      if(Math.abs(touch.clientX-startX)>12||Math.abs(touch.clientY-startY)>12)clear();
+    },{passive:true});
+    document.addEventListener('touchend',clear,{passive:true});
+    document.addEventListener('touchcancel',clear,{passive:true});
+
+    document.addEventListener('contextmenu',event=>{
+      const bubble=event.target?.closest?.('.chat-message .bubble');
+      if(!bubble)return;
+      event.preventDefault();
+    });
   }
 
   function handleNativeBack(){
