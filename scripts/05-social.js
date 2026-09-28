@@ -275,6 +275,8 @@ function setDmReplyTarget(messageId){
   const markup=dmReplyComposer(message.conversation_id);
   if(existing)existing.outerHTML=markup;
   else document.querySelector('#liveChatForm')?.insertAdjacentHTML('beforebegin',markup);
+  const cancel=document.querySelector('[data-cancel-dm-reply]');
+  if(cancel)cancel.onclick=()=>{clearDmReplyTarget();document.querySelector('#liveChatInput')?.focus({preventScroll:true});scrollActiveDmToBottom()};
   const input=document.querySelector('#liveChatInput');
   input?.focus({preventScroll:true});
   scrollActiveDmToBottom();
@@ -983,7 +985,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
     const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
-    const canDelete=row?.dataset?.messageDeletable==='1';
+    const targetMessage=state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(same(targetMessage.sender_id,authUser.id)||state.isAdmin);
     openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
     const reply=document.querySelector('[data-mobile-reply-message]');
@@ -1033,4 +1035,18 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 })();
 
 /* v83 — expose DM delete action for mobile action sheets */
-window.neisDeleteDirectMessage=id=>window.deleteDirectMessage?.(id);
+window.neisDeleteDirectMessage=id=>{try{return typeof deleteDirectMessage==='function'?deleteDirectMessage(id):window.deleteDirectMessage?.(id)}catch(_){return window.deleteDirectMessage?.(id)}};
+
+/* v86 — robust delegated cancel for dynamic DM reply previews */
+if(!window.__neisDmReplyCancelDelegated){
+  window.__neisDmReplyCancelDelegated=true;
+  document.addEventListener('click',event=>{
+    const cancel=event.target?.closest?.('[data-cancel-dm-reply]');
+    if(!cancel)return;
+    event.preventDefault();
+    clearDmReplyTarget();
+    const input=document.querySelector('#liveChatInput');
+    input?.focus({preventScroll:true});
+    scrollActiveDmToBottom();
+  });
+}
