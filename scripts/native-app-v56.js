@@ -24,6 +24,7 @@
       if(row.dataset.nativeSettingsReady==='1')return;
       const children=[...row.children];
       if(children.length<2)return;
+      if(row.querySelector(':scope > .settings-row-end')){row.dataset.nativeSettingsReady='1';return}
       row.dataset.nativeSettingsReady='1';
       row.classList.add('settings-row');
       const first=children[0],last=children[children.length-1];
@@ -123,7 +124,15 @@
     });
   }
 
+  function syncNativeTheme(){
+    try{
+      const theme=document.documentElement.dataset.theme||localStorage.getItem('neis-theme')||'light';
+      window.NeisAndroid?.setSystemTheme?.(theme);
+    }catch(_){}
+  }
+
   function apply(){
+    syncNativeTheme();
     useLatestAsNativeDefault();
     adaptSettings();
     flattenReplyTree();
@@ -138,6 +147,7 @@
     requestAnimationFrame(()=>{queued=false;apply()});
   };
   new MutationObserver(queue).observe(document.body,{childList:true,subtree:true});
+  new MutationObserver(syncNativeTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
   document.addEventListener('click',()=>setTimeout(queue,0),true);
   apply();
 })();
