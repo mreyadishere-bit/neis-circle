@@ -764,3 +764,20 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     font-size:9px!important;
   }
 }
+
+
+/* v82 — mobile settings/action-sheet sizing */
+@media(max-width:760px){
+  #modalRoot .modal:has([data-setting-plus]){
+    width:calc(100vw - 22px)!important;
+    max-height:78dvh!important;
+    overflow-y:auto!important;
+    padding:18px!important;
+  }
+  #modalRoot .message-actions-modal{
+    width:calc(100vw - 34px)!important;
+    max-width:390px!important;
+    padding:16px!important;
+  }
+  .dm-reply-preview{margin-inline:9px!important}
+}
