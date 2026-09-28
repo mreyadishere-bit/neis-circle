@@ -728,3 +728,39 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     border-color:color-mix(in srgb,#a53a2d 24%,var(--line))!important;
   }
 }
+
+
+/* v79 — phone posts use the exact Article-comment geometry */
+@media(max-width:760px){
+  .reply-card,
+  .reply-card.nested,
+  .reply-card.is-reply{
+    padding:14px 2px 12px!important;
+  }
+  .reply-head .avatar,
+  .reply-card.is-reply .reply-head .avatar{
+    width:40px!important;
+    height:40px!important;
+    flex:0 0 40px!important;
+    border-radius:13px!important;
+  }
+  .reply-children{
+    width:calc(100% - 16px)!important;
+    margin-inline-start:16px!important;
+  }
+  body.rtl .reply-children{
+    margin-inline-start:0!important;
+    margin-inline-end:16px!important;
+  }
+  .reply-actions{
+    flex-wrap:nowrap!important;
+    gap:2px!important;
+  }
+  .reply-actions .reply-action,
+  .reply-actions button{
+    height:30px!important;
+    min-height:30px!important;
+    padding:3px 6px!important;
+    font-size:9px!important;
+  }
+}
