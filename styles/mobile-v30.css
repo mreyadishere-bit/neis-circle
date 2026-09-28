@@ -659,3 +659,47 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     font-size:9px!important;
   }
 }
+
+
+/* v68 — tiny permanent delete button outside mobile message bubbles */
+@media(max-width:760px){
+  .messages.mobile-thread-open .chat-message .bubble{
+    position:relative!important;
+    overflow:visible!important;
+  }
+  .messages.mobile-thread-open .chat-message .content-menu{
+    display:grid!important;
+    place-items:center!important;
+    position:absolute!important;
+    top:50%!important;
+    inset-inline-end:auto!important;
+    inset-inline-start:-21px!important;
+    transform:translateY(-50%)!important;
+    width:17px!important;
+    min-width:17px!important;
+    height:17px!important;
+    min-height:17px!important;
+    padding:0!important;
+    margin:0!important;
+    border:1px solid color-mix(in srgb,#a53a2d 38%,var(--line))!important;
+    border-radius:5px!important;
+    background:var(--card)!important;
+    color:#a53a2d!important;
+    box-shadow:none!important;
+    font-size:11px!important;
+    font-weight:700!important;
+    line-height:1!important;
+    opacity:.82!important;
+    z-index:3!important;
+  }
+  .messages.mobile-thread-open .chat-message .content-menu::before{
+    content:none!important;
+  }
+  .messages.mobile-thread-open .chat-message:not(.mine) .content-menu{
+    inset-inline-start:auto!important;
+    inset-inline-end:-21px!important;
+  }
+  .messages.mobile-thread-open .chat-message .bubble:has(.content-menu){
+    padding-inline-end:10px!important;
+  }
+}
