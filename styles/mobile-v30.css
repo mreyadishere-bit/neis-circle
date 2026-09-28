@@ -256,3 +256,41 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     font-size:8.5px!important;
   }
 }
+
+
+/* v60.1 — make the mobile conversation column actually occupy the whole Messages width */
+@media(max-width:760px){
+  .messages:not(.mobile-thread-open){
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-list{
+    grid-column:1/-1!important;
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    justify-self:stretch!important;
+    align-self:stretch!important;
+    box-sizing:border-box!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-head,
+  .messages:not(.mobile-thread-open) .thread-list-scroll{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-head{
+    justify-content:space-between!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-search{
+    display:block!important;
+    width:calc(100% - 28px)!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+  .messages:not(.mobile-thread-open) .thread{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+}
