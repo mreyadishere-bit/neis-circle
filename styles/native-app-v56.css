@@ -1,0 +1,517 @@
+/* NEIS Circle v54 — native shell + targeted mobile interaction fixes only.
+   Preserve the responsive web design and original card language. */
+
+html.neis-native-app{
+  --native-safe-top:0px;
+  --native-safe-bottom:0px;
+  background:var(--paper);
+}
+html.neis-native-app,
+html.neis-native-app body,
+html.neis-native-app .app{
+  min-height:100dvh;
+  background:var(--paper);
+}
+
+@media(max-width:760px){
+  html.neis-native-app .top{
+    height:calc(68px + var(--native-safe-top));
+    padding-top:var(--native-safe-top);
+    box-sizing:border-box;
+  }
+  html.neis-native-app .stage{
+    min-height:calc(100dvh - 68px - var(--native-safe-top));
+    padding-bottom:calc(90px + var(--native-safe-bottom));
+  }
+  html.neis-native-app .bottom-nav{bottom:calc(10px + var(--native-safe-bottom))}
+  html.neis-native-app .toast{bottom:calc(84px + var(--native-safe-bottom))}
+
+  /* Center every native create + instead of relying on text baseline. */
+  html.neis-native-app .page-title>[data-action="new-gallery"],
+  html.neis-native-app .page-title>[data-action="new-article"],
+  html.neis-native-app .circle-create-button,
+  html.neis-native-app .opportunities-create,
+  html.neis-native-app .composer-bar .compose,
+  html.neis-native-app .thread-head [data-new-chat]{
+    display:grid!important;
+    place-items:center!important;
+    box-sizing:border-box;
+    padding:0!important;
+    line-height:1!important;
+  }
+  html.neis-native-app .page-title>[data-action="new-gallery"],
+  html.neis-native-app .page-title>[data-action="new-article"],
+  html.neis-native-app .circle-create-button,
+  html.neis-native-app .opportunities-create{
+    width:52px!important;height:52px!important;min-width:52px!important;min-height:52px!important;
+    border-radius:16px!important;font-size:0!important;
+  }
+  html.neis-native-app .page-title>[data-action="new-gallery"]::after,
+  html.neis-native-app .page-title>[data-action="new-article"]::after,
+  html.neis-native-app .circle-create-button::after,
+  html.neis-native-app .opportunities-create::after{
+    content:"+";
+    display:grid;place-items:center;
+    width:24px;height:24px;
+    font-size:25px;font-weight:650;line-height:1;
+  }
+  html.neis-native-app .opportunities-create>span{display:none!important}
+
+  /* Native settings rows: one readable start label + one compact end value. */
+  html.neis-native-app .settings-menu .settings-row,
+  html.neis-native-app .account-menu>.settings-row{
+    width:100%;
+    min-height:60px;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:12px;
+    padding:12px 15px;
+    text-align:start;
+  }
+  html.neis-native-app .settings-row-label{
+    min-width:0;
+    max-width:100%;
+    text-align:start;
+    overflow-wrap:anywhere;
+  }
+  html.neis-native-app .settings-row-end{
+    min-width:0;
+    max-width:190px;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:7px;
+    text-align:end;
+  }
+  html.neis-native-app .settings-row-value{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    line-height:1.25;
+  }
+  html.neis-native-app .settings-chevron{
+    flex:0 0 auto;
+    width:9px;height:9px;
+    border-top:1.7px solid var(--muted);
+    border-right:1.7px solid var(--muted);
+    transform:rotate(45deg);
+  }
+  html.neis-native-app body.rtl .settings-chevron{transform:rotate(-135deg)}
+
+  /* Messages become a real mobile screen, not a desktop panel squeezed into the app. */
+  html.neis-native-app body:has(.messages) .top>.search{display:none!important}
+  html.neis-native-app body:has(.messages) .top{
+    min-height:calc(58px + var(--native-safe-top))!important;
+    height:calc(58px + var(--native-safe-top))!important;
+    grid-template-rows:48px!important;
+  }
+  html.neis-native-app body:has(.messages) .stage{
+    padding:0 0 calc(74px + var(--native-safe-bottom))!important;
+  }
+  html.neis-native-app .messages{
+    width:100%!important;
+    max-width:none!important;
+    height:calc(100dvh - 58px - var(--native-safe-top) - 74px - var(--native-safe-bottom))!important;
+    min-height:0!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:var(--card);
+  }
+  html.neis-native-app .messages .thread-list,
+  html.neis-native-app .messages .chat{width:100%!important;max-width:none!important;border:0!important}
+  html.neis-native-app body:has(.messages.mobile-thread-open) .top,
+  html.neis-native-app body:has(.messages.mobile-thread-open) .bottom-nav{display:none!important}
+  html.neis-native-app body:has(.messages.mobile-thread-open) .stage{
+    min-height:100dvh!important;
+    padding:0!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open{
+    height:100dvh!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-head{
+    height:calc(58px + var(--native-safe-top))!important;
+    min-height:calc(58px + var(--native-safe-top))!important;
+    padding-top:var(--native-safe-top)!important;
+    box-sizing:border-box;
+  }
+  html.neis-native-app .thread-head,
+  html.neis-native-app .chat-head{
+    height:58px!important;min-height:58px!important;padding:0 14px!important
+  }
+  html.neis-native-app .thread-list-scroll{height:auto!important;flex:1;overflow-y:auto}
+  html.neis-native-app .thread{min-height:70px;padding:10px 14px}
+  html.neis-native-app .thread .avatar{width:48px;height:48px}
+  html.neis-native-app .thread-search{
+    width:calc(100% - 24px)!important;
+    height:44px!important;
+    margin:10px 12px!important;
+    border:0!important;
+    border-radius:14px!important;
+  }
+  html.neis-native-app .chat-flow{
+    flex:1;min-height:0;
+    padding:12px 10px 8px!important;
+    gap:4px;
+    background:color-mix(in srgb,var(--soft) 35%,var(--card));
+  }
+  html.neis-native-app .chat-message{gap:6px}
+  html.neis-native-app .chat-message.grouped .avatar{visibility:hidden}
+  html.neis-native-app .chat-message .bubble{
+    min-width:0;
+    max-width:82%!important;
+    padding:8px 10px!important;
+    border-radius:13px;
+    overflow-wrap:anywhere;
+    unicode-bidi:plaintext;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-touch-callout:none;
+  }
+  html.neis-native-app .chat-message .bubble:has(.content-menu){padding-inline-end:10px!important}
+  html.neis-native-app .chat-message .content-menu{display:none!important}
+  html.neis-native-app .chat-form{
+    width:auto!important;
+    margin:7px 9px calc(7px + var(--native-safe-bottom))!important;
+    padding:6px!important;
+    min-height:50px;
+    border-radius:25px!important;
+  }
+  html.neis-native-app .chat-form input,
+  html.neis-native-app .chat-form textarea{
+    min-width:0;
+    min-height:38px;
+    max-height:116px;
+    flex:1;
+    border:0;
+    outline:0;
+    resize:none;
+    overflow-y:auto;
+    background:transparent;
+    color:var(--ink);
+    font:inherit;
+    line-height:1.45;
+  }
+  html.neis-native-app .chat-form button{
+    width:40px;height:40px;min-width:40px;border-radius:50%!important
+  }
+
+  /* Long-press action sheet. Destructive controls never float over bubbles. */
+  html.neis-native-app .native-message-action-list{display:grid;gap:8px}
+  html.neis-native-app .native-message-action-list .account-row{
+    width:100%;min-height:54px;text-align:start
+  }
+  html.neis-native-app .native-message-action-list .danger{
+    color:#a43d2f!important;background:color-mix(in srgb,#a43d2f 14%,var(--card))!important
+  }
+
+  /* Instagram-like discussion threads: one indentation level, no recursive card tunnel. */
+  html.neis-native-app .reply-tree{display:grid;gap:0}
+  html.neis-native-app .reply-card,
+  html.neis-native-app .reply-card.nested{
+    width:100%!important;
+    margin:0!important;
+    padding:13px 2px!important;
+    border:0!important;
+    border-bottom:1px solid var(--line)!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  html.neis-native-app .reply-children{
+    width:calc(100% - 18px);
+    margin-inline-start:18px;
+  }
+  html.neis-native-app .reply-children .reply-card{
+    padding-inline-start:0!important;
+  }
+  html.neis-native-app .reply-head{gap:9px;align-items:flex-start}
+  html.neis-native-app .reply-head>div{min-width:0}
+  html.neis-native-app .reply-head b,
+  html.neis-native-app .reply-head small{
+    display:block;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  html.neis-native-app .reply-body{
+    margin:7px 0 7px 47px!important;
+    font-size:12.5px;
+    line-height:1.6;
+    unicode-bidi:plaintext;
+    overflow-wrap:anywhere;
+    text-align:start;
+  }
+  html.neis-native-app body.rtl .reply-body{margin:7px 47px 7px 0!important}
+  html.neis-native-app .reply-actions{
+    margin-inline-start:47px;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:4px;
+  }
+  html.neis-native-app body.rtl .reply-actions{margin-inline-start:0;margin-inline-end:47px}
+  html.neis-native-app .reply-actions button{
+    min-height:30px;
+    padding:4px 7px;
+    border:0;
+    background:transparent;
+    font-size:9.5px;
+  }
+  html.neis-native-app .reply-actions button.danger,
+  html.neis-native-app .reply-actions [data-delete-reply]{color:#a43d2f!important}
+  html.neis-native-app .reply-thread-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:8px 0 10px 47px;
+    padding:3px 0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    font-size:10px;
+    font-weight:750;
+  }
+  html.neis-native-app body.rtl .reply-thread-toggle{margin:8px 47px 10px 0}
+  html.neis-native-app .reply-thread-toggle>span{
+    width:28px;height:1px;background:var(--line)
+  }
+  html.neis-native-app .reply-composer{
+    position:sticky;
+    bottom:0;
+    z-index:3;
+    background:var(--card);
+  }
+
+  /* Opportunities: show content sooner without changing the original card style. */
+  html.neis-native-app .opportunities-filters{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  html.neis-native-app .opportunity-expired-toggle{grid-column:auto!important}
+  html.neis-native-app .opportunities-toolbar{padding:13px!important}
+  html.neis-native-app .opportunities-summary{margin-bottom:10px}
+  html.neis-native-app .opportunities-create{min-width:52px!important}
+
+  /* Compact native admin setting toggles; logic stays unchanged. */
+  html.neis-native-app [data-author-like-email-setting]>.page-title,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:12px;
+  }
+  html.neis-native-app [data-author-like-email-setting],
+  html.neis-native-app [data-admin-dm-email-setting],
+  html.neis-native-app [data-admin-post-email-setting]{
+    margin-top:12px!important;
+    padding:15px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title{
+    margin-bottom:8px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title h2,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title h2,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title h2{
+    font-size:18px!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title p,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title p,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title p{
+    margin-top:4px!important;
+    font-size:10px!important;
+    line-height:1.45!important;
+  }
+  html.neis-native-app [data-author-like-email-setting]>p,
+  html.neis-native-app [data-admin-dm-email-setting]>p,
+  html.neis-native-app [data-admin-post-email-setting]>p{
+    font-size:9.5px!important;
+    line-height:1.5!important;
+  }
+  html.neis-native-app [data-author-like-email-toggle],
+  html.neis-native-app [data-admin-dm-email-toggle],
+  html.neis-native-app [data-admin-post-email-toggle]{
+    position:relative;
+    width:50px;min-width:50px;height:30px;min-height:30px;
+    padding:0;border:0;border-radius:999px;
+    font-size:0;color:transparent;background:var(--line)!important;
+  }
+  html.neis-native-app [data-author-like-email-toggle]::before,
+  html.neis-native-app [data-admin-dm-email-toggle]::before,
+  html.neis-native-app [data-admin-post-email-toggle]::before{
+    content:"";
+    position:absolute;top:3px;left:3px;
+    width:24px;height:24px;border-radius:50%;
+    background:#fff;box-shadow:0 2px 7px rgba(0,0,0,.16);
+    transition:transform .16s ease;
+  }
+  html.neis-native-app [data-author-like-email-toggle].primary,
+  html.neis-native-app [data-admin-dm-email-toggle].primary,
+  html.neis-native-app [data-admin-post-email-toggle].primary{
+    background:var(--accent)!important;
+  }
+  html.neis-native-app [data-author-like-email-toggle].primary::before,
+  html.neis-native-app [data-admin-dm-email-toggle].primary::before,
+  html.neis-native-app [data-admin-post-email-toggle].primary::before{
+    transform:translateX(20px);
+  }
+  html.neis-native-app body.rtl [data-author-like-email-toggle].primary::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle].primary::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle].primary::before{
+    transform:translateX(-20px);
+  }
+  html.neis-native-app body.rtl [data-author-like-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle]::before{
+    left:auto;right:3px;
+  }
+
+  /* Message action sheet and discussion use bottom-sheet geometry on native. */
+  html.neis-native-app .modal-layer:has(.native-message-action-head){
+    align-items:end;
+    padding:0!important;
+  }
+  html.neis-native-app .modal-layer:has(.native-message-action-head) .modal{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    border-radius:22px 22px 0 0!important;
+    padding-bottom:calc(18px + var(--native-safe-bottom))!important;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent){
+    align-items:end;
+    padding:0!important;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) .modal{
+    width:100%!important;
+    max-width:none!important;
+    height:min(90dvh,820px);
+    margin:0!important;
+    border-radius:22px 22px 0 0!important;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) #replyContent{
+    min-height:0;
+    display:flex;
+    flex:1;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  html.neis-native-app .modal-layer:has(#replyContent) .reply-tree{
+    min-height:0;flex:1;overflow-y:auto;
+  }
+
+  /* Admin moderation stays compact when expanded. */
+  html.neis-native-app .admin-content-disclosure summary{min-height:64px}
+  html.neis-native-app .admin-content-row{grid-template-columns:minmax(0,1fr) auto}
+
+  /* Modal bottom safety for Settings / Discussion. */
+  html.neis-native-app .modal{
+    max-height:calc(92dvh - var(--native-safe-top) - var(--native-safe-bottom));
+    padding-bottom:calc(24px + var(--native-safe-bottom));
+  }
+}
+
+@media(max-width:430px){
+  html.neis-native-app .settings-row-end{max-width:150px}
+  html.neis-native-app .opportunities-filters{grid-template-columns:1fr 1fr!important}
+}
+
+@media(max-width:380px){
+  html.neis-native-app .settings-row-end{max-width:128px}
+  html.neis-native-app .opportunities-filters{grid-template-columns:1fr!important}
+}
+
+
+/* v56 article comments — native only, flat Instagram-style presentation. */
+@media(max-width:760px){
+  html.neis-native-app .article-comment-list{display:grid;gap:0}
+  html.neis-native-app .article-comment,
+  html.neis-native-app .article-comment.is-reply{
+    width:100%!important;
+    margin:0!important;
+    padding:13px 2px!important;
+    border:0!important;
+    border-bottom:1px solid var(--line)!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  html.neis-native-app .article-comment-children{display:none!important}
+  html.neis-native-app .article-comment-replies{
+    width:calc(100% - 42px);
+    margin-inline-start:42px;
+  }
+  html.neis-native-app .article-comment-head{gap:9px}
+  html.neis-native-app .article-comment-identity{min-width:0}
+  html.neis-native-app .article-comment-body{
+    margin:7px 0 7px 47px!important;
+    font-size:12.5px;
+    line-height:1.6;
+    unicode-bidi:plaintext;
+    overflow-wrap:anywhere;
+    text-align:start;
+  }
+  html.neis-native-app body.rtl .article-comment-body{
+    margin:7px 47px 7px 0!important;
+  }
+  html.neis-native-app .article-comment-actions{
+    margin-inline-start:47px;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:4px;
+  }
+  html.neis-native-app body.rtl .article-comment-actions{
+    margin-inline-start:0;
+    margin-inline-end:47px;
+  }
+  html.neis-native-app .article-comment-actions button{
+    min-height:30px!important;
+    height:30px!important;
+    padding:4px 7px!important;
+    border:0!important;
+    background:transparent!important;
+    border-radius:8px!important;
+    font-size:9.5px!important;
+  }
+  html.neis-native-app .article-comment-actions button.danger{
+    margin-inline-start:0!important;
+    color:#a43d2f!important;
+  }
+  html.neis-native-app .article-replies-toggle{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:8px 0 10px 47px;
+    padding:3px 0;
+    border:0;
+    background:transparent;
+    color:var(--muted);
+    font-size:10px;
+    font-weight:750;
+  }
+  html.neis-native-app body.rtl .article-replies-toggle{
+    margin:8px 47px 10px 0;
+  }
+  html.neis-native-app .article-replies-toggle>span{
+    width:28px;
+    height:1px;
+    background:var(--line);
+  }
+
+  html.neis-native-app .native-moderation-collapsed .admin-content-list[hidden]{
+    display:none!important;
+  }
+  html.neis-native-app .native-moderation-toggle{
+    min-height:38px;
+    white-space:nowrap;
+  }
+}
