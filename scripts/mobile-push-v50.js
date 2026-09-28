@@ -199,6 +199,44 @@
     };
   }
 
+  function installNativeMessageActions(){
+    if(!nativeAvailable()||document.documentElement.dataset.neisMessageActions==='1')return;
+    document.documentElement.dataset.neisMessageActions='1';
+    let timer=null,startX=0,startY=0,target=null;
+
+    const clear=()=>{
+      if(timer){clearTimeout(timer);timer=null}
+      target=null;
+    };
+
+    document.addEventListener('pointerdown',(event)=>{
+      const bubble=event.target?.closest?.('.chat-message .bubble');
+      if(!bubble||event.target.closest('[data-delete-message],[data-delete-circle-message]'))return;
+      clear();
+      target=bubble.closest('.chat-message');
+      startX=event.clientX;startY=event.clientY;
+      timer=setTimeout(()=>{
+        document.querySelectorAll('.chat-message.show-actions').forEach(row=>{if(row!==target)row.classList.remove('show-actions')});
+        target?.classList.add('show-actions');
+        if(navigator.vibrate)navigator.vibrate(18);
+        timer=null;
+      },460);
+    },{passive:true});
+
+    document.addEventListener('pointermove',(event)=>{
+      if(!timer)return;
+      if(Math.abs(event.clientX-startX)>10||Math.abs(event.clientY-startY)>10)clear();
+    },{passive:true});
+    document.addEventListener('pointerup',clear,{passive:true});
+    document.addEventListener('pointercancel',clear,{passive:true});
+
+    document.addEventListener('click',(event)=>{
+      if(event.target?.closest?.('[data-delete-message],[data-delete-circle-message]'))return;
+      const current=event.target?.closest?.('.chat-message.show-actions');
+      document.querySelectorAll('.chat-message.show-actions').forEach(row=>{if(row!==current)row.classList.remove('show-actions')});
+    });
+  }
+
   window.NEISMobile={
     receivePushToken,
     openRoute:openNativeRoute,
@@ -209,6 +247,7 @@
 
   if(nativeAvailable()){
     document.documentElement.classList.add('neis-native-app');
+    installNativeMessageActions();
     const previousLoad=loadLiveData;
     if(typeof previousLoad==='function'){
       loadLiveData=async function(){
