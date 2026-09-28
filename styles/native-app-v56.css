@@ -942,3 +942,41 @@ html.neis-native-app .app{
     box-shadow:0 1px 8px rgba(0,0,0,.06)!important;
   }
 }
+
+
+/* v60.1 — Android: remove the leftover desktop 310px Messages grid column */
+@media(max-width:1180px){
+  html.neis-native-app .messages:not(.mobile-thread-open){
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-list{
+    grid-column:1/-1!important;
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    justify-self:stretch!important;
+    align-self:stretch!important;
+    box-sizing:border-box!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-head,
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-list-scroll{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-head{
+    justify-content:space-between!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-search{
+    display:block!important;
+    width:calc(100% - 28px)!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread{
+    width:100%!important;
+    max-width:none!important;
+    box-sizing:border-box!important;
+  }
+}
