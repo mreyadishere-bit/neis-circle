@@ -7,6 +7,12 @@ on:
         description: "Android version name"
         required: true
         default: "1.0.0"
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/android/**"
+      - ".github/workflows/android-apk.yml"
 
 permissions:
   contents: write
@@ -57,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           gradle -p mobile/android :app:assembleRelease \
-            -PNEIS_VERSION_NAME="${{ inputs.version_name }}" \
+            -PNEIS_VERSION_NAME="${{ inputs.version_name || '1.0.0' }}" \
             -PNEIS_VERSION_CODE="${{ github.run_number }}" \
             --no-daemon
           cp mobile/android/app/build/outputs/apk/release/app-release.apk neis-circle-android.apk
@@ -77,6 +83,6 @@ jobs:
           set -euo pipefail
           TAG="android-${{ github.run_number }}"
           gh release create "$TAG" neis-circle-android.apk \
-            --title "NEIS Circle Android ${{ inputs.version_name }}" \
+            --title "NEIS Circle Android ${{ inputs.version_name || '1.0.0' }}" \
             --notes "Signed Android APK for NEIS Circle." \
             --latest
