@@ -439,3 +439,110 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     background:var(--card)!important;
   }
 }
+
+
+/* v62 — center all mobile + controls, lock open DM to viewport, hide delete until long-press */
+@media(max-width:760px){
+  /* Any compact create/+ control should visually center its plus glyph. */
+  .thread-head .round-btn[data-new-chat],
+  .page-title>.primary,
+  .page-title>.circle-create-button{
+    display:grid!important;
+    place-items:center!important;
+    align-content:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+    line-height:1!important;
+  }
+  .thread-head .round-btn[data-new-chat]{
+    padding:0!important;
+    font-size:0!important;
+  }
+  .thread-head .round-btn[data-new-chat]::after{
+    content:"+";
+    display:grid;
+    place-items:center;
+    width:100%;
+    height:100%;
+    font-size:22px;
+    font-weight:700;
+    line-height:1;
+    transform:translateY(-1px);
+  }
+  .page-title>.primary::after,
+  .page-title>.circle-create-button::after{
+    margin:0!important;
+    line-height:1!important;
+    transform:none!important;
+  }
+
+  /* Delete is not a permanent visual affordance on phone DMs. Long-press reveals actions. */
+  .messages.mobile-thread-open .chat-message .content-menu{
+    display:none!important;
+  }
+  .messages.mobile-thread-open .chat-message .bubble:has(.content-menu){
+    padding-inline-end:10px!important;
+  }
+
+  /* Keep chat header + composer inside one viewport: no page scrolling to reach either end. */
+  body:has(.messages.mobile-thread-open){
+    height:100dvh;
+    overflow:hidden!important;
+  }
+  body:has(.messages.mobile-thread-open) .stage{
+    height:calc(100dvh - 58px)!important;
+    min-height:0!important;
+    padding:0 0 calc(82px + env(safe-area-inset-bottom))!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+  body:has(.messages.mobile-thread-open) .view:has(.messages){
+    height:100%!important;
+    min-height:0!important;
+    width:100%!important;
+    margin:0!important;
+  }
+  .messages.mobile-thread-open{
+    height:100%!important;
+    min-height:0!important;
+    margin:0!important;
+    overflow:hidden!important;
+  }
+  .messages.mobile-thread-open .chat{
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  .messages.mobile-thread-open .chat-head{
+    position:relative;
+    z-index:3;
+    flex:0 0 62px!important;
+  }
+  .messages.mobile-thread-open .chat-flow{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+  }
+  .messages.mobile-thread-open .chat-form{
+    position:relative!important;
+    z-index:3;
+    flex:0 0 auto!important;
+    margin:7px 9px 8px!important;
+  }
+
+  /* Long-press action sheet on mobile web. */
+  .mobile-message-action-list{
+    display:grid;
+    gap:8px;
+  }
+  .mobile-message-action-list .account-row{
+    width:100%;
+    min-height:54px;
+    text-align:start;
+  }
+  .mobile-message-action-list .danger{
+    color:#a43d2f!important;
+    background:color-mix(in srgb,#a43d2f 10%,var(--card))!important;
+  }
+}
