@@ -323,7 +323,7 @@ function messageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
   const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
   const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
-  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time></span></div>`
+  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time></span></div>`
 }
 
 window.openNewConversation=function(){
@@ -935,7 +935,8 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
     const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button></div>`);
+    const canDelete=row?.dataset?.messageDeletable==='1';
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
     const reply=document.querySelector('[data-mobile-reply-message]');
     if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>window.startDmReply?.(messageId),0)};
@@ -947,6 +948,8 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         toast(t('Message copied.','تم نسخ الرسالة.'));
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
+    const del=document.querySelector('[data-mobile-delete-message]');
+    if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
   };
 
   document.addEventListener('pointerdown',event=>{
@@ -980,3 +983,6 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     consumed=false;
   });
 })();
+
+/* v83 — expose DM delete action for mobile action sheets */
+window.neisDeleteDirectMessage=id=>window.deleteDirectMessage?.(id);
