@@ -63,31 +63,31 @@
   function whatsappMessage(link){
     if(state.lang==='ar'){
       return [
-        'مرحبًا! 👋🌿',
-        'أعتقد أن NEIS Circle قد يعجبك ✨',
+        'مرحبًا! ✨',
+        'أعتقد أن *NEIS Circle* قد يعجبك',
         '',
         'هو مجتمع لطلاب مدارس النيل المصرية نقدر من خلاله:',
-        '📝 نشارك المقالات والأفكار',
-        '🎓 نكتشف الفرص والمنح',
-        '📚 نشارك مصادر المذاكرة',
-        '🤝 نتواصل مع طلاب آخرين',
+        '✦ نشارك المقالات والأفكار',
+        '✦ نكتشف الفرص والمنح',
+        '✦ نشارك مصادر المذاكرة',
+        '✦ نتواصل مع طلاب آخرين',
         '',
-        '🚀 انضم من خلال رابط الدعوة الخاص بي:',
-        '🔗 '+link
+        '★ انضم من خلال رابط الدعوة الخاص بي:',
+        '→ '+link
       ].join('\n');
     }
     return [
-      'Hey! 👋🌿',
-      'I thought you might like NEIS Circle ✨',
+      'Hey! ✨',
+      'I thought you might like *NEIS Circle*',
       '',
       'It’s a student community for NEIS students where we can:',
-      '📝 share articles and ideas',
-      '🎓 discover opportunities and scholarships',
-      '📚 share study resources',
-      '🤝 connect with other students',
+      '✦ share articles and ideas',
+      '✦ discover opportunities and scholarships',
+      '✦ share study resources',
+      '✦ connect with other students',
       '',
-      '🚀 Join through my invite link:',
-      '🔗 '+link
+      '★ Join through my invite link:',
+      '→ '+link
     ].join('\n');
   }
 
