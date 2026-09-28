@@ -872,3 +872,221 @@ body.image-lightbox-open{overflow:hidden}
     min-width:120px;
   }
 }
+
+
+/* v64 — one comment visual system everywhere */
+:where(.reply-card,.article-comment){
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:14px 2px 12px;
+  border:0;
+  border-bottom:1px solid var(--line);
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+:where(.reply-card,.article-comment):last-child{border-bottom:0}
+
+:where(.reply-head,.article-comment-head){
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+}
+:where(.reply-head,.article-comment-head) .avatar{
+  width:40px;
+  height:40px;
+  flex:0 0 40px;
+  border-radius:13px;
+}
+:where(.reply-head>div,.article-comment-identity){
+  min-width:0;
+  flex:1;
+}
+:where(.reply-head,.article-comment-head) b{
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  line-height:1.3;
+}
+:where(.reply-head,.article-comment-head) small{
+  display:block;
+  max-width:100%;
+  margin-top:2px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.35;
+}
+
+:where(.reply-body,.article-comment-body){
+  margin:8px 0 7px 50px;
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.62;
+  overflow-wrap:anywhere;
+  unicode-bidi:plaintext;
+  text-align:start;
+  white-space:pre-wrap;
+}
+.rtl :where(.reply-body,.article-comment-body){
+  margin:8px 50px 7px 0;
+}
+
+/* Replies use one small indent everywhere, never recursive visual tunneling. */
+.reply-children,
+.article-comment-replies{
+  width:calc(100% - 16px)!important;
+  margin-inline-start:16px!important;
+  padding:0!important;
+  border:0!important;
+}
+.rtl .reply-children,
+.rtl .article-comment-replies{
+  margin-inline-start:0!important;
+  margin-inline-end:16px!important;
+}
+
+.reply-card.is-reply .reply-body,
+.article-comment.is-reply .article-comment-body{
+  margin-inline-start:46px!important;
+}
+.rtl .reply-card.is-reply .reply-body,
+.rtl .article-comment.is-reply .article-comment-body{
+  margin-inline-start:0!important;
+  margin-inline-end:46px!important;
+}
+
+/* Actions use the same sizing, alignment and single-row behavior everywhere. */
+.reply-actions,
+.article-comment-actions{
+  margin-inline-start:50px!important;
+  display:flex!important;
+  align-items:center!important;
+  flex-wrap:nowrap!important;
+  gap:2px!important;
+  min-width:0;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:2px;
+}
+.rtl .reply-actions,
+.rtl .article-comment-actions{
+  margin-inline-start:0!important;
+  margin-inline-end:50px!important;
+}
+.reply-card.is-reply .reply-actions,
+.article-comment.is-reply .article-comment-actions{
+  margin-inline-start:46px!important;
+}
+.rtl .reply-card.is-reply .reply-actions,
+.rtl .article-comment.is-reply .article-comment-actions{
+  margin-inline-start:0!important;
+  margin-inline-end:46px!important;
+}
+.reply-actions::-webkit-scrollbar,
+.article-comment-actions::-webkit-scrollbar{display:none}
+
+.reply-actions .reply-action,
+.reply-actions button,
+.article-comment-actions button{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  height:30px!important;
+  min-height:30px!important;
+  padding:3px 6px!important;
+  border:0;
+  border-radius:8px!important;
+  background:transparent;
+  color:var(--muted);
+  box-shadow:none;
+  white-space:nowrap!important;
+  font-size:9px!important;
+  font-weight:700;
+}
+.reply-actions .reply-action:hover,
+.reply-actions button:hover,
+.article-comment-actions button:hover{
+  background:var(--soft);
+  color:var(--ink);
+}
+.reply-actions .reply-action.active,
+.article-comment-actions button.active{color:var(--accent)}
+
+.reply-actions [data-delete-reply],
+.article-comment-actions [data-article-delete]{
+  color:#a53a2d!important;
+}
+.reply-actions [data-delete-reply]:hover,
+.article-comment-actions [data-article-delete]:hover{
+  background:color-mix(in srgb,#a53a2d 8%,transparent)!important;
+  color:#923126!important;
+}
+.reply-actions .native-mention-action,
+.article-comment-actions .native-mention-action,
+.article-comment-actions .article-mention-action{
+  color:var(--accent)!important;
+  font-weight:750!important;
+}
+
+.reply-actions .creator-heart,
+.reply-actions .creator-heart-toggle,
+.article-comment-actions .creator-heart,
+.article-comment-actions .creator-heart-toggle{
+  flex:0 0 28px!important;
+  width:28px!important;
+  min-width:28px!important;
+  height:28px!important;
+  min-height:28px!important;
+  margin:0 2px!important;
+  padding:0!important;
+  display:inline-grid!important;
+  place-items:center!important;
+  border-radius:50%!important;
+  line-height:1!important;
+}
+
+/* View/Hide replies is identical in discussions and article comments. */
+.reply-thread-toggle,
+.article-replies-toggle{
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  display:inline-flex!important;
+  width:auto!important;
+  min-width:0!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:8px!important;
+  margin:7px 0 11px 50px!important;
+  padding:4px 0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--muted)!important;
+  box-shadow:none!important;
+  font-size:10px!important;
+  font-weight:750!important;
+  line-height:1.2!important;
+}
+.rtl .reply-thread-toggle,
+.rtl .article-replies-toggle{
+  margin:7px 50px 11px 0!important;
+}
+.reply-thread-toggle:hover,
+.article-replies-toggle:hover{color:var(--ink)!important}
+.reply-thread-line,
+.article-replies-toggle>span:first-child{
+  width:28px!important;
+  height:1px!important;
+  flex:0 0 28px!important;
+  background:var(--line)!important;
+}
