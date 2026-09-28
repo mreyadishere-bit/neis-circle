@@ -1,10 +1,13 @@
-/* NEIS Circle v49 — lightweight WhatsApp referrals without paid APIs. */
+/* NEIS Circle v49.1 — lightweight WhatsApp referrals without paid APIs. */
 (function(){
   'use strict';
 
   const STORAGE_KEY='neis-referral-code-v1';
   const CODE_RE=/^nc-[a-z0-9]{10}$/;
+  const POSTER_B64_URL='assets/referral-poster.webp.b64?v=49.1';
   let claimBusy=false;
+  let posterFilePromise=null;
+  let posterObjectUrl='';
 
   const tr=(en,arText)=>state.lang==='ar'?arText:en;
 
@@ -60,30 +63,48 @@
   function whatsappMessage(link){
     if(state.lang==='ar'){
       return [
-        'مرحبًا! أعتقد أن NEIS Circle قد يعجبك 👋',
+        'مرحبًا! 👋🌿',
+        'أعتقد أن NEIS Circle قد يعجبك ✨',
         '',
         'هو مجتمع لطلاب مدارس النيل المصرية نقدر من خلاله:',
-        '• نشارك المقالات والأفكار',
-        '• نكتشف الفرص والمنح',
-        '• نشارك مصادر المذاكرة',
-        '• نتواصل مع طلاب آخرين',
+        '📝 نشارك المقالات والأفكار',
+        '🎓 نكتشف الفرص والمنح',
+        '📚 نشارك مصادر المذاكرة',
+        '🤝 نتواصل مع طلاب آخرين',
         '',
-        'انضم من خلال رابط الدعوة الخاص بي:',
-        link
+        '🚀 انضم من خلال رابط الدعوة الخاص بي:',
+        '🔗 '+link
       ].join('\n');
     }
     return [
-      'Hey! I thought you might like NEIS Circle 👋',
+      'Hey! 👋🌿',
+      'I thought you might like NEIS Circle ✨',
       '',
       'It’s a student community for NEIS students where we can:',
-      '• share articles and ideas',
-      '• discover opportunities and scholarships',
-      '• share study resources',
-      '• connect with other students',
+      '📝 share articles and ideas',
+      '🎓 discover opportunities and scholarships',
+      '📚 share study resources',
+      '🤝 connect with other students',
       '',
-      'Join through my invite link:',
-      link
+      '🚀 Join through my invite link:',
+      '🔗 '+link
     ].join('\n');
+  }
+
+  async function loadPosterFile(){
+    if(posterFilePromise)return posterFilePromise;
+    posterFilePromise=(async()=>{
+      const response=await fetch(POSTER_B64_URL,{cache:'force-cache'});
+      if(!response.ok)throw new Error('poster_load_failed');
+      const raw=(await response.text()).trim();
+      const binary=atob(raw);
+      const bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+      const file=new File([bytes],'neis-circle-invite.webp',{type:'image/webp'});
+      if(!posterObjectUrl)posterObjectUrl=URL.createObjectURL(file);
+      return file;
+    })();
+    return posterFilePromise;
   }
 
   async function copyText(value){
@@ -107,6 +128,24 @@
     }
   }
 
+  async function shareInvite(link,waUrl){
+    try{
+      const file=await loadPosterFile();
+      const canShareFiles=!!navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}));
+      if(canShareFiles){
+        await navigator.share({
+          title:'NEIS Circle',
+          text:whatsappMessage(link),
+          files:[file]
+        });
+        return;
+      }
+    }catch(error){
+      if(error?.name==='AbortError')return;
+    }
+    window.open(waUrl,'_blank','noopener,noreferrer');
+  }
+
   async function openReferralInvite(){
     if(!sb||!authUser)return;
     const result=await sb.rpc('referral_summary');
@@ -117,8 +156,11 @@
 
     const code=String(result.data.referral_code);
     const count=Number(result.data.successful_invites||0);
+    const builder=result.data.community_builder===true||count>=2;
     const link=inviteLink(code);
     const wa='https://wa.me/?text='+encodeURIComponent(whatsappMessage(link));
+
+    try{await loadPosterFile()}catch(_){/* text invite remains available */}
 
     openModal(`
       <div class="modal-head referral-head">
@@ -129,29 +171,34 @@
         <button class="close" data-close>×</button>
       </div>
       <section class="referral-panel">
+        ${posterObjectUrl?`<img class="referral-poster" src="${esc(posterObjectUrl)}" alt="${tr('NEIS Circle student invite poster','بوستر دعوة NEIS Circle')}" loading="eager">`:''}
         <div class="referral-stat">
-          <span>${tr('Successful invites','الدعوات الناجحة')}</span>
-          <b>${count}</b>
+          <div><span>${tr('Successful invites','الدعوات الناجحة')}</span><b>${count}</b></div>
+          ${builder
+            ?`<span class="badge-community referral-earned">🌟 ${tr('Community Builder','باني المجتمع')}</span>`
+            :`<small>${tr(`${Math.max(0,2-count)} more successful invite${2-count===1?'':'s'} to unlock Community Builder.`,`متبقي ${Math.max(0,2-count)} دعوة ناجحة لفتح شارة باني المجتمع.`)}</small>`}
         </div>
         <label class="field referral-link-field">
           ${tr('Your invite link','رابط الدعوة الخاص بك')}
           <input id="referralInviteLink" dir="ltr" readonly value="${esc(link)}">
         </label>
         <div class="referral-actions">
-          <a class="primary referral-whatsapp" href="${esc(wa)}" target="_blank" rel="noopener noreferrer">
+          <button type="button" class="primary referral-whatsapp" data-share-referral>
             <span aria-hidden="true">↗</span>
             ${tr('Invite via WhatsApp','دعوة عبر واتساب')}
-          </a>
+          </button>
           <button type="button" class="secondary" data-copy-referral>
             ${tr('Copy link','نسخ الرابط')}
           </button>
         </div>
-        <p class="referral-note">${tr('WhatsApp opens with a ready message. You choose the person and press Send yourself.','سيفتح واتساب برسالة جاهزة، وأنت تختار الشخص وتضغط إرسال بنفسك.')}</p>
+        <p class="referral-note">${tr('On supported phones, the poster and message open in your share sheet so you can choose WhatsApp and press Send yourself. Otherwise WhatsApp opens with the ready message.','على الهواتف المدعومة، يفتح البوستر والرسالة في قائمة المشاركة لتختار واتساب وتضغط إرسال بنفسك. وإذا لم يدعم الجهاز ذلك، يفتح واتساب بالرسالة الجاهزة.')}</p>
       </section>
     `);
 
     const copy=document.querySelector('[data-copy-referral]');
     if(copy)copy.onclick=()=>copyText(link);
+    const share=document.querySelector('[data-share-referral]');
+    if(share)share.onclick=()=>shareInvite(link,wa);
     if(typeof translateTree==='function')translateTree(document.getElementById('modalRoot'));
   }
 
