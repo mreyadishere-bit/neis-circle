@@ -1,0 +1,448 @@
+/* NEIS Circle v53 — consolidated native Android UX.
+   Loaded only for the installed app through html.neis-native-app. */
+
+html.neis-native-app,
+html.neis-native-app body{
+  min-height:100%;
+  background:var(--paper);
+  overscroll-behavior-y:none;
+}
+html.neis-native-app .grain{display:none!important}
+
+@media(max-width:760px){
+  /* ---------- App chrome ---------- */
+  html.neis-native-app .app{min-height:100dvh;background:var(--paper)}
+  html.neis-native-app .rail{display:none!important}
+  html.neis-native-app .top{
+    position:sticky;top:0;z-index:70;
+    min-height:58px;height:58px;margin:0;
+    padding:5px 14px;
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;
+    border-bottom:1px solid var(--line);
+    background:color-mix(in srgb,var(--card) 97%,transparent);
+    backdrop-filter:blur(18px);
+    box-shadow:none;
+  }
+  html.neis-native-app .wordmark{min-width:0;display:flex;align-items:center;gap:7px}
+  html.neis-native-app .wordmark b{font-size:19px;font-weight:850;letter-spacing:-.035em}
+  html.neis-native-app .wordmark span,
+  html.neis-native-app .top>.search{display:none!important}
+  html.neis-native-app .top-actions{display:flex;align-items:center;gap:3px}
+  html.neis-native-app .top-actions .round-btn,
+  html.neis-native-app .top-actions .mini-avatar{
+    width:38px;height:38px;min-width:38px;flex:0 0 38px;border-radius:50%;
+  }
+  html.neis-native-app .top-actions .round-btn{background:transparent}
+  html.neis-native-app .top-actions .round-btn[data-action="language"],
+  html.neis-native-app .top-actions .theme-control{display:none!important}
+  html.neis-native-app .stage{
+    width:100%;min-width:0;margin:0;
+    padding:0 0 calc(66px + env(safe-area-inset-bottom));
+  }
+  html.neis-native-app .view{width:100%;max-width:none;margin:0;overflow-x:hidden}
+
+  html.neis-native-app .bottom-nav{
+    position:fixed;z-index:90;left:0;right:0;bottom:0;width:100%;
+    height:calc(64px + env(safe-area-inset-bottom));
+    padding:3px 6px env(safe-area-inset-bottom);
+    display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));align-items:start;
+    border:0;border-top:1px solid var(--line);border-radius:0;
+    background:color-mix(in srgb,var(--card) 98%,transparent);
+    box-shadow:0 -7px 22px rgba(12,35,29,.04);
+    backdrop-filter:blur(18px);
+  }
+  html.neis-native-app .bottom-nav button{
+    position:relative;z-index:0;min-width:0;height:56px;
+    display:grid;grid-template-rows:30px 15px;place-items:center;align-content:center;gap:1px;
+    padding:0 2px;border:0;border-radius:0;background:transparent!important;
+    color:var(--muted);font-size:9.5px;font-weight:700;
+  }
+  html.neis-native-app .bottom-nav button svg{width:23px;height:23px}
+  html.neis-native-app .bottom-nav .more-glyph{width:23px;height:23px;display:grid;place-items:center}
+  html.neis-native-app .bottom-nav button.active{color:var(--accent)}
+  html.neis-native-app .bottom-nav button.active:before{
+    content:"";position:absolute;z-index:-1;top:3px;width:42px;height:30px;
+    border-radius:16px;background:color-mix(in srgb,var(--accent) 10%,transparent);
+  }
+  html.neis-native-app .bottom-nav button.active svg{
+    fill:color-mix(in srgb,var(--accent) 9%,transparent);stroke:var(--accent)
+  }
+  html.neis-native-app .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
+
+  /* ---------- Global mobile system ---------- */
+  html.neis-native-app .page-title{
+    margin:0;padding:18px 16px 12px;gap:12px;align-items:flex-start;
+  }
+  html.neis-native-app .page-title h1{font-size:28px;line-height:1.06;letter-spacing:-.035em}
+  html.neis-native-app .page-title h2{font-size:22px;line-height:1.12;letter-spacing:-.025em}
+  html.neis-native-app .page-title p{margin-top:5px;font-size:12px;line-height:1.55}
+  html.neis-native-app .section-head{padding-inline:16px}
+  html.neis-native-app .primary,
+  html.neis-native-app .secondary{min-height:44px;border-radius:12px}
+  html.neis-native-app .round-btn,
+  html.neis-native-app .close{min-width:44px;width:44px;height:44px;min-height:44px;border-radius:13px}
+  html.neis-native-app button,
+  html.neis-native-app [role="button"]{transition:transform .14s ease,background .14s ease,border-color .14s ease,opacity .14s ease}
+  html.neis-native-app button:active,
+  html.neis-native-app [role="button"]:active{transform:scale(.975)}
+  html.neis-native-app button:disabled{opacity:.55}
+  html.neis-native-app .module-card,
+  html.neis-native-app .post,
+  html.neis-native-app .article-card,
+  html.neis-native-app .gallery-card,
+  html.neis-native-app .profile-card,
+  html.neis-native-app .opportunity-card,
+  html.neis-native-app .meeting-card,
+  html.neis-native-app .admin-report-card{
+    border-radius:18px;
+  }
+  html.neis-native-app .module-card,
+  html.neis-native-app .post,
+  html.neis-native-app .article-card,
+  html.neis-native-app .profile-card,
+  html.neis-native-app .opportunity-card,
+  html.neis-native-app .meeting-card{
+    box-shadow:0 8px 24px rgba(17,45,37,.045);
+  }
+
+  /* ---------- Home ---------- */
+  html.neis-native-app .dashboard{display:block}
+  html.neis-native-app .main-column{gap:12px}
+  html.neis-native-app .side-column{display:none!important}
+  html.neis-native-app .hero{display:block;margin:12px 12px 14px}
+  html.neis-native-app .hero-main{min-height:0;padding:20px 18px;border-radius:20px}
+  html.neis-native-app .hero h1{max-width:88%;font-size:29px;line-height:1.06}
+  html.neis-native-app .hero-main p{max-width:90%;font-size:11.5px;line-height:1.55}
+  html.neis-native-app .hero-side{display:none!important}
+  html.neis-native-app .composer-bar{margin:0 12px;padding:11px 12px;border-radius:16px}
+  html.neis-native-app .feed{padding:0 12px}
+  html.neis-native-app .post{margin-bottom:11px;padding:15px}
+
+  /* ---------- Empty states ---------- */
+  html.neis-native-app .empty{
+    min-height:132px;max-height:220px;
+    margin:12px 16px;padding:28px 18px;
+    border-radius:18px;background:var(--card);
+  }
+  html.neis-native-app .empty b{font-size:17px}
+  html.neis-native-app .empty span{font-size:11px;line-height:1.5}
+  html.neis-native-app .gallery-grid:has(>.empty:only-child),
+  html.neis-native-app .article-grid:has(>.empty:only-child),
+  html.neis-native-app .grid-3:has(>.empty:only-child){
+    display:block!important;
+  }
+  html.neis-native-app .gallery-grid>.empty:only-child,
+  html.neis-native-app .article-grid>.empty:only-child,
+  html.neis-native-app .grid-3>.empty:only-child{
+    width:calc(100% - 32px);max-width:none;margin:16px;
+  }
+
+  /* ---------- Articles ---------- */
+  html.neis-native-app .article-grid{
+    display:grid;grid-template-columns:1fr;gap:12px;padding:0 14px;
+  }
+  html.neis-native-app .article-card{
+    display:grid;grid-template-columns:1fr;height:auto;min-height:0;
+    overflow:hidden;border:1px solid var(--line);background:var(--card);
+  }
+  html.neis-native-app .article-cover{
+    width:100%;height:auto;min-height:0;aspect-ratio:16/9;background-position:center;background-size:cover;
+  }
+  html.neis-native-app .article-copy{padding:15px}
+  html.neis-native-app .article-copy h3{margin:8px 0 6px;font-size:18px;line-height:1.3}
+  html.neis-native-app .article-copy>p{-webkit-line-clamp:3;font-size:12px;line-height:1.65}
+  html.neis-native-app .article-meta{font-size:10px}
+  html.neis-native-app .article-card .author-link{margin-top:12px}
+  html.neis-native-app .article-actions{display:flex;gap:7px;align-items:center;padding-top:12px}
+  html.neis-native-app .article-actions .primary{flex:1}
+  html.neis-native-app .article-actions .secondary{flex:0 0 auto;padding-inline:12px}
+  html.neis-native-app .reader{padding:0 2px}
+  html.neis-native-app .reader-cover{border-radius:18px}
+  html.neis-native-app .reader h1{font-size:34px;line-height:1.08}
+  html.neis-native-app .reader-body{font-size:16px;line-height:1.85}
+
+  /* ---------- Gallery ---------- */
+  html.neis-native-app .gallery-grid{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:0 14px;
+  }
+  html.neis-native-app .gallery-card{
+    min-height:210px;border-radius:18px;box-shadow:0 8px 24px rgba(17,45,37,.07)
+  }
+  html.neis-native-app .gallery-copy{left:12px;right:12px;bottom:11px}
+  html.neis-native-app .gallery-copy h3{font-size:13px;line-height:1.3}
+  html.neis-native-app .gallery-copy p{font-size:9px}
+  html.neis-native-app .gallery-tools{top:8px;right:8px;gap:4px}
+  html.neis-native-app .gallery-tools button{padding:6px 8px;font-size:8px}
+
+  /* ---------- Discussion / replies ---------- */
+  html.neis-native-app .modal-layer{align-items:end;padding:0}
+  html.neis-native-app .backdrop{background:rgba(7,18,14,.52);backdrop-filter:blur(3px)}
+  html.neis-native-app .modal:not(.meeting-modal){
+    width:100%;max-width:none;max-height:90dvh;margin:0;
+    padding:18px 18px calc(16px + env(safe-area-inset-bottom));
+    border-inline:0;border-bottom:0;border-radius:22px 22px 0 0;
+    box-shadow:0 -20px 60px rgba(0,0,0,.18);
+  }
+  html.neis-native-app .modal:not(.meeting-modal):before{
+    content:"";display:block;width:42px;height:4px;margin:-7px auto 14px;border-radius:99px;background:var(--line)
+  }
+  html.neis-native-app .modal-head{gap:12px;margin-bottom:12px}
+  html.neis-native-app .modal-head h2{font-size:22px}
+  html.neis-native-app .modal-head p{font-size:10px;line-height:1.45}
+  html.neis-native-app .modal:has(#replyContent){height:min(88dvh,780px);display:flex;flex-direction:column}
+  html.neis-native-app #replyContent{min-height:0;display:flex;flex:1;flex-direction:column;overflow:hidden}
+  html.neis-native-app #replyContent>.reply-tree{min-height:0;flex:1;overflow-y:auto;padding:0 2px 8px;gap:0}
+  html.neis-native-app .reply-card{
+    width:100%;padding:13px 6px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:var(--card)
+  }
+  html.neis-native-app .reply-card .reply-card{
+    width:calc(100% - 18px);margin-inline-start:18px;padding:12px 0 12px 11px;
+    border:0;border-inline-start:2px solid color-mix(in srgb,var(--accent) 42%,var(--line));border-radius:0;
+  }
+  html.neis-native-app body.rtl .reply-card .reply-card{padding:12px 11px 12px 0}
+  html.neis-native-app .reply-card .reply-card .reply-card{
+    width:100%;margin-inline-start:0;padding-inline-start:0;border-inline-start:0;
+  }
+  html.neis-native-app .reply-head{gap:8px;min-width:0}
+  html.neis-native-app .reply-head .avatar{width:38px;height:38px;border-radius:12px}
+  html.neis-native-app .reply-card .reply-card .reply-head .avatar{width:32px;height:32px}
+  html.neis-native-app .reply-head>div{min-width:0}
+  html.neis-native-app .reply-head b,
+  html.neis-native-app .reply-head small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  html.neis-native-app .reply-head b{font-size:12px}
+  html.neis-native-app .reply-head small{font-size:8.5px}
+  html.neis-native-app .reply-body{
+    margin:8px 0;font-size:13px;line-height:1.62;unicode-bidi:plaintext;text-align:start;overflow-wrap:anywhere
+  }
+  html.neis-native-app .reply-actions{display:flex;flex-wrap:wrap;gap:5px}
+  html.neis-native-app .reply-actions button{min-height:34px;padding:5px 9px;border-radius:10px;font-size:9.5px}
+  html.neis-native-app .reply-composer{flex:0 0 auto;margin:7px 0 0}
+
+  /* ---------- Messages ---------- */
+  html.neis-native-app .messages{
+    display:block;width:100%;max-width:none;
+    height:calc(100dvh - 58px - 64px - env(safe-area-inset-bottom));
+    margin:0;border:0;border-radius:0;background:var(--card)
+  }
+  html.neis-native-app .messages:not(.mobile-thread-open) .thread-list{display:flex!important;width:100%;height:100%;flex-direction:column}
+  html.neis-native-app .messages:not(.mobile-thread-open) .chat{display:none!important}
+  html.neis-native-app .messages.mobile-thread-open .thread-list{display:none!important}
+  html.neis-native-app .messages.mobile-thread-open .chat{display:flex!important;width:100%;height:100%}
+  html.neis-native-app .thread-head,
+  html.neis-native-app .chat-head{
+    min-height:58px;height:58px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--card)
+  }
+  html.neis-native-app .thread-head h2{font-size:22px}
+  html.neis-native-app .thread-search{
+    width:calc(100% - 24px);height:44px;margin:10px 12px;padding:0 13px;
+    border:0;border-radius:14px;background:var(--soft);font-size:13px
+  }
+  html.neis-native-app .thread-list-scroll{height:auto;flex:1;overflow-y:auto}
+  html.neis-native-app .thread{
+    width:100%;min-height:72px;padding:10px 14px;border-bottom:1px solid var(--line)
+  }
+  html.neis-native-app .thread .avatar{width:48px;height:48px;border-radius:15px}
+  html.neis-native-app .thread b{font-size:13px}
+  html.neis-native-app .thread small{font-size:10.5px}
+  html.neis-native-app .chat-flow{
+    padding:12px 10px;gap:4px;background:color-mix(in srgb,var(--soft) 34%,var(--card))
+  }
+  html.neis-native-app .chat-message{gap:6px}
+  html.neis-native-app .chat-message.grouped .avatar{visibility:hidden}
+  html.neis-native-app .chat-message .bubble{
+    position:relative;max-width:82%;padding:8px 10px;border-radius:13px;font-size:13px;line-height:1.45
+  }
+  html.neis-native-app .bubble.mine{border-bottom-right-radius:4px}
+  html.neis-native-app body.rtl .bubble.mine{border-bottom-right-radius:13px;border-bottom-left-radius:4px}
+  html.neis-native-app .chat-message .content-menu{
+    display:none;position:absolute;top:4px;inset-inline-end:4px;z-index:2;
+    width:30px;min-width:30px;height:30px;padding:0;border-radius:9px;background:color-mix(in srgb,var(--card) 92%,transparent)
+  }
+  html.neis-native-app .chat-message.show-actions .content-menu{display:grid;place-items:center}
+  html.neis-native-app .chat-form{
+    width:auto;margin:7px 8px calc(7px + env(safe-area-inset-bottom));padding:6px;
+    min-height:50px;border-radius:24px;background:var(--soft)
+  }
+  html.neis-native-app .chat-form button{width:40px;height:40px;border-radius:50%}
+
+  /* ---------- Circles ---------- */
+  html.neis-native-app .circle-hero{
+    display:grid;grid-template-columns:58px minmax(0,1fr);gap:12px;align-items:center;
+    margin:12px;padding:15px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 8px 24px rgba(17,45,37,.045)
+  }
+  html.neis-native-app .circle-hero .circle-logo,
+  html.neis-native-app .circle-hero .module-icon{
+    width:58px;height:58px;margin:0;border-radius:18px;font-size:18px
+  }
+  html.neis-native-app .circle-hero-copy{min-width:0}
+  html.neis-native-app .circle-hero h1{font-size:25px;line-height:1.08}
+  html.neis-native-app .circle-hero-copy>p{margin:5px 0 7px;font-size:11.5px;line-height:1.45}
+  html.neis-native-app .circle-hero .profile-stats{justify-content:flex-start;gap:6px;margin-top:6px;flex-wrap:wrap}
+  html.neis-native-app .circle-hero .profile-stats span{min-height:24px;padding:4px 8px;border-radius:999px;background:var(--soft);font-size:9px}
+  html.neis-native-app .circle-hero .profile-stats b{font-size:10px}
+  html.neis-native-app .circle-hero .profile-hero-actions{
+    grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 46px 46px;gap:7px;width:100%
+  }
+  html.neis-native-app .circle-hero .profile-hero-actions button{
+    width:100%;min-width:0;height:44px;padding:0 8px;border-radius:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px
+  }
+  html.neis-native-app .circle-tabs{
+    position:sticky;z-index:55;top:58px;width:100%;margin:0;padding:7px 10px;
+    display:flex;gap:6px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;
+    border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--card) 98%,transparent);backdrop-filter:blur(16px)
+  }
+  html.neis-native-app .circle-tabs::-webkit-scrollbar{display:none}
+  html.neis-native-app .circle-tabs button{
+    flex:0 0 auto;min-height:38px;padding:0 14px;border-radius:999px;scroll-snap-align:start;font-size:11px;white-space:nowrap
+  }
+  html.neis-native-app .circle-toolbar{margin:0;padding:9px 12px;gap:7px;border-bottom:1px solid var(--line);background:var(--card)}
+  html.neis-native-app .circle-toolbar .field{max-width:none;margin:0}
+  html.neis-native-app .circle-toolbar input{height:42px;border:0;border-radius:13px;background:var(--soft)}
+  html.neis-native-app .circle-panel{margin:12px;border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 24px rgba(17,45,37,.04)}
+  html.neis-native-app .circle-panel.circle-chat{
+    height:calc(100dvh - 58px - 53px - 64px - env(safe-area-inset-bottom));
+    min-height:300px;display:flex;flex-direction:column;margin:0;border-inline:0;border-bottom:0;border-radius:0;box-shadow:none
+  }
+  html.neis-native-app .circle-chat>.section-head{min-height:56px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  html.neis-native-app .circle-chat>.section-head h2{font-size:19px}
+  html.neis-native-app .circle-chat>.section-head p{font-size:9px;line-height:1.35}
+  html.neis-native-app .circle-chat .chat-flow{flex:1;min-height:0;padding:10px;background:color-mix(in srgb,var(--soft) 32%,var(--card))}
+  html.neis-native-app .circle-chat .chat-flow>.empty{width:calc(100% - 28px);margin:auto 14px}
+
+  /* ---------- Opportunities ---------- */
+  html.neis-native-app .opportunities-header{margin:0;padding:18px 16px 14px;border-bottom:1px solid var(--line)}
+  html.neis-native-app .opportunities-heading{padding-inline-end:52px}
+  html.neis-native-app .opportunities-heading h1{font-size:30px}
+  html.neis-native-app .opportunities-heading p{margin-top:7px;font-size:11px;line-height:1.5}
+  html.neis-native-app .opportunities-create{
+    top:16px;inset-inline-end:14px;width:48px;height:48px;min-width:48px;padding:0;border-radius:15px;font-size:0;box-shadow:none
+  }
+  html.neis-native-app .opportunities-toolbar{
+    margin:0;padding:10px 12px;gap:9px;border:0;border-bottom:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--card)
+  }
+  html.neis-native-app .opportunities-search input{height:44px;border:0;border-radius:14px;font-size:12px}
+  html.neis-native-app .opportunities-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  html.neis-native-app .opportunities-filters select{height:42px;border:0;border-radius:12px;font-size:10.5px}
+  html.neis-native-app .opportunity-expired-toggle{grid-column:1/-1;height:40px;min-height:40px;border:0;background:var(--soft);font-size:10px}
+  html.neis-native-app .opportunities-grid{grid-template-columns:1fr;gap:12px;padding:0 12px}
+  html.neis-native-app .opportunity-card{border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 24px rgba(17,45,37,.045)}
+
+  /* ---------- Admin ---------- */
+  html.neis-native-app .admin-hero{display:grid;grid-template-columns:1fr;gap:12px;padding:12px}
+  html.neis-native-app .admin-banner{padding:22px;border-radius:20px}
+  html.neis-native-app .admin-banner h1{margin:14px 0 8px;font-size:30px;line-height:1.08}
+  html.neis-native-app .admin-banner p{font-size:11.5px;line-height:1.55}
+  html.neis-native-app .admin-banner>div{margin-top:14px!important}
+  html.neis-native-app .admin-banner .primary,
+  html.neis-native-app .admin-banner .secondary{min-height:42px}
+  html.neis-native-app .stat-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  html.neis-native-app .stat{min-height:110px;padding:15px;border-radius:18px}
+  html.neis-native-app .stat strong{font-size:28px}
+  html.neis-native-app .stat small{font-size:11px}
+  html.neis-native-app .module-card{margin-inline:12px;padding:16px;border:1px solid var(--line);background:var(--card)}
+  html.neis-native-app .module-card>.page-title{padding:0 0 12px}
+  html.neis-native-app .module-card>h2{margin:0 0 12px;font-size:21px}
+
+  html.neis-native-app .admin-content-list{gap:8px}
+  html.neis-native-app .admin-content-row{
+    grid-template-columns:minmax(0,1fr) auto;gap:10px;min-height:82px;padding:13px 14px;border-radius:16px
+  }
+  html.neis-native-app .admin-content-row>div{min-width:0}
+  html.neis-native-app .admin-content-row b{
+    display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px
+  }
+  html.neis-native-app .admin-content-row p{font-size:10px}
+  html.neis-native-app .admin-content-row .danger{
+    width:auto;min-width:44px;height:40px;min-height:40px;padding:0 11px;font-size:10px
+  }
+
+  /* Members table becomes mobile rows without touching desktop */
+  html.neis-native-app .module-card>h2+.admin-table{display:block;width:100%}
+  html.neis-native-app .module-card>h2+.admin-table thead{display:none}
+  html.neis-native-app .module-card>h2+.admin-table tbody{display:grid;gap:8px}
+  html.neis-native-app .module-card>h2+.admin-table tr{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;
+    gap:4px 10px;padding:12px 13px;border:1px solid var(--line);border-radius:15px;background:var(--card)
+  }
+  html.neis-native-app .module-card>h2+.admin-table td{display:block;padding:0;border:0}
+  html.neis-native-app .module-card>h2+.admin-table td:nth-child(1){grid-column:1;grid-row:1;font-size:13px;font-weight:750}
+  html.neis-native-app .module-card>h2+.admin-table td:nth-child(2){grid-column:1;grid-row:2;color:var(--muted);font-size:10px}
+  html.neis-native-app .module-card>h2+.admin-table td:nth-child(3){grid-column:1;grid-row:2;margin-inline-start:58px}
+  html.neis-native-app .module-card>h2+.admin-table td:nth-child(4){grid-column:2;grid-row:1/3;align-self:center}
+  html.neis-native-app .module-card>h2+.admin-table .branch-tag{font-size:8.5px}
+
+  /* Admin email settings become native settings rows */
+  html.neis-native-app [data-author-like-email-setting],
+  html.neis-native-app [data-admin-dm-email-setting],
+  html.neis-native-app [data-admin-post-email-setting]{
+    position:relative;margin:12px;padding:14px 15px;border-radius:18px
+  }
+  html.neis-native-app [data-author-like-email-setting]>.page-title,
+  html.neis-native-app [data-admin-dm-email-setting]>.page-title,
+  html.neis-native-app [data-admin-post-email-setting]>.page-title{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:0
+  }
+  html.neis-native-app [data-author-like-email-setting] h2,
+  html.neis-native-app [data-admin-dm-email-setting] h2,
+  html.neis-native-app [data-admin-post-email-setting] h2{
+    margin:0;font-size:17px;line-height:1.25
+  }
+  html.neis-native-app [data-author-like-email-setting] .page-title p,
+  html.neis-native-app [data-admin-dm-email-setting] .page-title p,
+  html.neis-native-app [data-admin-post-email-setting] .page-title p{
+    margin:5px 0 0;font-size:10.5px;line-height:1.45
+  }
+  html.neis-native-app [data-author-like-email-setting]>p,
+  html.neis-native-app [data-admin-dm-email-setting]>p,
+  html.neis-native-app [data-admin-post-email-setting]>p{
+    margin-top:9px!important;font-size:9.5px!important;line-height:1.45
+  }
+  html.neis-native-app [data-author-like-email-toggle],
+  html.neis-native-app [data-admin-dm-email-toggle],
+  html.neis-native-app [data-admin-post-email-toggle]{
+    position:relative;width:50px;min-width:50px;height:30px;min-height:30px;padding:0;
+    border:0;border-radius:999px;font-size:0;color:transparent;
+    background:var(--line)!important
+  }
+  html.neis-native-app [data-author-like-email-toggle]::before,
+  html.neis-native-app [data-admin-dm-email-toggle]::before,
+  html.neis-native-app [data-admin-post-email-toggle]::before{
+    content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;
+    box-shadow:0 2px 7px rgba(0,0,0,.16);transition:transform .16s ease
+  }
+  html.neis-native-app [data-author-like-email-toggle="false"],
+  html.neis-native-app [data-admin-dm-email-toggle="false"],
+  html.neis-native-app [data-admin-post-email-toggle="false"]{background:var(--accent)!important}
+  html.neis-native-app [data-author-like-email-toggle="false"]::before,
+  html.neis-native-app [data-admin-dm-email-toggle="false"]::before,
+  html.neis-native-app [data-admin-post-email-toggle="false"]::before{transform:translateX(20px)}
+  html.neis-native-app body.rtl [data-author-like-email-toggle="false"]::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle="false"]::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle="false"]::before{transform:translateX(-20px)}
+  html.neis-native-app body.rtl [data-author-like-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-dm-email-toggle]::before,
+  html.neis-native-app body.rtl [data-admin-post-email-toggle]::before{left:auto;right:3px}
+
+  /* ---------- Forms ---------- */
+  html.neis-native-app .field{gap:6px;margin:11px 0;font-size:10px}
+  html.neis-native-app .field input,
+  html.neis-native-app .field select{min-height:46px}
+  html.neis-native-app .field textarea{min-height:120px}
+  html.neis-native-app .row{grid-template-columns:1fr;gap:10px}
+  html.neis-native-app .modal-actions{gap:8px}
+}
+
+@media(max-width:430px){
+  html.neis-native-app .gallery-grid{grid-template-columns:1fr 1fr;gap:6px;padding-inline:10px}
+  html.neis-native-app .gallery-card{min-height:185px}
+  html.neis-native-app .circle-hero{margin-inline:10px}
+  html.neis-native-app .circle-hero .profile-hero-actions{grid-template-columns:minmax(0,1fr) 42px 42px;gap:5px}
+  html.neis-native-app .opportunities-filters{grid-template-columns:1fr 1fr}
+}
+
+@media(max-width:380px){
+  html.neis-native-app .bottom-nav button{font-size:8.5px}
+  html.neis-native-app .page-title h1{font-size:26px}
+  html.neis-native-app .gallery-grid{grid-template-columns:1fr}
+  html.neis-native-app .gallery-card{min-height:240px}
+}
