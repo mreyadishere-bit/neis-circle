@@ -93,12 +93,12 @@ html.neis-native-app .app{
   }
   html.neis-native-app .settings-chevron{
     flex:0 0 auto;
-    font-style:normal;
-    font-size:22px;
-    line-height:1;
-    color:var(--muted);
+    width:9px;height:9px;
+    border-top:1.7px solid var(--muted);
+    border-right:1.7px solid var(--muted);
+    transform:rotate(45deg);
   }
-  html.neis-native-app body.rtl .settings-chevron{transform:scaleX(-1)}
+  html.neis-native-app body.rtl .settings-chevron{transform:rotate(-135deg)}
 
   /* Messages become a real mobile screen, not a desktop panel squeezed into the app. */
   html.neis-native-app body:has(.messages) .top>.search{display:none!important}
@@ -194,7 +194,7 @@ html.neis-native-app .app{
     width:100%;min-height:54px;text-align:start
   }
   html.neis-native-app .native-message-action-list .danger{
-    color:#a43d2f!important;background:color-mix(in srgb,#fff0ed 92%,var(--card))!important
+    color:#a43d2f!important;background:color-mix(in srgb,#a43d2f 14%,var(--card))!important
   }
 
   /* Instagram-like discussion threads: one indentation level, no recursive card tunnel. */
