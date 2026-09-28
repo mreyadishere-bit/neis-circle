@@ -128,22 +128,44 @@
     }
   }
 
-  async function shareInvite(link,waUrl){
+  function openWhatsAppInvite(link){
+    const text=whatsappMessage(link);
+    const encoded=encodeURIComponent(text);
+    const appUrl='whatsapp://send?text='+encoded;
+    const webUrl='https://wa.me/?text='+encoded;
+    const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if(!mobile){
+      window.open(webUrl,'_blank','noopener,noreferrer');
+      return;
+    }
+
+    let leftPage=false;
+    const onVisibility=()=>{if(document.hidden)leftPage=true};
+    document.addEventListener('visibilitychange',onVisibility);
+    window.location.href=appUrl;
+    setTimeout(()=>{
+      document.removeEventListener('visibilitychange',onVisibility);
+      if(!leftPage)window.location.href=webUrl;
+    },900);
+  }
+
+  async function sharePosterImage(){
     try{
       const file=await loadPosterFile();
-      const canShareFiles=!!navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}));
-      if(canShareFiles){
+      if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
         await navigator.share({
-          title:'NEIS Circle',
-          text:whatsappMessage(link),
+          title:'NEIS Circle Invite',
           files:[file]
         });
         return;
       }
+      if(!posterObjectUrl)posterObjectUrl=URL.createObjectURL(file);
+      window.open(posterObjectUrl,'_blank','noopener,noreferrer');
     }catch(error){
       if(error?.name==='AbortError')return;
+      toast(tr('Could not open the poster. Please try again.','تعذر فتح البوستر. حاول مرة أخرى.'));
     }
-    window.open(waUrl,'_blank','noopener,noreferrer');
   }
 
   async function openReferralInvite(){
@@ -158,7 +180,6 @@
     const count=Number(result.data.successful_invites||0);
     const builder=result.data.community_builder===true||count>=2;
     const link=inviteLink(code);
-    const wa='https://wa.me/?text='+encodeURIComponent(whatsappMessage(link));
 
     try{await loadPosterFile()}catch(_){/* text invite remains available */}
 
@@ -183,22 +204,27 @@
           <input id="referralInviteLink" dir="ltr" readonly value="${esc(link)}">
         </label>
         <div class="referral-actions">
-          <button type="button" class="primary referral-whatsapp" data-share-referral>
+          <button type="button" class="primary referral-whatsapp" data-open-whatsapp>
             <span aria-hidden="true">↗</span>
             ${tr('Invite via WhatsApp','دعوة عبر واتساب')}
+          </button>
+          <button type="button" class="secondary referral-poster-share" data-share-poster>
+            ${tr('Share poster image','مشاركة صورة البوستر')}
           </button>
           <button type="button" class="secondary" data-copy-referral>
             ${tr('Copy link','نسخ الرابط')}
           </button>
         </div>
-        <p class="referral-note">${tr('On supported phones, the poster and message open in your share sheet so you can choose WhatsApp and press Send yourself. Otherwise WhatsApp opens with the ready message.','على الهواتف المدعومة، يفتح البوستر والرسالة في قائمة المشاركة لتختار واتساب وتضغط إرسال بنفسك. وإذا لم يدعم الجهاز ذلك، يفتح واتساب بالرسالة الجاهزة.')}</p>
+        <p class="referral-note">${tr('WhatsApp opens directly with your ready invite message and referral link. Use “Share poster image” if you also want to send the poster.','يفتح واتساب مباشرة برسالة الدعوة الجاهزة ورابطك. استخدم «مشاركة صورة البوستر» إذا أردت إرسال البوستر أيضًا.')}</p>
       </section>
     `);
 
     const copy=document.querySelector('[data-copy-referral]');
     if(copy)copy.onclick=()=>copyText(link);
-    const share=document.querySelector('[data-share-referral]');
-    if(share)share.onclick=()=>shareInvite(link,wa);
+    const whatsapp=document.querySelector('[data-open-whatsapp]');
+    if(whatsapp)whatsapp.onclick=()=>openWhatsAppInvite(link);
+    const poster=document.querySelector('[data-share-poster]');
+    if(poster)poster.onclick=()=>sharePosterImage();
     if(typeof translateTree==='function')translateTree(document.getElementById('modalRoot'));
   }
 
