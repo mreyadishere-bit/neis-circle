@@ -292,3 +292,9 @@ body.rtl .article-replies-toggle{
     font-size:9px!important;
   }
 }
+
+
+/* v71 — Arabic comment text keeps RTL reading order but is visually left-aligned */
+.article-comment-body[dir="auto"]{
+  text-align:left!important;
+}
