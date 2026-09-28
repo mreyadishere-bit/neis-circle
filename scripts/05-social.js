@@ -11,7 +11,7 @@ const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
 const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value||Date.now()));
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
-Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{}});
+Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null});
 let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificationRealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
@@ -141,15 +141,16 @@ async function refreshMessagesV6(){
           const clearedByConversation=new Map(mineRows.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));
           state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared});
         }
-        if(state.view==='messages'){
-          const flow=$('#chatFlow'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
-          render();
-          requestAnimationFrame(()=>{
-            const next=$('#liveChatInput');
-            if(next){next.value=getDmDraft(state.activeConversationId)}
-            const nextFlow=$('#chatFlow');
-            if(nextFlow&&wasNearBottom)nextFlow.scrollTop=nextFlow.scrollHeight;
-          });
+        if(state.view==='messages'&&state.activeConversationId){
+          const flow=$('#chatFlow'),input=$('#liveChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
+          const activeMessages=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
+          if(flow){
+            flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>messageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+            bindV6(flow);
+          }
+          if(input){input.value=getDmDraft(state.activeConversationId)}
+          if(flow&&wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+          updateBadges();
         }else{
           updateBadges();
         }
@@ -260,6 +261,37 @@ function bindDmKeyboardBottom(){
   }
 }
 
+
+function activeDmReply(){
+  const reply=state.dmReplyTo;
+  if(!reply||!same(reply.conversationId,state.activeConversationId))return null;
+  return state.liveMessages.find(m=>same(m.id,reply.messageId))||null;
+}
+function setDmReplyTarget(messageId){
+  const message=state.liveMessages.find(m=>same(m.id,messageId));
+  if(!message)return;
+  state.dmReplyTo={conversationId:message.conversation_id,messageId:message.id};
+  const existing=document.querySelector('[data-dm-reply-preview]');
+  const markup=dmReplyComposer(message.conversation_id);
+  if(existing)existing.outerHTML=markup;
+  else document.querySelector('#liveChatForm')?.insertAdjacentHTML('beforebegin',markup);
+  const input=document.querySelector('#liveChatInput');
+  input?.focus({preventScroll:true});
+  scrollActiveDmToBottom();
+}
+function clearDmReplyTarget(){
+  state.dmReplyTo=null;
+  document.querySelector('[data-dm-reply-preview]')?.remove();
+}
+function dmReplyComposer(conversationId){
+  const reply=state.dmReplyTo&&same(state.dmReplyTo.conversationId,conversationId)
+    ?state.liveMessages.find(m=>same(m.id,state.dmReplyTo.messageId)):null;
+  if(!reply)return '';
+  const sender=profileData(reply.sender_id);
+  return `<div class="dm-reply-preview" data-dm-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-dm-reply aria-label="${t('Cancel reply','إلغاء الرد')}">×</button></div>`;
+}
+window.startDmReply=setDmReplyTarget;
+
 const DM_DRAFTS_KEY='neis-dm-drafts-v1';
 function loadDmDrafts(){
   try{return JSON.parse(sessionStorage.getItem(DM_DRAFTS_KEY)||'{}')||{}}catch(_){return {}}
@@ -285,9 +317,14 @@ function conversationLast(id){return state.liveMessages.filter(m=>same(m.convers
 messages=function(){
   let threads=[...state.conversations].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));const q=normalize(state.conversationQuery);if(q)threads=threads.filter(c=>match(q,conversationName(c.id)?.full_name,conversationName(c.id)?.username,conversationLast(c.id)?.body));const compact=window.matchMedia('(max-width:760px)').matches,active=byId(state.conversations,state.activeConversationId)||(!compact?threads[0]:null);if(active&&!state.activeConversationId&&!compact)state.activeConversationId=active.id;
   const activePerson=active?conversationName(active.id):null,msgs=active?state.liveMessages.filter(m=>same(m.conversation_id,active.id)&&!m.deleted_at):[];
-  return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div><form class="chat-form" id="liveChatForm"><input id="liveChatInput" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto" value="${esc(getDmDraft(active.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
+  return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${dmReplyComposer(active.id)}<form class="chat-form" id="liveChatForm"><input id="liveChatInput" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto" value="${esc(getDmDraft(active.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
 };
-function messageBubble(m,previous){const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}"><span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time>${mine||state.isAdmin?`<button class="content-menu danger" data-delete-message="${m.id}" aria-label="${t('Delete message','حذف الرسالة')}">×</button>`:''}</span></div>`}
+function messageBubble(m,previous){
+  const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
+  const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
+  const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
+  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time></span></div>`
+}
 
 window.openNewConversation=function(){
   const people=state.members.filter(p=>!same(p.id,authUser.id));openModal(`<div class="modal-head"><div><h2>${t('New conversation','محادثة جديدة')}</h2><p>${t('Search and message a student directly. Following is not required.','ابحث عن طالب وراسله مباشرة دون اشتراط المتابعة.')}</p></div><button class="close" data-close>×</button></div><label class="field"><input id="newChatSearch" placeholder="${t('Search students…','ابحث عن الطلاب…')}"></label><div id="newChatPeople" class="result-list">${people.slice(0,20).map(newChatRow).join('')}</div>`);const input=$('#newChatSearch');input.oninput=()=>{const q=normalize(input.value);$('#newChatPeople').innerHTML=people.filter(p=>match(q,p.full_name,p.username,p.grade,p.branch)).slice(0,30).map(newChatRow).join('')||blank(t('No students found','لا يوجد طلاب'),t('Try another name.','جرّب اسمًا آخر.'));bindV6($('#modalRoot'))};bindV6($('#modalRoot'))
@@ -812,6 +849,7 @@ function bindV6(root=document){
   const circleSearch=root.querySelector('#circleSearch');if(circleSearch)circleSearch.oninput=()=>{state.circleQuery=circleSearch.value;clearTimeout(circleSearchTimer);circleSearchTimer=setTimeout(()=>{render();requestAnimationFrame(()=>{const next=$('#circleSearch');if(next){next.focus();next.setSelectionRange(next.value.length,next.value.length)}})},180)};
   root.querySelectorAll('[data-clear-circle-search]').forEach(el=>el.onclick=()=>{state.circleQuery='';render()});
   const ts=root.querySelector('#conversationSearch');if(ts)ts.oninput=()=>rerenderSearchInput(ts,'conversationQuery');
+  root.querySelectorAll('[data-cancel-dm-reply]').forEach(el=>el.onclick=()=>{clearDmReplyTarget();$('#liveChatInput')?.focus({preventScroll:true})});
   const liveDraftInput=root.querySelector('#liveChatInput');
   if(liveDraftInput){
     bindDmKeyboardBottom();
@@ -826,10 +864,11 @@ function bindV6(root=document){
     if(!body)return;
     button.disabled=true;
     setDmDraft(conversationId,input.value);
-    const {data,error}=await sb.from('messages').insert({conversation_id:conversationId,sender_id:authUser.id,body}).select('*').single();
+    const replyTo=activeDmReply();const {data,error}=await sb.from('messages').insert({conversation_id:conversationId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();
     if(error){toast(safeError(error,'send this message'));button.disabled=false;return}
     setDmDraft(conversationId,'');
     input.value='';
+    clearDmReplyTarget();
     if(data&&!state.liveMessages.some(m=>same(m.id,data.id)))state.liveMessages.push(data);
     const flow=$('#chatFlow');
     if(flow&&data){
@@ -840,6 +879,8 @@ function bindV6(root=document){
     }
     await markConversationRead(conversationId);
     button.disabled=false;
+    input.focus({preventScroll:true});
+    scrollActiveDmToBottom();
   };
   const circleChat=root.querySelector('#circleChatForm');if(circleChat)circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),body=input.value.trim();if(!body)return;button.disabled=true;const {error}=await sb.from('circle_messages').insert({circle_id:state.activeCircleId,sender_id:authUser.id,body});if(error){toast(safeError(error,'send this message'));button.disabled=false;return}input.value='';await loadLiveData();render()};
 }
@@ -891,20 +932,21 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   };
 
   const showActions=(row,bubble)=>{
-    const deleteButton=row?.querySelector?.('[data-delete-message],[data-delete-circle-message]');
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
+    const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2><p>${t('Choose what you want to do with this message.','اختر ما تريد فعله بهذه الرسالة.')}</p></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⌘</b></button>${deleteButton?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button></div>`);
+    document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
+    const reply=document.querySelector('[data-mobile-reply-message]');
+    if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>window.startDmReply?.(messageId),0)};
     const copy=document.querySelector('[data-mobile-copy-message]');
     if(copy)copy.onclick=async()=>{
       try{
         await navigator.clipboard.writeText(messageText);
-        if(typeof closeModal==='function')closeModal();
+        closeModal();
         toast(t('Message copied.','تم نسخ الرسالة.'));
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
-    const del=document.querySelector('[data-mobile-delete-message]');
-    if(del)del.onclick=()=>{if(typeof closeModal==='function')closeModal();setTimeout(()=>deleteButton?.click(),0)};
   };
 
   document.addEventListener('pointerdown',event=>{
