@@ -23,7 +23,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_B64 }}" || { echo "::error::Missing FIREBASE_GOOGLE_SERVICES_JSON_B64"; exit 1; }
           test -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" || { echo "::error::Missing ANDROID_KEYSTORE_B64"; exit 1; }
           test -n "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" || { echo "::error::Missing ANDROID_KEYSTORE_PASSWORD"; exit 1; }
           test -n "${{ secrets.ANDROID_KEY_ALIAS }}" || { echo "::error::Missing ANDROID_KEY_ALIAS"; exit 1; }
@@ -40,14 +39,13 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
-      - name: Restore Firebase and signing files
+      - name: Restore signing file
         shell: bash
         env:
-          FIREBASE_JSON_B64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_B64 }}
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           set -euo pipefail
-          printf '%s' "$FIREBASE_JSON_B64" | base64 --decode > mobile/android/app/google-services.json
+          test -f mobile/android/app/google-services.json || { echo "::error::Missing committed google-services.json"; exit 1; }
           printf '%s' "$KEYSTORE_B64" | base64 --decode > mobile/android/app/release.keystore
 
       - name: Build signed release APK
