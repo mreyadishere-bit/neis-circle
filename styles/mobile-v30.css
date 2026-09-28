@@ -18,3 +18,241 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   .page-title>.primary:after{content:"+";display:grid;place-items:center;width:100%;height:100%;font-size:24px;font-weight:700;line-height:1;transform:none}
   .page-title>.circle-create-button:after{align-content:center;justify-content:center;padding-bottom:2px;line-height:1}
 }
+
+
+/* v60 — mobile comments, Circle header actions and WhatsApp-like Messages */
+@media(max-width:760px){
+  /* Keep comment actions on one compact row whenever the phone width allows it.
+     Delete no longer drops into an isolated second line. */
+  .reply-actions,
+  .article-comment-actions{
+    flex-wrap:nowrap!important;
+    gap:1px!important;
+    overflow-x:auto;
+    overflow-y:hidden;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:2px;
+  }
+  .reply-actions::-webkit-scrollbar,
+  .article-comment-actions::-webkit-scrollbar{display:none}
+  .reply-actions .reply-action,
+  .reply-actions button,
+  .article-comment-actions button{
+    flex:0 0 auto;
+    min-width:0!important;
+    min-height:30px!important;
+    height:30px!important;
+    padding:3px 6px!important;
+    border-radius:8px!important;
+    white-space:nowrap;
+    font-size:9px!important;
+  }
+  .reply-actions [data-delete-reply],
+  .article-comment-actions [data-article-delete]{
+    margin-inline-start:1px!important;
+    padding-inline:6px!important;
+  }
+  .reply-actions .creator-heart,
+  .reply-actions .creator-heart-toggle,
+  .article-comment-actions .creator-heart,
+  .article-comment-actions .creator-heart-toggle{
+    flex:0 0 28px!important;
+    width:28px!important;
+    min-width:28px!important;
+    height:28px!important;
+    min-height:28px!important;
+  }
+
+  /* Circle hero actions: no clipped text inside the green Manage Circle button. */
+  .circle-hero .profile-hero-actions{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:9px!important;
+    width:100%!important;
+    justify-content:stretch!important;
+  }
+  .circle-hero .profile-hero-actions button,
+  .circle-hero .profile-hero-actions .primary,
+  .circle-hero .profile-hero-actions .secondary{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    margin:0!important;
+    padding-inline:10px!important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    justify-content:center;
+  }
+
+  /* Messages gets the full mobile content width instead of looking like a desktop card. */
+  .view:has(.messages){
+    width:calc(100% + 26px);
+    max-width:none;
+    margin-inline:-13px;
+  }
+  .messages{
+    width:100%!important;
+    max-width:none!important;
+    margin-inline:0!important;
+    border-inline:0!important;
+    border-radius:0!important;
+    background:var(--card);
+  }
+  .messages .thread-list,
+  .messages .chat{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+  }
+
+  /* WhatsApp-like conversation list. */
+  .thread-head{
+    height:64px;
+    padding-inline:16px;
+  }
+  .thread-search{
+    width:calc(100% - 28px);
+    height:42px;
+    margin:10px 14px 7px;
+    border-radius:14px;
+    background:var(--soft);
+  }
+  .thread-list-scroll{
+    height:calc(100% - 123px);
+    padding:2px 0 10px;
+  }
+  .thread{
+    min-height:70px;
+    padding:10px 15px;
+    gap:11px;
+    border-bottom:1px solid color-mix(in srgb,var(--line) 72%,transparent);
+  }
+  .thread:last-child{border-bottom:0}
+  .thread .avatar{
+    width:48px;
+    height:48px;
+    flex:0 0 48px;
+    border-radius:15px;
+  }
+  .thread>div{flex:1;min-width:0}
+  .thread b{font-size:13px;line-height:1.25}
+  .thread small{margin-top:3px;font-size:10.5px}
+  .thread time{flex:0 0 auto;font-size:9px}
+  .thread.active{background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+
+  /* Open conversation: full-screen-like, compact header, proper bubbles and composer. */
+  .messages.mobile-thread-open{
+    height:calc(100dvh - 116px - env(safe-area-inset-bottom))!important;
+    margin-bottom:0!important;
+  }
+  .messages.mobile-thread-open .chat{
+    display:flex!important;
+    flex-direction:column;
+    height:100%;
+    border:0;
+  }
+  .messages.mobile-thread-open .chat-head{
+    flex:0 0 62px;
+    height:62px;
+    padding-inline:10px 12px;
+    gap:8px;
+    background:var(--card);
+  }
+  .messages.mobile-thread-open .chat-head .avatar{
+    width:38px;
+    height:38px;
+    flex:0 0 38px;
+    border-radius:12px;
+  }
+  .messages.mobile-thread-open .chat-flow{
+    flex:1 1 auto;
+    min-height:0;
+    padding:12px 10px 8px!important;
+    gap:5px!important;
+    background:color-mix(in srgb,var(--soft) 35%,var(--card));
+    scroll-padding-bottom:76px;
+  }
+  .messages.mobile-thread-open .chat-message{
+    width:100%;
+    max-width:100%;
+    gap:6px;
+    align-items:flex-end;
+  }
+  .messages.mobile-thread-open .chat-message.grouped .avatar{
+    visibility:hidden;
+  }
+  .messages.mobile-thread-open .chat-message .avatar{
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    border-radius:9px;
+  }
+  .messages.mobile-thread-open .chat-message .bubble{
+    max-width:82%!important;
+    min-width:0;
+    padding:8px 10px!important;
+    border-radius:15px!important;
+    background:var(--soft);
+    box-shadow:0 1px 1px rgba(0,0,0,.04);
+    overflow-wrap:anywhere;
+  }
+  .messages.mobile-thread-open .chat-message.mine .bubble,
+  .messages.mobile-thread-open .chat-message .bubble.mine{
+    margin-inline-start:auto;
+    background:var(--accent)!important;
+    color:#fff!important;
+    border-end-end-radius:5px!important;
+  }
+  .messages.mobile-thread-open .chat-message:not(.mine) .bubble{
+    border-end-start-radius:5px!important;
+  }
+  .messages.mobile-thread-open .bubble time{
+    margin-top:3px;
+    opacity:.7;
+    font-size:8px;
+    text-align:end;
+  }
+  .messages.mobile-thread-open .chat-form{
+    position:relative;
+    flex:0 0 auto;
+    width:auto!important;
+    margin:7px 9px calc(8px + env(safe-area-inset-bottom))!important;
+    padding:6px!important;
+    gap:6px;
+    min-height:52px;
+    border-radius:26px!important;
+    background:var(--card);
+    box-shadow:0 1px 8px rgba(0,0,0,.06);
+  }
+  .messages.mobile-thread-open .chat-form input,
+  .messages.mobile-thread-open .chat-form textarea{
+    min-width:0;
+    min-height:38px;
+    flex:1;
+    padding-inline:8px;
+    border:0;
+    outline:0;
+    background:transparent;
+    color:var(--ink);
+    font:inherit;
+  }
+  .messages.mobile-thread-open .chat-form button{
+    width:40px;
+    height:40px;
+    min-width:40px;
+    border-radius:50%!important;
+    display:grid;
+    place-items:center;
+  }
+}
+
+@media(max-width:380px){
+  .reply-actions .reply-action,
+  .reply-actions button,
+  .article-comment-actions button{
+    padding-inline:5px!important;
+    font-size:8.5px!important;
+  }
+}
