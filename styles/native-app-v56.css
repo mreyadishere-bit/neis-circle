@@ -1106,3 +1106,27 @@ html.neis-native-app .app{
     display:none!important;
   }
 }
+
+
+/* v62.1 — Android: restore clear separation between DM bubbles */
+@media(max-width:1180px){
+  html.neis-native-app .messages.mobile-thread-open .chat-flow{
+    gap:0!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message{
+    flex:0 0 auto!important;
+    margin:0!important;
+    padding:0!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message + .chat-message{
+    margin-top:8px!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message.grouped + .chat-message.grouped,
+  html.neis-native-app .messages.mobile-thread-open .chat-message.grouped + .chat-message:not(.grouped){
+    margin-top:5px!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message .bubble{
+    display:block!important;
+    flex:0 0 auto!important;
+  }
+}
