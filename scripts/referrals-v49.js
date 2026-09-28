@@ -221,7 +221,7 @@
     button.type='button';
     button.className='account-row';
     button.dataset.referralInvite='';
-    button.classList.add('settings-row');button.innerHTML=`<span class="settings-row-label">${tr('Invite a student','دعوة طالب')}</span><span class="settings-row-end"><b class="settings-row-value">${tr('WhatsApp invite','دعوة واتساب')}</b><i class="settings-chevron" aria-hidden="true">›</i></span>`;
+    button.classList.add('settings-row');button.innerHTML=`<span class="settings-row-label">${tr('Invite a student','دعوة طالب')}</span><span class="settings-row-end"><b class="settings-row-value">${tr('WhatsApp invite','دعوة واتساب')}</b><i class="settings-chevron" aria-hidden="true"></i></span>`;
     const adminRow=menu.querySelector('[data-nav="admin"]');
     if(adminRow)menu.insertBefore(button,adminRow);else menu.appendChild(button);
     button.onclick=openReferralInvite;
