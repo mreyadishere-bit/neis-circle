@@ -122,6 +122,21 @@ html.neis-native-app .app{
   }
   html.neis-native-app .messages .thread-list,
   html.neis-native-app .messages .chat{width:100%!important;max-width:none!important;border:0!important}
+  html.neis-native-app body:has(.messages.mobile-thread-open) .top,
+  html.neis-native-app body:has(.messages.mobile-thread-open) .bottom-nav{display:none!important}
+  html.neis-native-app body:has(.messages.mobile-thread-open) .stage{
+    min-height:100dvh!important;
+    padding:0!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open{
+    height:100dvh!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-head{
+    height:calc(58px + var(--native-safe-top))!important;
+    min-height:calc(58px + var(--native-safe-top))!important;
+    padding-top:var(--native-safe-top)!important;
+    box-sizing:border-box;
+  }
   html.neis-native-app .thread-head,
   html.neis-native-app .chat-head{
     height:58px!important;min-height:58px!important;padding:0 14px!important
@@ -151,6 +166,9 @@ html.neis-native-app .app{
     border-radius:13px;
     overflow-wrap:anywhere;
     unicode-bidi:plaintext;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-touch-callout:none;
   }
   html.neis-native-app .chat-message .bubble:has(.content-menu){padding-inline-end:10px!important}
   html.neis-native-app .chat-message .content-menu{display:none!important}
