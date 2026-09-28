@@ -570,3 +570,64 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     flex:0 0 auto!important;
   }
 }
+
+
+/* v63 — mobile discussion reply alignment and single-row actions */
+@media(max-width:760px){
+  /* Replies should feel like a subtle indent, not a second nested column. */
+  .reply-children{
+    width:calc(100% - 16px)!important;
+    margin-inline-start:16px!important;
+  }
+  .rtl .reply-children{
+    margin-inline-start:0!important;
+    margin-inline-end:16px!important;
+  }
+
+  .reply-card.is-reply .reply-body{
+    margin-inline-start:46px!important;
+  }
+  .rtl .reply-card.is-reply .reply-body{
+    margin-inline-start:0!important;
+    margin-inline-end:46px!important;
+  }
+
+  .reply-card.is-reply .reply-actions{
+    margin-inline-start:46px!important;
+  }
+  .rtl .reply-card.is-reply .reply-actions{
+    margin-inline-start:0!important;
+    margin-inline-end:46px!important;
+  }
+
+  /* All reply actions stay on one clean row. */
+  .reply-card.is-reply .reply-actions{
+    display:flex!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    gap:2px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .reply-card.is-reply .reply-actions::-webkit-scrollbar{display:none}
+  .reply-card.is-reply .reply-actions .reply-action,
+  .reply-card.is-reply .reply-actions button{
+    flex:0 0 auto!important;
+    min-width:0!important;
+    height:30px!important;
+    min-height:30px!important;
+    padding:3px 6px!important;
+    white-space:nowrap!important;
+    font-size:9px!important;
+  }
+  .reply-card.is-reply .reply-actions .creator-heart,
+  .reply-card.is-reply .reply-actions .creator-heart-toggle{
+    flex:0 0 28px!important;
+    width:28px!important;
+    min-width:28px!important;
+    height:28px!important;
+    min-height:28px!important;
+  }
+}
