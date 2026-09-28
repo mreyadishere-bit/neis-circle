@@ -120,11 +120,91 @@
   window.addEventListener('neis:notification-opened',(event)=>openNativeRoute(event.detail?.route));
   window.addEventListener('neis:auth-callback',(event)=>handleAuthCallback(event.detail?.url));
 
+  const lang=(en,arText)=>state.lang==='ar'?arText:en;
+
+  async function openMobileNotificationSettings(){
+    if(!nativeAvailable()||!authUser||!sb)return;
+    const {data,error}=await sb.from('push_preferences').select('*').eq('user_id',authUser.id).maybeSingle();
+    if(error){
+      if(typeof toast==='function')toast(lang('Could not load notification settings.','تعذر تحميل إعدادات الإشعارات.'));
+      return;
+    }
+    const prefs=data||{
+      messages:true,replies:true,circles:true,social:true,announcements:true,reactions:false,sound:true
+    };
+    const row=(key,en,arText)=>`<label class="account-row" style="cursor:pointer"><span><b>${lang(en,arText)}</b></span><input type="checkbox" data-mobile-push-pref="${key}" ${prefs[key]!==false?'checked':''}></label>`;
+    openModal(`
+      <div class="modal-head">
+        <div>
+          <h2>${lang('Mobile notifications','إشعارات الموبايل')}</h2>
+          <p>${lang('Choose which native Android notifications you want to receive.','اختر إشعارات أندرويد التي تريد استلامها.')}</p>
+        </div>
+        <button class="close" data-close>×</button>
+      </div>
+      <div class="account-menu">
+        ${row('messages','Messages','الرسائل')}
+        ${row('replies','Replies','الردود')}
+        ${row('circles','Circles','المجتمعات')}
+        ${row('social','Followers & social','المتابعون والتفاعل الاجتماعي')}
+        ${row('announcements','Announcements','الإعلانات')}
+        ${row('reactions','Likes & reactions','الإعجابات والتفاعلات')}
+        ${row('sound','Notification sound','صوت الإشعارات')}
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-mobile-system-settings>${lang('Android notification settings','إعدادات إشعارات أندرويد')}</button>
+        <button type="button" class="primary" data-save-mobile-push>${lang('Save','حفظ')}</button>
+      </div>
+    `);
+
+    const systemButton=document.querySelector('[data-mobile-system-settings]');
+    if(systemButton)systemButton.onclick=()=>{try{nativeBridge.openNotificationSettings?.()}catch(_){}};
+
+    const saveButton=document.querySelector('[data-save-mobile-push]');
+    if(saveButton)saveButton.onclick=async()=>{
+      const values={user_id:authUser.id};
+      document.querySelectorAll('[data-mobile-push-pref]').forEach(input=>{
+        values[input.dataset.mobilePushPref]=!!input.checked;
+      });
+      saveButton.disabled=true;
+      const {error:saveError}=await sb.from('push_preferences').upsert(values,{onConflict:'user_id'});
+      if(saveError){
+        saveButton.disabled=false;
+        if(typeof toast==='function')toast(lang('Could not save notification settings.','تعذر حفظ إعدادات الإشعارات.'));
+        return;
+      }
+      closeModal();
+      if(typeof toast==='function')toast(lang('Mobile notification settings saved.','تم حفظ إعدادات إشعارات الموبايل.'));
+    };
+  }
+
+  function addMobileNotificationsToSettings(){
+    if(!nativeAvailable()||!authUser)return;
+    const menu=document.querySelector('#modalRoot .account-menu');
+    if(!menu||menu.querySelector('[data-mobile-notification-settings]'))return;
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='account-row';
+    button.dataset.mobileNotificationSettings='';
+    button.innerHTML=`<span>${lang('Mobile notifications','إشعارات الموبايل')}</span><b>${lang('Sound & alerts →','الصوت والتنبيهات ←')}</b>`;
+    menu.appendChild(button);
+    button.onclick=openMobileNotificationSettings;
+  }
+
+  const previousSettings=typeof settings==='function'?settings:null;
+  if(previousSettings){
+    settings=function(){
+      const result=previousSettings.apply(this,arguments);
+      addMobileNotificationsToSettings();
+      return result;
+    };
+  }
+
   window.NEISMobile={
     receivePushToken,
     openRoute:openNativeRoute,
     handleAuthCallback,
-    registerPushToken:registerStoredToken
+    registerPushToken:registerStoredToken,
+    openNotificationSettings:openMobileNotificationSettings
   };
 
   if(nativeAvailable()){
