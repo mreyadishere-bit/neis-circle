@@ -1,0 +1,444 @@
+/* NEIS Circle v51 — native Android layout polish.
+   Applies only inside the APK/WebView when html.neis-native-app is present. */
+
+html.neis-native-app,
+html.neis-native-app body{
+  min-height:100%;
+  background:var(--card);
+}
+
+html.neis-native-app body{
+  overscroll-behavior-y:none;
+}
+
+html.neis-native-app .grain{display:none!important}
+
+@media(max-width:760px){
+  html.neis-native-app .app{
+    min-height:100dvh;
+    background:var(--card);
+  }
+
+  html.neis-native-app .rail{display:none!important}
+
+  html.neis-native-app .top{
+    position:sticky;
+    z-index:70;
+    top:0;
+    min-height:64px!important;
+    height:64px!important;
+    margin:0!important;
+    padding:8px 12px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:48px;
+    gap:8px;
+    align-items:center;
+    border-bottom:1px solid var(--line);
+    background:color-mix(in srgb,var(--card) 97%,transparent);
+    backdrop-filter:blur(20px);
+    box-shadow:none;
+  }
+
+  html.neis-native-app .wordmark{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:7px;
+  }
+
+  html.neis-native-app .wordmark b{
+    font-size:20px;
+    font-weight:850;
+    letter-spacing:-.035em;
+    line-height:1;
+  }
+
+  html.neis-native-app .wordmark span{display:none!important}
+
+  html.neis-native-app .top>.search{
+    display:none!important;
+  }
+
+  html.neis-native-app .top-actions{
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:2px;
+  }
+
+  html.neis-native-app .top-actions .round-btn,
+  html.neis-native-app .top-actions .mini-avatar{
+    width:40px!important;
+    height:40px!important;
+    min-width:40px;
+    flex:0 0 40px!important;
+    border-radius:50%!important;
+  }
+
+  html.neis-native-app .top-actions .round-btn{
+    background:transparent;
+  }
+
+  html.neis-native-app .top-actions .round-btn:hover{
+    background:var(--soft);
+  }
+
+  html.neis-native-app .top-actions .round-btn[data-action="language"],
+  html.neis-native-app .top-actions .theme-control{
+    display:none!important;
+  }
+
+  html.neis-native-app .top-actions .mini-avatar{
+    border-radius:50%!important;
+    box-shadow:none;
+  }
+
+  html.neis-native-app .stage{
+    width:100%;
+    min-width:0;
+    margin:0!important;
+    padding:12px 0 calc(76px + env(safe-area-inset-bottom))!important;
+    background:var(--card);
+  }
+
+  html.neis-native-app .view{
+    width:100%;
+    max-width:none;
+    margin:0;
+  }
+
+  html.neis-native-app .page-title,
+  html.neis-native-app .section-head{
+    padding-inline:16px;
+  }
+
+  html.neis-native-app .page-title{
+    margin-bottom:14px;
+  }
+
+  html.neis-native-app .page-title h1{
+    font-size:28px;
+    line-height:1.08;
+    letter-spacing:-.035em;
+  }
+
+  html.neis-native-app .dashboard{
+    display:block;
+  }
+
+  html.neis-native-app .main-column{
+    gap:10px;
+  }
+
+  html.neis-native-app .side-column{
+    display:none!important;
+  }
+
+  html.neis-native-app .hero{
+    min-height:0;
+    display:block;
+    margin:0 12px 12px;
+  }
+
+  html.neis-native-app .hero-main{
+    min-height:138px;
+    padding:22px 20px;
+    border-radius:20px;
+  }
+
+  html.neis-native-app .hero-main:before{
+    width:76px;
+    height:76px;
+    right:42px;
+    top:-34px;
+    border-radius:22px;
+    opacity:.85;
+  }
+
+  html.neis-native-app .hero-main:after{
+    width:190px;
+    height:190px;
+    right:-78px;
+    bottom:-112px;
+    border-width:34px;
+    opacity:.32;
+  }
+
+  html.neis-native-app .hero h1{
+    max-width:82%;
+    font-size:30px;
+    line-height:1.06;
+  }
+
+  html.neis-native-app .hero-main p{
+    max-width:86%;
+    margin-top:10px;
+    font-size:12px;
+    line-height:1.55;
+  }
+
+  html.neis-native-app .hero-side{display:none!important}
+
+  html.neis-native-app .composer-bar,
+  html.neis-native-app .post,
+  html.neis-native-app .module-card,
+  html.neis-native-app .profile-card,
+  html.neis-native-app .article-card,
+  html.neis-native-app .opportunity,
+  html.neis-native-app .meeting-card{
+    margin-inline:0;
+    border-inline:0;
+    border-radius:0;
+    box-shadow:none;
+  }
+
+  html.neis-native-app .composer-bar{
+    padding:12px 16px;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+
+  html.neis-native-app .post{
+    padding:16px;
+    border-top:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+
+  html.neis-native-app .post+.post{
+    border-top:0;
+  }
+
+  html.neis-native-app .post-actions{
+    padding-top:4px;
+  }
+
+  html.neis-native-app .bottom-nav{
+    position:fixed;
+    z-index:90;
+    left:0!important;
+    right:0!important;
+    bottom:0!important;
+    width:100%;
+    height:calc(68px + env(safe-area-inset-bottom));
+    padding:5px 6px env(safe-area-inset-bottom);
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    align-items:start;
+    border:0;
+    border-top:1px solid var(--line);
+    border-radius:0;
+    background:color-mix(in srgb,var(--card) 98%,transparent);
+    box-shadow:0 -8px 24px rgba(0,0,0,.035);
+    backdrop-filter:blur(18px);
+  }
+
+  html.neis-native-app .bottom-nav button{
+    min-width:0;
+    height:58px;
+    display:grid;
+    grid-template-rows:32px 16px;
+    place-items:center;
+    align-content:center;
+    gap:1px;
+    padding:0 2px;
+    border:0;
+    border-radius:0;
+    background:transparent!important;
+    color:var(--muted);
+    font-size:10px;
+    font-weight:650;
+  }
+
+  html.neis-native-app .bottom-nav button svg,
+  html.neis-native-app .bottom-nav .more-glyph{
+    width:24px;
+    height:24px;
+  }
+
+  html.neis-native-app .bottom-nav .more-glyph{
+    display:grid;
+    place-items:center;
+    font-size:17px;
+    line-height:1;
+  }
+
+  html.neis-native-app .bottom-nav button.active{
+    color:var(--accent);
+  }
+
+  html.neis-native-app .bottom-nav button.active svg{
+    fill:color-mix(in srgb,var(--accent) 14%,transparent);
+    stroke:var(--accent);
+  }
+
+  html.neis-native-app .bottom-nav button.active:before{
+    content:"";
+    position:absolute;
+    width:44px;
+    height:30px;
+    margin-top:0;
+    border-radius:16px;
+    background:color-mix(in srgb,var(--accent) 11%,transparent);
+    z-index:-1;
+  }
+
+  html.neis-native-app .bottom-nav button{position:relative;z-index:0}
+
+  html.neis-native-app .toast{
+    bottom:calc(80px + env(safe-area-inset-bottom));
+  }
+
+  html.neis-native-app .modal-layer{
+    align-items:end;
+    padding:0;
+  }
+
+  html.neis-native-app .backdrop{
+    background:rgba(7,18,14,.52);
+    backdrop-filter:blur(3px);
+  }
+
+  html.neis-native-app .modal:not(.meeting-modal){
+    width:100%;
+    max-width:none;
+    max-height:min(88dvh,780px);
+    margin:0;
+    padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+    border-inline:0;
+    border-bottom:0;
+    border-radius:24px 24px 0 0;
+    box-shadow:0 -20px 60px rgba(0,0,0,.18);
+  }
+
+  html.neis-native-app .modal:not(.meeting-modal):before{
+    content:"";
+    display:block;
+    width:42px;
+    height:4px;
+    margin:-8px auto 16px;
+    border-radius:99px;
+    background:var(--line);
+  }
+
+  html.neis-native-app .messages{
+    width:100%;
+    height:calc(100dvh - 132px - env(safe-area-inset-bottom));
+    min-height:0;
+    margin:0;
+    border:0;
+    border-radius:0;
+    background:var(--card);
+  }
+
+  html.neis-native-app .messages .thread-list,
+  html.neis-native-app .messages .chat{
+    border:0;
+    background:var(--card);
+  }
+
+  html.neis-native-app .thread-head,
+  html.neis-native-app .chat-head{
+    height:60px;
+    min-height:60px;
+    padding-inline:14px;
+    border-bottom:1px solid var(--line);
+    background:var(--card);
+  }
+
+  html.neis-native-app .thread{
+    min-height:70px;
+    padding:10px 14px;
+    border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);
+  }
+
+  html.neis-native-app .thread.active{
+    background:color-mix(in srgb,var(--accent) 8%,var(--card));
+  }
+
+  html.neis-native-app .chat-flow{
+    padding:12px 10px;
+    gap:5px;
+    background:color-mix(in srgb,var(--soft) 40%,var(--card));
+  }
+
+  html.neis-native-app .chat-message .bubble,
+  html.neis-native-app .bubble{
+    max-width:82%;
+    padding:8px 10px;
+    border-radius:12px;
+    font-size:13px;
+    line-height:1.42;
+  }
+
+  html.neis-native-app .bubble.mine{
+    border-bottom-right-radius:4px;
+  }
+
+  html.neis-native-app body.rtl .bubble.mine{
+    border-bottom-right-radius:12px;
+    border-bottom-left-radius:4px;
+  }
+
+  html.neis-native-app .chat-form{
+    width:auto!important;
+    margin:7px 8px calc(7px + env(safe-area-inset-bottom))!important;
+    padding:6px;
+    min-height:50px;
+    border-radius:24px;
+    background:var(--soft);
+  }
+
+  html.neis-native-app .chat-form button{
+    width:40px;
+    height:40px;
+    border-radius:50%;
+  }
+
+  html.neis-native-app .empty{
+    margin-inline:14px;
+    border-radius:18px;
+    box-shadow:none;
+  }
+
+  html.neis-native-app .grid-3,
+  html.neis-native-app .people-grid,
+  html.neis-native-app .article-grid,
+  html.neis-native-app .meeting-grid{
+    gap:0;
+  }
+
+  html.neis-native-app .people-grid>.profile-card,
+  html.neis-native-app .people-grid>.student-card,
+  html.neis-native-app .article-card,
+  html.neis-native-app .meeting-card{
+    padding-inline:16px;
+  }
+
+  html.neis-native-app .circle-hero,
+  html.neis-native-app .profile-hero,
+  html.neis-native-app .circle-about{
+    margin-inline:0;
+    border-inline:0;
+    border-radius:0;
+    box-shadow:none;
+  }
+
+  html.neis-native-app .tabs,
+  html.neis-native-app .circle-tabs{
+    padding-inline:14px;
+  }
+
+  html.neis-native-app .search-results-list,
+  html.neis-native-app .admin-content-list,
+  html.neis-native-app .admin-report-list{
+    padding-inline:0;
+  }
+}
+
+@media(max-width:430px){
+  html.neis-native-app .page-title h1{font-size:26px}
+  html.neis-native-app .hero{margin-inline:10px}
+  html.neis-native-app .hero-main{padding:20px 18px}
+  html.neis-native-app .hero h1{font-size:28px}
+}
