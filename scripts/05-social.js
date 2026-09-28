@@ -682,3 +682,63 @@ document.addEventListener('click',e=>{if(!e.target.closest('#globalSearchForm'))
 
 setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history.replaceState(null,'','#/home');applyRoute()}},250);
 })();
+
+
+/* v62 — mobile-web message actions: delete/copy only after a deliberate long press. */
+(function installMobileWebMessageLongPress(){
+  if(window.__neisMobileWebMessageLongPress)return;
+  window.__neisMobileWebMessageLongPress=true;
+  let timer=null,startX=0,startY=0,target=null,consumed=false;
+
+  const mobileWeb=()=>window.matchMedia('(max-width:760px)').matches&&!document.documentElement.classList.contains('neis-native-app');
+  const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
+
+  const showActions=(row,bubble)=>{
+    const deleteButton=row?.querySelector?.('[data-delete-message],[data-delete-circle-message]');
+    const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
+    if(typeof openModal!=='function')return;
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2><p>${t('Press and hold a message to manage it.','اضغط ضغطة مطولة على الرسالة لإدارتها.')}</p></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⌘</b></button>${deleteButton?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    const copy=document.querySelector('[data-mobile-copy-message]');
+    if(copy)copy.onclick=async()=>{
+      try{
+        await navigator.clipboard.writeText(messageText);
+        if(typeof closeModal==='function')closeModal();
+        toast(t('Message copied.','تم نسخ الرسالة.'));
+      }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
+    };
+    const del=document.querySelector('[data-mobile-delete-message]');
+    if(del)del.onclick=()=>{if(typeof closeModal==='function')closeModal();setTimeout(()=>deleteButton?.click(),0)};
+  };
+
+  document.addEventListener('pointerdown',event=>{
+    if(!mobileWeb())return;
+    const bubble=event.target?.closest?.('.messages.mobile-thread-open .chat-message .bubble');
+    if(!bubble)return;
+    clear();consumed=false;
+    target={row:bubble.closest('.chat-message'),bubble};
+    startX=event.clientX;startY=event.clientY;
+    timer=setTimeout(()=>{
+      const current=target;timer=null;
+      if(!current?.row||!current?.bubble)return;
+      consumed=true;
+      if(navigator.vibrate)navigator.vibrate(18);
+      showActions(current.row,current.bubble);
+      target=null;
+    },480);
+  },{passive:true});
+
+  document.addEventListener('pointermove',event=>{
+    if(!timer)return;
+    if(Math.abs(event.clientX-startX)>10||Math.abs(event.clientY-startY)>10)clear();
+  },{passive:true});
+  document.addEventListener('pointerup',clear,{passive:true});
+  document.addEventListener('pointercancel',clear,{passive:true});
+  document.addEventListener('contextmenu',event=>{
+    if(!mobileWeb())return;
+    const bubble=event.target?.closest?.('.messages.mobile-thread-open .chat-message .bubble');
+    if(!bubble)return;
+    event.preventDefault();
+    if(!consumed)showActions(bubble.closest('.chat-message'),bubble);
+    consumed=false;
+  });
+})();
