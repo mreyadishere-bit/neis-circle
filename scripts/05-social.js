@@ -456,8 +456,9 @@ comments=async function(postId){
       <p class="reply-body" dir="auto">${r.deleted_at?`<i>${t('This reply was deleted.','تم حذف هذا الرد.')}</i>`:esc(r.body)}</p>
       ${!r.deleted_at?`<div class="reply-actions">
         <button class="reply-action ${like.mine?'active':''}" data-comment-like="${r.id}" aria-pressed="${like.mine?'true':'false'}"><span class="like-heart">♡</span><span>${t('Like','إعجاب')}</span><b>${like.count||0}</b></button>
-        ${heartsByComment.has(String(r.id))?`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
-        ${same(p.author_id,authUser.id)&&!same(r.author_id,authUser.id)?`<button class="reply-action creator-heart-toggle ${heartsByComment.has(String(r.id))?'active':''}" data-creator-heart="${r.id}" aria-label="${t('Creator heart','قلب الناشر')}">♥</button>`:''}
+        ${same(p.author_id,authUser.id)&&!same(r.author_id,authUser.id)
+          ?`<button class="reply-action creator-heart-toggle ${heartsByComment.has(String(r.id))?'active':''}" data-creator-heart="${r.id}" aria-label="${t('Creator heart','قلب الناشر')}">♥</button>`
+          :heartsByComment.has(String(r.id))?`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
         <button class="reply-action" data-reply-to="${r.id}">${t('Reply','رد')}</button>
         ${own?`<button class="reply-action" data-edit-reply="${r.id}">${t('Edit','تعديل')}</button>`:''}
         ${deletable?`<button class="reply-action danger-text" data-delete-reply="${r.id}">${t('Delete','حذف')}</button>`:`<button class="reply-action" data-report-target="comment" data-report-id="${r.id}">${t('Report','إبلاغ')}</button>`}
