@@ -292,6 +292,54 @@ function dmReplyComposer(conversationId){
 }
 window.startDmReply=setDmReplyTarget;
 
+function installDmSwipeReply(){
+  if(window.__neisDmSwipeReplyV85)return;
+  window.__neisDmSwipeReplyV85=true;
+  let active=null,startX=0,startY=0,triggered=false,pointerId=null;
+  const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+  const reset=()=>{
+    if(active)active.classList.remove('swipe-reply-active','swipe-reply-ready');
+    active=null;triggered=false;pointerId=null;
+  };
+  document.addEventListener('pointerdown',event=>{
+    if(!mobile()||event.pointerType==='mouse')return;
+    const row=event.target?.closest?.('#chatFlow > .chat-message');
+    if(!row)return;
+    active=row;startX=event.clientX;startY=event.clientY;triggered=false;pointerId=event.pointerId;
+    row.classList.add('swipe-reply-active');
+  },{passive:true});
+  document.addEventListener('pointermove',event=>{
+    if(!active||pointerId!==event.pointerId||triggered)return;
+    const dx=event.clientX-startX,dy=event.clientY-startY;
+    if(Math.abs(dy)>36&&Math.abs(dy)>Math.abs(dx)){reset();return}
+    const clamped=Math.max(0,Math.min(72,dx));
+    active.style.setProperty('--swipe-reply-x',clamped+'px');
+    active.classList.toggle('swipe-reply-ready',dx>=52&&Math.abs(dy)<34);
+    if(dx>=64&&Math.abs(dy)<34){
+      triggered=true;
+      const id=active.dataset.messageId;
+      active.classList.add('swipe-reply-ready');
+      if(navigator.vibrate)navigator.vibrate(12);
+      setTimeout(()=>{
+        if(id)window.startDmReply?.(id);
+        if(active)active.style.removeProperty('--swipe-reply-x');
+        reset();
+      },70);
+    }
+  },{passive:true});
+  const finish=event=>{
+    if(!active)return;
+    if(!triggered){
+      active.style.removeProperty('--swipe-reply-x');
+      reset();
+    }
+  };
+  document.addEventListener('pointerup',finish,{passive:true});
+  document.addEventListener('pointercancel',finish,{passive:true});
+}
+installDmSwipeReply();
+
+
 const DM_DRAFTS_KEY='neis-dm-drafts-v1';
 function loadDmDrafts(){
   try{return JSON.parse(sessionStorage.getItem(DM_DRAFTS_KEY)||'{}')||{}}catch(_){return {}}
