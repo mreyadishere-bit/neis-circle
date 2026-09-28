@@ -1,0 +1,70 @@
+/* NEIS Circle v54 — native shell fixes only.
+   Keep the normal responsive web design. Do not redesign cards or page surfaces here. */
+
+html.neis-native-app{
+  --native-safe-top:0px;
+  --native-safe-bottom:0px;
+  background:var(--paper);
+}
+html.neis-native-app,
+html.neis-native-app body,
+html.neis-native-app .app{
+  min-height:100dvh;
+  background:var(--paper);
+}
+@media(max-width:760px){
+  html.neis-native-app .top{
+    height:calc(68px + var(--native-safe-top));
+    padding-top:var(--native-safe-top);
+    box-sizing:border-box;
+  }
+  html.neis-native-app .stage{
+    min-height:calc(100dvh - 68px - var(--native-safe-top));
+    padding-bottom:calc(90px + var(--native-safe-bottom));
+  }
+  html.neis-native-app .bottom-nav{
+    bottom:calc(10px + var(--native-safe-bottom));
+  }
+  html.neis-native-app .toast{
+    bottom:calc(84px + var(--native-safe-bottom));
+  }
+
+  /* Thread depth is visual only; replies are siblings in the DOM, so width never collapses. */
+  html.neis-native-app .reply-card.nested{
+    width:calc(100% - 18px);
+    margin-inline-start:18px;
+    border-inline-start:2px solid color-mix(in srgb,var(--accent) 52%,var(--line));
+  }
+  html.neis-native-app .reply-card[data-reply-depth="2"]{
+    width:calc(100% - 18px);
+    margin-inline-start:18px;
+  }
+  html.neis-native-app .reply-body{
+    unicode-bidi:plaintext;
+    overflow-wrap:anywhere;
+  }
+
+  /* Message destructive action is contextual on the native app. */
+  html.neis-native-app .chat-message .content-menu{
+    display:none;
+  }
+  html.neis-native-app .chat-message.show-actions .content-menu{
+    display:grid;
+  }
+
+  /* Admin moderation stays compact when expanded. */
+  html.neis-native-app .admin-content-disclosure summary{
+    min-height:64px;
+  }
+  html.neis-native-app .admin-content-row{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+}
+
+@media(max-width:430px){
+  html.neis-native-app .reply-card.nested,
+  html.neis-native-app .reply-card[data-reply-depth="2"]{
+    width:calc(100% - 14px);
+    margin-inline-start:14px;
+  }
+}
