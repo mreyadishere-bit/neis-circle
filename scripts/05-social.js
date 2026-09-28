@@ -444,7 +444,49 @@ comments=async function(postId){
   if(creatorHeartsError)console.warn('Discussion creator hearts load failed',creatorHeartsError);
   const likesByComment=new Map();(commentLikes||[]).forEach(x=>{const key=String(x.comment_id),row=likesByComment.get(key)||{count:0,mine:false};row.count++;if(same(x.user_id,authUser.id))row.mine=true;likesByComment.set(key,row)});
   const heartsByComment=new Map((creatorHearts||[]).map(x=>[String(x.comment_id),x]));
-  const renderNode=(r,depth=0)=>{const children=replies.filter(x=>same(x.parent_id,r.id)),own=same(r.author_id,authUser.id),deletable=own||state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id));return `<article class="reply-card ${depth?'nested':''}" id="reply-${r.id}"><div class="reply-head">${profileAvatar(r.profile||profileData(r.author_id))}<div><button class="author-link" data-open-profile="${r.author_id}"><b>${esc(r.profile?.full_name||'Student')}</b></button><small>@${esc(r.profile?.username||'student')} · ${when(r.created_at)}${r.updated_at&&r.updated_at!==r.created_at?` · ${t('edited','معدل')}`:''}</small></div></div><p class="reply-body">${r.deleted_at?`<i>${t('This reply was deleted.','تم حذف هذا الرد.')}</i>`:esc(r.body)}</p>${!r.deleted_at?`<div class="reply-actions"><button class="${likesByComment.get(String(r.id))?.mine?'active':''}" data-comment-like="${r.id}" aria-pressed="${likesByComment.get(String(r.id))?.mine?'true':'false'}"><span class="like-heart">♡</span><span>${t('Like','إعجاب')}</span><b>${likesByComment.get(String(r.id))?.count||0}</b></button>${heartsByComment.has(String(r.id))?`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}${same(p.author_id,authUser.id)&&!same(r.author_id,authUser.id)?`<button class="creator-heart-toggle ${heartsByComment.has(String(r.id))?'active':''}" data-creator-heart="${r.id}" aria-label="${t('Creator heart','قلب الناشر')}">♥</button>`:''}<button data-reply-to="${r.id}">${t('Reply','رد')}</button>${own?`<button data-edit-reply="${r.id}">${t('Edit','تعديل')}</button>`:''}${deletable?`<button data-delete-reply="${r.id}">${t('Delete','حذف')}</button>`:`<button data-report-target="comment" data-report-id="${r.id}">${t('Report','إبلاغ')}</button>`}</div>`:''}${children.map(c=>renderNode(c,depth+1)).join('')}</article>`};
+  const renderNode=(r,isReply=false)=>{
+    const own=same(r.author_id,authUser.id),deletable=own||state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id)),like=likesByComment.get(String(r.id))||{count:0,mine:false},profile=r.profile||profileData(r.author_id);
+    return `<article class="reply-card ${isReply?'is-reply':''}" id="reply-${r.id}" data-comment-id="${r.id}">
+      <div class="reply-head">${profileAvatar(profile)}
+        <div class="reply-identity">
+          <button class="author-link" data-open-profile="${r.author_id}"><b>${esc(profile?.full_name||'Student')}</b></button>
+          <small>@${esc(profile?.username||'student')} · ${when(r.created_at)}${r.updated_at&&r.updated_at!==r.created_at?` · ${t('edited','معدل')}`:''}</small>
+        </div>
+      </div>
+      <p class="reply-body" dir="auto">${r.deleted_at?`<i>${t('This reply was deleted.','تم حذف هذا الرد.')}</i>`:esc(r.body)}</p>
+      ${!r.deleted_at?`<div class="reply-actions">
+        <button class="reply-action ${like.mine?'active':''}" data-comment-like="${r.id}" aria-pressed="${like.mine?'true':'false'}"><span class="like-heart">♡</span><span>${t('Like','إعجاب')}</span><b>${like.count||0}</b></button>
+        ${heartsByComment.has(String(r.id))?`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
+        ${same(p.author_id,authUser.id)&&!same(r.author_id,authUser.id)?`<button class="reply-action creator-heart-toggle ${heartsByComment.has(String(r.id))?'active':''}" data-creator-heart="${r.id}" aria-label="${t('Creator heart','قلب الناشر')}">♥</button>`:''}
+        <button class="reply-action" data-reply-to="${r.id}">${t('Reply','رد')}</button>
+        ${own?`<button class="reply-action" data-edit-reply="${r.id}">${t('Edit','تعديل')}</button>`:''}
+        ${deletable?`<button class="reply-action danger-text" data-delete-reply="${r.id}">${t('Delete','حذف')}</button>`:`<button class="reply-action" data-report-target="comment" data-report-id="${r.id}">${t('Report','إبلاغ')}</button>`}
+      </div>`:''}
+    </article>`;
+  };
+
+  const childrenByParent=new Map();
+  replies.forEach(row=>{
+    const key=row.parent_id?String(row.parent_id):'__root__';
+    const list=childrenByParent.get(key)||[];
+    list.push(row);
+    childrenByParent.set(key,list);
+  });
+  const roots=childrenByParent.get('__root__')||[];
+  const descendantsOf=root=>{
+    const out=[];
+    const walk=rows=>rows.forEach(row=>{out.push(row);walk(childrenByParent.get(String(row.id))||[])});
+    walk(childrenByParent.get(String(root.id))||[]);
+    return out;
+  };
+  const renderThread=root=>{
+    const children=descendantsOf(root);
+    return `<section class="reply-thread" data-thread-root="${root.id}">
+      ${renderNode(root,false)}
+      ${children.length?`<button type="button" class="reply-thread-toggle" data-toggle-replies="${root.id}" aria-expanded="false"><span class="reply-thread-line" aria-hidden="true"></span><span class="reply-thread-label">${t('View replies','عرض الردود')} (${children.length})</span></button>
+      <div class="reply-children hidden" data-reply-children="${root.id}">${children.map(child=>renderNode(child,true)).join('')}</div>`:''}
+    </section>`;
+  };
 
   const bindDiscussionManagement=()=>{
     const scope=$('#replyContent');if(!scope)return;
@@ -493,12 +535,31 @@ comments=async function(postId){
     };
   };
 
-  const roots=replies.filter(r=>!r.parent_id);
-  $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(r=>renderNode(r)).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><input id="replyInput" required maxlength="4000" placeholder="${t('Add a useful reply…','أضف ردًا مفيدًا…')}" dir="auto"><button aria-label="${t('Send reply','إرسال الرد')}">→</button></form>`;
+  $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(renderThread).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><input id="replyInput" required maxlength="4000" placeholder="${t('Add a thoughtful comment…','أضف تعليقًا مفيدًا…')}" dir="auto"><button aria-label="${t('Send reply','إرسال الرد')}">→</button></form>`;
   bindDiscussionManagement();
   bindV6($('#modalRoot'));
 
-  $('#replyContent').querySelectorAll('[data-reply-to]').forEach(button=>button.onclick=()=>{const reply=replies.find(row=>same(row.id,button.dataset.replyTo)),input=$('#replyInput'),parent=$('#replyParent');if(!reply||!input||!parent)return;parent.value=reply.id;input.placeholder=`${t('Reply to','رد على')} ${reply.profile?.full_name||t('Student','طالب')}…`;input.focus();input.scrollIntoView({block:'nearest',behavior:'smooth'})});
+  $('#replyContent').querySelectorAll('[data-toggle-replies]').forEach(button=>button.onclick=()=>{
+    const children=$('[data-reply-children="'+button.dataset.toggleReplies+'"]');if(!children)return;
+    const opening=children.classList.contains('hidden');
+    children.classList.toggle('hidden',!opening);
+    button.setAttribute('aria-expanded',opening?'true':'false');
+    const count=children.querySelectorAll('.reply-card').length;
+    const label=button.querySelector('.reply-thread-label');
+    if(label)label.textContent=opening?`${t('Hide replies','إخفاء الردود')} (${count})`:`${t('View replies','عرض الردود')} (${count})`;
+  });
+
+  $('#replyContent').querySelectorAll('[data-reply-to]').forEach(button=>button.onclick=()=>{
+    const reply=replies.find(row=>same(row.id,button.dataset.replyTo)),input=$('#replyInput'),parent=$('#replyParent');if(!reply||!input||!parent)return;
+    parent.value=reply.id;
+    const username=reply.profile?.username||'';
+    const mention=username?`@${username} `:'';
+    if(mention&&!input.value.includes(mention))input.value=(input.value.trim()?input.value.replace(/\s*$/,' '):'')+mention;
+    input.placeholder=`${t('Reply to','رد على')} ${reply.profile?.full_name||t('Student','طالب')}…`;
+    input.focus();
+    try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
+    input.scrollIntoView({block:'nearest',behavior:'smooth'});
+  });
   $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.creatorHeart,hearted=heartsByComment.has(String(commentId));const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}await comments(postId)});
   $('#replyContent').querySelectorAll('[data-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.commentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('comment_likes').delete().match({comment_id:commentId,user_id:authUser.id}):await sb.from('comment_likes').insert({comment_id:commentId,user_id:authUser.id});if(error){toast(safeError(error,mine?'unlike this comment':'like this comment'));button.disabled=false;return}await comments(postId)});
   $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm button'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{error}=await sb.from('comments').insert(payload);if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}await loadLiveData();comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
