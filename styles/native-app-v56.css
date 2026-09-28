@@ -1269,3 +1269,13 @@ html.neis-native-app .app{
     inset-inline-end:-8px!important;
   }
 }
+
+
+/* v77 — softer native delete affordance (fallback only) */
+@media(max-width:1180px){
+  html.neis-native-app .messages.mobile-thread-open .chat-message .content-menu{
+    opacity:.42!important;
+    background:color-mix(in srgb,var(--card) 62%,transparent)!important;
+    border-color:color-mix(in srgb,#a53a2d 24%,var(--line))!important;
+  }
+}
