@@ -354,79 +354,53 @@ async function changeAuthorLikeEmailSetting(enabled){
   render();
   toast(authorLikeEmailSetting?t('Author like emails enabled.','تم تشغيل رسائل الإعجاب للكتّاب.'):t('Author like emails disabled.','تم إيقاف رسائل الإعجاب للكتّاب.'));
 }
-function authorLikeEmailSettingsPanel(){
-  if(!canControlAuthorLikeEmails())return '';
-  const loading=authorLikeEmailSetting===null;
-  const enabled=authorLikeEmailSetting===true;
-  return `<section class="module-card" data-author-like-email-setting style="margin-top:18px"><div class="page-title"><div><h2>${t('Author like emails','إشعارات إعجاب الكتّاب بالبريد')}</h2><p>${t('Email article writers and public-post authors when someone likes their content. Circle posts are excluded.','إرسال بريد لكاتب المقال أو المنشور العام عندما يعجب أحد بالمحتوى. منشورات المجتمعات غير مشمولة.')}</p></div><button type="button" class="${enabled?'primary':'secondary'}" data-author-like-email-toggle="${enabled?'false':'true'}" ${loading?'disabled':''}>${loading?t('Loading…','جارٍ التحميل…'):enabled?t('On — turn off','مفعّل — إيقاف'):t('Off — turn on','متوقف — تشغيل')}</button></div><p style="margin:0;color:var(--muted);font-size:11px">${t('This control is available only to the primary admin account. Self-likes do not send email, and unlike/re-like does not create duplicate email for the same person and content.','هذا التحكم متاح فقط لحساب الأدمن الأساسي. الإعجاب الذاتي لا يرسل بريدًا، وإلغاء الإعجاب ثم إعادته لا ينشئ بريدًا مكررًا لنفس الشخص والمحتوى.')}</p></section>`;
+function adminToggleRow(label,enabled,attrs='',loading=false){
+  const on=!!enabled;
+  return `<div class="admin-toggle-row" ${attrs.includes('data-author-like-email-toggle')?'data-author-like-email-setting':''}${attrs.includes('data-admin-dm-email-toggle')?' data-admin-dm-email-setting':''}${attrs.includes('data-admin-post-email-toggle')?' data-admin-post-email-setting':''}>
+    <span>${label}</span>
+    <button type="button" class="admin-switch ${on?'is-on':''}" role="switch" aria-checked="${on?'true':'false'}" ${attrs} ${loading?'disabled':''}>
+      <i aria-hidden="true"></i><b>${loading?'…':on?t('On','مفعّل'):t('Off','متوقف')}</b>
+    </button>
+  </div>`;
 }
-async function loadAdminDmEmailSetting(){
-  if(!canControlAuthorLikeEmails()||adminDmEmailSettingLoading)return;
-  adminDmEmailSettingLoading=true;
-  const {data,error}=await sb.rpc('get_admin_dm_email_setting');
-  adminDmEmailSettingLoading=false;
-  if(error){console.error('[NEIS admin DM email setting]',error);toast(t('Could not load the DM email setting.','تعذر تحميل إعداد بريد الرسائل الخاصة.'));return}
-  adminDmEmailSetting=!!data;
-  if(state.view==='admin')render();
-}
-async function changeAdminDmEmailSetting(enabled){
-  if(!canControlAuthorLikeEmails())return;
-  const button=document.querySelector('[data-admin-dm-email-toggle]');
-  if(button)button.disabled=true;
-  const {data,error}=await sb.rpc('set_admin_dm_email_setting',{desired_enabled:!!enabled});
-  if(error){toast(safeError(error,'change the admin DM email setting'));if(button?.isConnected)button.disabled=false;return}
-  adminDmEmailSetting=!!data;
-  render();
-  toast(adminDmEmailSetting?t('Admin DM emails enabled.','تم تشغيل بريد الرسائل الخاصة من الأدمن.'):t('Admin DM emails disabled.','تم إيقاف بريد الرسائل الخاصة من الأدمن.'));
-}
-function adminDmEmailSettingsPanel(){
-  if(!canControlAuthorLikeEmails())return '';
-  const loading=adminDmEmailSetting===null;
-  const enabled=adminDmEmailSetting===true;
-  return `<section class="module-card" data-admin-dm-email-setting style="margin-top:18px"><div class="page-title"><div><h2>${t('Admin DM email alerts','تنبيهات رسائل الأدمن بالبريد')}</h2><p>${t('When the primary admin sends a direct message, email the recipient for the first unread message only. Extra messages are grouped until they open the conversation.','عندما يرسل حساب الأدمن الأساسي رسالة خاصة، يُرسل بريد للمستلم عن أول رسالة غير مقروءة فقط، وتُجمع الرسائل التالية حتى يفتح المحادثة.')}</p></div><button type="button" class="${enabled?'primary':'secondary'}" data-admin-dm-email-toggle="${enabled?'false':'true'}" ${loading?'disabled':''}>${loading?t('Loading…','جارٍ التحميل…'):enabled?t('On — turn off','مفعّل — إيقاف'):t('Off — turn on','متوقف — تشغيل')}</button></div><p style="margin:0;color:var(--muted);font-size:11px">${t('Credit saver: 3 or 10 admin messages before the recipient reads the chat still produce only one email. After they read it, the next new admin message can send one new email.','توفير للرصيد: سواء أرسل الأدمن 3 أو 10 رسائل قبل قراءة المحادثة، يتم إرسال بريد واحد فقط. بعد القراءة، يمكن لأول رسالة جديدة بعدها إرسال بريد جديد واحد.')}</p></section>`;
-}
-async function loadAdminPostEmailSetting(){
-  if(!canControlAuthorLikeEmails()||adminPostEmailSettingLoading)return;
-  adminPostEmailSettingLoading=true;
-  const {data,error}=await sb.rpc('get_admin_post_email_setting');
-  adminPostEmailSettingLoading=false;
-  if(error){console.error('[NEIS admin post email setting]',error);toast(t('Could not load the admin post email setting.','تعذر تحميل إعداد بريد منشورات الأدمن.'));return}
-  adminPostEmailSetting=!!data;
-  if(state.view==='admin')render();
-}
-async function changeAdminPostEmailSetting(enabled){
-  if(!canControlAuthorLikeEmails())return;
-  const button=document.querySelector('[data-admin-post-email-toggle]');
-  if(button)button.disabled=true;
-  const {data,error}=await sb.rpc('set_admin_post_email_setting',{desired_enabled:!!enabled});
-  if(error){toast(safeError(error,'change the admin post email setting'));if(button?.isConnected)button.disabled=false;return}
-  adminPostEmailSetting=!!data;
-  render();
-  toast(adminPostEmailSetting?t('Admin post emails enabled.','تم تشغيل بريد منشورات الأدمن.'):t('Admin post emails disabled.','تم إيقاف بريد منشورات الأدمن.'));
-}
-function adminPostEmailSettingsPanel(){
-  if(!canControlAuthorLikeEmails())return '';
-  const loading=adminPostEmailSetting===null;
-  const enabled=adminPostEmailSetting===true;
-  return `<section class="module-card" data-admin-post-email-setting style="margin-top:18px"><div class="page-title"><div><h2>${t('Admin post email notifications','إشعارات منشورات الأدمن بالبريد')}</h2><p>${t('Send an email to eligible members when an admin publishes a homepage post. Circle posts are excluded.','إرسال بريد للأعضاء المؤهلين عندما ينشر الأدمن منشورًا في الصفحة الرئيسية. منشورات المجتمعات غير مشمولة.')}</p></div><button type="button" class="${enabled?'primary':'secondary'}" data-admin-post-email-toggle="${enabled?'false':'true'}" ${loading?'disabled':''}>${loading?t('Loading…','جارٍ التحميل…'):enabled?t('On — turn off','مفعّل — إيقاف'):t('Off — turn on','متوقف — تشغيل')}</button></div><p style="margin:0;color:var(--muted);font-size:11px">${t('Only the primary admin account can change this setting. Turning it off stops new admin-post email jobs without affecting in-app posts or notifications.','يمكن لحساب الأدمن الأساسي فقط تغيير هذا الإعداد. إيقافه يمنع رسائل البريد الجديدة لمنشورات الأدمن دون التأثير على المنشورات أو إشعارات الموقع.')}</p></section>`;
-}
-
 const ADMIN_CONTENT_MODERATION_HIDDEN_KEY='neis-admin-content-moderation-hidden-v1';
+const ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY='neis-admin-members-branches-hidden-v1';
 const adminContentModerationHidden=()=>localStorage.getItem(ADMIN_CONTENT_MODERATION_HIDDEN_KEY)==='1';
-function adminContentModerationVisibilityPanel(){
+const adminMembersBranchesHidden=()=>localStorage.getItem(ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY)==='1';
+
+function adminControlsPanel(){
   if(!state.isAdmin)return '';
-  const hidden=adminContentModerationHidden();
-  return `<section class="module-card" data-admin-content-moderation-visibility style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation visibility','إظهار إدارة المحتوى')}</h2><p>${t('Hide or show the Content moderation section in your Admin tab. This changes only your admin interface, not moderation rules or stored content.','إخفاء أو إظهار قسم إدارة المحتوى داخل تبويب الأدمن. هذا يغيّر واجهة الأدمن فقط ولا يؤثر على قواعد المراجعة أو المحتوى المخزن.')}</p></div><button type="button" class="${hidden?'primary':'secondary'}" data-toggle-content-moderation-visibility="${hidden?'show':'hide'}">${hidden?t('Show Content moderation','إظهار إدارة المحتوى'):t('Hide Content moderation','إخفاء إدارة المحتوى')}</button></div></section>`;
+  const rows=[];
+  if(canControlAuthorLikeEmails()){
+    const authorLoading=authorLikeEmailSetting===null,authorEnabled=authorLikeEmailSetting===true;
+    const dmLoading=adminDmEmailSetting===null,dmEnabled=adminDmEmailSetting===true;
+    const postLoading=adminPostEmailSetting===null,postEnabled=adminPostEmailSetting===true;
+    rows.push(adminToggleRow(t('Author like emails','إشعارات إعجاب الكتّاب'),authorEnabled,`data-author-like-email-toggle="${authorEnabled?'false':'true'}"`,authorLoading));
+    rows.push(adminToggleRow(t('Admin DM email alerts','تنبيهات رسائل الأدمن بالبريد'),dmEnabled,`data-admin-dm-email-toggle="${dmEnabled?'false':'true'}"`,dmLoading));
+    rows.push(adminToggleRow(t('Admin post email notifications','إشعارات منشورات الأدمن بالبريد'),postEnabled,`data-admin-post-email-toggle="${postEnabled?'false':'true'}"`,postLoading));
+  }
+  const moderationVisible=!adminContentModerationHidden();
+  const membersVisible=!adminMembersBranchesHidden();
+  rows.push(adminToggleRow(t('Content moderation','إدارة المحتوى'),moderationVisible,`data-toggle-content-moderation-visibility="${moderationVisible?'false':'true'}"`));
+  rows.push(adminToggleRow(t('Members & branches','الأعضاء والفروع'),membersVisible,`data-toggle-members-branches-visibility="${membersVisible?'false':'true'}"`));
+  return `<section class="module-card admin-controls-card" style="margin-top:18px"><h2>${t('Admin controls','إعدادات الأدمن')}</h2><div class="admin-toggle-list">${rows.join('')}</div></section>`;
 }
-function setAdminContentModerationVisibility(action){
+function setAdminContentModerationVisibility(visible){
   if(!state.isAdmin)return;
-  const hidden=action==='hide';
-  localStorage.setItem(ADMIN_CONTENT_MODERATION_HIDDEN_KEY,hidden?'1':'0');
+  const show=visible===true||visible==='true';
+  localStorage.setItem(ADMIN_CONTENT_MODERATION_HIDDEN_KEY,show?'0':'1');
   render();
-  toast(hidden?t('Content moderation hidden.','تم إخفاء قسم إدارة المحتوى.'):t('Content moderation shown.','تم إظهار قسم إدارة المحتوى.'));
+  toast(show?t('Content moderation shown.','تم إظهار قسم إدارة المحتوى.'):t('Content moderation hidden.','تم إخفاء قسم إدارة المحتوى.'));
+}
+function setAdminMembersBranchesVisibility(visible){
+  if(!state.isAdmin)return;
+  const show=visible===true||visible==='true';
+  localStorage.setItem(ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY,show?'0':'1');
+  render();
+  toast(show?t('Members & branches shown.','تم إظهار قسم الأعضاء والفروع.'):t('Members & branches hidden.','تم إخفاء قسم الأعضاء والفروع.'));
 }
 
-admin=function(){const base=originalAdmin();if(!state.isAdmin)return base;const content=[...state.posts.map(x=>({type:'post',id:x.id,title:x.title,meta:x.user,action:`data-delete-post="${x.id}"`})),...state.allComments.filter(x=>!x.deleted_at).map(x=>({type:'reply',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-reply="${x.id}"`})),...state.circleRows.map(x=>({type:'circle',id:x.id,title:x.name,meta:profileData(x.owner_id).full_name,action:`data-delete-circle="${x.id}"`})),...state.circleMeetings.map(x=>({type:'meeting',id:x.id,title:x.title,meta:x.creator?.full_name||'Student',action:`data-delete-meeting="${x.id}"`})),...state.circleMessages.filter(x=>!x.deleted_at).map(x=>({type:'circle message',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-circle-message="${x.id}"`})),...state.gallery.map(x=>({type:'gallery',id:x.id,title:x.caption_en||x.caption_ar||'Gallery item',meta:authorName(x.author),action:`data-delete-gallery="${x.id}"`})),...state.articles.map(x=>({type:'article',id:x.id,title:x.title_en||x.title_ar||'Article',meta:authorName(x.author),action:`data-delete-article="${x.id}"`}))];return `${base}${authorLikeEmailSettingsPanel()}${adminDmEmailSettingsPanel()}${adminPostEmailSettingsPanel()}${adminContentModerationVisibilityPanel()}<section class="module-card" style="margin-top:18px"><div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(s=>`<option value="${s}" ${normalizedReportStatus(r.status)===s?'selected':''}>${s}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}</section>${adminContentModerationHidden()?'':`<section class="module-card" data-admin-content-moderation style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('Real database content only. Deletions require confirmation.','محتوى قاعدة البيانات الحقيقي فقط، والحذف يتطلب تأكيدًا.')}</p></div><button type="button" class="secondary" data-toggle-content-moderation-visibility="hide">${t('Hide','إخفاء')}</button></div><div class="admin-content-list">${content.length?content.slice(0,100).map(x=>`<div class="admin-content-row"><div><b>${esc(x.title)}</b><p>${esc(x.type)} · ${esc(x.meta||'')}</p></div><button class="secondary danger" ${x.action}>${t('Delete','حذف')}</button></div>`).join(''):emptyState(t('No content','لا يوجد محتوى'),t('The production database is clean.','قاعدة بيانات الإنتاج نظيفة.'))}</div></section>`}`}
+admin=function(){const base=originalAdmin();if(!state.isAdmin)return base;const content=[...state.posts.map(x=>({type:'post',id:x.id,title:x.title,meta:x.user,action:`data-delete-post="${x.id}"`})),...state.allComments.filter(x=>!x.deleted_at).map(x=>({type:'reply',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-reply="${x.id}"`})),...state.circleRows.map(x=>({type:'circle',id:x.id,title:x.name,meta:profileData(x.owner_id).full_name,action:`data-delete-circle="${x.id}"`})),...state.circleMeetings.map(x=>({type:'meeting',id:x.id,title:x.title,meta:x.creator?.full_name||'Student',action:`data-delete-meeting="${x.id}"`})),...state.circleMessages.filter(x=>!x.deleted_at).map(x=>({type:'circle message',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-circle-message="${x.id}"`})),...state.gallery.map(x=>({type:'gallery',id:x.id,title:x.caption_en||x.caption_ar||'Gallery item',meta:authorName(x.author),action:`data-delete-gallery="${x.id}"`})),...state.articles.map(x=>({type:'article',id:x.id,title:x.title_en||x.title_ar||'Article',meta:authorName(x.author),action:`data-delete-article="${x.id}"`}))];return `${base}${adminControlsPanel()}<section class="module-card" style="margin-top:18px"><div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(s=>`<option value="${s}" ${normalizedReportStatus(r.status)===s?'selected':''}>${s}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}</section>${adminContentModerationHidden()?'':`<section class="module-card" data-admin-content-moderation style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('Real database content only. Deletions require confirmation.','محتوى قاعدة البيانات الحقيقي فقط، والحذف يتطلب تأكيدًا.')}</p></div></div><div class="admin-content-list">${content.length?content.slice(0,100).map(x=>`<div class="admin-content-row"><div><b>${esc(x.title)}</b><p>${esc(x.type)} · ${esc(x.meta||'')}</p></div><button class="secondary danger" ${x.action}>${t('Delete','حذف')}</button></div>`).join(''):emptyState(t('No content','لا يوجد محتوى'),t('The production database is clean.','قاعدة بيانات الإنتاج نظيفة.'))}</div></section>`}`}
 
 async function deleteResolvedReport(id){
   const report=state.reports.find(item=>same(item.id,id));
@@ -626,6 +600,7 @@ function bindV6(root=document){
   if(adminPostPanel&&adminPostEmailSetting===null&&!adminPostEmailSettingLoading)loadAdminPostEmailSetting();
   root.querySelectorAll('[data-admin-post-email-toggle]').forEach(el=>el.onclick=()=>changeAdminPostEmailSetting(el.dataset.adminPostEmailToggle==='true'));
   root.querySelectorAll('[data-toggle-content-moderation-visibility]').forEach(el=>el.onclick=()=>setAdminContentModerationVisibility(el.dataset.toggleContentModerationVisibility));
+  root.querySelectorAll('[data-toggle-members-branches-visibility]').forEach(el=>el.onclick=()=>setAdminMembersBranchesVisibility(el.dataset.toggleMembersBranchesVisibility));
   root.querySelectorAll('[data-full-image]').forEach(el=>el.onclick=e=>{e.preventDefault();openFullImage(el.dataset.fullImage)});
   const discoverGrade=root.querySelector('#discoverGradeFilter');if(discoverGrade)discoverGrade.onchange=()=>{state.discoverGrade=discoverGrade.value;render()};
   const discoverBranch=root.querySelector('#discoverBranchFilter');if(discoverBranch)discoverBranch.onchange=()=>{state.discoverBranch=discoverBranch.value;render()};
