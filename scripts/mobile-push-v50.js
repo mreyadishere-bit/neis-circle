@@ -241,7 +241,7 @@
       const messageText=bubble.querySelector('.message-text')?.textContent||'';
       const messageId=row.dataset?.messageId||'';
 
-      const canDelete=row.dataset?.messageDeletable==='1';
+      const targetMessage=state.liveMessages?.find?.(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(same(targetMessage.sender_id,authUser.id)||state.isAdmin);
       openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
       document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
 
