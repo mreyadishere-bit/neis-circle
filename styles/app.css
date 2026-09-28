@@ -1522,3 +1522,15 @@ body.rtl .reply-thread-toggle{
   opacity:.78;
 }
 .chat-message .content-menu{display:none!important}
+
+
+/* v83 — destructive action in compact message sheet */
+#modalRoot .message-actions-modal .account-row.danger{
+  color:#a53a2d!important;
+  background:transparent!important;
+  border-color:var(--line)!important;
+}
+#modalRoot .message-actions-modal .account-row.danger span,
+#modalRoot .message-actions-modal .account-row.danger b{
+  color:#a53a2d!important;
+}
