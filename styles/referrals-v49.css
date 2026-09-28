@@ -1,16 +1,26 @@
-/* NEIS Circle v49 — referral invite modal */
+/* NEIS Circle v49.1 — referral invite modal + Community Builder badge */
 .referral-head{align-items:flex-start}
 .referral-panel{display:grid;gap:16px}
+.referral-poster{display:block;width:100%;max-height:270px;object-fit:cover;object-position:center;border:1px solid var(--line);border-radius:18px;background:var(--soft)}
 .referral-stat{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--soft)}
+.referral-stat>div{display:grid;gap:3px}
 .referral-stat span{color:var(--muted);font-size:11px;font-weight:700}
 .referral-stat b{font-size:22px;line-height:1;color:var(--accent)}
+.referral-stat small{max-width:260px;color:var(--muted);font-size:9px;line-height:1.5;text-align:end}
+.badge-community{display:inline-flex;align-items:center;gap:5px;width:max-content;min-height:26px;padding:0 9px;border:1px solid color-mix(in srgb,var(--accent) 22%,var(--line));border-radius:999px;background:color-mix(in srgb,var(--accent) 8%,var(--card));color:var(--accent)!important;font-size:9px!important;font-weight:850!important;line-height:1;white-space:nowrap}
+.referral-earned{margin-inline-start:auto}
 .referral-link-field input{font-size:11px}
 .referral-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
 .referral-actions>*{min-height:44px}
 .referral-whatsapp{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
 .referral-note{margin:0;color:var(--muted);font-size:10px;line-height:1.6}
 .rtl .referral-panel,.rtl .referral-head{text-align:right}
+.rtl .referral-stat small{text-align:start}
 @media(max-width:520px){
+  .referral-poster{max-height:220px}
+  .referral-stat{align-items:flex-start;flex-direction:column}
+  .referral-earned{margin-inline-start:0}
+  .referral-stat small{text-align:start}
   .referral-actions{grid-template-columns:1fr}
   .referral-actions>*{width:100%}
 }
