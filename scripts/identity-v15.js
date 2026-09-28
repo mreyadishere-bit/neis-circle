@@ -26,7 +26,23 @@
     document.body.classList.remove('app-ready');
     var failed=oauthError();
     authRoot.innerHTML=`<section class="auth-shell">${story()}<div class="auth-panel">${authTools()}<h2>${tr('Welcome to NEIS Circle','مرحبًا بك في NEIS Circle')}</h2><p>${tr('Sign in with your Google account to continue.','سجّل الدخول بحساب Google للمتابعة.')}</p>${failed?`<div class="form-error" role="alert">${esc(tr('Sign-in failed','فشل تسجيل الدخول'))}: ${esc(failed)}</div>`:''}<button class="google-btn" data-auth-google><span class="google-mark">G</span>${tr('Continue with Google','المتابعة باستخدام Google')}</button><p class="auth-note">${tr('After signing in, you will register your mobile number once before entering.','بعد تسجيل الدخول، ستسجّل رقم هاتفك مرة واحدة قبل الدخول.')}</p></div></section>`;
-    document.querySelector('[data-auth-google]').onclick=function(){if(!sb){toast(tr('Connection is not ready. Please refresh.','الاتصال غير جاهز. حدّث الصفحة.'));return}googleSignIn()};
+    document.querySelector('[data-auth-google]').onclick=async function(){
+      var button=this;
+      if(button.disabled)return;
+      button.disabled=true;
+      var original=button.innerHTML;
+      button.innerHTML='<span class="google-mark">G</span>'+tr('Connecting…','جارٍ الاتصال…');
+      if(!sb)await initSupabase();
+      if(!sb){
+        button.disabled=false;
+        button.innerHTML=original;
+        toast(tr('Could not connect yet. Check your internet and try again.','تعذر الاتصال الآن. تحقق من الإنترنت وحاول مرة أخرى.'));
+        return;
+      }
+      button.disabled=false;
+      button.innerHTML=original;
+      googleSignIn();
+    };
     bindTools();
   }
   function needsPhone(){
