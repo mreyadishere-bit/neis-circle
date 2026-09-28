@@ -255,10 +255,14 @@ public class MainActivity extends Activity {
             "(function(){try{return !!(window.NEISMobile&&window.NEISMobile.handleNativeBack&&window.NEISMobile.handleNativeBack())}catch(e){return false}})()",
             handled -> {
                 if ("true".equals(handled)) return;
-                if (webView.canGoBack()) webView.goBack();
-                else MainActivity.super.onBackPressed();
+                fallbackBackNavigation();
             }
         );
+    }
+
+    private void fallbackBackNavigation() {
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
     }
 
     @Override
