@@ -207,6 +207,9 @@
   }
 
   function installNativeMessageActions(){
+    // v87: DM long-press actions are handled by the shared web layer in 05-social.js
+    // for both mobile web and the APK, so do not install a second competing gesture listener.
+    return;
     if(!nativeAvailable()||document.documentElement.dataset.neisMessageActions==='1')return;
     document.documentElement.dataset.neisMessageActions='1';
 
