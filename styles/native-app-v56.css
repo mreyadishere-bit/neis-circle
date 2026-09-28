@@ -980,3 +980,70 @@ html.neis-native-app .app{
     box-sizing:border-box!important;
   }
 }
+
+
+/* v61 — Android DM visual repair */
+@media(max-width:1180px){
+  html.neis-native-app .messages.mobile-thread-open .chat-message>.avatar{
+    display:none!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message{
+    display:flex!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:0!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message.mine{
+    justify-content:flex-end!important;
+    flex-direction:row!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message:not(.mine){
+    justify-content:flex-start!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-flow{
+    padding:12px 10px 10px!important;
+    gap:4px!important;
+    background:color-mix(in srgb,var(--soft) 32%,var(--card))!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message .bubble{
+    width:auto!important;
+    max-width:78%!important;
+    min-width:54px!important;
+    padding:8px 10px 6px!important;
+    border-radius:14px!important;
+    box-sizing:border-box!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message.mine .bubble{
+    margin-inline:0!important;
+    border-end-end-radius:4px!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message:not(.mine) .bubble{
+    margin-inline:0!important;
+    border-end-start-radius:4px!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .message-text{
+    display:block!important;
+    font-size:13px!important;
+    line-height:1.45!important;
+    overflow-wrap:anywhere!important;
+    word-break:break-word!important;
+    unicode-bidi:plaintext!important;
+    text-align:start!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .bubble time{
+    display:block!important;
+    margin-top:3px!important;
+    font-size:7.5px!important;
+    line-height:1.2!important;
+    opacity:.68!important;
+    text-align:end!important;
+    white-space:nowrap!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message .content-menu{
+    display:none!important;
+  }
+  html.neis-native-app .messages.mobile-thread-open .chat-message .bubble:has(.content-menu){
+    padding-inline-end:10px!important;
+  }
+}
