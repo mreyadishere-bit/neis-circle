@@ -703,3 +703,18 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     padding-inline-end:10px!important;
   }
 }
+
+
+/* v76 — place tiny delete at the message's outer top corner */
+@media(max-width:760px){
+  .messages.mobile-thread-open .chat-message .content-menu{
+    top:-6px!important;
+    inset-inline-start:-8px!important;
+    inset-inline-end:auto!important;
+    transform:none!important;
+  }
+  .messages.mobile-thread-open .chat-message:not(.mine) .content-menu{
+    inset-inline-start:auto!important;
+    inset-inline-end:-8px!important;
+  }
+}
