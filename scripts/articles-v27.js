@@ -203,7 +203,7 @@
         <button class="${like.mine?'active':''}" data-article-comment-like="${esc(item.id)}" aria-pressed="${like.mine?'true':'false'}"><span class="like-heart">♡</span><span>${tr('Like','إعجاب')}</span><b>${like.count}</b></button>
         ${creatorCanHeart?`<button class="creator-heart-toggle ${hearted?'active':''}" data-article-creator-heart="${esc(item.id)}" aria-label="${tr('Creator heart','قلب الناشر')}">♥</button>`:hearted?`<span class="creator-heart" title="${tr('Hearted by creator','أعجب به الناشر')}">♥</span>`:''}
         <button data-article-reply="${esc(item.id)}">${tr('Reply','رد')}</button>
-        ${profile.username?`<button class="article-mention-action" data-article-mention="${esc(item.id)}">@ ${tr('Mention','منشن')}</button>`:''}
+        ${profile.username?`<button class="article-mention-action native-mention-action" data-native-mention data-article-mention="${esc(item.id)}">@ ${tr('Mention','منشن')}</button>`:''}
         ${own?`<button data-article-edit="${esc(item.id)}">${tr('Edit','تعديل')}</button>`:''}
         ${canDelete?`<button class="danger" data-article-delete="${esc(item.id)}">${tr('Delete','حذف')}</button>`:''}
       </div>
