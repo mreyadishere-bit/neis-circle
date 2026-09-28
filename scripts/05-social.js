@@ -11,7 +11,7 @@ const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
 const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value||Date.now()));
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
-Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{}});
+Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{}});
 let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificationRealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
@@ -103,9 +103,9 @@ loadLiveData=async function(){
     .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
@@ -115,6 +115,49 @@ loadLiveData=async function(){
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };
+
+let messageRefreshTimer=null,messageRefreshBusy=false,messageRefreshQueued=false;
+async function refreshMessagesV6(){
+  if(!sb||!authUser)return;
+  if(messageRefreshBusy){messageRefreshQueued=true;return}
+  clearTimeout(messageRefreshTimer);
+  messageRefreshTimer=setTimeout(async()=>{
+    messageRefreshBusy=true;
+    try{
+      do{
+        messageRefreshQueued=false;
+        const memberships=state.conversationMembers.filter(m=>same(m.user_id,authUser.id)&&!m.hidden_at);
+        const ids=memberships.map(m=>m.conversation_id);
+        if(!ids.length){state.liveMessages=[];return}
+        const [conversationRes,memberRes,messageRes]=await Promise.all([
+          sb.from('conversations').select('*').in('id',ids).order('updated_at',{ascending:false}),
+          sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').in('conversation_id',ids),
+          sb.from('messages').select('*').in('conversation_id',ids).order('created_at').limit(500)
+        ]);
+        if(!conversationRes.error)state.conversations=conversationRes.data||[];
+        if(!memberRes.error)state.conversationMembers=memberRes.data||state.conversationMembers;
+        if(!messageRes.error){
+          const mineRows=state.conversationMembers.filter(m=>same(m.user_id,authUser.id));
+          const clearedByConversation=new Map(mineRows.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));
+          state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared});
+        }
+        if(state.view==='messages'){
+          const flow=$('#chatFlow'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
+          render();
+          requestAnimationFrame(()=>{
+            const next=$('#liveChatInput');
+            if(next){next.value=getDmDraft(state.activeConversationId)}
+            const nextFlow=$('#chatFlow');
+            if(nextFlow&&wasNearBottom)nextFlow.scrollTop=nextFlow.scrollHeight;
+          });
+        }else{
+          updateBadges();
+        }
+      }while(messageRefreshQueued)
+    }finally{messageRefreshBusy=false}
+  },70);
+}
+
 let refreshBusy=false,refreshQueued=false;
 async function refreshV6(){
   if(refreshBusy){refreshQueued=true;return}
@@ -182,12 +225,33 @@ function connectionsView(){
 }
 function requestCard(p){return `<article class="module-card profile-card" data-open-profile="${p.id}" tabindex="0"><div class="identity-line">${profileAvatar(p,true)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')}</p></div></div><p>${esc(p.grade||'')} · ${esc(p.branch||'')}</p><div class="profile-actions"><button class="primary" data-follow-request="accept" data-user="${p.id}">${t('Accept','قبول')}</button><button class="secondary danger" data-follow-request="reject" data-user="${p.id}">${t('Reject','رفض')}</button></div></article>`}
 
+
+const DM_DRAFTS_KEY='neis-dm-drafts-v1';
+function loadDmDrafts(){
+  try{return JSON.parse(sessionStorage.getItem(DM_DRAFTS_KEY)||'{}')||{}}catch(_){return {}}
+}
+function saveDmDrafts(){
+  try{sessionStorage.setItem(DM_DRAFTS_KEY,JSON.stringify(state.dmDrafts||{}))}catch(_){}
+}
+function getDmDraft(id){
+  if(!state.dmDrafts||typeof state.dmDrafts!=='object')state.dmDrafts=loadDmDrafts();
+  return String(state.dmDrafts?.[String(id)]||'');
+}
+function setDmDraft(id,value){
+  if(!id)return;
+  if(!state.dmDrafts||typeof state.dmDrafts!=='object')state.dmDrafts={};
+  const key=String(id),text=String(value||'');
+  if(text)state.dmDrafts[key]=text;else delete state.dmDrafts[key];
+  saveDmDrafts();
+}
+if(!state.dmDrafts||!Object.keys(state.dmDrafts).length)state.dmDrafts=loadDmDrafts();
+
 function conversationName(id){const other=state.conversationMembers.find(m=>same(m.conversation_id,id)&&!same(m.user_id,authUser.id));return other?.profile||profileData(other?.user_id)}
 function conversationLast(id){return state.liveMessages.filter(m=>same(m.conversation_id,id)&&!m.deleted_at).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]}
 messages=function(){
   let threads=[...state.conversations].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));const q=normalize(state.conversationQuery);if(q)threads=threads.filter(c=>match(q,conversationName(c.id)?.full_name,conversationName(c.id)?.username,conversationLast(c.id)?.body));const compact=window.matchMedia('(max-width:760px)').matches,active=byId(state.conversations,state.activeConversationId)||(!compact?threads[0]:null);if(active&&!state.activeConversationId&&!compact)state.activeConversationId=active.id;
   const activePerson=active?conversationName(active.id):null,msgs=active?state.liveMessages.filter(m=>same(m.conversation_id,active.id)&&!m.deleted_at):[];
-  return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div><form class="chat-form" id="liveChatForm"><input id="liveChatInput" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
+  return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div><form class="chat-form" id="liveChatForm"><input id="liveChatInput" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto" value="${esc(getDmDraft(active.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
 };
 function messageBubble(m,previous){const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}"><span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time>${mine||state.isAdmin?`<button class="content-menu danger" data-delete-message="${m.id}" aria-label="${t('Delete message','حذف الرسالة')}">×</button>`:''}</span></div>`}
 
@@ -714,7 +778,29 @@ function bindV6(root=document){
   const circleSearch=root.querySelector('#circleSearch');if(circleSearch)circleSearch.oninput=()=>{state.circleQuery=circleSearch.value;clearTimeout(circleSearchTimer);circleSearchTimer=setTimeout(()=>{render();requestAnimationFrame(()=>{const next=$('#circleSearch');if(next){next.focus();next.setSelectionRange(next.value.length,next.value.length)}})},180)};
   root.querySelectorAll('[data-clear-circle-search]').forEach(el=>el.onclick=()=>{state.circleQuery='';render()});
   const ts=root.querySelector('#conversationSearch');if(ts)ts.oninput=()=>rerenderSearchInput(ts,'conversationQuery');
-  const chat=root.querySelector('#liveChatForm');if(chat)chat.onsubmit=async e=>{e.preventDefault();const input=$('#liveChatInput'),button=chat.querySelector('button'),body=input.value.trim();if(!body)return;button.disabled=true;const {error}=await sb.from('messages').insert({conversation_id:state.activeConversationId,sender_id:authUser.id,body});if(error){toast(safeError(error,'send this message'));button.disabled=false;return}input.value='';await markConversationRead(state.activeConversationId);await loadLiveData();render()};
+  const liveDraftInput=root.querySelector('#liveChatInput');
+  if(liveDraftInput)liveDraftInput.oninput=()=>setDmDraft(state.activeConversationId,liveDraftInput.value);
+  const chat=root.querySelector('#liveChatForm');if(chat)chat.onsubmit=async e=>{
+    e.preventDefault();
+    const input=$('#liveChatInput'),button=chat.querySelector('button'),conversationId=state.activeConversationId,body=input.value.trim();
+    if(!body)return;
+    button.disabled=true;
+    setDmDraft(conversationId,input.value);
+    const {data,error}=await sb.from('messages').insert({conversation_id:conversationId,sender_id:authUser.id,body}).select('*').single();
+    if(error){toast(safeError(error,'send this message'));button.disabled=false;return}
+    setDmDraft(conversationId,'');
+    input.value='';
+    if(data&&!state.liveMessages.some(m=>same(m.id,data.id)))state.liveMessages.push(data);
+    const flow=$('#chatFlow');
+    if(flow&&data){
+      const previous=state.liveMessages.filter(m=>same(m.conversation_id,conversationId)&&!m.deleted_at&& !same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);
+      flow.insertAdjacentHTML('beforeend',messageBubble(data,previous));
+      flow.scrollTop=flow.scrollHeight;
+      bindV6(flow);
+    }
+    await markConversationRead(conversationId);
+    button.disabled=false;
+  };
   const circleChat=root.querySelector('#circleChatForm');if(circleChat)circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),body=input.value.trim();if(!body)return;button.disabled=true;const {error}=await sb.from('circle_messages').insert({circle_id:state.activeCircleId,sender_id:authUser.id,body});if(error){toast(safeError(error,'send this message'));button.disabled=false;return}input.value='';await loadLiveData();render()};
 }
 
