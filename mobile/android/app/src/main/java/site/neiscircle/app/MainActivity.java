@@ -20,6 +20,11 @@ import android.webkit.WebViewClient;
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.google.firebase.messaging.FirebaseMessaging;
 
@@ -35,22 +40,38 @@ public class MainActivity extends Activity {
     private boolean pageReady = false;
     private String pendingRoute;
     private String pendingAuthUrl;
+    private int nativeTopInset = 0;
+    private int nativeBottomInset = 0;
 
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.WHITE);
-        getWindow().setNavigationBarColor(Color.WHITE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            getWindow().getDecorView().setSystemUiVisibility(
-                getWindow().getDecorView().getSystemUiVisibility() | 8192
-            );
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        if (bars != null) {
+            bars.setAppearanceLightStatusBars(true);
+            bars.setAppearanceLightNavigationBars(true);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            getWindow().setStatusBarContrastEnforced(false);
+            getWindow().setNavigationBarContrastEnforced(false);
         }
 
         NotificationHelper.createChannels(this);
 
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.WHITE);
         setContentView(webView);
+        ViewCompat.setOnApplyWindowInsetsListener(webView, (view, insets) -> {
+            Insets barsInsets = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+            nativeTopInset = barsInsets.top;
+            nativeBottomInset = barsInsets.bottom;
+            applyNativeInsets();
+            return insets;
+        });
+        ViewCompat.requestApplyInsets(webView);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -92,12 +113,20 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 pageReady = true;
+                applyNativeInsets();
                 flushPendingEvents();
             }
         });
 
         handleIntent(getIntent());
         webView.loadUrl(SITE_URL);
+    }
+
+    private void applyNativeInsets() {
+        if (!pageReady || webView == null) return;
+        String script = "document.documentElement.style.setProperty('--native-safe-top','" + nativeTopInset +
+            "px');document.documentElement.style.setProperty('--native-safe-bottom','" + nativeBottomInset + "px');";
+        webView.post(() -> webView.evaluateJavascript(script, null));
     }
 
     private boolean handleNavigation(Uri uri) {
