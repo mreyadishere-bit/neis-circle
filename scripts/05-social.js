@@ -344,15 +344,62 @@ async function loadAuthorLikeEmailSetting(){
   authorLikeEmailSetting=!!data;
   if(state.view==='admin')render();
 }
+function syncAdminSwitch(el,on){
+  if(!el)return;
+  el.classList.toggle('is-on',!!on);
+  el.setAttribute('aria-checked',on?'true':'false');
+  const label=el.querySelector('b');if(label)label.textContent=on?t('On','مفعّل'):t('Off','متوقف');
+}
+async function persistAdminSetting(button,stateName,next,rpcName,datasetKey,errorAction){
+  const previous=stateName.get();
+  stateName.set(next);
+  if(button){
+    button.disabled=true;
+    button.dataset[datasetKey]=next?'false':'true';
+    syncAdminSwitch(button,next);
+  }
+  const {data,error}=await sb.rpc(rpcName,{desired_enabled:next});
+  if(error){
+    stateName.set(previous);
+    if(button?.isConnected){
+      button.disabled=false;
+      button.dataset[datasetKey]=previous?'false':'true';
+      syncAdminSwitch(button,previous);
+    }
+    toast(safeError(error,errorAction));
+    return;
+  }
+  const saved=!!data;
+  stateName.set(saved);
+  if(button?.isConnected){
+    button.disabled=false;
+    button.dataset[datasetKey]=saved?'false':'true';
+    syncAdminSwitch(button,saved);
+  }
+}
 async function changeAuthorLikeEmailSetting(enabled){
   if(!canControlAuthorLikeEmails())return;
-  const button=document.querySelector('[data-author-like-email-toggle]');
-  if(button)button.disabled=true;
-  const {data,error}=await sb.rpc('set_author_like_email_setting',{desired_enabled:!!enabled});
-  if(error){toast(safeError(error,'change the author like email setting'));if(button?.isConnected)button.disabled=false;return}
-  authorLikeEmailSetting=!!data;
-  render();
-  toast(authorLikeEmailSetting?t('Author like emails enabled.','تم تشغيل رسائل الإعجاب للكتّاب.'):t('Author like emails disabled.','تم إيقاف رسائل الإعجاب للكتّاب.'));
+  return persistAdminSetting(
+    document.querySelector('[data-author-like-email-toggle]'),
+    {get:()=>authorLikeEmailSetting===true,set:value=>{authorLikeEmailSetting=!!value}},
+    !!enabled,'set_author_like_email_setting','authorLikeEmailToggle','change the author like email setting'
+  );
+}
+async function changeAdminDmEmailSetting(enabled){
+  if(!canControlAuthorLikeEmails())return;
+  return persistAdminSetting(
+    document.querySelector('[data-admin-dm-email-toggle]'),
+    {get:()=>adminDmEmailSetting===true,set:value=>{adminDmEmailSetting=!!value}},
+    !!enabled,'set_admin_dm_email_setting','adminDmEmailToggle','change the admin DM email setting'
+  );
+}
+async function changeAdminPostEmailSetting(enabled){
+  if(!canControlAuthorLikeEmails())return;
+  return persistAdminSetting(
+    document.querySelector('[data-admin-post-email-toggle]'),
+    {get:()=>adminPostEmailSetting===true,set:value=>{adminPostEmailSetting=!!value}},
+    !!enabled,'set_admin_post_email_setting','adminPostEmailToggle','change the admin post email setting'
+  );
 }
 function adminToggleRow(label,enabled,attrs='',loading=false){
   const on=!!enabled;
@@ -389,18 +436,20 @@ function setAdminContentModerationVisibility(visible){
   if(!state.isAdmin)return;
   const show=visible===true||visible==='true';
   localStorage.setItem(ADMIN_CONTENT_MODERATION_HIDDEN_KEY,show?'0':'1');
-  render();
-  toast(show?t('Content moderation shown.','تم إظهار قسم إدارة المحتوى.'):t('Content moderation hidden.','تم إخفاء قسم إدارة المحتوى.'));
+  document.querySelector('[data-admin-content-moderation]')?.classList.toggle('hidden',!show);
+  const toggle=document.querySelector('[data-toggle-content-moderation-visibility]');
+  if(toggle){toggle.dataset.toggleContentModerationVisibility=show?'false':'true';syncAdminSwitch(toggle,show)}
 }
 function setAdminMembersBranchesVisibility(visible){
   if(!state.isAdmin)return;
   const show=visible===true||visible==='true';
   localStorage.setItem(ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY,show?'0':'1');
-  render();
-  toast(show?t('Members & branches shown.','تم إظهار قسم الأعضاء والفروع.'):t('Members & branches hidden.','تم إخفاء قسم الأعضاء والفروع.'));
+  document.querySelector('[data-admin-members-branches]')?.classList.toggle('hidden',!show);
+  const toggle=document.querySelector('[data-toggle-members-branches-visibility]');
+  if(toggle){toggle.dataset.toggleMembersBranchesVisibility=show?'false':'true';syncAdminSwitch(toggle,show)}
 }
 
-admin=function(){const base=originalAdmin();if(!state.isAdmin)return base;const content=[...state.posts.map(x=>({type:'post',id:x.id,title:x.title,meta:x.user,action:`data-delete-post="${x.id}"`})),...state.allComments.filter(x=>!x.deleted_at).map(x=>({type:'reply',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-reply="${x.id}"`})),...state.circleRows.map(x=>({type:'circle',id:x.id,title:x.name,meta:profileData(x.owner_id).full_name,action:`data-delete-circle="${x.id}"`})),...state.circleMeetings.map(x=>({type:'meeting',id:x.id,title:x.title,meta:x.creator?.full_name||'Student',action:`data-delete-meeting="${x.id}"`})),...state.circleMessages.filter(x=>!x.deleted_at).map(x=>({type:'circle message',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-circle-message="${x.id}"`})),...state.gallery.map(x=>({type:'gallery',id:x.id,title:x.caption_en||x.caption_ar||'Gallery item',meta:authorName(x.author),action:`data-delete-gallery="${x.id}"`})),...state.articles.map(x=>({type:'article',id:x.id,title:x.title_en||x.title_ar||'Article',meta:authorName(x.author),action:`data-delete-article="${x.id}"`}))];return `${base}${adminControlsPanel()}<section class="module-card" style="margin-top:18px"><div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(s=>`<option value="${s}" ${normalizedReportStatus(r.status)===s?'selected':''}>${s}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}</section>${adminContentModerationHidden()?'':`<section class="module-card" data-admin-content-moderation style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('Real database content only. Deletions require confirmation.','محتوى قاعدة البيانات الحقيقي فقط، والحذف يتطلب تأكيدًا.')}</p></div></div><div class="admin-content-list">${content.length?content.slice(0,100).map(x=>`<div class="admin-content-row"><div><b>${esc(x.title)}</b><p>${esc(x.type)} · ${esc(x.meta||'')}</p></div><button class="secondary danger" ${x.action}>${t('Delete','حذف')}</button></div>`).join(''):emptyState(t('No content','لا يوجد محتوى'),t('The production database is clean.','قاعدة بيانات الإنتاج نظيفة.'))}</div></section>`}`}
+admin=function(){const base=originalAdmin();if(!state.isAdmin)return base;const content=[...state.posts.map(x=>({type:'post',id:x.id,title:x.title,meta:x.user,action:`data-delete-post="${x.id}"`})),...state.allComments.filter(x=>!x.deleted_at).map(x=>({type:'reply',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-reply="${x.id}"`})),...state.circleRows.map(x=>({type:'circle',id:x.id,title:x.name,meta:profileData(x.owner_id).full_name,action:`data-delete-circle="${x.id}"`})),...state.circleMeetings.map(x=>({type:'meeting',id:x.id,title:x.title,meta:x.creator?.full_name||'Student',action:`data-delete-meeting="${x.id}"`})),...state.circleMessages.filter(x=>!x.deleted_at).map(x=>({type:'circle message',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-circle-message="${x.id}"`})),...state.gallery.map(x=>({type:'gallery',id:x.id,title:x.caption_en||x.caption_ar||'Gallery item',meta:authorName(x.author),action:`data-delete-gallery="${x.id}"`})),...state.articles.map(x=>({type:'article',id:x.id,title:x.title_en||x.title_ar||'Article',meta:authorName(x.author),action:`data-delete-article="${x.id}"`}))];return `${base}${adminControlsPanel()}<section class="module-card" style="margin-top:18px"><div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(s=>`<option value="${s}" ${normalizedReportStatus(r.status)===s?'selected':''}>${s}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}</section><section class="module-card ${adminContentModerationHidden()?'hidden':''}" data-admin-content-moderation style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('Real database content only. Deletions require confirmation.','محتوى قاعدة البيانات الحقيقي فقط، والحذف يتطلب تأكيدًا.')}</p></div></div><div class="admin-content-list">${content.length?content.slice(0,100).map(x=>`<div class="admin-content-row"><div><b>${esc(x.title)}</b><p>${esc(x.type)} · ${esc(x.meta||'')}</p></div><button class="secondary danger" ${x.action}>${t('Delete','حذف')}</button></div>`).join(''):emptyState(t('No content','لا يوجد محتوى'),t('The production database is clean.','قاعدة بيانات الإنتاج نظيفة.'))}</div></section>`}
 
 async function deleteResolvedReport(id){
   const report=state.reports.find(item=>same(item.id,id));
@@ -590,14 +639,23 @@ render=function(){
 function openFullImage(src){if(!src)return;const layer=document.createElement('div');layer.className='image-lightbox';layer.innerHTML='<button type="button" class="image-lightbox-close" aria-label="Close">×</button><img src="'+esc(src)+'" alt="">';document.body.appendChild(layer);document.body.classList.add('image-lightbox-open');const close=()=>{layer.remove();document.body.classList.remove('image-lightbox-open');document.removeEventListener('keydown',onKey)};const onKey=e=>{if(e.key==='Escape')close()};layer.addEventListener('click',e=>{if(e.target===layer||e.target.closest('.image-lightbox-close'))close()});document.addEventListener('keydown',onKey);}
 
 function bindV6(root=document){
-  const authorLikePanel=root.querySelector('[data-author-like-email-setting]');
-  if(authorLikePanel&&authorLikeEmailSetting===null&&!authorLikeEmailSettingLoading)loadAuthorLikeEmailSetting();
+  if(canControlAuthorLikeEmails()&&!window.__neisAdminSettingsLoading&&(authorLikeEmailSetting===null||adminDmEmailSetting===null||adminPostEmailSetting===null)){
+    window.__neisAdminSettingsLoading=true;
+    Promise.allSettled([
+      sb.rpc('get_author_like_email_setting'),
+      sb.rpc('get_admin_dm_email_setting'),
+      sb.rpc('get_admin_post_email_setting')
+    ]).then(results=>{
+      const valueAt=index=>results[index].status==='fulfilled'&&!results[index].value?.error?!!results[index].value.data:false;
+      authorLikeEmailSetting=valueAt(0);
+      adminDmEmailSetting=valueAt(1);
+      adminPostEmailSetting=valueAt(2);
+      window.__neisAdminSettingsLoading=false;
+      if(state.view==='admin')render();
+    });
+  }
   root.querySelectorAll('[data-author-like-email-toggle]').forEach(el=>el.onclick=()=>changeAuthorLikeEmailSetting(el.dataset.authorLikeEmailToggle==='true'));
-  const adminDmPanel=root.querySelector('[data-admin-dm-email-setting]');
-  if(adminDmPanel&&adminDmEmailSetting===null&&!adminDmEmailSettingLoading)loadAdminDmEmailSetting();
   root.querySelectorAll('[data-admin-dm-email-toggle]').forEach(el=>el.onclick=()=>changeAdminDmEmailSetting(el.dataset.adminDmEmailToggle==='true'));
-  const adminPostPanel=root.querySelector('[data-admin-post-email-setting]');
-  if(adminPostPanel&&adminPostEmailSetting===null&&!adminPostEmailSettingLoading)loadAdminPostEmailSetting();
   root.querySelectorAll('[data-admin-post-email-toggle]').forEach(el=>el.onclick=()=>changeAdminPostEmailSetting(el.dataset.adminPostEmailToggle==='true'));
   root.querySelectorAll('[data-toggle-content-moderation-visibility]').forEach(el=>el.onclick=()=>setAdminContentModerationVisibility(el.dataset.toggleContentModerationVisibility));
   root.querySelectorAll('[data-toggle-members-branches-visibility]').forEach(el=>el.onclick=()=>setAdminMembersBranchesVisibility(el.dataset.toggleMembersBranchesVisibility));
