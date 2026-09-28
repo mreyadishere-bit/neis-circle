@@ -318,9 +318,24 @@
     });
   }
 
-  function openMessageActionsAt(x,y){
-    const el=document.elementFromPoint(Number(x)||0,Number(y)||0);
-    const row=el?.closest?.('.chat-message');
+  function findMessageRowAtPoint(x,y){
+    const px=Number(x)||0,py=Number(y)||0;
+    const direct=document.elementFromPoint(px,py)?.closest?.('.chat-message');
+    if(direct)return direct;
+    const rows=[...document.querySelectorAll('#chatFlow > .chat-message')];
+    if(!rows.length)return null;
+    let best=null,bestDistance=Infinity;
+    for(const row of rows){
+      const rect=row.getBoundingClientRect();
+      if(py>=rect.top-10&&py<=rect.bottom+10){
+        const center=(rect.top+rect.bottom)/2,distance=Math.abs(py-center);
+        if(distance<bestDistance){best=row;bestDistance=distance}
+      }
+    }
+    return best;
+  }
+
+  function openMessageActionsForRow(row){
     const bubble=row?.querySelector?.('.bubble');
     if(!row||!bubble)return false;
     const messageText=bubble.querySelector('.message-text')?.textContent||'';
@@ -341,6 +356,25 @@
     return true;
   }
 
+  function openMessageActionsAt(x,y){
+    return openMessageActionsForRow(findMessageRowAtPoint(x,y));
+  }
+
+  function openMessageActionsAtDevicePixels(rawX,rawY){
+    const dpr=Math.max(1,Number(window.devicePixelRatio)||1);
+    const vv=window.visualViewport;
+    const candidates=[
+      [Number(rawX)/dpr,Number(rawY)/dpr],
+      [Number(rawX)/dpr,(Number(rawY)/dpr)+(vv?.offsetTop||0)],
+      [Number(rawX),Number(rawY)]
+    ];
+    for(const [x,y] of candidates){
+      const row=findMessageRowAtPoint(x,y);
+      if(row)return openMessageActionsForRow(row);
+    }
+    return false;
+  }
+
   function handleNativeBack(){
     const modal=document.querySelector('#modalRoot .modal');
     if(modal){try{closeModal()}catch(_){};return true}
@@ -359,6 +393,7 @@
     registerPushToken:registerStoredToken,
     openNotificationSettings:openMobileNotificationSettings,
     openMessageActionsAt,
+    openMessageActionsAtDevicePixels,
     handleNativeBack
   };
 
