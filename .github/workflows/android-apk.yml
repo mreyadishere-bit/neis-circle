@@ -86,3 +86,5 @@ jobs:
             --title "NEIS Circle Android ${{ inputs.version_name || '1.0.0' }}" \
             --notes "Signed Android APK for NEIS Circle." \
             --latest
+
+# signing-secrets-refresh-trigger-20260928
