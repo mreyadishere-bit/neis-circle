@@ -206,6 +206,29 @@
     let timer=null,startX=0,startY=0,target=null,lastTouchAt=0;
     const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
 
+    const rowAtY=(eventTarget,y)=>{
+      const flow=eventTarget?.closest?.('.chat-flow')||document.elementFromPoint(Math.max(1,Math.min(window.innerWidth-1,startX||1)),Math.max(1,Math.min(window.innerHeight-1,y)))?.closest?.('.chat-flow');
+      if(!flow)return null;
+      const rows=[...flow.querySelectorAll(':scope > .chat-message')];
+      if(!rows.length)return null;
+      for(let index=0;index<rows.length;index++){
+        const row=rows[index],rect=row.getBoundingClientRect();
+        const prev=index?rows[index-1].getBoundingClientRect():null;
+        const next=index<rows.length-1?rows[index+1].getBoundingClientRect():null;
+        const top=prev?(prev.bottom+rect.top)/2:rect.top-5;
+        const bottom=next?(rect.bottom+next.top)/2:rect.bottom+5;
+        if(y>=top&&y<=bottom)return row;
+      }
+      return null;
+    };
+
+    const resolveTarget=(eventTarget,x,y)=>{
+      const directRow=eventTarget?.closest?.('.chat-message');
+      const row=directRow||rowAtY(eventTarget,y);
+      const bubble=row?.querySelector?.('.bubble');
+      return row&&bubble?{row,bubble}:null;
+    };
+
     const openActions=(row,bubble)=>{
       if(!row||!bubble)return;
       const deleteButton=row.querySelector('[data-delete-message],[data-delete-circle-message]');
@@ -231,27 +254,26 @@
       };
     };
 
-    const begin=(bubble,x,y)=>{
+    const begin=(eventTarget,x,y)=>{
       clear();
-      const row=bubble?.closest?.('.chat-message');
-      if(!row)return;
-      target={row,bubble};
+      const current=resolveTarget(eventTarget,x,y);
+      if(!current)return;
+      target=current;
       startX=x;startY=y;
       timer=setTimeout(()=>{
-        const current=target;
+        const selected=target;
         timer=null;
-        if(!current?.row||!current?.bubble)return;
+        if(!selected?.row||!selected?.bubble)return;
         if(navigator.vibrate)navigator.vibrate(22);
-        openActions(current.row,current.bubble);
+        openActions(selected.row,selected.bubble);
         target=null;
       },500);
     };
 
     document.addEventListener('pointerdown',event=>{
       if(Date.now()-lastTouchAt<700)return;
-      const bubble=event.target?.closest?.('.chat-message .bubble');
-      if(!bubble)return;
-      begin(bubble,event.clientX,event.clientY);
+      if(!event.target?.closest?.('.chat-flow'))return;
+      begin(event.target,event.clientX,event.clientY);
     },{passive:true});
 
     document.addEventListener('pointermove',event=>{
@@ -261,14 +283,11 @@
     document.addEventListener('pointerup',clear,{passive:true});
     document.addEventListener('pointercancel',clear,{passive:true});
 
-    // Some Android WebViews can be inconsistent with Pointer Events during long-press.
-    // Touch fallback keeps the feature reliable without showing delete permanently.
     document.addEventListener('touchstart',event=>{
       const touch=event.touches?.[0];
-      const bubble=event.target?.closest?.('.chat-message .bubble');
-      if(!touch||!bubble)return;
+      if(!touch||!event.target?.closest?.('.chat-flow'))return;
       lastTouchAt=Date.now();
-      begin(bubble,touch.clientX,touch.clientY);
+      begin(event.target,touch.clientX,touch.clientY);
     },{passive:true});
 
     document.addEventListener('touchmove',event=>{
@@ -281,8 +300,9 @@
     document.addEventListener('touchcancel',clear,{passive:true});
 
     document.addEventListener('contextmenu',event=>{
-      const bubble=event.target?.closest?.('.chat-message .bubble');
-      if(!bubble)return;
+      if(!event.target?.closest?.('.chat-flow'))return;
+      const row=resolveTarget(event.target,event.clientX,event.clientY);
+      if(!row)return;
       event.preventDefault();
     });
   }
