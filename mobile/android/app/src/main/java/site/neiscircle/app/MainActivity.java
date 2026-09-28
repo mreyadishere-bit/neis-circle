@@ -134,8 +134,14 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> {
             if (Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+                boolean prompted = getSharedPreferences("neis_mobile", MODE_PRIVATE)
+                    .getBoolean("notification_prompted", false);
+                if (!prompted) {
+                    getSharedPreferences("neis_mobile", MODE_PRIVATE)
+                        .edit().putBoolean("notification_prompted", true).apply();
+                    ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATIONS);
+                }
                 return;
             }
             deliverCurrentToken();
