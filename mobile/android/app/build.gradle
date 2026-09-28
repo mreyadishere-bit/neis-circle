@@ -1,0 +1,55 @@
+plugins {
+    id "com.android.application"
+    id "com.google.gms.google-services"
+}
+
+def versionNameValue = project.findProperty("NEIS_VERSION_NAME") ?: "1.0.0"
+def versionCodeValue = (project.findProperty("NEIS_VERSION_CODE") ?: "1") as Integer
+
+android {
+    namespace = "site.neiscircle.app"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "site.neiscircle.app"
+        minSdk = 24
+        targetSdk = 36
+        versionCode = versionCodeValue
+        versionName = versionNameValue
+    }
+
+    signingConfigs {
+        release {
+            def ks = file("release.keystore")
+            if (ks.exists()) {
+                storeFile = ks
+                storePassword = System.getenv("NEIS_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("NEIS_KEY_ALIAS")
+                keyPassword = System.getenv("NEIS_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+            shrinkResources = false
+            if (file("release.keystore").exists()) {
+                signingConfig = signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.7.1"
+    implementation "androidx.core:core:1.17.0"
+    implementation "androidx.browser:browser:1.9.0"
+    implementation "com.google.firebase:firebase-messaging:25.0.1"
+}
