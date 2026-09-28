@@ -31,6 +31,7 @@ import com.google.firebase.messaging.FirebaseMessaging;
 import org.json.JSONObject;
 
 public class MainActivity extends Activity {
+    private static volatile boolean appForeground = false;
     private static final String SITE_URL = "https://neiscircle.site/";
     private static final int REQUEST_NOTIFICATIONS = 5001;
     private static final int REQUEST_FILE = 5002;
@@ -42,6 +43,22 @@ public class MainActivity extends Activity {
     private String pendingAuthUrl;
     private int nativeTopInset = 0;
     private int nativeBottomInset = 0;
+
+    public static boolean isAppForeground() {
+        return appForeground;
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        appForeground = true;
+    }
+
+    @Override
+    protected void onStop() {
+        appForeground = false;
+        super.onStop();
+    }
 
     @Override
     protected void onCreate(Bundle state) {
