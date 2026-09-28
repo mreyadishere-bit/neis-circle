@@ -158,3 +158,298 @@ body.image-lightbox-open{overflow:hidden}
 .post-body.collapsed{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:5;white-space:normal}
 .post-read-more{display:inline-flex;align-items:center;margin-top:8px;padding:0;border:0;background:transparent;color:var(--accent);font-size:11px;font-weight:800;cursor:pointer}
 .post-read-more:hover{text-decoration:underline}
+
+/* v58 — main post discussion redesign
+   Flat, readable Facebook/Instagram-style comment threads. */
+.reply-tree{
+  display:grid;
+  gap:0;
+}
+.reply-thread{
+  min-width:0;
+  border-bottom:1px solid var(--line);
+}
+.reply-thread:last-child{
+  border-bottom:0;
+}
+.reply-card,
+.reply-card.nested,
+.reply-card.is-reply{
+  width:100%;
+  min-width:0;
+  margin:0;
+  padding:16px 2px 14px;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.reply-card.is-reply{
+  padding-block:13px;
+}
+.reply-head{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  min-width:0;
+}
+.reply-head .avatar{
+  width:42px;
+  height:42px;
+  flex:0 0 42px;
+  border-radius:14px;
+}
+.reply-card.is-reply .reply-head .avatar{
+  width:36px;
+  height:36px;
+  flex-basis:36px;
+  border-radius:12px;
+}
+.reply-identity,
+.reply-head>div{
+  min-width:0;
+  flex:1;
+}
+.reply-head .author-link{
+  max-width:100%;
+  padding:0;
+  text-align:start;
+}
+.reply-head b{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  line-height:1.35;
+}
+.reply-head small{
+  display:block;
+  max-width:100%;
+  margin-top:2px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.35;
+}
+.reply-body{
+  margin:8px 0 7px 52px;
+  max-width:760px;
+  color:var(--ink);
+  font-size:12.5px;
+  line-height:1.65;
+  overflow-wrap:anywhere;
+  unicode-bidi:plaintext;
+  text-align:start;
+}
+.rtl .reply-body{
+  margin:8px 52px 7px 0;
+}
+.reply-card.is-reply .reply-body{
+  margin-inline-start:46px;
+}
+.rtl .reply-card.is-reply .reply-body{
+  margin-inline-start:0;
+  margin-inline-end:46px;
+}
+.reply-actions{
+  margin-inline-start:52px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:2px;
+}
+.rtl .reply-actions{
+  margin-inline-start:0;
+  margin-inline-end:52px;
+}
+.reply-card.is-reply .reply-actions{
+  margin-inline-start:46px;
+}
+.rtl .reply-card.is-reply .reply-actions{
+  margin-inline-start:0;
+  margin-inline-end:46px;
+}
+.reply-actions .reply-action,
+.reply-actions button{
+  width:auto;
+  min-width:0;
+  min-height:30px;
+  padding:4px 7px;
+  border:0;
+  border-radius:8px;
+  background:transparent;
+  color:var(--muted);
+  font-size:9.5px;
+  font-weight:700;
+  box-shadow:none;
+}
+.reply-actions .reply-action:hover,
+.reply-actions button:hover{
+  background:var(--soft);
+  color:var(--ink);
+}
+.reply-actions .reply-action.active{
+  color:var(--accent);
+}
+.reply-actions .danger-text,
+.reply-actions [data-delete-reply]{
+  color:#a53a2d;
+}
+.reply-actions .danger-text:hover,
+.reply-actions [data-delete-reply]:hover{
+  background:color-mix(in srgb,#a53a2d 8%,transparent);
+  color:#923126;
+}
+.reply-children{
+  width:calc(100% - 52px);
+  margin-inline-start:52px;
+  padding:0;
+  border:0;
+}
+.rtl .reply-children{
+  margin-inline-start:0;
+  margin-inline-end:52px;
+}
+.reply-thread-toggle{
+  appearance:none;
+  -webkit-appearance:none;
+  display:inline-flex;
+  width:auto;
+  min-width:0;
+  align-items:center;
+  justify-content:flex-start;
+  gap:8px;
+  margin:7px 0 11px 52px;
+  padding:4px 0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:750;
+  line-height:1.2;
+  box-shadow:none;
+}
+.rtl .reply-thread-toggle{
+  margin:7px 52px 11px 0;
+}
+.reply-thread-toggle:hover{
+  color:var(--ink);
+}
+.reply-thread-line{
+  width:28px;
+  height:1px;
+  flex:0 0 28px;
+  background:var(--line);
+}
+.reply-composer{
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  margin-top:8px;
+  padding-top:10px;
+  background:linear-gradient(to bottom,transparent,var(--card) 14px,var(--card));
+}
+#replyContent{
+  min-width:0;
+}
+.modal.wide:has(#replyContent){
+  width:min(860px,96vw);
+  max-height:min(88vh,820px);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+.modal.wide:has(#replyContent) #replyContent{
+  min-height:0;
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  overflow:hidden;
+}
+.modal.wide:has(#replyContent) .reply-tree{
+  min-height:0;
+  flex:1;
+  overflow-y:auto;
+  padding-inline:4px 10px;
+}
+.modal.wide:has(#replyContent) .reply-composer{
+  flex:0 0 auto;
+}
+.reply-inline-edit{
+  margin:10px 0 2px 52px;
+}
+.rtl .reply-inline-edit{
+  margin:10px 52px 2px 0;
+}
+.reply-inline-edit textarea{
+  width:100%;
+  min-height:86px;
+  resize:vertical;
+}
+.reply-edit-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:7px;
+  margin-top:7px;
+}
+
+@media(max-width:760px){
+  .modal.wide:has(#replyContent){
+    width:100vw;
+    max-width:none;
+    height:min(92dvh,820px);
+    max-height:92dvh;
+    margin:0;
+    border-radius:22px 22px 0 0;
+  }
+  .modal-layer:has(#replyContent){
+    align-items:end;
+    padding:0;
+  }
+  .modal.wide:has(#replyContent) .reply-tree{
+    padding-inline:14px;
+  }
+  .reply-card{
+    padding-block:14px 12px;
+  }
+  .reply-head .avatar{
+    width:40px;
+    height:40px;
+    flex-basis:40px;
+  }
+  .reply-body{
+    margin-inline-start:50px;
+    font-size:13px;
+  }
+  .rtl .reply-body{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+  .reply-actions{
+    margin-inline-start:50px;
+  }
+  .rtl .reply-actions{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+  .reply-children{
+    width:calc(100% - 42px);
+    margin-inline-start:42px;
+  }
+  .rtl .reply-children{
+    margin-inline-start:0;
+    margin-inline-end:42px;
+  }
+  .reply-thread-toggle{
+    margin-inline-start:50px;
+  }
+  .rtl .reply-thread-toggle{
+    margin-inline-start:0;
+    margin-inline-end:50px;
+  }
+}
+
