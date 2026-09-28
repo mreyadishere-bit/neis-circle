@@ -16,12 +16,14 @@ let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificat
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
-let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;\nlet adminPostEmailSetting=null,adminPostEmailSettingLoading=false;
+let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
+let adminPostEmailSetting=null,adminPostEmailSettingLoading=false;
 const AUTHOR_LIKE_EMAIL_ADMIN='mreyadishere@gmail.com';
 const expandedPostIds=new Set();
 
 function profileData(id){return state.members.find(x=>same(x.id,id))||{id,full_name:t('NEIS Student','طالب NEIS'),username:'student',grade:'',branch:'',bio:'',interests:[]}}
-function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,initials:initials(p.full_name||p.name),color:'#006f5b'},large)}\nfunction hasCommunityBuilder(id){return state.profileBadges.some(b=>same(b.user_id,id)&&b.badge_key==='community_builder')}
+function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,initials:initials(p.full_name||p.name),color:'#006f5b'},large)}
+function hasCommunityBuilder(id){return state.profileBadges.some(b=>same(b.user_id,id)&&b.badge_key==='community_builder')}
 function isFollowing(id){return state.follows.some(f=>same(f.follower_id,authUser?.id)&&same(f.following_id,id)&&f.status==='accepted')}
 function followsMe(id){return state.follows.some(f=>same(f.follower_id,id)&&same(f.following_id,authUser?.id)&&f.status==='accepted')}
 function membership(circleId,userId=authUser?.id){return state.circleMembers.find(m=>same(m.circle_id,circleId)&&same(m.user_id,userId))}
@@ -89,7 +91,8 @@ loadLiveData=async function(){
   if(!meetingRes.error){state.circleMeetings=meetingRes.data||[];state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
   if(!notificationRes.error)state.notifications=notificationRes.data||[];
   if(!commentRes.error){state.allComments=commentRes.data||[];state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
-  if(!reportRes.error)state.reports=reportRes.data||[];\n  if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
+  if(!reportRes.error)state.reports=reportRes.data||[];
+  if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at').limit(500);if(!cm.error)state.circleMessages=cm.data||[]}
