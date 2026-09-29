@@ -259,7 +259,16 @@
         }
       };
       const del=document.querySelector('[data-native-delete-message]');
-      if(del)del.onclick=()=>window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+      if(del){
+        const runDelete=event=>{
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+        };
+        del.addEventListener('touchstart',runDelete,{passive:false});
+        del.addEventListener('pointerdown',runDelete);
+        del.addEventListener('click',runDelete);
+      }
     };
 
     const begin=(eventTarget,x,y)=>{
