@@ -1605,56 +1605,34 @@ body.rtl .reply-thread-toggle{
 }
 
 
-/* v108 — unified Arabic typography + Android download card */
+/* v118 — unified Arabic typography + PWA install card */
 :lang(ar),
 [lang="ar"],
 [dir="rtl"]{
   font-family:"IBM Plex Sans Arabic","DM Sans",system-ui,sans-serif;
 }
 
-.apk-download-card{
+.pwa-install-card{
   display:grid;
-  grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr);
-  gap:20px;
-  align-items:stretch;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:18px;
+  align-items:center;
   margin:0 0 22px;
-  padding:24px;
+  padding:22px 24px;
   border:1px solid var(--line);
   border-radius:24px;
   background:var(--card);
 }
-.apk-download-copy{min-width:0}
-.apk-download-copy .kicker{margin:0 0 8px}
-.apk-download-copy h2{margin:0 0 8px;font-size:24px;line-height:1.15}
-.apk-download-copy>p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
-.apk-download-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-.apk-download-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
-.apk-download-guide{
-  display:grid;
-  gap:10px;
-  align-content:start;
-  padding:16px;
-  border:1px solid var(--line);
-  border-radius:18px;
-  background:var(--soft);
-}
-.apk-download-step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start}
-.apk-download-step b{
-  width:28px;height:28px;display:grid;place-items:center;
-  border-radius:9px;background:var(--accent);color:#fff;font-size:10px
-}
-.apk-download-step span{font-size:11px;line-height:1.55;color:var(--ink)}
-.apk-download-note{
-  margin-top:2px;padding-top:10px;border-top:1px solid var(--line);
-  color:var(--muted);font-size:10px;line-height:1.6
-}
+.pwa-install-card .kicker{margin:0 0 8px}
+.pwa-install-card h2{margin:0 0 8px;font-size:24px;line-height:1.15}
+.pwa-install-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.7}
+.pwa-install-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 @media(max-width:760px){
-  .apk-download-card{grid-template-columns:1fr;padding:18px;border-radius:20px;gap:14px}
-  .apk-download-copy h2{font-size:20px}
-  .apk-download-actions{display:grid;grid-template-columns:1fr}
-  .apk-download-actions a,.apk-download-actions button{width:100%}
+  .pwa-install-card{grid-template-columns:1fr;padding:18px;border-radius:20px;gap:14px}
+  .pwa-install-card h2{font-size:20px}
+  .pwa-install-actions{display:grid;grid-template-columns:1fr}
+  .pwa-install-actions button{width:100%}
 }
-
 
 /* v111 — distinct Graduate grade badge */
 .graduate-badge{
@@ -1696,13 +1674,13 @@ html[data-theme="dark"][data-style-theme="minimal"]{
 }
 
 /* Theme geometry: each preset changes more than color while preserving layout/function. */
-html[data-style-theme="emerald"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.apk-download-card){border-radius:28px}
+html[data-style-theme="emerald"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.pwa-install-card){border-radius:28px}
 html[data-style-theme="emerald"] :is(.primary,.secondary,.field input,.field textarea,.field select,.search){border-radius:16px}
-html[data-style-theme="ocean"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.apk-download-card){border-radius:18px}
+html[data-style-theme="ocean"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.pwa-install-card){border-radius:18px}
 html[data-style-theme="ocean"] :is(.primary,.secondary,.field input,.field textarea,.field select,.search){border-radius:10px}
-html[data-style-theme="sunset"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.apk-download-card){border-radius:24px}
+html[data-style-theme="sunset"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.pwa-install-card){border-radius:24px}
 html[data-style-theme="sunset"] .kicker{color:var(--accent)}
-html[data-style-theme="minimal"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.apk-download-card){border-radius:12px;box-shadow:none!important}
+html[data-style-theme="minimal"] :is(.module-card,.profile-card,.side-card,.post-card,.article-card,.hero-main,.hero-side,.modal,.messages,.pwa-install-card){border-radius:12px;box-shadow:none!important}
 html[data-style-theme="minimal"] :is(.primary,.secondary,.field input,.field textarea,.field select,.search,.avatar,.mini-avatar){border-radius:8px!important}
 html[data-style-theme="minimal"] .grain{display:none}
 html[data-style-theme="minimal"] .top{backdrop-filter:none;background:var(--paper)}
