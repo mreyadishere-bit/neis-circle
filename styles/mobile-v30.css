@@ -1013,3 +1013,205 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     padding-inline-end:10px!important;
   }
 }
+
+
+/* v105 — compact horizontal person cards for Discover + Connections (mobile only) */
+@media(max-width:760px){
+  .people-grid>.student-card,
+  .connections-tabs + .grid-3>.student-card{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 94px!important;
+    grid-template-rows:auto auto auto!important;
+    column-gap:14px!important;
+    row-gap:7px!important;
+    align-items:center!important;
+    min-height:0!important;
+    padding:15px 16px!important;
+    border-radius:22px!important;
+  }
+
+  .people-grid>.student-card>.person-card-head,
+  .connections-tabs + .grid-3>.student-card>.person-card-head{
+    grid-column:1!important;
+    grid-row:1!important;
+    display:grid!important;
+    grid-template-columns:54px minmax(0,1fr)!important;
+    gap:12px!important;
+    align-items:center!important;
+    min-width:0!important;
+  }
+
+  .people-grid>.student-card>.person-card-head .avatar,
+  .connections-tabs + .grid-3>.student-card>.person-card-head .avatar{
+    width:54px!important;
+    height:54px!important;
+    min-width:54px!important;
+    border-radius:16px!important;
+  }
+
+  .people-grid>.student-card>.person-card-head h3,
+  .connections-tabs + .grid-3>.student-card>.person-card-head h3{
+    margin:0 0 2px!important;
+    font-size:16px!important;
+    line-height:1.15!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .people-grid>.student-card>.person-card-head .person-handle,
+  .connections-tabs + .grid-3>.student-card>.person-card-head .person-handle{
+    margin:0!important;
+    font-size:11px!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .people-grid>.student-card>.person-tags,
+  .connections-tabs + .grid-3>.student-card>.person-tags{
+    grid-column:1!important;
+    grid-row:2!important;
+    display:flex!important;
+    flex-wrap:wrap!important;
+    gap:6px!important;
+    margin:0!important;
+    padding-inline-start:66px!important;
+  }
+
+  .people-grid>.student-card>.person-tags .post-kind,
+  .people-grid>.student-card>.person-tags .branch-tag,
+  .connections-tabs + .grid-3>.student-card>.person-tags .post-kind,
+  .connections-tabs + .grid-3>.student-card>.person-tags .branch-tag{
+    padding:5px 8px!important;
+    font-size:8px!important;
+    border-radius:9px!important;
+  }
+
+  .people-grid>.student-card>.person-interests,
+  .connections-tabs + .grid-3>.student-card>.person-interests{
+    grid-column:1!important;
+    grid-row:3!important;
+    min-width:0!important;
+    min-height:0!important;
+    margin:0!important;
+    padding-inline-start:66px!important;
+    font-size:10px!important;
+    line-height:1.35!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .people-grid>.student-card>.profile-actions,
+  .connections-tabs + .grid-3>.student-card>.profile-actions{
+    grid-column:2!important;
+    grid-row:1 / span 3!important;
+    align-self:center!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:7px!important;
+    width:94px!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  .people-grid>.student-card>.profile-actions button,
+  .connections-tabs + .grid-3>.student-card>.profile-actions button{
+    width:100%!important;
+    min-width:0!important;
+    height:38px!important;
+    min-height:38px!important;
+    padding:0 8px!important;
+    border-radius:12px!important;
+    font-size:10px!important;
+    white-space:nowrap!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card){
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) 94px!important;
+    grid-template-rows:auto auto!important;
+    column-gap:14px!important;
+    row-gap:7px!important;
+    align-items:center!important;
+    min-height:0!important;
+    padding:15px 16px!important;
+    border-radius:22px!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.identity-line{
+    grid-column:1!important;
+    grid-row:1!important;
+    display:grid!important;
+    grid-template-columns:54px minmax(0,1fr)!important;
+    gap:12px!important;
+    align-items:center!important;
+    min-width:0!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.identity-line .avatar{
+    width:54px!important;
+    height:54px!important;
+    min-width:54px!important;
+    border-radius:16px!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.identity-line h3{
+    margin:0 0 2px!important;
+    font-size:16px!important;
+    line-height:1.15!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>p{
+    grid-column:1!important;
+    grid-row:2!important;
+    margin:0!important;
+    padding-inline-start:66px!important;
+    font-size:10px!important;
+    color:var(--muted)!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.profile-actions{
+    grid-column:2!important;
+    grid-row:1 / span 2!important;
+    align-self:center!important;
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:7px!important;
+    width:94px!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.profile-actions button{
+    width:100%!important;
+    min-width:0!important;
+    height:38px!important;
+    min-height:38px!important;
+    padding:0 8px!important;
+    border-radius:12px!important;
+    font-size:10px!important;
+  }
+}
+
+@media(max-width:390px){
+  .people-grid>.student-card,
+  .connections-tabs + .grid-3>.student-card,
+  .connections-tabs + .grid-3>.profile-card:not(.student-card){
+    grid-template-columns:minmax(0,1fr) 84px!important;
+    column-gap:10px!important;
+    padding:13px!important;
+  }
+  .people-grid>.student-card>.profile-actions,
+  .connections-tabs + .grid-3>.student-card>.profile-actions,
+  .connections-tabs + .grid-3>.profile-card:not(.student-card)>.profile-actions{
+    width:84px!important;
+  }
+}
