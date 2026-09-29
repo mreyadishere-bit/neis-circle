@@ -290,20 +290,24 @@ function bindDmKeyboardBottom(){
   if(vv){
     dmKeyboardLastHeight=vv.height;
     vv.addEventListener('resize',()=>{
-      const input=document.querySelector('#liveChatInput');
-      if(document.activeElement!==input){dmKeyboardLastHeight=vv.height;return}
+      const input=document.querySelector('#liveChatInput'),circleInput=document.querySelector('#circleChatInput');
+      const dmFocused=document.activeElement===input,circleFocused=document.activeElement===circleInput;
+      if(!dmFocused&&!circleFocused){dmKeyboardLastHeight=vv.height;return}
       const opening=vv.height<dmKeyboardLastHeight-20;
       dmKeyboardLastHeight=vv.height;
-      if(opening||document.querySelector('.messages.mobile-thread-open'))scrollActiveDmToBottom();
+      if(dmFocused&&(opening||document.querySelector('.messages.mobile-thread-open')))scrollActiveDmToBottom();
+      if(circleFocused&&(opening||document.querySelector('.dm-like-circle-chat')))scrollActiveCircleChatToBottom();
     },{passive:true});
     vv.addEventListener('scroll',()=>{
-      const input=document.querySelector('#liveChatInput');
+      const input=document.querySelector('#liveChatInput'),circleInput=document.querySelector('#circleChatInput');
       if(document.activeElement===input)scrollActiveDmToBottom();
+      if(document.activeElement===circleInput)scrollActiveCircleChatToBottom();
     },{passive:true});
   }else{
     window.addEventListener('resize',()=>{
-      const input=document.querySelector('#liveChatInput');
+      const input=document.querySelector('#liveChatInput'),circleInput=document.querySelector('#circleChatInput');
       if(document.activeElement===input)scrollActiveDmToBottom();
+      if(document.activeElement===circleInput)scrollActiveCircleChatToBottom();
     },{passive:true});
   }
 }
@@ -1039,7 +1043,7 @@ function bindV6(root=document){
     input.focus({preventScroll:true});
     scrollActiveDmToBottom();
   };
-  const circleInput=root.querySelector('#circleChatInput');if(circleInput){circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
+  const circleInput=root.querySelector('#circleChatInput');if(circleInput){bindDmKeyboardBottom();circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
   root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=()=>{clearCircleReplyTarget();$('#circleChatInput')?.focus({preventScroll:true})});
   const circleChat=root.querySelector('#circleChatForm');if(circleChat)circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};
 }
