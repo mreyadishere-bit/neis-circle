@@ -1895,3 +1895,34 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     padding-inline-end:38px!important;
   }
 }
+
+/* v135 — authoritative desktop placement for message actions */
+@media(max-width:760px){
+  .message-actions-trigger{display:none!important}
+}
+@media(min-width:761px){
+  .chat-message .bubble{
+    position:relative!important;
+    overflow:visible!important;
+  }
+  .chat-message .message-actions-trigger{
+    position:absolute!important;
+    top:6px!important;
+    inset-inline-end:6px!important;
+    inset-inline-start:auto!important;
+    left:auto!important;
+    right:auto!important;
+    transform:none!important;
+    margin:0!important;
+    display:grid!important;
+    width:26px!important;
+    height:26px!important;
+    min-width:26px!important;
+    min-height:26px!important;
+    place-items:center!important;
+    z-index:3!important;
+  }
+  .chat-message .bubble:has(.message-actions-trigger){
+    padding-inline-end:38px!important;
+  }
+}
