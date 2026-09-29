@@ -1112,7 +1112,16 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
     const del=document.querySelector('[data-mobile-delete-message]');
-    if(del)del.onclick=()=>window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+    if(del){
+      const runDelete=event=>{
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+      };
+      del.addEventListener('touchstart',runDelete,{passive:false});
+      del.addEventListener('pointerdown',runDelete);
+      del.addEventListener('click',runDelete);
+    }
   };
 
   document.addEventListener('pointerdown',event=>{
@@ -1259,23 +1268,4 @@ window.neisConfirmMessageDelete=(scope,id)=>{
     }
   };
 };
-if(!window.__neisDeleteActionDelegatedV99){
-  window.__neisDeleteActionDelegatedV99=true;
-  let lastDeleteActivationAt=0;
-  const activateDeleteAction=event=>{
-    const button=event.target?.closest?.('[data-mobile-delete-message],[data-native-delete-message]');
-    if(!button)return;
-    const id=button.dataset.messageActionId||'';
-    const scope=button.dataset.messageActionScope||'dm';
-    if(!id)return;
-    const now=Date.now();
-    if(now-lastDeleteActivationAt<500)return;
-    lastDeleteActivationAt=now;
-    event.preventDefault();
-    event.stopPropagation();
-    window.neisConfirmMessageDelete(scope,id);
-  };
-  document.addEventListener('pointerup',activateDeleteAction,true);
-  document.addEventListener('touchend',activateDeleteAction,{capture:true,passive:false});
-  document.addEventListener('click',activateDeleteAction,true);
-}
+
