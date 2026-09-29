@@ -108,7 +108,7 @@
   }
 
   async function registerSubscriptionWithServer(subscription){
-    if(!subscription||!window.sb||!window.authUser)return false;
+    if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return false;
     const json=subscription.toJSON();
     const {error}=await sb.rpc('register_web_push_subscription',{
       endpoint_input:subscription.endpoint,
@@ -128,7 +128,7 @@
       if(requestPermission&&typeof toast==='function')toast(lang('Notifications are not supported in this browser.','المتصفح الحالي لا يدعم الإشعارات.'));
       return false;
     }
-    if(!window.authUser||!window.sb){
+    if(!(typeof authUser!=='undefined'?authUser:null)||!(typeof sb!=='undefined'?sb:null)){
       if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
       return false;
     }
@@ -174,7 +174,7 @@
     try{
       const subscription=await currentSubscription();
       if(!subscription)return true;
-      if(window.sb&&window.authUser){
+      if((typeof sb!=='undefined'?sb:null)&&(typeof authUser!=='undefined'?authUser:null)){
         await sb.rpc('disable_web_push_subscription',{endpoint_input:subscription.endpoint});
       }
       await subscription.unsubscribe().catch(()=>{});
@@ -186,7 +186,7 @@
   }
 
   async function openPwaNotificationSettings(){
-    if(!window.authUser||!window.sb){
+    if(!(typeof authUser!=='undefined'?authUser:null)||!(typeof sb!=='undefined'?sb:null)){
       if(typeof toast==='function')toast(lang('Sign in first.','سجّل الدخول أولًا.'));
       return;
     }
@@ -262,20 +262,20 @@
   }
 
   function installSettingsHook(){
-    if(typeof window.settings==='function'&&!window.settings.__neisPwaWrapped){
-      const previous=window.settings;
+    if(typeof settings==='function'&&!settings.__neisPwaWrapped){
+      const previous=settings;
       const wrapped=function(){
         const result=previous.apply(this,arguments);
         addPwaSettingsEntry();
         return result;
       };
       wrapped.__neisPwaWrapped=true;
-      window.settings=wrapped;
+      settings=wrapped;
     }
   }
 
   function installSignOutHook(){
-    if(signOutHookInstalled||!window.sb?.auth?.signOut)return;
+    if(signOutHookInstalled||!(typeof sb!=='undefined'?sb:null)?.auth?.signOut)return;
     signOutHookInstalled=true;
     const original=sb.auth.signOut.bind(sb.auth);
     sb.auth.signOut=async function(){
@@ -285,16 +285,16 @@
   }
 
   function hookLiveData(){
-    if(typeof window.loadLiveData!=='function'||window.loadLiveData.__neisPwaWrapped)return;
-    const previous=window.loadLiveData;
+    if(typeof loadLiveData!=='function'||loadLiveData.__neisPwaWrapped)return;
+    const previous=loadLiveData;
     const wrapped=async function(){
       const result=await previous.apply(this,arguments);
       installSignOutHook();
-      if(window.authUser&&Notification.permission==='granted')await ensureWebPush(false);
+      if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted')await ensureWebPush(false);
       return result;
     };
     wrapped.__neisPwaWrapped=true;
-    window.loadLiveData=wrapped;
+    loadLiveData=wrapped;
   }
 
   window.addEventListener('beforeinstallprompt',event=>{
@@ -331,7 +331,7 @@
     hookLiveData();
     installSettingsHook();
     installSignOutHook();
-    if(window.authUser&&Notification.permission==='granted')ensureWebPush(false);
+    if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted')ensureWebPush(false);
   });
 
   syncThemeChrome();
