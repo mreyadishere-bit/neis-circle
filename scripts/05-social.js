@@ -143,13 +143,32 @@ async function refreshMessagesV6(){
         }
         if(state.view==='messages'&&state.activeConversationId){
           const flow=$('#chatFlow'),input=$('#liveChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
+          const inputWasFocused=!!input&&document.activeElement===input;
+          const inputValue=input?.value??'';
+          const selection=inputWasFocused?[input.selectionStart,input.selectionEnd]:null;
           const activeMessages=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
           if(flow){
             flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>messageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
             bindV6(flow);
           }
-          if(input){input.value=getDmDraft(state.activeConversationId)}
-          if(flow&&wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+          if(input){
+            if(inputWasFocused){
+              input.value=inputValue;
+              setDmDraft(state.activeConversationId,inputValue);
+            }else{
+              input.value=getDmDraft(state.activeConversationId);
+            }
+          }
+          requestAnimationFrame(()=>{
+            const liveInput=$('#liveChatInput');
+            if(inputWasFocused&&liveInput){
+              liveInput.focus({preventScroll:true});
+              if(selection&&Number.isInteger(selection[0])&&Number.isInteger(selection[1])){
+                try{liveInput.setSelectionRange(selection[0],selection[1])}catch(_){}
+              }
+            }
+            if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight;
+          });
           updateBadges();
         }else{
           updateBadges();
@@ -1071,5 +1090,23 @@ if(!window.__neisDmReplyCancelDelegated){
     const input=document.querySelector('#liveChatInput');
     input?.focus({preventScroll:true});
     scrollActiveDmToBottom();
+  });
+}
+
+/* v95 — keep the DM composer focused while realtime messages arrive. */
+if(!window.__neisDmKeyboardFocusGuardV95){
+  window.__neisDmKeyboardFocusGuardV95=true;
+  document.addEventListener('focusin',event=>{
+    if(event.target?.id==='liveChatInput'){
+      window.__neisDmComposerFocused=true;
+    }
+  });
+  document.addEventListener('focusout',event=>{
+    if(event.target?.id==='liveChatInput'){
+      setTimeout(()=>{
+        const input=document.querySelector('#liveChatInput');
+        if(document.activeElement!==input)window.__neisDmComposerFocused=false;
+      },0);
+    }
   });
 }
