@@ -1553,3 +1553,33 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   }
   .people-grid>.student-card>.profile-actions{width:84px!important}
 }
+
+
+/* v110 — closed mobile conversation list must end above the fixed bottom nav */
+@media(max-width:760px){
+  .messages:not(.mobile-thread-open){
+    min-height:0!important;
+    margin-bottom:0!important;
+    overflow:hidden!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-list{
+    display:flex!important;
+    flex-direction:column!important;
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-head,
+  .messages:not(.mobile-thread-open) .thread-search{
+    flex:0 0 auto!important;
+  }
+  .messages:not(.mobile-thread-open) .thread-list-scroll{
+    flex:1 1 auto!important;
+    height:auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+    padding-bottom:18px!important;
+    scroll-padding-bottom:18px!important;
+  }
+}
