@@ -182,10 +182,14 @@ public class MainActivity extends Activity {
                 connection.setRequestProperty("User-Agent", "NEIS-Circle-Android");
                 if (connection.getResponseCode() != 200) return;
 
-                String json;
-                try (InputStream input = connection.getInputStream()) {
-                    json = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                StringBuilder jsonBuilder = new StringBuilder();
+                try (InputStream input = connection.getInputStream();
+                     java.io.BufferedReader reader = new java.io.BufferedReader(
+                         new java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) jsonBuilder.append(line);
                 }
+                String json = jsonBuilder.toString();
                 JSONObject release = new JSONObject(json);
                 String tag = release.optString("tag_name", "");
                 int latestCode = 0;
