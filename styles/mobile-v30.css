@@ -835,3 +835,74 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     user-select:text;
   }
 }
+
+/* v96 — Circle chat uses the same mobile geometry and behavior as Direct Messages */
+@media(max-width:760px){
+  .dm-like-circle-chat{
+    height:calc(100dvh - 58px - 82px - env(safe-area-inset-bottom))!important;
+    min-height:0!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:var(--card)!important;
+  }
+  .dm-like-circle-chat .circle-chat-head{
+    flex:0 0 62px!important;
+    height:62px!important;
+    gap:8px!important;
+    padding:10px 12px!important;
+  }
+  .dm-like-circle-chat .chat-flow{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+    padding:12px 10px 10px!important;
+    background:color-mix(in srgb,var(--soft) 32%,var(--card))!important;
+  }
+  .dm-like-circle-chat .chat-message{
+    display:flex!important;
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    gap:6px!important;
+    align-items:flex-end!important;
+    margin:0!important;
+    padding:0!important;
+  }
+  .dm-like-circle-chat .chat-message + .chat-message{margin-top:8px!important}
+  .dm-like-circle-chat .chat-message.grouped + .chat-message{margin-top:5px!important}
+  .dm-like-circle-chat .chat-message.mine{justify-content:flex-end!important}
+  .dm-like-circle-chat .chat-message:not(.mine){justify-content:flex-start!important}
+  .dm-like-circle-chat .chat-message>.avatar{
+    width:28px!important;height:28px!important;flex:0 0 28px!important;border-radius:9px!important;
+  }
+  .dm-like-circle-chat .chat-message.mine>.avatar{display:none!important}
+  .dm-like-circle-chat .chat-message.grouped>.avatar{visibility:hidden!important}
+  .dm-like-circle-chat .circle-message-stack{max-width:78%!important}
+  .dm-like-circle-chat .chat-message .bubble{
+    width:auto!important;
+    max-width:100%!important;
+    min-width:54px!important;
+    padding:8px 10px 6px!important;
+    border-radius:14px!important;
+    box-sizing:border-box!important;
+    box-shadow:0 1px 1px rgba(0,0,0,.04)!important;
+  }
+  .dm-like-circle-chat .chat-message.mine .bubble{
+    background:var(--accent)!important;color:#fff!important;border-end-end-radius:4px!important;
+  }
+  .dm-like-circle-chat .chat-message:not(.mine) .bubble{
+    background:var(--soft)!important;border-end-start-radius:4px!important;
+  }
+  .dm-like-circle-chat .message-text{display:block;font-size:13px!important;line-height:1.45!important;overflow-wrap:anywhere!important;word-break:break-word;unicode-bidi:plaintext;text-align:start}
+  .dm-like-circle-chat .bubble time{display:block!important;margin-top:3px!important;font-size:7.5px!important;line-height:1.2!important;opacity:.68!important;text-align:end!important;white-space:nowrap}
+  .dm-like-circle-chat .chat-form{
+    position:relative!important;z-index:3;flex:0 0 auto!important;width:auto!important;
+    margin:7px 9px 8px!important;padding:6px!important;gap:6px!important;min-height:50px!important;
+    border-radius:25px!important;background:var(--card)!important;box-shadow:0 1px 8px rgba(0,0,0,.06)!important;
+  }
+  .dm-like-circle-chat .chat-form input{min-width:0!important;min-height:38px!important;flex:1!important;padding-inline:8px!important;border:0!important;outline:0!important;background:transparent!important;color:var(--ink)!important;font:inherit!important}
+  .dm-like-circle-chat .chat-form button{width:40px!important;height:40px!important;min-width:40px!important;border-radius:50%!important;display:grid!important;place-items:center!important}
+  #circleChatFlow>.chat-message{touch-action:pan-y!important}
+}
