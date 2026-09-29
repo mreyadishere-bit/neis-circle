@@ -52,7 +52,7 @@
   async function registerServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
-      serviceWorkerRegistration=await navigator.serviceWorker.register('/pwa-sw.js?v=4',{scope:'/'});
+      serviceWorkerRegistration=await navigator.serviceWorker.register('/pwa-sw.js?v=5',{scope:'/'});
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{serviceWorkerRegistration=reg;reg.update().catch(()=>{})}).catch(()=>{});
       return serviceWorkerRegistration;
