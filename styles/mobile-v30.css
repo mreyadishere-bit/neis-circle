@@ -906,3 +906,73 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   .dm-like-circle-chat .chat-form button{width:40px!important;height:40px!important;min-width:40px!important;border-radius:50%!important;display:grid!important;place-items:center!important}
   #circleChatFlow>.chat-message{touch-action:pan-y!important}
 }
+
+/* v97 — pin Circle chat header/composer to the viewport exactly like open DMs */
+@media(max-width:760px){
+  body:has(.dm-like-circle-chat){
+    height:100dvh!important;
+    overflow:hidden!important;
+  }
+  body:has(.dm-like-circle-chat) .top{
+    min-height:58px!important;
+    height:58px!important;
+    padding:5px 13px!important;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:48px!important;
+    align-content:center!important;
+  }
+  body:has(.dm-like-circle-chat) .top>.search{display:none!important}
+  body:has(.dm-like-circle-chat) .stage{
+    height:calc(100dvh - 58px)!important;
+    min-height:0!important;
+    padding:0 0 calc(82px + env(safe-area-inset-bottom))!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+  body:has(.dm-like-circle-chat) #view{
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  body:has(.dm-like-circle-chat) .circle-hero,
+  body:has(.dm-like-circle-chat) .circle-tabs{
+    display:none!important;
+  }
+  .dm-like-circle-chat{
+    height:100%!important;
+    min-height:0!important;
+    margin:0!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .dm-like-circle-chat .circle-chat-head{
+    position:relative!important;
+    z-index:3!important;
+    flex:0 0 62px!important;
+  }
+  .dm-like-circle-chat .circle-chat-back{
+    display:grid!important;
+    place-items:center!important;
+    flex:0 0 38px!important;
+    width:38px!important;
+    height:38px!important;
+    padding:0!important;
+  }
+  .dm-like-circle-chat #circleChatFlow{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain!important;
+  }
+  .dm-like-circle-chat .dm-reply-preview,
+  .dm-like-circle-chat #circleChatForm{
+    position:relative!important;
+    z-index:3!important;
+    flex:0 0 auto!important;
+  }
+  .dm-like-circle-chat #circleChatForm{
+    margin:7px 9px 8px!important;
+  }
+}
