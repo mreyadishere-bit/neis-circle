@@ -328,8 +328,6 @@ function setDmReplyTarget(messageId){
   else document.querySelector('#liveChatForm')?.insertAdjacentHTML('beforebegin',markup);
   const cancel=document.querySelector('[data-cancel-dm-reply]');
   if(cancel)cancel.onclick=event=>{event?.preventDefault?.();event?.stopPropagation?.();clearDmReplyTarget()};
-  const input=document.querySelector('#liveChatInput');
-  input?.focus({preventScroll:true});
   scrollActiveDmToBottom();
 }
 function clearDmReplyTarget(){
@@ -462,8 +460,6 @@ function setCircleReplyTarget(messageId){
   else document.querySelector('#circleChatForm')?.insertAdjacentHTML('beforebegin',markup);
   const cancel=document.querySelector('[data-cancel-circle-reply]');
   if(cancel)cancel.onclick=event=>{event?.preventDefault?.();event?.stopPropagation?.();clearCircleReplyTarget()};
-  const input=document.querySelector('#circleChatInput');
-  input?.focus({preventScroll:true});
   scrollActiveCircleChatToBottom();
 }
 function clearCircleReplyTarget(){
@@ -1177,7 +1173,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 
   document.addEventListener('pointermove',event=>{
     if(!timer)return;
-    if(Math.abs(event.clientX-startX)>12||Math.abs(event.clientY-startY)>12)clear();
+    if(Math.abs(event.clientX-startX)>20||Math.abs(event.clientY-startY)>20)clear();
   },{passive:true});
   document.addEventListener('pointerup',clear,{passive:true});
   document.addEventListener('pointercancel',clear,{passive:true});
@@ -1208,11 +1204,91 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   document.addEventListener('touchmove',event=>{
     if(!touchTimer)return;
     const touch=event.touches?.[0];
-    if(!touch||Math.abs(touch.clientX-touchX)>12||Math.abs(touch.clientY-touchY)>12)clearTouch();
+    if(!touch||Math.abs(touch.clientX-touchX)>20||Math.abs(touch.clientY-touchY)>20)clearTouch();
   },{passive:true});
   document.addEventListener('touchend',clearTouch,{passive:true});
   document.addEventListener('touchcancel',clearTouch,{passive:true});
 })();
+
+/* v126 — PWA/mobile chat gesture + keyboard viewport repair */
+if(!window.__neisPwaChatFixV126){
+  window.__neisPwaChatFixV126=true;
+
+  const mobileChat=()=>window.matchMedia('(max-width:760px)').matches;
+
+  const isMessageSurface=target=>!!target?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
+
+  document.addEventListener('selectstart',event=>{
+    if(!mobileChat()||!isMessageSurface(event.target))return;
+    event.preventDefault();
+    try{window.getSelection()?.removeAllRanges()}catch(_){}
+  },true);
+
+  document.addEventListener('dragstart',event=>{
+    if(!mobileChat()||!isMessageSurface(event.target))return;
+    event.preventDefault();
+  },true);
+
+  const cancelReplyFromEvent=event=>{
+    const dm=event.target?.closest?.('[data-cancel-dm-reply]');
+    const circle=event.target?.closest?.('[data-cancel-circle-reply]');
+    if(!dm&&!circle)return false;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    if(dm)clearDmReplyTarget();
+    if(circle)clearCircleReplyTarget();
+    return true;
+  };
+
+  document.addEventListener('touchend',cancelReplyFromEvent,{capture:true,passive:false});
+  document.addEventListener('pointerup',cancelReplyFromEvent,{capture:true,passive:false});
+  document.addEventListener('click',cancelReplyFromEvent,true);
+
+  const fitOpenChatToVisualViewport=()=>{
+    if(!mobileChat())return;
+    const vv=window.visualViewport;
+    const viewportBottom=(vv?.offsetTop||0)+(vv?.height||window.innerHeight);
+    const dm=document.querySelector('.messages.mobile-thread-open');
+    const circle=document.querySelector('.dm-like-circle-chat');
+    [dm,circle].forEach(shell=>{
+      if(!shell)return;
+      const rect=shell.getBoundingClientRect();
+      const available=Math.max(220,Math.floor(viewportBottom-rect.top));
+      shell.style.height=available+'px';
+      shell.style.maxHeight=available+'px';
+    });
+  };
+
+  const settleChatBottom=()=>{
+    fitOpenChatToVisualViewport();
+    const dmInput=document.querySelector('#liveChatInput');
+    const circleInput=document.querySelector('#circleChatInput');
+    if(document.activeElement===dmInput){
+      scrollActiveDmToBottom({immediate:true});
+      setTimeout(()=>scrollActiveDmToBottom({immediate:true}),80);
+      setTimeout(()=>scrollActiveDmToBottom({immediate:true}),220);
+    }
+    if(document.activeElement===circleInput){
+      scrollActiveCircleChatToBottom({immediate:true});
+      setTimeout(()=>scrollActiveCircleChatToBottom({immediate:true}),80);
+      setTimeout(()=>scrollActiveCircleChatToBottom({immediate:true}),220);
+    }
+  };
+
+  window.visualViewport?.addEventListener('resize',settleChatBottom,{passive:true});
+  window.visualViewport?.addEventListener('scroll',settleChatBottom,{passive:true});
+  window.addEventListener('resize',settleChatBottom,{passive:true});
+
+  document.addEventListener('focusin',event=>{
+    if(event.target?.id!=='liveChatInput'&&event.target?.id!=='circleChatInput')return;
+    requestAnimationFrame(settleChatBottom);
+    setTimeout(settleChatBottom,80);
+    setTimeout(settleChatBottom,220);
+  },true);
+
+  window.__neisFitOpenMobileChat=fitOpenChatToVisualViewport;
+}
 
 /* v83 — expose DM delete action for mobile action sheets */
 window.neisDeleteDirectMessage=id=>{try{return typeof deleteDirectMessage==='function'?deleteDirectMessage(id):window.deleteDirectMessage?.(id)}catch(_){return window.deleteDirectMessage?.(id)}};
