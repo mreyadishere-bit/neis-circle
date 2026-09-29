@@ -242,7 +242,7 @@
       const messageId=row.dataset?.messageId||'';
 
       const isCircle=!!row?.closest?.('#circleChatFlow');const canDelete=row.dataset?.messageDeletable==='1';
-      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message data-message-action-id="${messageId}" data-message-action-scope="${isCircle?'circle':'dm'}"><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
       document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
 
       const reply=document.querySelector('[data-native-reply-message]');
@@ -259,21 +259,7 @@
         }
       };
       const del=document.querySelector('[data-native-delete-message]');
-      if(del)del.onclick=()=>{
-        try{
-          if(isCircle){
-            if(typeof deleteCircleMessage==='function'){deleteCircleMessage(messageId);return}
-            toast(lang('Delete action is unavailable.','خيار الحذف غير متاح حاليًا.'));
-            return;
-          }
-          if(typeof deleteDirectMessage==='function'){deleteDirectMessage(messageId);return}
-          if(typeof window.deleteDirectMessage==='function'){window.deleteDirectMessage(messageId);return}
-          toast(lang('Delete action is unavailable.','خيار الحذف غير متاح حاليًا.'));
-        }catch(error){
-          console.error('[NEIS APK delete message]',error);
-          toast(lang('Could not start delete action.','تعذر بدء عملية الحذف.'));
-        }
-      };
+      if(del)del.onclick=()=>window.neisRunMessageDeleteAction?.(isCircle?'circle':'dm',messageId);
     };
 
     const begin=(eventTarget,x,y)=>{
