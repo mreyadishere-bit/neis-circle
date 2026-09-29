@@ -1591,3 +1591,41 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     scroll-padding-bottom:18px!important;
   }
 }
+
+/* v126 — stable PWA chat gestures and keyboard-safe layout */
+@media(max-width:760px){
+  #chatFlow > .chat-message,
+  #chatFlow > .chat-message *,
+  #circleChatFlow > .chat-message,
+  #circleChatFlow > .chat-message *{
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+    -webkit-tap-highlight-color:transparent!important;
+  }
+
+  [data-cancel-dm-reply],
+  [data-cancel-circle-reply]{
+    -webkit-tap-highlight-color:transparent!important;
+    touch-action:manipulation!important;
+    user-select:none!important;
+    -webkit-user-select:none!important;
+  }
+
+  .messages.mobile-thread-open,
+  .dm-like-circle-chat{
+    min-height:220px!important;
+    overflow:hidden!important;
+  }
+
+  .messages.mobile-thread-open .chat,
+  .dm-like-circle-chat{
+    min-height:0!important;
+  }
+
+  .messages.mobile-thread-open .chat-flow,
+  .dm-like-circle-chat .chat-flow{
+    min-height:0!important;
+    overscroll-behavior:contain!important;
+  }
+}
