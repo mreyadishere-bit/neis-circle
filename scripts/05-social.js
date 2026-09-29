@@ -1119,6 +1119,9 @@ window.NEISChatActionBridge={
       canDelete:same(message.sender_id,authUser?.id)||state.isAdmin
     };
   },
+  rowCanDelete(row){
+    return row?.dataset?.messageDeletable==='1'||row?.classList?.contains('mine')||false;
+  },
   deleteMessage(scope,id){
     if(scope==='circle')return deleteCircleMessage(id);
     return deleteDirectMessage(id);
@@ -1168,7 +1171,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const isCircle=!!row.closest('#circleChatFlow');
     const scope=isCircle?'circle':'dm';
     const meta=window.NEISChatActionBridge?.getMessageMeta?.(scope,messageId);
-    const canDelete=typeof meta?.canDelete==='boolean'?meta.canDelete:(row.dataset?.messageDeletable==='1'||row.classList?.contains('mine'));
+    const canDelete=row.dataset?.messageDeletable==='1'||row.classList?.contains('mine')||meta?.canDelete===true;
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
 
     const dialog=ensureDialog();
