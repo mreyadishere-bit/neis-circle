@@ -830,9 +830,17 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     -webkit-user-select:none;
     user-select:none;
   }
-  #chatFlow > .chat-message .message-text{
-    -webkit-user-select:text;
-    user-select:text;
+  #chatFlow > .chat-message .message-text,
+  #circleChatFlow > .chat-message .message-text{
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+  }
+  #chatFlow > .chat-message,
+  #chatFlow > .chat-message .bubble,
+  #circleChatFlow > .chat-message,
+  #circleChatFlow > .chat-message .bubble{
+    -webkit-touch-callout:none!important;
   }
 }
 
