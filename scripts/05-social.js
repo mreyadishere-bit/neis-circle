@@ -482,7 +482,7 @@ function messageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
   const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
   const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
-  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>${(mine||state.isAdmin)?`<button class="content-menu danger" data-delete-message="${m.id}" aria-label="${t('Delete message','حذف الرسالة')}">×</button>`:''}</span></div>`
+  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
 }
 
 window.openNewConversation=function(){
@@ -519,7 +519,7 @@ function meetingInviteLink(m){return `${location.origin}${location.pathname}#/ci
 async function copyMeetingInvite(m){if(!m)return;const link=meetingInviteLink(m);try{await navigator.clipboard.writeText(link);toast(t('Meeting invitation link copied.','تم نسخ رابط دعوة الاجتماع.'))}catch{window.prompt(t('Copy meeting invitation link','انسخ رابط دعوة الاجتماع'),link)}}
 
 function meetingCard(m){const d=new Date(m.starts_at),day=new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'2-digit'}).format(d),month=new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{month:'short'}).format(d),manageable=same(m.creator_id,authUser.id)||canModerateCircle(m.circle_id),canJoin=membership(m.circle_id)?.status==='active'||state.isAdmin,ended=!!m.ended_at,endAt=d.getTime()+Number(m.duration_minutes||60)*60000,live=!ended&&Date.now()>=d.getTime()&&Date.now()<endAt,status=ended?t('Ended','انتهى'):live?t('Live','مباشر'):t('Upcoming','قادم');return `<article class="meeting-card ${ended?'ended':''}" data-meeting-card="${esc(m.id)}"><time class="meeting-date" datetime="${esc(m.starts_at)}"><b>${day}</b><span>${month}</span></time><div><div class="meeting-card-title"><h3>${esc(m.title)}</h3><span class="status-pill ${live?'live':''}">${status}</span></div><p>${esc(m.description||t('Circle video meeting','اجتماع فيديو للمجتمع'))}</p><p>${when(m.starts_at)} · ${m.duration_minutes} ${t('min','دقيقة')} · ${t('by','بواسطة')} ${esc(m.creator?.full_name||profileData(m.creator_id).full_name)}</p><div class="meeting-actions">${canJoin&&!ended?`<button class="primary" data-join-meeting="${m.id}">${t('Join meeting','دخول الاجتماع')}</button>`:!canJoin&&!ended?`<button class="secondary" data-v6-circle-join="${m.circle_id}">${t('Join Circle to attend','انضم للمجتمع للحضور')}</button>`:''}<button class="secondary" data-copy-meeting-invite="${m.id}">${t('Invite link','رابط الدعوة')}</button>${manageable&&!ended&&live?`<button class="secondary danger" data-end-meeting="${m.id}">${t('End meeting','إنهاء الاجتماع')}</button>`:''}${manageable&&!live?`<button class="secondary danger" data-delete-meeting="${m.id}">${t('Delete','حذف')}</button>`:''}</div></div></article>`}
-function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000),quoted=m.reply_to_id?state.circleMessages.find(x=>same(x.id,m.reply_to_id)):null,sender=m.profile||profileData(m.sender_id),quote=quoted?(()=>{const qp=quoted.profile||profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(qp?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.deleted_at?t('Message deleted','تم حذف الرسالة'):quoted.body||t('Message','رسالة'))}</span></div>`})():'';return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}">${profileAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time>${!m.deleted_at?`<button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>`:''}${!m.deleted_at&&manageable?`<button class="content-menu danger" data-delete-circle-message="${m.id}" aria-label="${t('Delete message','حذف الرسالة')}">×</button>`:''}</span></div></div>`}
+function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000),quoted=m.reply_to_id?state.circleMessages.find(x=>same(x.id,m.reply_to_id)):null,sender=m.profile||profileData(m.sender_id),quote=quoted?(()=>{const qp=quoted.profile||profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(qp?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.deleted_at?t('Message deleted','تم حذف الرسالة'):quoted.body||t('Message','رسالة'))}</span></div>`})():'';return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}">${profileAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time>${!m.deleted_at?`<button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>`:''}</span></div></div>`}
 function confirmAction(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-confirm-no>×</button></div><p class="confirm-copy">${t('This action is saved to the database and cannot be undone.','سيُحفظ هذا الإجراء في قاعدة البيانات ولا يمكن التراجع عنه.')}</p><div class="modal-actions"><button class="secondary" data-confirm-no>${t('Cancel','إلغاء')}</button><button class="primary danger" data-confirm-yes>${t('Delete','حذف')}</button></div>`);$$('[data-confirm-no]').forEach(b=>b.onclick=()=>{closeModal();resolve(false)});$('[data-confirm-yes]').onclick=()=>{closeModal();resolve(true)}})}
 async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
 async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}await removeMediaUrl(p.image_url);await loadLiveData();render();toast(t('Post deleted.','تم حذف المنشور.'))}
@@ -1107,10 +1107,10 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 })();
 
 
-/* v128 — independent PWA/mobile message action sheet + reply cancel */
-(function installPwaMessageControlsV128(){
-  if(window.__neisPwaMessageControlsV128)return;
-  window.__neisPwaMessageControlsV128=true;
+/* v130 — dialog-based message actions for PWA/mobile + desktop */
+(function installMessageActionsV130(){
+  if(window.__neisMessageActionsV130)return;
+  window.__neisMessageActionsV130=true;
 
   const mobile=()=>window.matchMedia('(max-width:760px)').matches;
   let timer=null,target=null,armed=null,startX=0,startY=0;
@@ -1120,20 +1120,30 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     target=null;
   };
 
-  const closeSheet=()=>{
-    document.querySelector('[data-neis-message-sheet]')?.remove();
-  };
-
   const resolve=eventTarget=>{
     const row=eventTarget?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
     const bubble=row?.querySelector?.('.bubble');
     return row&&bubble?{row,bubble}:null;
   };
 
-  const openSheet=(row,bubble)=>{
-    closeSheet();
+  const ensureDialog=()=>{
+    let dialog=document.querySelector('#neisMessageActionsDialog');
+    if(dialog)return dialog;
+    dialog=document.createElement('dialog');
+    dialog.id='neisMessageActionsDialog';
+    dialog.className='neis-message-actions-dialog';
+    document.body.appendChild(dialog);
+    dialog.addEventListener('click',event=>{
+      if(event.target===dialog)dialog.close();
+    });
+    dialog.addEventListener('cancel',()=>{});
+    return dialog;
+  };
+
+  const openActions=(row,bubble)=>{
     const messageId=row?.dataset?.messageId||'';
     if(!messageId)return;
+
     const isCircle=!!row.closest('#circleChatFlow');
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
     const targetMessage=isCircle
@@ -1145,87 +1155,102 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         :(same(targetMessage.sender_id,authUser.id)||state.isAdmin)
     );
 
-    const host=document.createElement('div');
-    host.dataset.neisMessageSheet='';
-    host.className='neis-message-sheet-layer';
-    host.innerHTML=`
-      <button type="button" class="neis-message-sheet-backdrop" data-neis-message-sheet-close aria-label="${t('Close','إغلاق')}"></button>
-      <section class="neis-message-sheet" role="dialog" aria-modal="true">
-        <div class="neis-message-sheet-head">
+    const dialog=ensureDialog();
+    dialog.innerHTML=`
+      <div class="neis-message-dialog-card">
+        <div class="neis-message-dialog-head">
           <b>${t('Message actions','خيارات الرسالة')}</b>
-          <button type="button" data-neis-message-sheet-close aria-label="${t('Close','إغلاق')}">×</button>
+          <button type="button" data-message-dialog-close aria-label="${t('Close','إغلاق')}">×</button>
         </div>
-        <button type="button" class="neis-message-sheet-action" data-neis-sheet-reply>
-          <span>${t('Reply','رد')}</span><b>↩</b>
-        </button>
-        <button type="button" class="neis-message-sheet-action" data-neis-sheet-copy>
-          <span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b>
-        </button>
-        ${canDelete?`<button type="button" class="neis-message-sheet-action danger" data-neis-sheet-delete><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}
-      </section>
+        <button type="button" class="neis-message-dialog-action" data-message-dialog-reply><span>${t('Reply','رد')}</span><b>↩</b></button>
+        <button type="button" class="neis-message-dialog-action" data-message-dialog-copy><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>
+        ${canDelete?`<button type="button" class="neis-message-dialog-action danger" data-message-dialog-delete><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}
+      </div>
     `;
-    document.body.appendChild(host);
 
-    host.querySelectorAll('[data-neis-message-sheet-close]').forEach(btn=>{
-      btn.addEventListener('pointerdown',event=>{event.preventDefault();event.stopPropagation();closeSheet()},{passive:false});
-      btn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();closeSheet()});
+    const close=()=>{try{dialog.close()}catch(_){dialog.removeAttribute('open')}};
+
+    dialog.querySelector('[data-message-dialog-close]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();close();
     });
 
-    const reply=host.querySelector('[data-neis-sheet-reply]');
-    if(reply)reply.addEventListener('pointerdown',event=>{
-      event.preventDefault();event.stopPropagation();closeSheet();
+    dialog.querySelector('[data-message-dialog-reply]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();close();
       setTimeout(()=>{isCircle?window.startCircleReply?.(messageId):window.startDmReply?.(messageId)},0);
-    },{passive:false});
+    });
 
-    const copy=host.querySelector('[data-neis-sheet-copy]');
-    if(copy)copy.addEventListener('pointerdown',async event=>{
+    dialog.querySelector('[data-message-dialog-copy]')?.addEventListener('click',async event=>{
       event.preventDefault();event.stopPropagation();
-      try{await navigator.clipboard.writeText(text);toast(t('Message copied.','تم نسخ الرسالة.'));closeSheet()}
-      catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
-    },{passive:false});
+      try{
+        await navigator.clipboard.writeText(text);
+        toast(t('Message copied.','تم نسخ الرسالة.'));
+        close();
+      }catch(_){
+        toast(t('Could not copy this message.','تعذر نسخ الرسالة.'));
+      }
+    });
 
-    const del=host.querySelector('[data-neis-sheet-delete]');
-    if(del)del.addEventListener('pointerdown',event=>{
-      event.preventDefault();event.stopPropagation();closeSheet();
-      window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
-    },{passive:false});
+    dialog.querySelector('[data-message-dialog-delete]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();close();
+      window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,null);
+    });
+
+    try{
+      if(dialog.open)dialog.close();
+      dialog.showModal();
+    }catch(error){
+      console.error('[NEIS message actions dialog]',error);
+      dialog.setAttribute('open','');
+    }
   };
 
   window.NEISMessageActions={
     openByRow(row){
-      if(!row)return;
-      const bubble=row.querySelector?.('.bubble');
-      if(bubble)openSheet(row,bubble);
-    },
-    close:closeSheet
+      const bubble=row?.querySelector?.('.bubble');
+      if(row&&bubble)openActions(row,bubble);
+    }
   };
 
+  // Desktop: direct click on the subtle three-dot trigger.
+  document.addEventListener('click',event=>{
+    const trigger=event.target?.closest?.('[data-message-actions-trigger]');
+    if(!trigger)return;
+    event.preventDefault();
+    event.stopPropagation();
+    const row=trigger.closest('.chat-message');
+    if(row)window.NEISMessageActions.openByRow(row);
+  },true);
+
+  // Mobile/PWA: arm on long press, show after finger release.
   document.addEventListener('touchstart',event=>{
     if(!mobile())return;
     const current=resolve(event.target);
     if(!current)return;
     const touch=event.touches?.[0];
     if(!touch)return;
+
     clearTimer();
+    armed=null;
     target=current;
     startX=touch.clientX;
     startY=touch.clientY;
-    armed=null;
+
     timer=setTimeout(()=>{
-      const selected=target;
+      if(!target)return;
+      armed=target;
       timer=null;
-      if(!selected)return;
-      armed=selected;
       try{window.getSelection()?.removeAllRanges()}catch(_){}
       if(navigator.vibrate)navigator.vibrate(24);
-    },500);
+    },480);
   },{capture:true,passive:true});
 
   document.addEventListener('touchmove',event=>{
-    if(!timer)return;
+    if(!timer&&!armed)return;
     const touch=event.touches?.[0];
     if(!touch){clearTimer();armed=null;return}
-    if(Math.abs(touch.clientX-startX)>36||Math.abs(touch.clientY-startY)>36){clearTimer();armed=null}
+    if(Math.abs(touch.clientX-startX)>38||Math.abs(touch.clientY-startY)>38){
+      clearTimer();armed=null;
+    }
   },{capture:true,passive:true});
 
   document.addEventListener('touchend',event=>{
@@ -1234,20 +1259,13 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     armed=null;
     if(!selected)return;
     event.preventDefault();
-    setTimeout(()=>openSheet(selected.row,selected.bubble),30);
+    event.stopPropagation();
+    setTimeout(()=>openActions(selected.row,selected.bubble),60);
   },{capture:true,passive:false});
+
   document.addEventListener('touchcancel',()=>{clearTimer();armed=null},{capture:true,passive:true});
 
-  document.addEventListener('click',event=>{
-    const trigger=event.target?.closest?.('[data-message-actions-trigger]');
-    if(!trigger)return;
-    event.preventDefault();
-    event.stopPropagation();
-    const row=trigger.closest?.('.chat-message');
-    if(row)window.NEISMessageActions?.openByRow(row);
-  },true);
-
-  // Cancel reply before the composer or any other handler can receive the gesture.
+  // Cancel reply before the input/composer can steal focus.
   document.addEventListener('pointerdown',event=>{
     const dm=event.target?.closest?.('[data-cancel-dm-reply]');
     const circle=event.target?.closest?.('[data-cancel-circle-reply]');
@@ -1255,16 +1273,6 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();
-    if(dm)window.cancelDmReply?.();
-    if(circle)window.cancelCircleReply?.();
-  },true);
-
-  document.addEventListener('click',event=>{
-    const dm=event.target?.closest?.('[data-cancel-dm-reply]');
-    const circle=event.target?.closest?.('[data-cancel-circle-reply]');
-    if(!dm&&!circle)return;
-    event.preventDefault();
-    event.stopPropagation();
     if(dm)window.cancelDmReply?.();
     if(circle)window.cancelCircleReply?.();
   },true);
