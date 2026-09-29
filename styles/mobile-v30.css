@@ -1851,32 +1851,47 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   }
 }
 
-/* v132 — place message actions outside the bubble, toward chat center */
-.chat-message .bubble{
-  position:relative!important;
-  overflow:visible!important;
-}
-.chat-message .message-actions-trigger{
-  top:50%!important;
-  transform:translateY(-50%)!important;
-  inset-inline-start:auto!important;
-  inset-inline-end:auto!important;
-}
-.chat-message:not(.mine) .message-actions-trigger{
-  left:auto!important;
-  right:-34px!important;
-}
-.chat-message.mine .message-actions-trigger{
-  right:auto!important;
-  left:-34px!important;
-}
-.chat-message .bubble:has(.message-actions-trigger){
-  padding-inline-end:10px!important;
-}
+
+/* v133 — desktop-only message actions in original bubble position */
 @media(max-width:760px){
-  .chat-message .message-actions-trigger{
-    width:28px!important;
-    height:28px!important;
-    min-width:28px!important;
+  .message-actions-trigger{
+    display:none!important;
+  }
+}
+@media(min-width:761px){
+  .chat-message .bubble{
+    position:relative!important;
+    overflow:visible!important;
+  }
+  .message-actions-trigger{
+    position:absolute!important;
+    top:6px!important;
+    inset-inline-end:6px!important;
+    inset-inline-start:auto!important;
+    left:auto!important;
+    right:auto!important;
+    transform:none!important;
+    width:26px!important;
+    height:26px!important;
+    min-width:26px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:color-mix(in srgb,var(--card) 82%,transparent)!important;
+    color:var(--muted)!important;
+    font-size:12px!important;
+    line-height:1!important;
+    opacity:.14!important;
+    cursor:pointer!important;
+  }
+  .chat-message:hover .message-actions-trigger,
+  .chat-message:focus-within .message-actions-trigger,
+  .message-actions-trigger:focus-visible{
+    opacity:.9!important;
+  }
+  .chat-message .bubble:has(.message-actions-trigger){
+    padding-inline-end:38px!important;
   }
 }
