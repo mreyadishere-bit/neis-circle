@@ -1,4 +1,4 @@
-const VERSION = "neis-pwa-v3";
+const VERSION = "neis-pwa-v4";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -34,6 +34,7 @@ self.addEventListener("push", (event) => {
   const title = data.title || "NEIS Circle";
   const options = {
     body: data.body || "You have a new notification.",
+    badge: "/assets/notification-badge.svg",
     data: { route: data.route || "/" },
     tag: data.notification_id ? "neis-" + data.notification_id : undefined,
     renotify: false,
