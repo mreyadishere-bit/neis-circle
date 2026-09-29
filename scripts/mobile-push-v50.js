@@ -242,7 +242,7 @@
       const messageId=row.dataset?.messageId||'';
 
       const isCircle=!!row?.closest?.('#circleChatFlow');const canDelete=row.dataset?.messageDeletable==='1';
-      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message data-message-action-id="${messageId}" data-message-action-scope="${isCircle?'circle':'dm'}"><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+      openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message data-message-action-id="${messageId}" data-message-action-scope="${isCircle?'circle':'dm'}" ontouchend="return window.neisDeleteFromActionElement(this,event)" onpointerup="return window.neisDeleteFromActionElement(this,event)" onclick="return window.neisDeleteFromActionElement(this,event)"><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
       document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
 
       const reply=document.querySelector('[data-native-reply-message]');
@@ -258,18 +258,7 @@
           toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'));
         }
       };
-      const actionModal=document.querySelector('#modalRoot .message-actions-modal');
-      const del=actionModal?.querySelector('[data-native-delete-message]');
-      if(del){
-        const runDelete=event=>{
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
-        };
-        del.addEventListener('touchstart',runDelete,{passive:false,once:true});
-        del.addEventListener('pointerdown',runDelete,{once:true});
-        del.addEventListener('click',runDelete,{once:true});
-      }
+
     };
 
     const begin=(eventTarget,x,y)=>{
