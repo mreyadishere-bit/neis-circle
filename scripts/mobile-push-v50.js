@@ -137,7 +137,7 @@
       return;
     }
     const prefs=data||{
-      messages:true,replies:true,circles:true,social:true,announcements:true,reactions:false,sound:true
+      messages:true,replies:true,circles:true,social:true,announcements:true,reactions:true,sound:true
     };
     const row=(key,en,arText)=>`<label class="account-row" style="cursor:pointer"><span><b>${lang(en,arText)}</b></span><input type="checkbox" data-mobile-push-pref="${key}" ${prefs[key]!==false?'checked':''}></label>`;
     openModal(`
