@@ -1103,16 +1103,23 @@ window.addEventListener('resize',fitMobileConversationList,{passive:true});windo
 window.addEventListener('hashchange',applyRoute);
 document.addEventListener('click',e=>{if(!e.target.closest('#globalSearchForm')){$('#searchSuggestions')?.classList.add('hidden');syncSearchChrome()}});
 
+window.NEISChatActionBridge={
+  deleteMessage(scope,id){
+    if(scope==='circle')return deleteCircleMessage(id);
+    return deleteDirectMessage(id);
+  }
+};
 setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history.replaceState(null,'','#/home');applyRoute()}},250);
 })();
 
 
-/* v130 — dialog-based message actions for PWA/mobile + desktop */
-(function installMessageActionsV130(){
-  if(window.__neisMessageActionsV130)return;
-  window.__neisMessageActionsV130=true;
+/* v131 — scope-safe message actions for mobile + desktop */
+(function installMessageActionsV131(){
+  if(window.__neisMessageActionsV131)return;
+  window.__neisMessageActionsV131=true;
 
   const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+  const tr=(en,ar)=>((typeof state!=='undefined'&&state?.lang==='ar')?ar:en);
   let timer=null,target=null,armed=null,startX=0,startY=0;
 
   const clearTimer=()=>{
@@ -1134,37 +1141,34 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     dialog.className='neis-message-actions-dialog';
     document.body.appendChild(dialog);
     dialog.addEventListener('click',event=>{
-      if(event.target===dialog)dialog.close();
+      if(event.target===dialog){try{dialog.close()}catch(_){}}
     });
-    dialog.addEventListener('cancel',()=>{});
     return dialog;
   };
 
   const openActions=(row,bubble)=>{
-    const messageId=row?.dataset?.messageId||'';
+    const messageId=String(row?.dataset?.messageId||'').trim();
     if(!messageId)return;
 
     const isCircle=!!row.closest('#circleChatFlow');
+    const scope=isCircle?'circle':'dm';
+    const canDelete=row.dataset?.messageDeletable==='1';
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
-    const targetMessage=isCircle
-      ?state.circleMessages.find(m=>same(m.id,messageId))
-      :state.liveMessages.find(m=>same(m.id,messageId));
-    const canDelete=!!targetMessage&&(
-      isCircle
-        ?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id))
-        :(same(targetMessage.sender_id,authUser.id)||state.isAdmin)
-    );
 
     const dialog=ensureDialog();
     dialog.innerHTML=`
       <div class="neis-message-dialog-card">
         <div class="neis-message-dialog-head">
-          <b>${t('Message actions','خيارات الرسالة')}</b>
-          <button type="button" data-message-dialog-close aria-label="${t('Close','إغلاق')}">×</button>
+          <b>${tr('Message actions','خيارات الرسالة')}</b>
+          <button type="button" data-message-dialog-close aria-label="${tr('Close','إغلاق')}">×</button>
         </div>
-        <button type="button" class="neis-message-dialog-action" data-message-dialog-reply><span>${t('Reply','رد')}</span><b>↩</b></button>
-        <button type="button" class="neis-message-dialog-action" data-message-dialog-copy><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>
-        ${canDelete?`<button type="button" class="neis-message-dialog-action danger" data-message-dialog-delete><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}
+        <button type="button" class="neis-message-dialog-action" data-message-dialog-reply>
+          <span>${tr('Reply','رد')}</span><b>↩</b>
+        </button>
+        <button type="button" class="neis-message-dialog-action" data-message-dialog-copy>
+          <span>${tr('Copy message','نسخ الرسالة')}</span><b>⧉</b>
+        </button>
+        ${canDelete?`<button type="button" class="neis-message-dialog-action danger" data-message-dialog-delete><span>${tr('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}
       </div>
     `;
 
@@ -1176,30 +1180,33 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 
     dialog.querySelector('[data-message-dialog-reply]')?.addEventListener('click',event=>{
       event.preventDefault();event.stopPropagation();close();
-      setTimeout(()=>{isCircle?window.startCircleReply?.(messageId):window.startDmReply?.(messageId)},0);
+      setTimeout(()=>{
+        if(isCircle)window.startCircleReply?.(messageId);
+        else window.startDmReply?.(messageId);
+      },0);
     });
 
     dialog.querySelector('[data-message-dialog-copy]')?.addEventListener('click',async event=>{
       event.preventDefault();event.stopPropagation();
       try{
         await navigator.clipboard.writeText(text);
-        toast(t('Message copied.','تم نسخ الرسالة.'));
+        if(typeof toast==='function')toast(tr('Message copied.','تم نسخ الرسالة.'));
         close();
       }catch(_){
-        toast(t('Could not copy this message.','تعذر نسخ الرسالة.'));
+        if(typeof toast==='function')toast(tr('Could not copy this message.','تعذر نسخ الرسالة.'));
       }
     });
 
     dialog.querySelector('[data-message-dialog-delete]')?.addEventListener('click',event=>{
       event.preventDefault();event.stopPropagation();close();
-      window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,null);
+      window.NEISChatActionBridge?.deleteMessage?.(scope,messageId);
     });
 
     try{
       if(dialog.open)dialog.close();
       dialog.showModal();
     }catch(error){
-      console.error('[NEIS message actions dialog]',error);
+      console.error('[NEIS message actions]',error);
       dialog.setAttribute('open','');
     }
   };
@@ -1211,7 +1218,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     }
   };
 
-  // Desktop: direct click on the subtle three-dot trigger.
+  // Both desktop and mobile: three-dot trigger opens the same action dialog.
   document.addEventListener('click',event=>{
     const trigger=event.target?.closest?.('[data-message-actions-trigger]');
     if(!trigger)return;
@@ -1221,24 +1228,18 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     if(row)window.NEISMessageActions.openByRow(row);
   },true);
 
-  // Mobile/PWA: arm on long press, show after finger release.
+  // Mobile long press remains as an optional shortcut.
   document.addEventListener('touchstart',event=>{
     if(!mobile())return;
     const current=resolve(event.target);
     if(!current)return;
     const touch=event.touches?.[0];
     if(!touch)return;
-
-    clearTimer();
-    armed=null;
-    target=current;
-    startX=touch.clientX;
-    startY=touch.clientY;
-
+    clearTimer();armed=null;target=current;
+    startX=touch.clientX;startY=touch.clientY;
     timer=setTimeout(()=>{
       if(!target)return;
-      armed=target;
-      timer=null;
+      armed=target;timer=null;
       try{window.getSelection()?.removeAllRanges()}catch(_){}
       if(navigator.vibrate)navigator.vibrate(24);
     },480);
@@ -1255,17 +1256,15 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 
   document.addEventListener('touchend',event=>{
     const selected=armed;
-    clearTimer();
-    armed=null;
+    clearTimer();armed=null;
     if(!selected)return;
-    event.preventDefault();
-    event.stopPropagation();
-    setTimeout(()=>openActions(selected.row,selected.bubble),60);
+    event.preventDefault();event.stopPropagation();
+    setTimeout(()=>openActions(selected.row,selected.bubble),50);
   },{capture:true,passive:false});
 
   document.addEventListener('touchcancel',()=>{clearTimer();armed=null},{capture:true,passive:true});
 
-  // Cancel reply before the input/composer can steal focus.
+  // Reply cancel stays capture-first so it never focuses the composer.
   document.addEventListener('pointerdown',event=>{
     const dm=event.target?.closest?.('[data-cancel-dm-reply]');
     const circle=event.target?.closest?.('[data-cancel-circle-reply]');
