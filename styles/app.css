@@ -1858,3 +1858,24 @@ html,body{
     bottom:calc(10px + env(safe-area-inset-bottom))!important;
   }
 }
+
+/* v122 — device-specific notification prompt controls */
+.pwa-notification-suppress{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:10px 0 2px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--soft);
+  color:var(--ink);
+  font-size:12px;
+  cursor:pointer;
+}
+.pwa-notification-suppress input{
+  width:17px;
+  height:17px;
+  accent-color:var(--accent);
+  flex:0 0 auto;
+}
