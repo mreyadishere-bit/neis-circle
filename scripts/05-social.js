@@ -1107,17 +1107,21 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 })();
 
 
-/* v127 — single-source mobile/PWA long press message actions */
-(function installMobileWebMessageLongPressV127(){
-  if(window.__neisMobileWebMessageLongPressV127)return;
-  window.__neisMobileWebMessageLongPressV127=true;
+/* v128 — independent PWA/mobile message action sheet + reply cancel */
+(function installPwaMessageControlsV128(){
+  if(window.__neisPwaMessageControlsV128)return;
+  window.__neisPwaMessageControlsV128=true;
 
-  let timer=null,target=null,startX=0,startY=0,fired=false;
   const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+  let timer=null,target=null,startX=0,startY=0;
 
-  const clear=()=>{
+  const clearTimer=()=>{
     if(timer){clearTimeout(timer);timer=null}
     target=null;
+  };
+
+  const closeSheet=()=>{
+    document.querySelector('[data-neis-message-sheet]')?.remove();
   };
 
   const resolve=eventTarget=>{
@@ -1126,12 +1130,12 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     return row&&bubble?{row,bubble}:null;
   };
 
-  const showActions=(row,bubble)=>{
-    const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
+  const openSheet=(row,bubble)=>{
+    closeSheet();
     const messageId=row?.dataset?.messageId||'';
-    if(!messageId||typeof openModal!=='function')return;
-
+    if(!messageId)return;
     const isCircle=!!row.closest('#circleChatFlow');
+    const text=bubble?.querySelector?.('.message-text')?.textContent||'';
     const targetMessage=isCircle
       ?state.circleMessages.find(m=>same(m.id,messageId))
       :state.liveMessages.find(m=>same(m.id,messageId));
@@ -1141,28 +1145,50 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         :(same(targetMessage.sender_id,authUser.id)||state.isAdmin)
     );
 
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}" onclick="return window.neisDeleteFromActionElement(this,event)"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
-    document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
+    const host=document.createElement('div');
+    host.dataset.neisMessageSheet='';
+    host.className='neis-message-sheet-layer';
+    host.innerHTML=`
+      <button type="button" class="neis-message-sheet-backdrop" data-neis-message-sheet-close aria-label="${t('Close','إغلاق')}"></button>
+      <section class="neis-message-sheet" role="dialog" aria-modal="true">
+        <div class="neis-message-sheet-head">
+          <b>${t('Message actions','خيارات الرسالة')}</b>
+          <button type="button" data-neis-message-sheet-close aria-label="${t('Close','إغلاق')}">×</button>
+        </div>
+        <button type="button" class="neis-message-sheet-action" data-neis-sheet-reply>
+          <span>${t('Reply','رد')}</span><b>↩</b>
+        </button>
+        <button type="button" class="neis-message-sheet-action" data-neis-sheet-copy>
+          <span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b>
+        </button>
+        ${canDelete?`<button type="button" class="neis-message-sheet-action danger" data-neis-sheet-delete><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}
+      </section>
+    `;
+    document.body.appendChild(host);
 
-    const reply=document.querySelector('[data-mobile-reply-message]');
-    if(reply)reply.onclick=()=>{
-      closeModal();
-      setTimeout(()=>{
-        if(isCircle)window.startCircleReply?.(messageId);
-        else window.startDmReply?.(messageId);
-      },0);
-    };
+    host.querySelectorAll('[data-neis-message-sheet-close]').forEach(btn=>{
+      btn.addEventListener('pointerdown',event=>{event.preventDefault();event.stopPropagation();closeSheet()},{passive:false});
+      btn.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();closeSheet()});
+    });
 
-    const copy=document.querySelector('[data-mobile-copy-message]');
-    if(copy)copy.onclick=async()=>{
-      try{
-        await navigator.clipboard.writeText(messageText);
-        closeModal();
-        toast(t('Message copied.','تم نسخ الرسالة.'));
-      }catch(_){
-        toast(t('Could not copy this message.','تعذر نسخ الرسالة.'));
-      }
-    };
+    const reply=host.querySelector('[data-neis-sheet-reply]');
+    if(reply)reply.addEventListener('pointerdown',event=>{
+      event.preventDefault();event.stopPropagation();closeSheet();
+      setTimeout(()=>{isCircle?window.startCircleReply?.(messageId):window.startDmReply?.(messageId)},0);
+    },{passive:false});
+
+    const copy=host.querySelector('[data-neis-sheet-copy]');
+    if(copy)copy.addEventListener('pointerdown',async event=>{
+      event.preventDefault();event.stopPropagation();
+      try{await navigator.clipboard.writeText(text);toast(t('Message copied.','تم نسخ الرسالة.'));closeSheet()}
+      catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
+    },{passive:false});
+
+    const del=host.querySelector('[data-neis-sheet-delete]');
+    if(del)del.addEventListener('pointerdown',event=>{
+      event.preventDefault();event.stopPropagation();closeSheet();
+      window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
+    },{passive:false});
   };
 
   document.addEventListener('touchstart',event=>{
@@ -1171,8 +1197,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     if(!current)return;
     const touch=event.touches?.[0];
     if(!touch)return;
-    clear();
-    fired=false;
+    clearTimer();
     target=current;
     startX=touch.clientX;
     startY=touch.clientY;
@@ -1180,31 +1205,43 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
       const selected=target;
       timer=null;
       if(!selected)return;
-      fired=true;
       try{window.getSelection()?.removeAllRanges()}catch(_){}
-      if(navigator.vibrate)navigator.vibrate(22);
-      showActions(selected.row,selected.bubble);
+      if(navigator.vibrate)navigator.vibrate(24);
+      openSheet(selected.row,selected.bubble);
       target=null;
-    },480);
+    },500);
   },{capture:true,passive:true});
 
   document.addEventListener('touchmove',event=>{
     if(!timer)return;
     const touch=event.touches?.[0];
-    if(!touch){clear();return}
-    if(Math.abs(touch.clientX-startX)>42||Math.abs(touch.clientY-startY)>42)clear();
+    if(!touch){clearTimer();return}
+    if(Math.abs(touch.clientX-startX)>36||Math.abs(touch.clientY-startY)>36)clearTimer();
   },{capture:true,passive:true});
 
-  document.addEventListener('touchend',()=>{clear()},{capture:true,passive:true});
-  document.addEventListener('touchcancel',()=>{clear()},{capture:true,passive:true});
+  document.addEventListener('touchend',clearTimer,{capture:true,passive:true});
+  document.addEventListener('touchcancel',clearTimer,{capture:true,passive:true});
 
-  document.addEventListener('contextmenu',event=>{
-    if(!mobile())return;
-    const current=resolve(event.target);
-    if(!current)return;
+  // Cancel reply before the composer or any other handler can receive the gesture.
+  document.addEventListener('pointerdown',event=>{
+    const dm=event.target?.closest?.('[data-cancel-dm-reply]');
+    const circle=event.target?.closest?.('[data-cancel-circle-reply]');
+    if(!dm&&!circle)return;
     event.preventDefault();
-    if(!fired)showActions(current.row,current.bubble);
-    fired=false;
+    event.stopPropagation();
+    event.stopImmediatePropagation?.();
+    if(dm)window.cancelDmReply?.();
+    if(circle)window.cancelCircleReply?.();
+  },true);
+
+  document.addEventListener('click',event=>{
+    const dm=event.target?.closest?.('[data-cancel-dm-reply]');
+    const circle=event.target?.closest?.('[data-cancel-circle-reply]');
+    if(!dm&&!circle)return;
+    event.preventDefault();
+    event.stopPropagation();
+    if(dm)window.cancelDmReply?.();
+    if(circle)window.cancelCircleReply?.();
   },true);
 })();
 
