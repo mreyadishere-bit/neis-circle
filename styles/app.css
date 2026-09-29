@@ -1534,3 +1534,31 @@ body.rtl .reply-thread-toggle{
 #modalRoot .message-actions-modal .account-row.danger b{
   color:#a53a2d!important;
 }
+
+/* v96 — Circle chat mirrors the Direct Message chat system */
+.dm-like-circle-chat{
+  display:flex;
+  flex-direction:column;
+  min-height:520px;
+  padding:0!important;
+  overflow:hidden;
+}
+.dm-like-circle-chat .circle-chat-head{
+  min-height:62px;
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  background:var(--card);
+}
+.circle-chat-mark{
+  width:38px;height:38px;flex:0 0 38px;border-radius:12px;
+  display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800;
+}
+.circle-chat-title{display:flex;flex-direction:column;min-width:0}
+.circle-chat-title b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.circle-chat-title small{font-size:10px;color:var(--muted)}
+.dm-like-circle-chat .chat-flow{flex:1 1 auto;min-height:0;overflow-y:auto}
+.dm-like-circle-chat .circle-message-stack{display:flex;flex-direction:column;max-width:78%;min-width:0}
+.dm-like-circle-chat .circle-message.mine .circle-message-stack{margin-inline-start:auto;align-items:flex-end}
+.dm-like-circle-chat .circle-message-author{padding:0 4px 3px;font-size:9px;color:var(--muted);text-align:start}
+.dm-like-circle-chat .circle-message .bubble{max-width:100%!important}
+.dm-like-circle-chat .circle-message.grouped .circle-message-author{display:none}
