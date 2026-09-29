@@ -1629,3 +1629,76 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     overscroll-behavior:contain!important;
   }
 }
+
+/* v128 — independent mobile/PWA message action sheet */
+@media(max-width:760px){
+  .neis-message-sheet-layer{
+    position:fixed!important;
+    inset:0!important;
+    z-index:2147483000!important;
+    display:flex!important;
+    align-items:flex-end!important;
+    justify-content:center!important;
+    padding:12px 12px calc(12px + env(safe-area-inset-bottom))!important;
+    box-sizing:border-box!important;
+  }
+  .neis-message-sheet-backdrop{
+    position:absolute!important;
+    inset:0!important;
+    width:100%!important;
+    height:100%!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    background:rgba(0,0,0,.28)!important;
+  }
+  .neis-message-sheet{
+    position:relative!important;
+    z-index:1!important;
+    width:min(100%,420px)!important;
+    padding:10px!important;
+    border:1px solid var(--line)!important;
+    border-radius:22px!important;
+    background:var(--card)!important;
+    box-shadow:0 20px 60px rgba(0,0,0,.22)!important;
+  }
+  .neis-message-sheet-head{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:12px!important;
+    padding:7px 8px 10px!important;
+  }
+  .neis-message-sheet-head>b{font-size:15px!important}
+  .neis-message-sheet-head>button{
+    width:34px!important;height:34px!important;min-width:34px!important;
+    display:grid!important;place-items:center!important;
+    border:1px solid var(--line)!important;border-radius:11px!important;
+    background:var(--soft)!important;color:var(--ink)!important;
+    font-size:20px!important;line-height:1!important;
+    -webkit-tap-highlight-color:transparent!important;
+  }
+  .neis-message-sheet-action{
+    width:100%!important;
+    min-height:48px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:12px!important;
+    padding:11px 12px!important;
+    border:0!important;
+    border-radius:14px!important;
+    background:transparent!important;
+    color:var(--ink)!important;
+    text-align:start!important;
+    font:inherit!important;
+    -webkit-tap-highlight-color:transparent!important;
+    touch-action:manipulation!important;
+  }
+  .neis-message-sheet-action:active{
+    background:var(--soft)!important;
+  }
+  .neis-message-sheet-action.danger{
+    color:#a53a2d!important;
+  }
+}
