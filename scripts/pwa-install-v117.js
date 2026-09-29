@@ -217,6 +217,12 @@
         ${row('reactions','Likes & reactions','الإعجابات والتفاعلات')}
         ${row('sound','Notification sound','صوت الإشعارات')}
       </div>
+      <div class="account-menu" style="margin-top:12px">
+        <button type="button" class="account-row" data-pwa-show-prompt-again>
+          <span><b>${lang('Automatic notification prompt','طلب تفعيل الإشعارات تلقائيًا')}</b><small>${localStorage.getItem(NOTIFICATION_PROMPT_DISABLED_KEY)==='1'?lang('Hidden on this device','مخفي على هذا الجهاز'):lang('Allowed to appear on this device','مسموح له بالظهور على هذا الجهاز')}</small></span>
+          <b>→</b>
+        </button>
+      </div>
       <div class="modal-actions">
         <button type="button" class="secondary" data-pwa-notification-permission>${notificationPermission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
         <button type="button" class="primary" data-save-pwa-push>${lang('Save','حفظ')}</button>
@@ -229,6 +235,14 @@
       await ensureWebPush(true);
       permissionButton.disabled=false;
       permissionButton.textContent=('Notification' in window&&Notification.permission==='granted')?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات');
+    };
+
+    const showAgain=document.querySelector('[data-pwa-show-prompt-again]');
+    if(showAgain)showAgain.onclick=()=>{
+      localStorage.removeItem(NOTIFICATION_PROMPT_DISABLED_KEY);
+      notificationOnboardingShown=false;
+      if(typeof toast==='function')toast(lang('Automatic notification prompt enabled on this device.','تم تفعيل طلب الإشعارات التلقائي على هذا الجهاز.'));
+      openPwaNotificationSettings();
     };
 
     const saveButton=document.querySelector('[data-save-pwa-push]');
@@ -290,6 +304,7 @@
   let notificationOnboardingTimer=null;
   let notificationOnboardingShown=false;
   let notificationHiddenAt=0;
+  const NOTIFICATION_PROMPT_DISABLED_KEY='neis-pwa-notification-prompt-disabled';
 
   function notificationOnboardingMarkup(){
     const permission=('Notification' in window)?Notification.permission:'unsupported';
@@ -321,6 +336,7 @@
       Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
       return;
     }
+    if(localStorage.getItem(NOTIFICATION_PROMPT_DISABLED_KEY)==='1')return;
     if(notificationOnboardingShown)return;
     notificationOnboardingShown=true;
 
@@ -334,18 +350,35 @@
         </div>
         <button class="close" data-close>×</button>
       </div>
+      <label class="pwa-notification-suppress">
+        <input type="checkbox" data-pwa-dont-show-again>
+        <span>${lang("Don't show again on this device",'عدم الإظهار مرة أخرى على هذا الجهاز')}</span>
+      </label>
       <div class="modal-actions">
-        <button type="button" class="secondary" data-close>${lang('Not now','ليس الآن')}</button>
+        <button type="button" class="secondary" data-pwa-not-now>${lang('Not now','ليس الآن')}</button>
         ${copy.action}
       </div>
     `);
 
+    const suppress=document.querySelector('[data-pwa-dont-show-again]');
+    const rememberSuppression=()=>{
+      if(suppress?.checked)localStorage.setItem(NOTIFICATION_PROMPT_DISABLED_KEY,'1');
+    };
+
+    const notNow=document.querySelector('[data-pwa-not-now]');
+    if(notNow)notNow.onclick=()=>{
+      rememberSuppression();
+      try{closeModal()}catch(_){}
+    };
+
     const enable=document.querySelector('[data-pwa-onboarding-enable]');
     if(enable)enable.onclick=async()=>{
+      rememberSuppression();
       enable.disabled=true;
       const ok=await ensureWebPush(true);
       enable.disabled=false;
       if(ok){
+        localStorage.removeItem(NOTIFICATION_PROMPT_DISABLED_KEY);
         try{closeModal()}catch(_){}
       }
     };
