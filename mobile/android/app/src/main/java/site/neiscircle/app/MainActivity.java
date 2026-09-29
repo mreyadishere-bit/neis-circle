@@ -95,9 +95,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.5");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.6");
 
+        webView.clearCache(true);
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -136,7 +138,7 @@ public class MainActivity extends Activity {
         });
 
         handleIntent(getIntent());
-        webView.loadUrl(SITE_URL);
+        webView.loadUrl(SITE_URL + "?native=1.6");
     }
 
     private void checkForWebUpdate() {
@@ -150,9 +152,9 @@ public class MainActivity extends Activity {
             "const parsed=new DOMParser().parseFromString(html,'text/html');" +
             "const clean=u=>{try{const x=new URL(u,location.href);return x.pathname+x.search}catch(e){return String(u||'')}};" +
             "const wanted=[...parsed.querySelectorAll('script[src],link[rel=\\\"stylesheet\\\"][href]')]" +
-            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')&&!x.includes('mobile-push-v50.js')&&!x.includes('native-app-v56.js')).sort();" +
+            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')).sort();" +
             "const current=[...document.querySelectorAll('script[src],link[rel=\\\"stylesheet\\\"][href]')]" +
-            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')&&!x.includes('mobile-push-v50.js')&&!x.includes('native-app-v56.js')).sort();" +
+            ".map(el=>clean(el.src||el.href)).filter(x=>x&&x.includes('?v=')).sort();" +
             "const a=wanted.join('|'),b=current.join('|');" +
             "if(a&&b&&a!==b){location.reload();return 'reloaded'}" +
             "return 'same';" +
