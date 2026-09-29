@@ -196,6 +196,7 @@
       return;
     }
     const prefs=data||{messages:true,replies:true,circles:true,social:true,announcements:true,reactions:true,sound:true};
+    const notificationPermission=('Notification' in window)?Notification.permission:'unsupported';
     const row=(key,en,arText)=>`<label class="account-row" style="cursor:pointer"><span><b>${lang(en,arText)}</b></span><input type="checkbox" data-pwa-push-pref="${key}" ${prefs[key]!==false?'checked':''}></label>`;
 
     openModal(`
@@ -216,7 +217,7 @@
         ${row('sound','Notification sound','صوت الإشعارات')}
       </div>
       <div class="modal-actions">
-        <button type="button" class="secondary" data-pwa-notification-permission>${Notification.permission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
+        <button type="button" class="secondary" data-pwa-notification-permission>${notificationPermission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
         <button type="button" class="primary" data-save-pwa-push>${lang('Save','حفظ')}</button>
       </div>
     `);
@@ -226,7 +227,7 @@
       permissionButton.disabled=true;
       await ensureWebPush(true);
       permissionButton.disabled=false;
-      permissionButton.textContent=Notification.permission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات');
+      permissionButton.textContent=('Notification' in window&&Notification.permission==='granted')?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات');
     };
 
     const saveButton=document.querySelector('[data-save-pwa-push]');
@@ -240,7 +241,7 @@
         if(typeof toast==='function')toast(lang('Could not save notification settings.','تعذر حفظ إعدادات الإشعارات.'));
         return;
       }
-      if(Notification.permission==='granted')await ensureWebPush(false);
+      if('Notification' in window&&Notification.permission==='granted')await ensureWebPush(false);
       closeModal();
       if(typeof toast==='function')toast(lang('Notification settings saved.','تم حفظ إعدادات الإشعارات.'));
     };
@@ -255,7 +256,8 @@
     button.className='module-card';
     button.style.cssText='width:100%;margin-top:12px;text-align:start';
     button.dataset.pwaNotificationSettings='';
-    button.innerHTML=`<b>${lang('Notifications','الإشعارات')}</b><p>${Notification.permission==='granted'?lang('Enabled on this device','مفعلة على هذا الجهاز'):lang('Push alerts and preferences','التنبيهات وإعداداتها')}</p>`;
+    const permission=('Notification' in window)?Notification.permission:'unsupported';
+    button.innerHTML=`<b>${lang('Notifications','الإشعارات')}</b><p>${permission==='granted'?lang('Enabled on this device','مفعلة على هذا الجهاز'):lang('Push alerts and preferences','التنبيهات وإعداداتها')}</p>`;
     const action=modal.querySelector('[data-action="setup"]')||modal.querySelector('[data-action=setup]');
     if(action)action.before(button); else modal.appendChild(button);
     button.onclick=openPwaNotificationSettings;
