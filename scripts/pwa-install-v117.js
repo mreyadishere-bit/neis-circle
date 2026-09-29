@@ -52,9 +52,23 @@
   async function registerServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
-      serviceWorkerRegistration=await navigator.serviceWorker.register('/pwa-sw.js?v=5',{scope:'/'});
+      const migrationKey='neis-pwa-sw-migrated-v6';
+      if(localStorage.getItem(migrationKey)!=='1'){
+        const registrations=await navigator.serviceWorker.getRegistrations();
+        for(const reg of registrations){
+          try{await reg.unregister()}catch(_){}
+        }
+        localStorage.setItem(migrationKey,'1');
+      }
+      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=6',{scope:'/'});
       serviceWorkerRegistration.update().catch(()=>{});
-      navigator.serviceWorker.ready.then(reg=>{serviceWorkerRegistration=reg;reg.update().catch(()=>{})}).catch(()=>{});
+      navigator.serviceWorker.ready.then(reg=>{
+        serviceWorkerRegistration=reg;
+        reg.update().catch(()=>{});
+        if(('Notification' in window)&&Notification.permission==='granted'){
+          setTimeout(()=>{ensureWebPush(false).catch(()=>{})},300);
+        }
+      }).catch(()=>{});
       return serviceWorkerRegistration;
     }catch(error){
       console.error('[NEIS PWA service worker]',error);
