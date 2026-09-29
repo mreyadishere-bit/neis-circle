@@ -9,8 +9,6 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.view.GestureDetector;
-import android.view.MotionEvent;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -47,8 +45,6 @@ public class MainActivity extends Activity {
     private int nativeBottomInset = 0;
     private long backgroundedAtMs = 0L;
     private boolean updateCheckRunning = false;
-    private float lastTouchX = 0f;
-    private float lastTouchY = 0f;
 
     public static boolean isAppForeground() {
         return appForeground;
@@ -100,7 +96,7 @@ public class MainActivity extends Activity {
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.4");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.5");
 
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
@@ -117,35 +113,6 @@ public class MainActivity extends Activity {
                     return false;
                 }
             }
-        });
-
-        GestureDetector messageGestureDetector = new GestureDetector(
-            this,
-            new GestureDetector.SimpleOnGestureListener() {
-                @Override
-                public boolean onDown(MotionEvent event) {
-                    return true;
-                }
-
-                @Override
-                public void onLongPress(MotionEvent event) {
-                    if (webView == null || !pageReady || event == null) return;
-                    lastTouchX = event.getX();
-                    lastTouchY = event.getY();
-                    String script =
-                        "window.NEISMobile&&window.NEISMobile.openMessageActionsAtDevicePixels&&" +
-                        "window.NEISMobile.openMessageActionsAtDevicePixels(" +
-                        lastTouchX + "," + lastTouchY + ")";
-                    webView.evaluateJavascript(script, null);
-                }
-            }
-        );
-        messageGestureDetector.setIsLongpressEnabled(true);
-        webView.setOnTouchListener((view, event) -> {
-            lastTouchX = event.getX();
-            lastTouchY = event.getY();
-            messageGestureDetector.onTouchEvent(event);
-            return false;
         });
 
         webView.setDownloadListener((url, userAgent, contentDisposition, mimeType, length) -> openExternal(url));
