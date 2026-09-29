@@ -1575,3 +1575,14 @@ body.rtl .reply-thread-toggle{
   font-weight:800!important;
 }
 .circle-chat-mark::first-letter{line-height:1!important}
+
+/* v99 — message action rows must behave as real tap targets in WebView */
+#modalRoot .message-actions-modal [data-mobile-delete-message],
+#modalRoot .message-actions-modal [data-native-delete-message]{
+  -webkit-user-select:none!important;
+  user-select:none!important;
+  -webkit-touch-callout:none!important;
+  touch-action:manipulation!important;
+  -webkit-tap-highlight-color:transparent!important;
+  cursor:pointer!important;
+}
