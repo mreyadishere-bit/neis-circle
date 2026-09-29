@@ -1521,7 +1521,12 @@ body.rtl .reply-thread-toggle{
   font-size:9px;
   opacity:.78;
 }
-.chat-message .content-menu{display:none!important}
+@media(min-width:761px){
+  html:not(.neis-native-app) .chat-message .content-menu{display:grid!important;place-items:center}
+}
+@media(max-width:760px){
+  .chat-message .content-menu{display:none!important}
+}
 
 
 /* v83 — destructive action in compact message sheet */
