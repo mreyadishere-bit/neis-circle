@@ -298,7 +298,7 @@ function installDmSwipeReply(){
   if(window.__neisDmSwipeReplyV85)return;
   window.__neisDmSwipeReplyV85=true;
   let active=null,startX=0,startY=0,triggered=false,pointerId=null;
-  const mobile=()=>window.matchMedia('(max-width:760px)').matches;
+  const mobile=()=>window.matchMedia('(max-width:760px)').matches&&!(window.NeisAndroid&&typeof window.NeisAndroid.isNative==='function'&&window.NeisAndroid.isNative());
   const reset=()=>{
     if(active)active.classList.remove('swipe-reply-active','swipe-reply-ready');
     active=null;triggered=false;pointerId=null;
