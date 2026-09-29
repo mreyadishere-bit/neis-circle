@@ -261,14 +261,13 @@
       const del=document.querySelector('[data-native-delete-message]');
       if(del)del.onclick=()=>{
         try{
-          if(typeof deleteDirectMessage==='function'){
-            deleteDirectMessage(messageId);
+          if(isCircle){
+            if(typeof deleteCircleMessage==='function'){deleteCircleMessage(messageId);return}
+            toast(lang('Delete action is unavailable.','خيار الحذف غير متاح حاليًا.'));
             return;
           }
-          if(typeof window.deleteDirectMessage==='function'){
-            window.deleteDirectMessage(messageId);
-            return;
-          }
+          if(typeof deleteDirectMessage==='function'){deleteDirectMessage(messageId);return}
+          if(typeof window.deleteDirectMessage==='function'){window.deleteDirectMessage(messageId);return}
           toast(lang('Delete action is unavailable.','خيار الحذف غير متاح حاليًا.'));
         }catch(error){
           console.error('[NEIS APK delete message]',error);
