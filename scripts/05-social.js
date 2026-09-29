@@ -334,12 +334,13 @@ function clearDmReplyTarget(){
   state.dmReplyTo=null;
   document.querySelector('[data-dm-reply-preview]')?.remove();
 }
+window.cancelDmReply=clearDmReplyTarget;
 function dmReplyComposer(conversationId){
   const reply=state.dmReplyTo&&same(state.dmReplyTo.conversationId,conversationId)
     ?state.liveMessages.find(m=>same(m.id,state.dmReplyTo.messageId)):null;
   if(!reply)return '';
   const sender=profileData(reply.sender_id);
-  return `<div class="dm-reply-preview" data-dm-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-dm-reply aria-label="${t('Cancel reply','إلغاء الرد')}">×</button></div>`;
+  return `<div class="dm-reply-preview" data-dm-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-dm-reply aria-label="${t('Cancel reply','إلغاء الرد')}" onpointerdown="event.preventDefault();event.stopPropagation();window.cancelDmReply?.();return false" onclick="event.preventDefault();event.stopPropagation();window.cancelDmReply?.();return false">×</button></div>`;
 }
 window.startDmReply=setDmReplyTarget;
 
@@ -448,7 +449,7 @@ function circleReplyComposer(circleId){
     ?state.circleMessages.find(m=>same(m.id,state.circleReplyTo.messageId)):null;
   if(!reply)return '';
   const sender=reply.profile||profileData(reply.sender_id);
-  return `<div class="dm-reply-preview circle-reply-preview" data-circle-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.deleted_at?t('Message deleted','تم حذف الرسالة'):reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-circle-reply aria-label="${t('Cancel reply','إلغاء الرد')}">×</button></div>`;
+  return `<div class="dm-reply-preview circle-reply-preview" data-circle-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.deleted_at?t('Message deleted','تم حذف الرسالة'):reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-circle-reply aria-label="${t('Cancel reply','إلغاء الرد')}" onpointerdown="event.preventDefault();event.stopPropagation();window.cancelCircleReply?.();return false" onclick="event.preventDefault();event.stopPropagation();window.cancelCircleReply?.();return false">×</button></div>`;
 }
 function setCircleReplyTarget(messageId){
   const message=state.circleMessages.find(m=>same(m.id,messageId));
@@ -466,6 +467,7 @@ function clearCircleReplyTarget(){
   state.circleReplyTo=null;
   document.querySelector('[data-circle-reply-preview]')?.remove();
 }
+window.cancelCircleReply=clearCircleReplyTarget;
 window.startCircleReply=setCircleReplyTarget;
 
 
@@ -1105,32 +1107,21 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 })();
 
 
-/* v67 — WhatsApp-like mobile message long press: the whole row is the hit area. */
-(function installMobileWebMessageLongPress(){
-  if(window.__neisMobileWebMessageLongPressV67)return;
-  window.__neisMobileWebMessageLongPressV67=true;
-  let timer=null,startX=0,startY=0,target=null,consumed=false;
+/* v127 — single-source mobile/PWA long press message actions */
+(function installMobileWebMessageLongPressV127(){
+  if(window.__neisMobileWebMessageLongPressV127)return;
+  window.__neisMobileWebMessageLongPressV127=true;
 
-  const mobileWeb=()=>window.matchMedia('(max-width:760px)').matches;
-  const clear=()=>{if(timer){clearTimeout(timer);timer=null}target=null};
+  let timer=null,target=null,startX=0,startY=0,fired=false;
+  const mobile=()=>window.matchMedia('(max-width:760px)').matches;
 
-  const rowAtY=(eventTarget,y)=>{
-    const flow=eventTarget?.closest?.('.chat-flow');
-    if(!flow)return null;
-    const rows=[...flow.querySelectorAll(':scope > .chat-message')];
-    for(let index=0;index<rows.length;index++){
-      const row=rows[index],rect=row.getBoundingClientRect();
-      const prev=index?rows[index-1].getBoundingClientRect():null;
-      const next=index<rows.length-1?rows[index+1].getBoundingClientRect():null;
-      const top=prev?(prev.bottom+rect.top)/2:rect.top-5;
-      const bottom=next?(rect.bottom+next.top)/2:rect.bottom+5;
-      if(y>=top&&y<=bottom)return row;
-    }
-    return null;
+  const clear=()=>{
+    if(timer){clearTimeout(timer);timer=null}
+    target=null;
   };
 
-  const resolveTarget=(eventTarget,y)=>{
-    const row=eventTarget?.closest?.('.chat-message')||rowAtY(eventTarget,y);
+  const resolve=eventTarget=>{
+    const row=eventTarget?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
     const bubble=row?.querySelector?.('.bubble');
     return row&&bubble?{row,bubble}:null;
   };
@@ -1138,157 +1129,84 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   const showActions=(row,bubble)=>{
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
     const messageId=row?.dataset?.messageId||'';
-    if(typeof openModal!=='function')return;
-    const isCircle=!!row?.closest?.('#circleChatFlow');const targetMessage=isCircle?state.circleMessages.find(m=>same(m.id,messageId)):state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(isCircle?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id)):(same(targetMessage.sender_id,authUser.id)||state.isAdmin));
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}" ontouchend="return window.neisDeleteFromActionElement(this,event)" onpointerup="return window.neisDeleteFromActionElement(this,event)" onclick="return window.neisDeleteFromActionElement(this,event)"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    if(!messageId||typeof openModal!=='function')return;
+
+    const isCircle=!!row.closest('#circleChatFlow');
+    const targetMessage=isCircle
+      ?state.circleMessages.find(m=>same(m.id,messageId))
+      :state.liveMessages.find(m=>same(m.id,messageId));
+    const canDelete=!!targetMessage&&(
+      isCircle
+        ?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id))
+        :(same(targetMessage.sender_id,authUser.id)||state.isAdmin)
+    );
+
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}" onclick="return window.neisDeleteFromActionElement(this,event)"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
+
     const reply=document.querySelector('[data-mobile-reply-message]');
-    if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)window.startCircleReply?.(messageId);else window.startDmReply?.(messageId)},0)};
+    if(reply)reply.onclick=()=>{
+      closeModal();
+      setTimeout(()=>{
+        if(isCircle)window.startCircleReply?.(messageId);
+        else window.startDmReply?.(messageId);
+      },0);
+    };
+
     const copy=document.querySelector('[data-mobile-copy-message]');
     if(copy)copy.onclick=async()=>{
       try{
         await navigator.clipboard.writeText(messageText);
         closeModal();
         toast(t('Message copied.','تم نسخ الرسالة.'));
-      }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
+      }catch(_){
+        toast(t('Could not copy this message.','تعذر نسخ الرسالة.'));
+      }
     };
-
   };
 
-  document.addEventListener('pointerdown',event=>{
-    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
-    const current=resolveTarget(event.target,event.clientY);
+  document.addEventListener('touchstart',event=>{
+    if(!mobile())return;
+    const current=resolve(event.target);
     if(!current)return;
-    clear();consumed=false;target=current;
-    startX=event.clientX;startY=event.clientY;
+    const touch=event.touches?.[0];
+    if(!touch)return;
+    clear();
+    fired=false;
+    target=current;
+    startX=touch.clientX;
+    startY=touch.clientY;
     timer=setTimeout(()=>{
-      const selected=target;timer=null;
-      if(!selected?.row||!selected?.bubble)return;
-      consumed=true;
-      if(navigator.vibrate)navigator.vibrate(18);
+      const selected=target;
+      timer=null;
+      if(!selected)return;
+      fired=true;
+      try{window.getSelection()?.removeAllRanges()}catch(_){}
+      if(navigator.vibrate)navigator.vibrate(22);
       showActions(selected.row,selected.bubble);
       target=null;
-    },500);
-  },{passive:true});
+    },480);
+  },{capture:true,passive:true});
 
-  document.addEventListener('pointermove',event=>{
+  document.addEventListener('touchmove',event=>{
     if(!timer)return;
-    if(Math.abs(event.clientX-startX)>20||Math.abs(event.clientY-startY)>20)clear();
-  },{passive:true});
-  document.addEventListener('pointerup',clear,{passive:true});
-  document.addEventListener('pointercancel',clear,{passive:true});
+    const touch=event.touches?.[0];
+    if(!touch){clear();return}
+    if(Math.abs(touch.clientX-startX)>42||Math.abs(touch.clientY-startY)>42)clear();
+  },{capture:true,passive:true});
+
+  document.addEventListener('touchend',()=>{clear()},{capture:true,passive:true});
+  document.addEventListener('touchcancel',()=>{clear()},{capture:true,passive:true});
+
   document.addEventListener('contextmenu',event=>{
-    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
-    const current=resolveTarget(event.target,event.clientY);
+    if(!mobile())return;
+    const current=resolve(event.target);
     if(!current)return;
     event.preventDefault();
-    if(!consumed)showActions(current.row,current.bubble);
-    consumed=false;
-  });
-
-  let touchTimer=null,touchTarget=null,touchX=0,touchY=0;
-  const clearTouch=()=>{if(touchTimer){clearTimeout(touchTimer);touchTimer=null}touchTarget=null};
-  document.addEventListener('touchstart',event=>{
-    if(!mobileWeb()||!event.target?.closest?.('.chat-flow'))return;
-    const touch=event.touches?.[0];if(!touch)return;
-    const current=resolveTarget(event.target,touch.clientY);if(!current)return;
-    clearTouch();touchTarget=current;touchX=touch.clientX;touchY=touch.clientY;
-    touchTimer=setTimeout(()=>{
-      const selected=touchTarget;touchTimer=null;
-      if(!selected?.row||!selected?.bubble)return;
-      if(navigator.vibrate)navigator.vibrate(18);
-      showActions(selected.row,selected.bubble);
-      touchTarget=null;
-    },500);
-  },{passive:true});
-  document.addEventListener('touchmove',event=>{
-    if(!touchTimer)return;
-    const touch=event.touches?.[0];
-    if(!touch||Math.abs(touch.clientX-touchX)>20||Math.abs(touch.clientY-touchY)>20)clearTouch();
-  },{passive:true});
-  document.addEventListener('touchend',clearTouch,{passive:true});
-  document.addEventListener('touchcancel',clearTouch,{passive:true});
+    if(!fired)showActions(current.row,current.bubble);
+    fired=false;
+  },true);
 })();
-
-/* v126 — PWA/mobile chat gesture + keyboard viewport repair */
-if(!window.__neisPwaChatFixV126){
-  window.__neisPwaChatFixV126=true;
-
-  const mobileChat=()=>window.matchMedia('(max-width:760px)').matches;
-
-  const isMessageSurface=target=>!!target?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
-
-  document.addEventListener('selectstart',event=>{
-    if(!mobileChat()||!isMessageSurface(event.target))return;
-    event.preventDefault();
-    try{window.getSelection()?.removeAllRanges()}catch(_){}
-  },true);
-
-  document.addEventListener('dragstart',event=>{
-    if(!mobileChat()||!isMessageSurface(event.target))return;
-    event.preventDefault();
-  },true);
-
-  const cancelReplyFromEvent=event=>{
-    const dm=event.target?.closest?.('[data-cancel-dm-reply]');
-    const circle=event.target?.closest?.('[data-cancel-circle-reply]');
-    if(!dm&&!circle)return false;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation?.();
-    if(dm)clearDmReplyTarget();
-    if(circle)clearCircleReplyTarget();
-    return true;
-  };
-
-  document.addEventListener('touchend',cancelReplyFromEvent,{capture:true,passive:false});
-  document.addEventListener('pointerup',cancelReplyFromEvent,{capture:true,passive:false});
-  document.addEventListener('click',cancelReplyFromEvent,true);
-
-  const fitOpenChatToVisualViewport=()=>{
-    if(!mobileChat())return;
-    const vv=window.visualViewport;
-    const viewportBottom=(vv?.offsetTop||0)+(vv?.height||window.innerHeight);
-    const dm=document.querySelector('.messages.mobile-thread-open');
-    const circle=document.querySelector('.dm-like-circle-chat');
-    [dm,circle].forEach(shell=>{
-      if(!shell)return;
-      const rect=shell.getBoundingClientRect();
-      const available=Math.max(220,Math.floor(viewportBottom-rect.top));
-      shell.style.height=available+'px';
-      shell.style.maxHeight=available+'px';
-    });
-  };
-
-  const settleChatBottom=()=>{
-    fitOpenChatToVisualViewport();
-    const dmInput=document.querySelector('#liveChatInput');
-    const circleInput=document.querySelector('#circleChatInput');
-    if(document.activeElement===dmInput){
-      scrollActiveDmToBottom({immediate:true});
-      setTimeout(()=>scrollActiveDmToBottom({immediate:true}),80);
-      setTimeout(()=>scrollActiveDmToBottom({immediate:true}),220);
-    }
-    if(document.activeElement===circleInput){
-      scrollActiveCircleChatToBottom({immediate:true});
-      setTimeout(()=>scrollActiveCircleChatToBottom({immediate:true}),80);
-      setTimeout(()=>scrollActiveCircleChatToBottom({immediate:true}),220);
-    }
-  };
-
-  window.visualViewport?.addEventListener('resize',settleChatBottom,{passive:true});
-  window.visualViewport?.addEventListener('scroll',settleChatBottom,{passive:true});
-  window.addEventListener('resize',settleChatBottom,{passive:true});
-
-  document.addEventListener('focusin',event=>{
-    if(event.target?.id!=='liveChatInput'&&event.target?.id!=='circleChatInput')return;
-    requestAnimationFrame(settleChatBottom);
-    setTimeout(settleChatBottom,80);
-    setTimeout(settleChatBottom,220);
-  },true);
-
-  window.__neisFitOpenMobileChat=fitOpenChatToVisualViewport;
-}
 
 /* v83 — expose DM delete action for mobile action sheets */
 window.neisDeleteDirectMessage=id=>{try{return typeof deleteDirectMessage==='function'?deleteDirectMessage(id):window.deleteDirectMessage?.(id)}catch(_){return window.deleteDirectMessage?.(id)}};
