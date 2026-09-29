@@ -821,3 +821,17 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     transform:translateY(-50%) scale(1);
   }
 }
+
+/* v91 — APK/mobile DM gestures */
+@media(max-width:760px){
+  #chatFlow > .chat-message,
+  #chatFlow > .chat-message .bubble{
+    touch-action:pan-y!important;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  #chatFlow > .chat-message .message-text{
+    -webkit-user-select:text;
+    user-select:text;
+  }
+}
