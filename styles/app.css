@@ -1840,3 +1840,21 @@ html[data-theme="dark"] :is(.primary,.composer-bar .compose,.tabs button.active,
   pointer-events:auto!important;
   touch-action:manipulation;
 }
+
+/* v119 — PWA safe-area + mobile shell theme continuity */
+html,body{
+  min-height:100%;
+  background:var(--paper)!important;
+}
+@media(max-width:760px){
+  body{
+    min-height:100dvh;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  .stage{
+    padding-bottom:calc(90px + env(safe-area-inset-bottom))!important;
+  }
+  .bottom-nav{
+    bottom:calc(10px + env(safe-area-inset-bottom))!important;
+  }
+}
