@@ -259,7 +259,7 @@
         }
       };
       const del=document.querySelector('[data-native-delete-message]');
-      if(del)del.onclick=()=>window.neisRunMessageDeleteAction?.(isCircle?'circle':'dm',messageId);
+      if(del)del.onclick=()=>window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
     };
 
     const begin=(eventTarget,x,y)=>{
