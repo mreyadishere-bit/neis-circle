@@ -1844,3 +1844,21 @@ html[data-theme="dark"] .style-theme-preview{
 html[data-theme="dark"] :is(.primary,.composer-bar .compose,.tabs button.active,.chip.active){
   color:var(--accent-contrast)!important;
 }
+
+
+/* v114 — keep Home hero controls above decorative scene artwork */
+.hero-main:before,
+.hero-main:after{
+  pointer-events:none!important;
+}
+.hero-main>*,
+.hero-main button,
+.hero-main a{
+  position:relative;
+  z-index:2;
+}
+.hero-main button,
+.hero-main a{
+  pointer-events:auto!important;
+  touch-action:manipulation;
+}
