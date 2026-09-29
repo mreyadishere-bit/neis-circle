@@ -258,16 +258,17 @@
           toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'));
         }
       };
-      const del=document.querySelector('[data-native-delete-message]');
+      const actionModal=document.querySelector('#modalRoot .message-actions-modal');
+      const del=actionModal?.querySelector('[data-native-delete-message]');
       if(del){
         const runDelete=event=>{
           event?.preventDefault?.();
           event?.stopPropagation?.();
-          window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+          window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
         };
-        del.addEventListener('touchstart',runDelete,{passive:false});
-        del.addEventListener('pointerdown',runDelete);
-        del.addEventListener('click',runDelete);
+        del.addEventListener('touchstart',runDelete,{passive:false,once:true});
+        del.addEventListener('pointerdown',runDelete,{once:true});
+        del.addEventListener('click',runDelete,{once:true});
       }
     };
 
