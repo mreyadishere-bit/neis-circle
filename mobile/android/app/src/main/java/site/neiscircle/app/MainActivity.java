@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -35,9 +36,11 @@ public class MainActivity extends Activity {
     private static final String SITE_URL = "https://neiscircle.site/";
     private static final int REQUEST_NOTIFICATIONS = 5001;
     private static final int REQUEST_FILE = 5002;
+    private static final int REQUEST_MEDIA = 5003;
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
+    private PermissionRequest pendingMediaRequest;
     private boolean pageReady = false;
     private String pendingRoute;
     private String pendingAuthUrl;
@@ -114,6 +117,17 @@ public class MainActivity extends Activity {
                     fileCallback = null;
                     return false;
                 }
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> handleWebMediaPermission(request));
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                if (pendingMediaRequest == request) pendingMediaRequest = null;
+                request.deny();
             }
         });
 
@@ -246,6 +260,56 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void handleWebMediaPermission(PermissionRequest request) {
+        if (request == null) return;
+
+        boolean wantsAudio = false;
+        boolean wantsVideo = false;
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) wantsAudio = true;
+            if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource)) wantsVideo = true;
+        }
+
+        java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+        if (wantsAudio &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.RECORD_AUDIO);
+        }
+        if (wantsVideo &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.CAMERA);
+        }
+
+        if (missing.isEmpty()) {
+            grantAllowedWebMediaResources(request);
+            return;
+        }
+
+        if (pendingMediaRequest != null && pendingMediaRequest != request) {
+            pendingMediaRequest.deny();
+        }
+        pendingMediaRequest = request;
+        ActivityCompat.requestPermissions(this, missing.toArray(new String[0]), REQUEST_MEDIA);
+    }
+
+    private void grantAllowedWebMediaResources(PermissionRequest request) {
+        if (request == null) return;
+        java.util.ArrayList<String> allowed = new java.util.ArrayList<>();
+
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource) &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                allowed.add(resource);
+            } else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(resource) &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                allowed.add(resource);
+            }
+        }
+
+        if (allowed.isEmpty()) request.deny();
+        else request.grant(allowed.toArray(new String[0]));
+    }
+
     private void requestPushToken() {
         runOnUiThread(() -> {
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -344,6 +408,13 @@ public class MainActivity extends Activity {
         if (requestCode == REQUEST_NOTIFICATIONS && results.length > 0 &&
             results[0] == PackageManager.PERMISSION_GRANTED) {
             deliverCurrentToken();
+            return;
+        }
+
+        if (requestCode == REQUEST_MEDIA) {
+            PermissionRequest request = pendingMediaRequest;
+            pendingMediaRequest = null;
+            if (request != null) grantAllowedWebMediaResources(request);
         }
     }
 
