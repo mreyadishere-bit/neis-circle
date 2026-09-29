@@ -286,13 +286,83 @@
     };
   }
 
+  let notificationOnboardingTimer=null;
+
+  function notificationOnboardingMarkup(){
+    const permission=('Notification' in window)?Notification.permission:'unsupported';
+    if(permission==='unsupported'){
+      return {
+        title:lang('Notifications unavailable','الإشعارات غير متاحة'),
+        body:lang('This browser does not support web push notifications.','هذا المتصفح لا يدعم إشعارات الويب.'),
+        action:''
+      };
+    }
+    if(permission==='denied'){
+      return {
+        title:lang('Notifications are blocked','الإشعارات محظورة'),
+        body:lang('Open this site’s settings in your browser and change Notifications to Allow, then reopen NEIS Circle.','افتح إعدادات هذا الموقع في المتصفح وغيّر الإشعارات إلى سماح، ثم افتح NEIS Circle مرة أخرى.'),
+        action:''
+      };
+    }
+    return {
+      title:lang('Enable notifications','فعّل الإشعارات'),
+      body:lang('Allow NEIS Circle to notify you about messages, replies, circles, announcements, likes and reactions even when the app is closed.','اسمح لـ NEIS Circle بإرسال إشعارات الرسائل والردود والمجتمعات والإعلانات والإعجابات والتفاعلات حتى عند إغلاق التطبيق.'),
+      action:`<button type="button" class="primary" data-pwa-onboarding-enable>${lang('Enable notifications','تفعيل الإشعارات')}</button>`
+    };
+  }
+
+  function showNotificationOnboarding(){
+    if(!(typeof authUser!=='undefined'?authUser:null))return;
+    if(!('Notification' in window))return;
+    if(Notification.permission==='granted'){
+      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+      return;
+    }
+    if(sessionStorage.getItem('neis-pwa-notification-onboarding-shown')==='1')return;
+    sessionStorage.setItem('neis-pwa-notification-onboarding-shown','1');
+
+    const copy=notificationOnboardingMarkup();
+    if(typeof openModal!=='function')return;
+    openModal(`
+      <div class="modal-head">
+        <div>
+          <h2>${copy.title}</h2>
+          <p>${copy.body}</p>
+        </div>
+        <button class="close" data-close>×</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" data-close>${lang('Not now','ليس الآن')}</button>
+        ${copy.action}
+      </div>
+    `);
+
+    const enable=document.querySelector('[data-pwa-onboarding-enable]');
+    if(enable)enable.onclick=async()=>{
+      enable.disabled=true;
+      const ok=await ensureWebPush(true);
+      enable.disabled=false;
+      if(ok){
+        try{closeModal()}catch(_){}
+      }
+    };
+  }
+
+  function scheduleNotificationOnboarding(){
+    clearTimeout(notificationOnboardingTimer);
+    notificationOnboardingTimer=setTimeout(showNotificationOnboarding,700);
+  }
+
   function hookLiveData(){
     if(typeof loadLiveData!=='function'||loadLiveData.__neisPwaWrapped)return;
     const previous=loadLiveData;
     const wrapped=async function(){
       const result=await previous.apply(this,arguments);
       installSignOutHook();
-      if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted')await ensureWebPush(false);
+      if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
+        Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+      }
+      scheduleNotificationOnboarding();
       return result;
     };
     wrapped.__neisPwaWrapped=true;
@@ -338,7 +408,10 @@
     hookLiveData();
     installSettingsHook();
     installSignOutHook();
-    if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted')ensureWebPush(false);
+    if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
+      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+    }
+    scheduleNotificationOnboarding();
   });
 
   syncThemeChrome();
