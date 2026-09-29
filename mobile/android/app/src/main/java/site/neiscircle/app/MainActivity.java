@@ -97,7 +97,7 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.6");
+        settings.setUserAgentString(settings.getUserAgentString() + " NEISCircleAndroid/1.7");
 
         webView.clearCache(true);
         webView.addJavascriptInterface(new NativeBridge(), "NeisAndroid");
@@ -138,7 +138,7 @@ public class MainActivity extends Activity {
         });
 
         handleIntent(getIntent());
-        webView.loadUrl(SITE_URL + "?native=1.6");
+        webView.loadUrl(SITE_URL + "?native=1.7");
     }
 
     private void checkForWebUpdate() {
@@ -208,6 +208,18 @@ public class MainActivity extends Activity {
         if (uri == null) return false;
         String scheme = uri.getScheme() == null ? "" : uri.getScheme();
         String host = uri.getHost() == null ? "" : uri.getHost();
+
+        if ("neiscircle".equalsIgnoreCase(scheme) && "delete-message".equalsIgnoreCase(host)) {
+            final String scope = uri.getQueryParameter("scope");
+            final String messageId = uri.getQueryParameter("id");
+            if (webView != null && messageId != null && !messageId.isEmpty()) {
+                final String safeScope = "circle".equalsIgnoreCase(scope) ? "circle" : "dm";
+                final String script = "window.neisDeleteMessageNow&&window.neisDeleteMessageNow(" +
+                    JSONObject.quote(safeScope) + "," + JSONObject.quote(messageId) + ",null);";
+                webView.post(() -> webView.evaluateJavascript(script, null));
+            }
+            return true;
+        }
 
         if ("neiscircle".equalsIgnoreCase(scheme)) {
             pendingAuthUrl = uri.toString();
