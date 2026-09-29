@@ -240,9 +240,8 @@
       if(!row||!bubble)return;
       const messageText=bubble.querySelector('.message-text')?.textContent||'';
       const messageId=row.dataset?.messageId||'';
-      const targetMessage=state.liveMessages?.find?.(m=>same(m.id,messageId));
-      const canDelete=!!targetMessage&&(same(targetMessage.sender_id,authUser.id)||state.isAdmin);
 
+      const canDelete=row.dataset?.messageDeletable==='1';
       openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
       document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
 
@@ -259,10 +258,10 @@
           toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'));
         }
       };
-
       const del=document.querySelector('[data-native-delete-message]');
       if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
     };
+
     const begin=(eventTarget,x,y)=>{
       clear();
       const current=resolveTarget(eventTarget,x,y);
@@ -305,33 +304,8 @@
       if(!touch){clear();return}
       if(Math.abs(touch.clientX-startX)>12||Math.abs(touch.clientY-startY)>12)clear();
     },{passive:true});
-    let swipeRow=null,swipeStartX=0,swipeStartY=0,swipeTriggered=false;
-    document.addEventListener('touchstart',event=>{
-      const touch=event.touches?.[0];
-      const row=event.target?.closest?.('#chatFlow > .chat-message');
-      if(!touch||!row)return;
-      swipeRow=row;swipeStartX=touch.clientX;swipeStartY=touch.clientY;swipeTriggered=false;
-    },{passive:true});
-
-    document.addEventListener('touchmove',event=>{
-      if(!swipeRow||swipeTriggered)return;
-      const touch=event.touches?.[0];if(!touch)return;
-      const dx=touch.clientX-swipeStartX,dy=touch.clientY-swipeStartY;
-      if(Math.abs(dy)>40&&Math.abs(dy)>Math.abs(dx)){swipeRow=null;return}
-      if(Math.abs(dx)>14&&timer){clearTimeout(timer);timer=null}
-      if(Math.abs(dx)>=60&&Math.abs(dy)<34){
-        swipeTriggered=true;
-        const id=swipeRow.dataset.messageId;
-        if(navigator.vibrate)navigator.vibrate(12);
-        if(id)setTimeout(()=>window.startDmReply?.(id),0);
-        swipeRow=null;
-      }
-    },{passive:true});
-
-    const clearSwipe=()=>{swipeRow=null;swipeTriggered=false};
-    document.addEventListener('touchend',event=>{clear();clearSwipe()},{passive:true});
-    document.addEventListener('touchcancel',event=>{clear();clearSwipe()},{passive:true});
-    /* v91 native swipe reply */
+    document.addEventListener('touchend',clear,{passive:true});
+    document.addEventListener('touchcancel',clear,{passive:true});
 
     document.addEventListener('contextmenu',event=>{
       if(!event.target?.closest?.('.chat-flow'))return;
@@ -339,63 +313,6 @@
       if(!row)return;
       event.preventDefault();
     });
-  }
-
-  function findMessageRowAtPoint(x,y){
-    const px=Number(x)||0,py=Number(y)||0;
-    const direct=document.elementFromPoint(px,py)?.closest?.('.chat-message');
-    if(direct)return direct;
-    const rows=[...document.querySelectorAll('#chatFlow > .chat-message')];
-    if(!rows.length)return null;
-    let best=null,bestDistance=Infinity;
-    for(const row of rows){
-      const rect=row.getBoundingClientRect();
-      if(py>=rect.top-10&&py<=rect.bottom+10){
-        const center=(rect.top+rect.bottom)/2,distance=Math.abs(py-center);
-        if(distance<bestDistance){best=row;bestDistance=distance}
-      }
-    }
-    return best;
-  }
-
-  function openMessageActionsForRow(row){
-    const bubble=row?.querySelector?.('.bubble');
-    if(!row||!bubble)return false;
-    const messageText=bubble.querySelector('.message-text')?.textContent||'';
-    const messageId=row.dataset?.messageId||'';
-    const targetMessage=state.liveMessages?.find?.(m=>same(m.id,messageId));
-    const canDelete=!!targetMessage&&(same(targetMessage.sender_id,authUser.id)||state.isAdmin);
-    openModal(`<div class="modal-head native-message-action-head"><div><h2>${lang('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="native-message-action-list"><button type="button" class="account-row" data-native-reply-message><span>${lang('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-native-copy-message><span>${lang('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-native-delete-message><span>${lang('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
-    document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
-    const reply=document.querySelector('[data-native-reply-message]');
-    if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>window.startDmReply?.(messageId),0)};
-    const copy=document.querySelector('[data-native-copy-message]');
-    if(copy)copy.onclick=async()=>{
-      try{await navigator.clipboard.writeText(messageText);closeModal();toast(lang('Message copied.','تم نسخ الرسالة.'))}
-      catch(_){toast(lang('Could not copy this message.','تعذر نسخ الرسالة.'))}
-    };
-    const del=document.querySelector('[data-native-delete-message]');
-    if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
-    return true;
-  }
-
-  function openMessageActionsAt(x,y){
-    return openMessageActionsForRow(findMessageRowAtPoint(x,y));
-  }
-
-  function openMessageActionsAtDevicePixels(rawX,rawY){
-    const dpr=Math.max(1,Number(window.devicePixelRatio)||1);
-    const vv=window.visualViewport;
-    const candidates=[
-      [Number(rawX)/dpr,Number(rawY)/dpr],
-      [Number(rawX)/dpr,(Number(rawY)/dpr)+(vv?.offsetTop||0)],
-      [Number(rawX),Number(rawY)]
-    ];
-    for(const [x,y] of candidates){
-      const row=findMessageRowAtPoint(x,y);
-      if(row)return openMessageActionsForRow(row);
-    }
-    return false;
   }
 
   function handleNativeBack(){
@@ -415,8 +332,6 @@
     handleAuthCallback,
     registerPushToken:registerStoredToken,
     openNotificationSettings:openMobileNotificationSettings,
-    openMessageActionsAt,
-    openMessageActionsAtDevicePixels,
     handleNativeBack
   };
 
