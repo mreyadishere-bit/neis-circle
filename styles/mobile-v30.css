@@ -1740,9 +1740,6 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     padding-inline-end:38px!important;
   }
 }
-@media(max-width:760px){
-  .message-actions-trigger{display:none!important}
-}
 
 /* v130 — native dialog message actions, shared by desktop and PWA */
 .neis-message-actions-dialog{
@@ -1818,3 +1815,38 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
 
 /* v130 — remove legacy desktop inline delete */
 .chat-message .content-menu{display:none!important}
+
+/* v131 — three-dot message actions available on mobile too */
+@media(max-width:760px){
+  .chat-message .bubble{
+    position:relative!important;
+  }
+  .message-actions-trigger{
+    position:absolute!important;
+    top:5px!important;
+    inset-inline-end:5px!important;
+    width:28px!important;
+    height:28px!important;
+    min-width:28px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:color-mix(in srgb,var(--card) 72%,transparent)!important;
+    color:var(--muted)!important;
+    font-size:12px!important;
+    line-height:1!important;
+    opacity:.68!important;
+    z-index:2!important;
+    -webkit-tap-highlight-color:transparent!important;
+    touch-action:manipulation!important;
+  }
+  .chat-message.mine .message-actions-trigger{
+    color:rgba(255,255,255,.82)!important;
+    background:rgba(255,255,255,.14)!important;
+  }
+  .chat-message .bubble:has(.message-actions-trigger){
+    padding-inline-end:40px!important;
+  }
+}
