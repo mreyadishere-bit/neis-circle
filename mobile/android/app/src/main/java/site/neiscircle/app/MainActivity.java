@@ -197,7 +197,13 @@ public class MainActivity extends Activity {
                     try { latestCode = Integer.parseInt(tag.substring("android-".length())); }
                     catch (Exception ignored) { }
                 }
-                if (latestCode <= BuildConfig.VERSION_CODE) return;
+                long installedCode;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    installedCode = getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
+                } else {
+                    installedCode = getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
+                }
+                if (latestCode <= installedCode) return;
 
                 String apkUrl = null;
                 org.json.JSONArray assets = release.optJSONArray("assets");
