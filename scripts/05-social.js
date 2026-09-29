@@ -11,7 +11,7 @@ const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
 const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value||Date.now()));
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
-Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null});
+Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
 let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificationRealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
@@ -106,7 +106,7 @@ loadLiveData=async function(){
     .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
@@ -175,6 +175,34 @@ async function refreshMessagesV6(){
         }
       }while(messageRefreshQueued)
     }finally{messageRefreshBusy=false}
+  },70);
+}
+
+
+let circleMessageRefreshTimer=null,circleMessageRefreshBusy=false,circleMessageRefreshQueued=false;
+async function refreshCircleMessagesV96(){
+  if(!sb||!authUser)return;
+  if(circleMessageRefreshBusy){circleMessageRefreshQueued=true;return}
+  clearTimeout(circleMessageRefreshTimer);
+  circleMessageRefreshTimer=setTimeout(async()=>{
+    circleMessageRefreshBusy=true;
+    try{
+      do{
+        circleMessageRefreshQueued=false;
+        const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,authUser.id)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
+        if(!joinedCircleIds.length){state.circleMessages=[];return}
+        const res=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at').limit(500);
+        if(!res.error)state.circleMessages=res.data||[];
+        if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.activeCircleId){
+          const flow=$('#circleChatFlow'),input=$('#circleChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
+          const inputWasFocused=!!input&&document.activeElement===input,inputValue=input?.value??'',selection=inputWasFocused?[input.selectionStart,input.selectionEnd]:null;
+          const activeMessages=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
+          if(flow){flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>circleMessageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
+          if(input){if(inputWasFocused){input.value=inputValue;setCircleDraft(state.activeCircleId,inputValue)}else input.value=getCircleDraft(state.activeCircleId)}
+          requestAnimationFrame(()=>{const next=$('#circleChatInput');if(inputWasFocused&&next){next.focus({preventScroll:true});if(selection)try{next.setSelectionRange(selection[0],selection[1])}catch(_){}}if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight});
+        }
+      }while(circleMessageRefreshQueued)
+    }finally{circleMessageRefreshBusy=false}
   },70);
 }
 
@@ -324,7 +352,7 @@ function installDmSwipeReply(){
   };
   document.addEventListener('pointerdown',event=>{
     if(!mobile()||event.pointerType==='mouse')return;
-    const row=event.target?.closest?.('#chatFlow > .chat-message');
+    const row=event.target?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
     if(!row)return;
     active=row;startX=event.clientX;startY=event.clientY;triggered=false;pointerId=event.pointerId;
     row.classList.add('swipe-reply-active');
@@ -342,7 +370,7 @@ function installDmSwipeReply(){
       active.classList.add('swipe-reply-ready');
       if(navigator.vibrate)navigator.vibrate(12);
       setTimeout(()=>{
-        if(id)window.startDmReply?.(id);
+        if(id){if(active?.closest?.('#circleChatFlow'))window.startCircleReply?.(id);else window.startDmReply?.(id)}
         if(active)active.style.removeProperty('--swipe-reply-x');
         reset();
       },70);
@@ -380,6 +408,66 @@ function setDmDraft(id,value){
   saveDmDrafts();
 }
 if(!state.dmDrafts||!Object.keys(state.dmDrafts).length)state.dmDrafts=loadDmDrafts();
+
+const CIRCLE_DRAFTS_KEY='neis-circle-chat-drafts-v1';
+function loadCircleDrafts(){
+  try{return JSON.parse(sessionStorage.getItem(CIRCLE_DRAFTS_KEY)||'{}')||{}}catch(_){return {}}
+}
+function saveCircleDrafts(){
+  try{sessionStorage.setItem(CIRCLE_DRAFTS_KEY,JSON.stringify(state.circleDrafts||{}))}catch(_){}
+}
+function getCircleDraft(id){
+  if(!state.circleDrafts||typeof state.circleDrafts!=='object')state.circleDrafts=loadCircleDrafts();
+  return String(state.circleDrafts?.[String(id)]||'');
+}
+function setCircleDraft(id,value){
+  if(!id)return;
+  if(!state.circleDrafts||typeof state.circleDrafts!=='object')state.circleDrafts={};
+  const key=String(id),text=String(value||'');
+  if(text)state.circleDrafts[key]=text;else delete state.circleDrafts[key];
+  saveCircleDrafts();
+}
+if(!state.circleDrafts||!Object.keys(state.circleDrafts).length)state.circleDrafts=loadCircleDrafts();
+
+function scrollActiveCircleChatToBottom(options={}){
+  const flow=document.querySelector('#circleChatFlow');
+  if(!flow)return;
+  const run=()=>{flow.scrollTop=flow.scrollHeight};
+  if(options.immediate)run();
+  requestAnimationFrame(()=>{run();setTimeout(run,70);setTimeout(run,180)});
+}
+function activeCircleReply(){
+  const reply=state.circleReplyTo;
+  if(!reply||!same(reply.circleId,state.activeCircleId))return null;
+  return state.circleMessages.find(m=>same(m.id,reply.messageId))||null;
+}
+function circleReplyComposer(circleId){
+  const reply=state.circleReplyTo&&same(state.circleReplyTo.circleId,circleId)
+    ?state.circleMessages.find(m=>same(m.id,state.circleReplyTo.messageId)):null;
+  if(!reply)return '';
+  const sender=reply.profile||profileData(reply.sender_id);
+  return `<div class="dm-reply-preview circle-reply-preview" data-circle-reply-preview><div><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(reply.deleted_at?t('Message deleted','تم حذف الرسالة'):reply.body||t('Message','رسالة'))}</span></div><button type="button" data-cancel-circle-reply aria-label="${t('Cancel reply','إلغاء الرد')}">×</button></div>`;
+}
+function setCircleReplyTarget(messageId){
+  const message=state.circleMessages.find(m=>same(m.id,messageId));
+  if(!message||message.deleted_at)return;
+  state.circleReplyTo={circleId:message.circle_id,messageId:message.id};
+  const existing=document.querySelector('[data-circle-reply-preview]');
+  const markup=circleReplyComposer(message.circle_id);
+  if(existing)existing.outerHTML=markup;
+  else document.querySelector('#circleChatForm')?.insertAdjacentHTML('beforebegin',markup);
+  const cancel=document.querySelector('[data-cancel-circle-reply]');
+  if(cancel)cancel.onclick=()=>{clearCircleReplyTarget();document.querySelector('#circleChatInput')?.focus({preventScroll:true});scrollActiveCircleChatToBottom()};
+  const input=document.querySelector('#circleChatInput');
+  input?.focus({preventScroll:true});
+  scrollActiveCircleChatToBottom();
+}
+function clearCircleReplyTarget(){
+  state.circleReplyTo=null;
+  document.querySelector('[data-circle-reply-preview]')?.remove();
+}
+window.startCircleReply=setCircleReplyTarget;
+
 
 function conversationName(id){const other=state.conversationMembers.find(m=>same(m.conversation_id,id)&&!same(m.user_id,authUser.id));return other?.profile||profileData(other?.user_id)}
 function conversationLast(id){return state.liveMessages.filter(m=>same(m.conversation_id,id)&&!m.deleted_at).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]}
@@ -419,7 +507,7 @@ function circleTabContent(c,mine,members){
   const search=`<div class="circle-toolbar"><label class="field"><input id="circleSearch" value="${esc(state.circleQuery)}" placeholder="${t('Search this Circle…','ابحث داخل المجتمع…')}"></label>${state.circleQuery?`<button class="secondary" data-clear-circle-search>${t('Clear','مسح')}</button>`:''}</div>`;
   if(state.circleTab==='home')return `${search}<div class="circle-layout"><div><div class="composer-bar">${profileAvatar(profileData(authUser.id))}<button ${mine?.status==='active'?'data-circle-compose':''}>${mine?.status==='active'?t('Start a discussion in this Circle…','ابدأ نقاشًا في هذا المجتمع…'):t('Join to participate','انضم للمشاركة')}</button></div><div class="feed" style="margin-top:16px">${posts.length?posts.slice(0,10).map(postCard).join(''):emptyState(t('No Circle posts yet','لا توجد منشورات بعد'),query?t('No posts match your search.','لا توجد منشورات مطابقة للبحث.'):mine?.status==='active'?t('Start the first discussion.','ابدأ أول نقاش.'):t('Join to follow the conversation.','انضم لمتابعة النقاش.'))}</div></div><aside class="circle-panel"><h3>${t('About this Circle','عن المجتمع')}</h3><p>${esc(c.description)}</p><p><b>${t('Category','التصنيف')}:</b> ${esc(c.category)}</p><p><b>${t('Created','تاريخ الإنشاء')}:</b> ${formatDate(c.created_at)}</p></aside></div>`;
   if(state.circleTab==='posts')return `${search}<div class="page-title"><div><h2>${t('Circle posts','منشورات المجتمع')}</h2><p>${posts.length} ${t('results','نتيجة')}</p></div>${mine?.status==='active'?`<button class="primary" data-circle-compose>${t('+ New post','+ منشور جديد')}</button>`:''}</div><div class="feed">${posts.length?posts.map(postCard).join(''):emptyState(t('No posts found','لا توجد منشورات'),query?t('Try a different search.','جرّب بحثًا مختلفًا.'):t('Start the first discussion.','ابدأ أول نقاش.'))}</div>`;
-  if(state.circleTab==='chat'){const msgs=state.circleMessages.filter(m=>same(m.circle_id,c.id)&&match(query,m.body,m.profile?.full_name));return `${search}<section class="circle-panel circle-chat"><div class="section-head"><div><h2>${t('Circle chat','دردشة المجتمع')}</h2><p>${t('Messages update in realtime and remain after refresh.','الرسائل تتحدث لحظيًا وتبقى بعد تحديث الصفحة.')}</p></div></div><div class="chat-flow" id="circleChatFlow">${msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages found','لا توجد رسائل'),query?t('Try another search.','جرّب بحثًا آخر.'):t('Start the group conversation.','ابدأ المحادثة الجماعية.'))}</div>${mine?.status==='active'&&mine.status!=='muted'?`<form class="chat-form" id="circleChatForm"><input id="circleChatInput" required maxlength="4000" placeholder="${t('Message the Circle…','اكتب للمجتمع…')}" dir="auto"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="empty"><b>${t('Members only','للأعضاء فقط')}</b><span>${t('Join the Circle to chat.','انضم للمجتمع للمشاركة في الدردشة.')}</span></div>`}</section>`}
+  if(state.circleTab==='chat'){const msgs=state.circleMessages.filter(m=>same(m.circle_id,c.id)&&match(query,m.body,m.profile?.full_name));return `<section class="circle-panel circle-chat dm-like-circle-chat"><div class="chat-head circle-chat-head"><div class="circle-chat-mark">${esc(initials(c.name)||'C')}</div><div class="circle-chat-title"><b>${esc(c.name)}</b><small>${t('Circle chat','دردشة المجتمع')} · ${members.length} ${t('members','أعضاء')}</small></div></div><div class="chat-flow" id="circleChatFlow">${msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${circleReplyComposer(c.id)}${mine?.status==='active'&&mine.status!=='muted'?`<form class="chat-form" id="circleChatForm"><input id="circleChatInput" required maxlength="4000" autocomplete="off" placeholder="${t('Write a message…','اكتب رسالة…')}" dir="auto" value="${esc(getCircleDraft(c.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="empty"><b>${t('Members only','للأعضاء فقط')}</b><span>${t('Join the Circle to chat.','انضم للمجتمع للمشاركة في الدردشة.')}</span></div>`}</section>`}
   if(state.circleTab==='meetings'){const meetings=state.circleMeetings.filter(m=>same(m.circle_id,c.id)&&!m.cancelled_at&&match(query,m.title,m.description,m.creator?.full_name));return `${search}<div class="page-title"><div><h2>${t('Online meetings','الاجتماعات الأونلاين')}</h2><p>${t('Secure in-browser video rooms powered by LiveKit.','غرف فيديو آمنة داخل المنصة عبر LiveKit.')}</p></div>${canModerateCircle(c.id)?`<button class="primary" data-new-meeting>${t('+ Schedule meeting','+ جدولة اجتماع')}</button>`:''}</div>${state.dataErrors.meetings?`<div class="error-state"><b>${t('Meetings could not refresh.','تعذر تحديث الاجتماعات.')}</b><span>${t('Your last loaded meetings are still shown. Try again.','تظل آخر اجتماعات تم تحميلها ظاهرة. حاول مرة أخرى.')}</span><button class="secondary" data-retry-meetings>${t('Try again','إعادة المحاولة')}</button></div>`:''}<div class="meeting-grid">${meetings.length?meetings.map(meetingCard).join(''):!state.dataErrors.meetings?emptyState(t('No meetings yet','لا توجد اجتماعات بعد'),query?t('Try another search.','جرّب بحثًا آخر.'):canModerateCircle(c.id)?t('Schedule the first meeting.','جدول أول اجتماع.'):t('Circle moderators schedule meetings here.','يقوم مشرفو المجتمع بجدولة الاجتماعات هنا.')):''}</div>`}
   if(state.circleTab==='members')return `${search}<div class="page-title"><div><h2>${t('Members','الأعضاء')}</h2><p>${filteredMembers.length} ${t('active members','عضو نشط')}</p></div></div><div class="result-list">${filteredMembers.length?filteredMembers.map(m=>`<div class="result-row">${profileAvatar(m.profile||profileData(m.user_id))}<div><h3><button class="author-link" data-open-profile="${m.user_id}">${esc(m.profile?.full_name||'Student')}</button></h3><p>@${esc(m.profile?.username||'student')} · ${esc(m.profile?.grade||'')} · ${esc(m.profile?.branch||'')}</p></div><div class="identity-line"><span class="role-pill ${m.role}">${esc(m.role)}</span>${canManageCircle(c.id)&&!same(m.user_id,authUser.id)&&m.role!=='owner'?`<select data-member-role="${m.user_id}"><option value="member" ${m.role==='member'?'selected':''}>Member</option><option value="moderator" ${m.role==='moderator'?'selected':''}>Moderator</option><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option></select><button class="secondary danger" data-remove-member="${m.user_id}">${t('Remove','إزالة')}</button>`:''}</div></div>`).join(''):emptyState(t('No members found','لا يوجد أعضاء'),t('Try another search.','جرّب بحثًا آخر.'))}</div>`;
   return `<section class="circle-panel circle-about"><header class="circle-about-head"><h2>${t('About this Circle','حول هذا المجتمع')}</h2><p>${esc(c.description||t('A student community for learning and collaboration.','مجتمع طلابي للتعلم والتعاون.'))}</p></header><dl class="circle-facts"><div class="circle-fact"><dt>${t('Category','التصنيف')}</dt><dd>${esc(c.category)}</dd></div><div class="circle-fact"><dt>${t('Privacy','الخصوصية')}</dt><dd>${c.privacy==='private'?t('Private','خاص'):t('Public','عام')}</dd></div><div class="circle-fact"><dt>${t('Owner','المالك')}</dt><dd>${esc(profileData(c.owner_id).full_name||'Student')}</dd></div></dl>${canManageCircle(c.id)?`<div class="circle-management"><div><h3>${t('Circle management','إدارة المجتمع')}</h3><p>${t('Manage roles from Members, or permanently delete this Circle and its community data.','أدر الأدوار من تبويب الأعضاء، أو احذف هذا المجتمع وبياناته نهائيًا.')}</p></div><button class="secondary danger" data-delete-circle="${c.id}">${t('Delete Circle','حذف المجتمع')}</button></div>`:''}</section>`
@@ -429,7 +517,7 @@ function meetingInviteLink(m){return `${location.origin}${location.pathname}#/ci
 async function copyMeetingInvite(m){if(!m)return;const link=meetingInviteLink(m);try{await navigator.clipboard.writeText(link);toast(t('Meeting invitation link copied.','تم نسخ رابط دعوة الاجتماع.'))}catch{window.prompt(t('Copy meeting invitation link','انسخ رابط دعوة الاجتماع'),link)}}
 
 function meetingCard(m){const d=new Date(m.starts_at),day=new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'2-digit'}).format(d),month=new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{month:'short'}).format(d),manageable=same(m.creator_id,authUser.id)||canModerateCircle(m.circle_id),canJoin=membership(m.circle_id)?.status==='active'||state.isAdmin,ended=!!m.ended_at,endAt=d.getTime()+Number(m.duration_minutes||60)*60000,live=!ended&&Date.now()>=d.getTime()&&Date.now()<endAt,status=ended?t('Ended','انتهى'):live?t('Live','مباشر'):t('Upcoming','قادم');return `<article class="meeting-card ${ended?'ended':''}" data-meeting-card="${esc(m.id)}"><time class="meeting-date" datetime="${esc(m.starts_at)}"><b>${day}</b><span>${month}</span></time><div><div class="meeting-card-title"><h3>${esc(m.title)}</h3><span class="status-pill ${live?'live':''}">${status}</span></div><p>${esc(m.description||t('Circle video meeting','اجتماع فيديو للمجتمع'))}</p><p>${when(m.starts_at)} · ${m.duration_minutes} ${t('min','دقيقة')} · ${t('by','بواسطة')} ${esc(m.creator?.full_name||profileData(m.creator_id).full_name)}</p><div class="meeting-actions">${canJoin&&!ended?`<button class="primary" data-join-meeting="${m.id}">${t('Join meeting','دخول الاجتماع')}</button>`:!canJoin&&!ended?`<button class="secondary" data-v6-circle-join="${m.circle_id}">${t('Join Circle to attend','انضم للمجتمع للحضور')}</button>`:''}<button class="secondary" data-copy-meeting-invite="${m.id}">${t('Invite link','رابط الدعوة')}</button>${manageable&&!ended&&live?`<button class="secondary danger" data-end-meeting="${m.id}">${t('End meeting','إنهاء الاجتماع')}</button>`:''}${manageable&&!live?`<button class="secondary danger" data-delete-meeting="${m.id}">${t('Delete','حذف')}</button>`:''}</div></div></article>`}
-function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''}">${profileAvatar(m.profile||profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}"><span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time>${!m.deleted_at&&manageable?`<button class="content-menu danger" data-delete-circle-message="${m.id}" aria-label="${t('Delete message','حذف الرسالة')}">×</button>`:''}</span></div>`}
+function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000),quoted=m.reply_to_id?state.circleMessages.find(x=>same(x.id,m.reply_to_id)):null,sender=m.profile||profileData(m.sender_id),quote=quoted?(()=>{const qp=quoted.profile||profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(qp?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.deleted_at?t('Message deleted','تم حذف الرسالة'):quoted.body||t('Message','رسالة'))}</span></div>`})():'';return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}">${profileAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time></span></div></div>`}
 function confirmAction(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-confirm-no>×</button></div><p class="confirm-copy">${t('This action is saved to the database and cannot be undone.','سيُحفظ هذا الإجراء في قاعدة البيانات ولا يمكن التراجع عنه.')}</p><div class="modal-actions"><button class="secondary" data-confirm-no>${t('Cancel','إلغاء')}</button><button class="primary danger" data-confirm-yes>${t('Delete','حذف')}</button></div>`);$$('[data-confirm-no]').forEach(b=>b.onclick=()=>{closeModal();resolve(false)});$('[data-confirm-yes]').onclick=()=>{closeModal();resolve(true)}})}
 async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
 async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}await removeMediaUrl(p.image_url);await loadLiveData();render();toast(t('Post deleted.','تم حذف المنشور.'))}
@@ -951,7 +1039,9 @@ function bindV6(root=document){
     input.focus({preventScroll:true});
     scrollActiveDmToBottom();
   };
-  const circleChat=root.querySelector('#circleChatForm');if(circleChat)circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),body=input.value.trim();if(!body)return;button.disabled=true;const {error}=await sb.from('circle_messages').insert({circle_id:state.activeCircleId,sender_id:authUser.id,body});if(error){toast(safeError(error,'send this message'));button.disabled=false;return}input.value='';await loadLiveData();render()};
+  const circleInput=root.querySelector('#circleChatInput');if(circleInput){circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
+  root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=()=>{clearCircleReplyTarget();$('#circleChatInput')?.focus({preventScroll:true})});
+  const circleChat=root.querySelector('#circleChatForm');if(circleChat)circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};
 }
 
 function updateBadges(){const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;$$('[data-nav="messages"] i').forEach(i=>{i.className=msg?'count-badge':'';i.textContent=msg||''});const bell=$('[data-action="notifications"]');if(bell){let badge=bell.querySelector('.count-badge');if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}if(badge){badge.textContent=not||'';badge.classList.toggle('hidden',!not)}}}
@@ -1004,11 +1094,11 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const messageText=bubble?.querySelector?.('.message-text')?.textContent||'';
     const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
-    const targetMessage=state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(same(targetMessage.sender_id,authUser.id)||state.isAdmin);
+    const isCircle=!!row?.closest?.('#circleChatFlow');const targetMessage=isCircle?state.circleMessages.find(m=>same(m.id,messageId)):state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(isCircle?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id)):(same(targetMessage.sender_id,authUser.id)||state.isAdmin));
     openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
     const reply=document.querySelector('[data-mobile-reply-message]');
-    if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>window.startDmReply?.(messageId),0)};
+    if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)window.startCircleReply?.(messageId);else window.startDmReply?.(messageId)},0)};
     const copy=document.querySelector('[data-mobile-copy-message]');
     if(copy)copy.onclick=async()=>{
       try{
@@ -1018,7 +1108,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
     const del=document.querySelector('[data-mobile-delete-message]');
-    if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
+    if(del)del.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)deleteCircleMessage(messageId);else window.neisDeleteDirectMessage?.(messageId)},0)};
   };
 
   document.addEventListener('pointerdown',event=>{
