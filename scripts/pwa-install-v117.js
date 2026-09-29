@@ -53,7 +53,7 @@
     if(!('serviceWorker' in navigator))return null;
     try{
       serviceWorkerRegistration=await navigator.serviceWorker.register('/pwa-sw.js?v=2',{scope:'/'});
-      await navigator.serviceWorker.ready;
+      navigator.serviceWorker.ready.then(reg=>{serviceWorkerRegistration=reg}).catch(()=>{});
       return serviceWorkerRegistration;
     }catch(error){
       console.error('[NEIS PWA service worker]',error);
