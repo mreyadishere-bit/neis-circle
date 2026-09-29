@@ -1743,3 +1743,78 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
 @media(max-width:760px){
   .message-actions-trigger{display:none!important}
 }
+
+/* v130 — native dialog message actions, shared by desktop and PWA */
+.neis-message-actions-dialog{
+  width:min(390px,calc(100vw - 28px))!important;
+  max-width:390px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:22px!important;
+  background:transparent!important;
+  color:var(--ink)!important;
+  overflow:visible!important;
+}
+.neis-message-actions-dialog::backdrop{
+  background:rgba(0,0,0,.30)!important;
+  backdrop-filter:blur(2px);
+}
+.neis-message-dialog-card{
+  padding:10px!important;
+  border:1px solid var(--line)!important;
+  border-radius:22px!important;
+  background:var(--card)!important;
+  box-shadow:0 20px 60px rgba(0,0,0,.22)!important;
+}
+.neis-message-dialog-head{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  padding:7px 8px 10px!important;
+}
+.neis-message-dialog-head>b{font-size:15px!important}
+.neis-message-dialog-head>button{
+  width:34px!important;height:34px!important;min-width:34px!important;
+  display:grid!important;place-items:center!important;
+  border:1px solid var(--line)!important;
+  border-radius:11px!important;
+  background:var(--soft)!important;
+  color:var(--ink)!important;
+  font-size:20px!important;
+  line-height:1!important;
+  -webkit-tap-highlight-color:transparent!important;
+}
+.neis-message-dialog-action{
+  width:100%!important;
+  min-height:48px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  padding:11px 12px!important;
+  border:0!important;
+  border-radius:14px!important;
+  background:transparent!important;
+  color:var(--ink)!important;
+  text-align:start!important;
+  font:inherit!important;
+  cursor:pointer!important;
+  -webkit-tap-highlight-color:transparent!important;
+  touch-action:manipulation!important;
+}
+.neis-message-dialog-action:hover,
+.neis-message-dialog-action:active{
+  background:var(--soft)!important;
+}
+.neis-message-dialog-action.danger{
+  color:#a53a2d!important;
+}
+@media(max-width:760px){
+  .neis-message-actions-dialog{
+    margin:auto auto 14px!important;
+  }
+}
+
+/* v130 — remove legacy desktop inline delete */
+.chat-message .content-menu{display:none!important}
