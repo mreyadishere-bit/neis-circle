@@ -1702,3 +1702,44 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     color:#a53a2d!important;
   }
 }
+
+/* v129 — desktop message actions trigger */
+@media(min-width:761px){
+  .chat-message .bubble{
+    position:relative;
+  }
+  .message-actions-trigger{
+    position:absolute!important;
+    top:6px!important;
+    inset-inline-end:6px!important;
+    width:26px!important;
+    height:26px!important;
+    min-width:26px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:color-mix(in srgb,var(--card) 82%,transparent)!important;
+    color:var(--muted)!important;
+    font-size:12px!important;
+    line-height:1!important;
+    opacity:.14;
+    cursor:pointer!important;
+    transition:opacity .15s ease,background .15s ease!important;
+  }
+  .chat-message:hover .message-actions-trigger,
+  .chat-message:focus-within .message-actions-trigger,
+  .message-actions-trigger:focus-visible{
+    opacity:.9;
+  }
+  .message-actions-trigger:hover{
+    background:var(--soft)!important;
+  }
+  .chat-message .bubble:has(.message-actions-trigger){
+    padding-inline-end:38px!important;
+  }
+}
+@media(max-width:760px){
+  .message-actions-trigger{display:none!important}
+}
