@@ -1,4 +1,4 @@
-const VERSION = "neis-pwa-v1";
+const VERSION = "neis-pwa-v2";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -26,4 +26,20 @@ self.addEventListener("notificationclick", (event) => {
     }
     if (self.clients.openWindow) return self.clients.openWindow(target);
   })());
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (_) {}
+  const title = data.title || "NEIS Circle";
+  const options = {
+    body: data.body || "You have a new notification.",
+    icon: "/assets/email-logo.png",
+    badge: "/assets/email-logo.png",
+    data: { route: data.route || "/" },
+    tag: data.notification_id ? "neis-" + data.notification_id : undefined,
+    renotify: false,
+    silent: data.silent === true
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
 });
