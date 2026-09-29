@@ -37,10 +37,12 @@ public class MainActivity extends Activity {
     private static final int REQUEST_NOTIFICATIONS = 5001;
     private static final int REQUEST_FILE = 5002;
     private static final int REQUEST_MEDIA = 5003;
+    private static final int REQUEST_EXPLICIT_MEDIA = 5004;
 
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
     private PermissionRequest pendingMediaRequest;
+    private String pendingExplicitMediaKind;
     private boolean pageReady = false;
     private String pendingRoute;
     private String pendingAuthUrl;
@@ -310,6 +312,40 @@ public class MainActivity extends Activity {
         else request.grant(allowed.toArray(new String[0]));
     }
 
+    private boolean hasMediaPermission(String kind) {
+        if ("microphone".equalsIgnoreCase(kind) || "audio".equalsIgnoreCase(kind)) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        }
+        if ("camera".equalsIgnoreCase(kind) || "video".equalsIgnoreCase(kind)) {
+            return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
+        }
+        return false;
+    }
+
+    private void requestExplicitMediaPermission(String kind) {
+        runOnUiThread(() -> {
+            final boolean microphone = "microphone".equalsIgnoreCase(kind) || "audio".equalsIgnoreCase(kind);
+            final boolean camera = "camera".equalsIgnoreCase(kind) || "video".equalsIgnoreCase(kind);
+            if (!microphone && !camera) return;
+
+            if (hasMediaPermission(kind)) {
+                sendExplicitMediaPermissionResult(microphone ? "microphone" : "camera", true, true);
+                return;
+            }
+
+            pendingExplicitMediaKind = microphone ? "microphone" : "camera";
+            String permission = microphone ? Manifest.permission.RECORD_AUDIO : Manifest.permission.CAMERA;
+            ActivityCompat.requestPermissions(this, new String[]{permission}, REQUEST_EXPLICIT_MEDIA);
+        });
+    }
+
+    private void sendExplicitMediaPermissionResult(String kind, boolean granted, boolean canAskAgain) {
+        if (!pageReady || webView == null) return;
+        final String script = "window.neisMeetingNativePermissionResult&&window.neisMeetingNativePermissionResult(" +
+            JSONObject.quote(kind) + "," + granted + "," + canAskAgain + ");";
+        webView.post(() -> webView.evaluateJavascript(script, null));
+    }
+
     private void requestPushToken() {
         runOnUiThread(() -> {
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -415,6 +451,17 @@ public class MainActivity extends Activity {
             PermissionRequest request = pendingMediaRequest;
             pendingMediaRequest = null;
             if (request != null) grantAllowedWebMediaResources(request);
+            return;
+        }
+
+        if (requestCode == REQUEST_EXPLICIT_MEDIA) {
+            String kind = pendingExplicitMediaKind;
+            pendingExplicitMediaKind = null;
+            if (kind == null) return;
+            boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            String permission = "microphone".equals(kind) ? Manifest.permission.RECORD_AUDIO : Manifest.permission.CAMERA;
+            boolean canAskAgain = granted || ActivityCompat.shouldShowRequestPermissionRationale(this, permission);
+            sendExplicitMediaPermissionResult(kind, granted, canAskAgain);
         }
     }
 
@@ -434,6 +481,15 @@ public class MainActivity extends Activity {
         @JavascriptInterface public boolean isNative() { return true; }
         @JavascriptInterface public void openExternal(String url) { MainActivity.this.openExternal(url); }
         @JavascriptInterface public void requestPushToken() { MainActivity.this.requestPushToken(); }
+        @JavascriptInterface public boolean hasMediaPermission(String kind) { return MainActivity.this.hasMediaPermission(kind); }
+        @JavascriptInterface public void requestMediaPermission(String kind) { MainActivity.this.requestExplicitMediaPermission(kind); }
+        @JavascriptInterface public void openAppSettings() {
+            runOnUiThread(() -> {
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            });
+        }
         @JavascriptInterface public void pushRegistrationComplete() { }
         @JavascriptInterface public void setSystemTheme(String theme) {
             runOnUiThread(() -> MainActivity.this.applySystemTheme(theme));
