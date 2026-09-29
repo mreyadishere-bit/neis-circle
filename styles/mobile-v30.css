@@ -987,3 +987,14 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     line-height:1!important;
   }
 }
+
+@media(max-width:760px){
+  #modalRoot .message-actions-modal [data-mobile-delete-message],
+  #modalRoot .message-actions-modal [data-native-delete-message]{
+    -webkit-user-select:none!important;
+    user-select:none!important;
+    -webkit-touch-callout:none!important;
+    touch-action:manipulation!important;
+    -webkit-tap-highlight-color:transparent!important;
+  }
+}
