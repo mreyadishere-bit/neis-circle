@@ -2,6 +2,7 @@ package site.neiscircle.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -17,6 +18,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
 import androidx.browser.customtabs.CustomTabsIntent;
 import androidx.core.app.ActivityCompat;
@@ -30,6 +32,12 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends Activity {
     private static volatile boolean appForeground = false;
@@ -50,6 +58,8 @@ public class MainActivity extends Activity {
     private int nativeBottomInset = 0;
     private long backgroundedAtMs = 0L;
     private boolean updateCheckRunning = false;
+    private boolean nativeUpdateCheckRunning = false;
+    private File pendingInstallApk;
 
     public static boolean isAppForeground() {
         return appForeground;
@@ -150,11 +160,144 @@ public class MainActivity extends Activity {
                 pageReady = true;
                 applyNativeInsets();
                 flushPendingEvents();
+                webView.postDelayed(MainActivity.this::checkForNativeAppUpdate, 1200L);
             }
         });
 
         handleIntent(getIntent());
         webView.loadUrl(SITE_URL + "?native=1.7");
+    }
+
+    private void checkForNativeAppUpdate() {
+        if (nativeUpdateCheckRunning) return;
+        nativeUpdateCheckRunning = true;
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL("https://api.github.com/repos/mreyadishere-bit/neis-circle/releases/latest");
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(8000);
+                connection.setRequestProperty("Accept", "application/vnd.github+json");
+                connection.setRequestProperty("User-Agent", "NEIS-Circle-Android");
+                if (connection.getResponseCode() != 200) return;
+
+                String json;
+                try (InputStream input = connection.getInputStream()) {
+                    json = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                }
+                JSONObject release = new JSONObject(json);
+                String tag = release.optString("tag_name", "");
+                int latestCode = 0;
+                if (tag.startsWith("android-")) {
+                    try { latestCode = Integer.parseInt(tag.substring("android-".length())); }
+                    catch (Exception ignored) { }
+                }
+                if (latestCode <= BuildConfig.VERSION_CODE) return;
+
+                String apkUrl = null;
+                org.json.JSONArray assets = release.optJSONArray("assets");
+                if (assets != null) {
+                    for (int i = 0; i < assets.length(); i++) {
+                        JSONObject asset = assets.optJSONObject(i);
+                        if (asset != null && "neis-circle-android.apk".equals(asset.optString("name"))) {
+                            apkUrl = asset.optString("browser_download_url", null);
+                            break;
+                        }
+                    }
+                }
+                if (apkUrl == null || apkUrl.isEmpty()) return;
+
+                final String versionLabel = release.optString("name", "New Android update");
+                final String finalApkUrl = apkUrl;
+                runOnUiThread(() -> showNativeUpdatePrompt(versionLabel, finalApkUrl));
+            } catch (Exception ignored) {
+            } finally {
+                if (connection != null) connection.disconnect();
+                nativeUpdateCheckRunning = false;
+            }
+        }).start();
+    }
+
+    private void showNativeUpdatePrompt(String versionLabel, String apkUrl) {
+        if (isFinishing()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage(versionLabel + "\n\nA newer NEIS Circle app is available. Update now to get the latest fixes and features. Your account and app data will stay in place.")
+            .setNegativeButton("Later", null)
+            .setPositiveButton("Update", (dialog, which) -> downloadAndInstallUpdate(apkUrl))
+            .show();
+    }
+
+    private void downloadAndInstallUpdate(String apkUrl) {
+        Toast.makeText(this, "Downloading NEIS Circle update…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+            try {
+                File dir = new File(getCacheDir(), "updates");
+                if (!dir.exists() && !dir.mkdirs()) throw new Exception("update_dir");
+                File apk = new File(dir, "neis-circle-update.apk");
+                if (apk.exists()) apk.delete();
+
+                URL url = new URL(apkUrl);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                connection.setInstanceFollowRedirects(true);
+                connection.setRequestProperty("User-Agent", "NEIS-Circle-Android");
+                int code = connection.getResponseCode();
+                if (code < 200 || code >= 300) throw new Exception("download_" + code);
+
+                try (InputStream input = connection.getInputStream();
+                     FileOutputStream output = new FileOutputStream(apk)) {
+                    byte[] buffer = new byte[32768];
+                    int read;
+                    while ((read = input.read(buffer)) != -1) output.write(buffer, 0, read);
+                }
+
+                if (!apk.exists() || apk.length() < 1024 * 100) throw new Exception("apk_invalid");
+                runOnUiThread(() -> prepareApkInstall(apk));
+            } catch (Exception error) {
+                runOnUiThread(() -> Toast.makeText(this,
+                    "The update could not be downloaded. Try again later.", Toast.LENGTH_LONG).show());
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+        }).start();
+    }
+
+    private void prepareApkInstall(File apk) {
+        pendingInstallApk = apk;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !getPackageManager().canRequestPackageInstalls()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Allow app updates")
+                .setMessage("Android needs permission to install NEIS Circle updates downloaded from the official app. Enable “Allow from this source”, then return here.")
+                .setNegativeButton("Cancel", (dialog, which) -> pendingInstallApk = null)
+                .setPositiveButton("Open settings", (dialog, which) -> {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                })
+                .show();
+            return;
+        }
+        pendingInstallApk = null;
+        launchApkInstaller(apk);
+    }
+
+    private void launchApkInstaller(File apk) {
+        try {
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                this, getPackageName() + ".fileprovider", apk);
+            Intent intent = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception error) {
+            Toast.makeText(this, "Could not open the Android update installer.", Toast.LENGTH_LONG).show();
+        }
     }
 
     private void checkForWebUpdate() {
@@ -187,6 +330,12 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (pendingInstallApk != null && pendingInstallApk.exists() &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getPackageManager().canRequestPackageInstalls())) {
+            File apk = pendingInstallApk;
+            pendingInstallApk = null;
+            webView.postDelayed(() -> launchApkInstaller(apk), 250L);
+        }
         if (backgroundedAtMs <= 0L) return;
         long awayFor = System.currentTimeMillis() - backgroundedAtMs;
         backgroundedAtMs = 0L;
