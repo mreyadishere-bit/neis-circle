@@ -11,7 +11,7 @@ const load=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??f}catch{retur
 const state={
   view:"home", lang:localStorage.getItem("neis-lang")||"en", theme:localStorage.getItem("neis-theme")||"light",
   posts:[], saved:[], liked:[], joined:[], following:[], rsvp:[],
-  threads:[], activeThread:null, query:"", filter:"For you",
+  threads:[], activeThread:null, query:"", filter:"Latest",
   discoverFilter:"Recommended", opportunityFilter:"All",
   profile:load("neis-profile-v2",{name:"Eyad",username:"eyad",grade:"Grade 11",campus:"Main Campus",bio:"Curious about physics, technology and design.",interests:"Physics, ICT, Design, AI"})
 };
