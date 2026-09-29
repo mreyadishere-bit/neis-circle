@@ -327,7 +327,7 @@ function setDmReplyTarget(messageId){
   if(existing)existing.outerHTML=markup;
   else document.querySelector('#liveChatForm')?.insertAdjacentHTML('beforebegin',markup);
   const cancel=document.querySelector('[data-cancel-dm-reply]');
-  if(cancel)cancel.onclick=()=>{clearDmReplyTarget();document.querySelector('#liveChatInput')?.focus({preventScroll:true});scrollActiveDmToBottom()};
+  if(cancel)cancel.onclick=event=>{event?.preventDefault?.();event?.stopPropagation?.();clearDmReplyTarget()};
   const input=document.querySelector('#liveChatInput');
   input?.focus({preventScroll:true});
   scrollActiveDmToBottom();
@@ -461,7 +461,7 @@ function setCircleReplyTarget(messageId){
   if(existing)existing.outerHTML=markup;
   else document.querySelector('#circleChatForm')?.insertAdjacentHTML('beforebegin',markup);
   const cancel=document.querySelector('[data-cancel-circle-reply]');
-  if(cancel)cancel.onclick=()=>{clearCircleReplyTarget();document.querySelector('#circleChatInput')?.focus({preventScroll:true});scrollActiveCircleChatToBottom()};
+  if(cancel)cancel.onclick=event=>{event?.preventDefault?.();event?.stopPropagation?.();clearCircleReplyTarget()};
   const input=document.querySelector('#circleChatInput');
   input?.focus({preventScroll:true});
   scrollActiveCircleChatToBottom();
@@ -1041,7 +1041,7 @@ function bindV6(root=document){
   const circleSearch=root.querySelector('#circleSearch');if(circleSearch)circleSearch.oninput=()=>{state.circleQuery=circleSearch.value;clearTimeout(circleSearchTimer);circleSearchTimer=setTimeout(()=>{render();requestAnimationFrame(()=>{const next=$('#circleSearch');if(next){next.focus();next.setSelectionRange(next.value.length,next.value.length)}})},180)};
   root.querySelectorAll('[data-clear-circle-search]').forEach(el=>el.onclick=()=>{state.circleQuery='';render()});
   const ts=root.querySelector('#conversationSearch');if(ts)ts.oninput=()=>rerenderSearchInput(ts,'conversationQuery');
-  root.querySelectorAll('[data-cancel-dm-reply]').forEach(el=>el.onclick=()=>{clearDmReplyTarget();$('#liveChatInput')?.focus({preventScroll:true})});
+  root.querySelectorAll('[data-cancel-dm-reply]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();clearDmReplyTarget()});
   const liveDraftInput=root.querySelector('#liveChatInput');
   if(liveDraftInput){
     bindDmKeyboardBottom();
@@ -1075,7 +1075,7 @@ function bindV6(root=document){
     scrollActiveDmToBottom();
   };}
   const circleInput=root.querySelector('#circleChatInput');if(circleInput){bindDmKeyboardBottom();circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
-  root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=()=>{clearCircleReplyTarget();$('#circleChatInput')?.focus({preventScroll:true})});
+  root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();clearCircleReplyTarget()});
   const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('button');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
 }
 
@@ -1224,11 +1224,21 @@ if(!window.__neisDmReplyCancelDelegated){
     const cancel=event.target?.closest?.('[data-cancel-dm-reply]');
     if(!cancel)return;
     event.preventDefault();
+    event.stopPropagation();
     clearDmReplyTarget();
-    const input=document.querySelector('#liveChatInput');
-    input?.focus({preventScroll:true});
-    scrollActiveDmToBottom();
-  });
+  },true);
+}
+
+/* v125 — cancel reply without reopening the mobile keyboard */
+if(!window.__neisCircleReplyCancelDelegated){
+  window.__neisCircleReplyCancelDelegated=true;
+  document.addEventListener('click',event=>{
+    const cancel=event.target?.closest?.('[data-cancel-circle-reply]');
+    if(!cancel)return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearCircleReplyTarget();
+  },true);
 }
 
 /* v95 — keep the DM composer focused while realtime messages arrive. */
