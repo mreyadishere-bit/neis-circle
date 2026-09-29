@@ -1104,6 +1104,21 @@ window.addEventListener('hashchange',applyRoute);
 document.addEventListener('click',e=>{if(!e.target.closest('#globalSearchForm')){$('#searchSuggestions')?.classList.add('hidden');syncSearchChrome()}});
 
 window.NEISChatActionBridge={
+  getMessageMeta(scope,id){
+    const key=String(id||'');
+    if(scope==='circle'){
+      const message=state.circleMessages.find(item=>same(item.id,key));
+      if(!message)return {canDelete:false};
+      return {
+        canDelete:!message.deleted_at&&(same(message.sender_id,authUser?.id)||canModerateCircle(message.circle_id))
+      };
+    }
+    const message=state.liveMessages.find(item=>same(item.id,key));
+    if(!message)return {canDelete:false};
+    return {
+      canDelete:same(message.sender_id,authUser?.id)||state.isAdmin
+    };
+  },
   deleteMessage(scope,id){
     if(scope==='circle')return deleteCircleMessage(id);
     return deleteDirectMessage(id);
@@ -1152,7 +1167,8 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 
     const isCircle=!!row.closest('#circleChatFlow');
     const scope=isCircle?'circle':'dm';
-    const canDelete=row.dataset?.messageDeletable==='1'||row.classList?.contains('mine');
+    const meta=window.NEISChatActionBridge?.getMessageMeta?.(scope,messageId);
+    const canDelete=typeof meta?.canDelete==='boolean'?meta.canDelete:(row.dataset?.messageDeletable==='1'||row.classList?.contains('mine'));
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
 
     const dialog=ensureDialog();
