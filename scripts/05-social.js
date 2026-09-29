@@ -1111,16 +1111,17 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         toast(t('Message copied.','تم نسخ الرسالة.'));
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
-    const del=document.querySelector('[data-mobile-delete-message]');
+    const actionModal=document.querySelector('#modalRoot .message-actions-modal');
+    const del=actionModal?.querySelector('[data-mobile-delete-message]');
     if(del){
       const runDelete=event=>{
         event?.preventDefault?.();
         event?.stopPropagation?.();
-        window.neisConfirmMessageDelete?.(isCircle?'circle':'dm',messageId);
+        window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
       };
-      del.addEventListener('touchstart',runDelete,{passive:false});
-      del.addEventListener('pointerdown',runDelete);
-      del.addEventListener('click',runDelete);
+      del.addEventListener('touchstart',runDelete,{passive:false,once:true});
+      del.addEventListener('pointerdown',runDelete,{once:true});
+      del.addEventListener('click',runDelete,{once:true});
     }
   };
 
@@ -1214,58 +1215,43 @@ if(!window.__neisDmKeyboardFocusGuardV95){
   });
 }
 
-/* v98 — reliable in-sheet delete confirmation for DM + Circle messages */
-window.neisConfirmMessageDelete=(scope,id)=>{
+/* v101 — execute message deletion directly from the action sheet tap */
+window.neisDeleteMessageNow=async(scope,id,button)=>{
   const messageId=String(id||'').trim();
   if(!messageId)return;
-  const isCircle=scope==='circle';
-  openModal(`<div class="modal-head"><div><h2>${t('Delete message?','حذف الرسالة؟')}</h2><p>${isCircle?t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.'):t('The message will disappear for everyone and cannot be restored.','ستختفي الرسالة لدى الجميع ولا يمكن استعادتها.')}</p></div><button class="close" data-delete-cancel>×</button></div><div class="modal-actions"><button type="button" class="secondary" data-delete-cancel>${t('Cancel','إلغاء')}</button><button type="button" class="primary danger" data-delete-confirm>${t('Delete','حذف')}</button></div>`);
-  document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
-  document.querySelectorAll('[data-delete-cancel]').forEach(btn=>btn.onclick=()=>closeModal());
-  const confirm=document.querySelector('[data-delete-confirm]');
-  if(!confirm)return;
-  confirm.onclick=async()=>{
-    confirm.disabled=true;
-    confirm.textContent=t('Deleting…','جارٍ الحذف…');
-    try{
-      if(isCircle){
-        const target=state.circleMessages.find(m=>same(m.id,messageId));
-        if(!target){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));closeModal();return}
-        const {error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',messageId);
-        if(error){toast(safeError(error,'delete this message'));confirm.disabled=false;confirm.textContent=t('Delete','حذف');return}
-        const local=state.circleMessages.find(m=>same(m.id,messageId));
-        if(local){local.body='';local.deleted_at=new Date().toISOString()}
-        closeModal();
-        if(state.view==='circle-detail'&&state.circleTab==='chat'){
-          const flow=document.querySelector('#circleChatFlow');
-          const msgs=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
-          if(flow){flow.innerHTML=msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
-        }
-        toast(t('Message deleted.','تم حذف الرسالة.'));
-        return;
-      }
-
-      const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});
-      if(error||!data){
-        toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));
-        confirm.disabled=false;
-        confirm.textContent=t('Delete','حذف');
-        return;
-      }
-      state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));
+  const btn=button||null;
+  const original=btn?.innerHTML||'';
+  if(btn){btn.disabled=true;btn.innerHTML='<span>'+t('Deleting…','جارٍ الحذف…')+'</span><b>…</b>'}
+  try{
+    if(scope==='circle'){
+      const target=state.circleMessages.find(m=>same(m.id,messageId));
+      if(!target){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
+      const {error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',messageId);
+      if(error){toast(safeError(error,'delete this message'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
+      const local=state.circleMessages.find(m=>same(m.id,messageId));
+      if(local){local.body='';local.deleted_at=new Date().toISOString()}
       closeModal();
-      if(state.view==='messages'&&state.activeConversationId){
-        const flow=document.querySelector('#chatFlow');
-        const msgs=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
-        if(flow){flow.innerHTML=msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
+      if(state.view==='circle-detail'&&state.circleTab==='chat'){
+        const flow=document.querySelector('#circleChatFlow');
+        const msgs=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
+        if(flow){flow.innerHTML=msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
       }
-      toast(t('Message permanently deleted.','تم حذف الرسالة نهائيًا.'));
-    }catch(error){
-      console.error('[NEIS delete message v98]',error);
-      toast(t('Could not delete this message.','تعذر حذف هذه الرسالة.'));
-      confirm.disabled=false;
-      confirm.textContent=t('Delete','حذف');
+      toast(t('Message deleted.','تم حذف الرسالة.'));
+      return;
     }
-  };
+    const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});
+    if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
+    state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));
+    closeModal();
+    if(state.view==='messages'&&state.activeConversationId){
+      const flow=document.querySelector('#chatFlow');
+      const msgs=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
+      if(flow){flow.innerHTML=msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
+    }
+    toast(t('Message permanently deleted.','تم حذف الرسالة نهائيًا.'));
+  }catch(error){
+    console.error('[NEIS direct delete v101]',error);
+    toast(t('Could not delete this message.','تعذر حذف هذه الرسالة.'));
+    if(btn){btn.disabled=false;btn.innerHTML=original}
+  }
 };
-
