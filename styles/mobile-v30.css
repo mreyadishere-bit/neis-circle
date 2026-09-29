@@ -998,3 +998,18 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     -webkit-tap-highlight-color:transparent!important;
   }
 }
+
+
+/* v104 — desktop-only inline message delete; mobile web/app use long-press actions */
+@media(max-width:760px){
+  .chat-message .content-menu,
+  .messages.mobile-thread-open .chat-message .content-menu,
+  .dm-like-circle-chat .chat-message .content-menu{
+    display:none!important;
+  }
+  .chat-message .bubble:has(.content-menu),
+  .messages.mobile-thread-open .chat-message .bubble:has(.content-menu),
+  .dm-like-circle-chat .chat-message .bubble:has(.content-menu){
+    padding-inline-end:10px!important;
+  }
+}
