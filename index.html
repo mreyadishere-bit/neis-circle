@@ -17,10 +17,11 @@
   <meta name="twitter:description" content="NEIS Circle — a private student knowledge network.">
   <meta name="twitter:image" content="https://neiscircle.site/assets/referral-poster.webp?v=49.4">
   <meta name="robots" content="noindex,nofollow">
-  <meta name="theme-color" content="#007e68">
+  <meta name="theme-color" content="#f3f6f2">
+  <meta name="color-scheme" content="light">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="NEIS Circle">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/email-logo.png">
@@ -31,7 +32,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="styles/security-v11.css?v=11.1">
-  <link rel="stylesheet" href="styles/app.css?v=114.0-hero-taps">
+  <link rel="stylesheet" href="styles/app.css?v=118.0-pwa-mobile-shell">
   <link rel="stylesheet" href="styles/image-editor.css" data-legacy-style="neis-image-editor-style">
   <link rel="stylesheet" href="styles/ui-v13.css?v=114.0-tab-contrast">
   <link rel="stylesheet" href="styles/ui-v14.css?v=14.0">
@@ -103,7 +104,7 @@
   <script src="scripts/02-content-admin.js?v=75.0-fast-admin-toggles"></script>
   <script src="scripts/03-auth-i18n.js?v=112.0-style-themes-announcement"></script>
   <script src="scripts/04-permissions-ux.js?v=23.1"></script>
-  <script src="scripts/05-social.js?v=116.0-meeting-mic-default-fallback"></script>
+  <script src="scripts/05-social.js?v=118.0-pwa-home"></script>
   <script src="scripts/hotfix-v21.js?v=21.0"></script>
   <script src="scripts/06-image-editor.js?v=18.0"></script>
   <script src="scripts/security-v11.js?v=26.0"></script>
@@ -123,21 +124,8 @@
   <script src="scripts/articles-v27.js?v=70.0-comment-direction"></script>
   <link rel="stylesheet" href="styles/study-v42.css?v=43.2-footer-alignment">
   <script src="scripts/study-v42.js?v=43.1-card-redesign"></script>
-  <script>
-    (function(){
-      if(!/NEISCircleAndroid\/\d+/i.test(navigator.userAgent))return;
-      function load(src,next){
-        var s=document.createElement('script');
-        s.src=src;
-        if(next)s.onload=next;
-        document.body.appendChild(s);
-      }
-      load('scripts/mobile-push-v50.js?v=109.0-all-notifications-on',function(){
-        load('scripts/native-app-v56.js?v=57.0-mentions-comments');
-      });
-    })();
-  </script>
-  <script src="scripts/pwa-install-v117.js?v=117.0-pwa-install"></script>
+
+  <script src="scripts/pwa-install-v117.js?v=118.0-web-push-theme"></script>
 </body>
 </html>
 
