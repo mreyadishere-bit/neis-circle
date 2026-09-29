@@ -1591,3 +1591,15 @@ body.rtl .reply-thread-toggle{
   -webkit-tap-highlight-color:transparent!important;
   cursor:pointer!important;
 }
+
+
+/* v106 — keep search result type letters perfectly centered */
+.search-suggest .entity-icon,
+.search-results-list .entity-icon,
+.result-list .result-row .entity-icon{
+  display:grid!important;
+  place-items:center!important;
+  text-align:center!important;
+  line-height:1!important;
+  padding:0!important;
+}
