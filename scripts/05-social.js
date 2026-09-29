@@ -1259,15 +1259,23 @@ window.neisConfirmMessageDelete=(scope,id)=>{
     }
   };
 };
-if(!window.__neisDeleteActionDelegatedV98){
-  window.__neisDeleteActionDelegatedV98=true;
-  document.addEventListener('click',event=>{
+if(!window.__neisDeleteActionDelegatedV99){
+  window.__neisDeleteActionDelegatedV99=true;
+  let lastDeleteActivationAt=0;
+  const activateDeleteAction=event=>{
     const button=event.target?.closest?.('[data-mobile-delete-message],[data-native-delete-message]');
     if(!button)return;
     const id=button.dataset.messageActionId||'';
     const scope=button.dataset.messageActionScope||'dm';
     if(!id)return;
+    const now=Date.now();
+    if(now-lastDeleteActivationAt<500)return;
+    lastDeleteActivationAt=now;
     event.preventDefault();
+    event.stopPropagation();
     window.neisConfirmMessageDelete(scope,id);
-  },true);
+  };
+  document.addEventListener('pointerup',activateDeleteAction,true);
+  document.addEventListener('touchend',activateDeleteAction,{capture:true,passive:false});
+  document.addEventListener('click',activateDeleteAction,true);
 }
