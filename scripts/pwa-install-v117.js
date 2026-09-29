@@ -287,6 +287,8 @@
   }
 
   let notificationOnboardingTimer=null;
+  let notificationOnboardingShown=false;
+  let notificationHiddenAt=0;
 
   function notificationOnboardingMarkup(){
     const permission=('Notification' in window)?Notification.permission:'unsupported';
@@ -318,8 +320,8 @@
       Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
       return;
     }
-    if(sessionStorage.getItem('neis-pwa-notification-onboarding-shown')==='1')return;
-    sessionStorage.setItem('neis-pwa-notification-onboarding-shown','1');
+    if(notificationOnboardingShown)return;
+    notificationOnboardingShown=true;
 
     const copy=notificationOnboardingMarkup();
     if(typeof openModal!=='function')return;
@@ -418,6 +420,26 @@
   updateInstallUI();
   hookLiveData();
   installSettingsHook();
+
+  [900,2200,4500].forEach(delay=>{
+    setTimeout(()=>{
+      if((typeof authUser!=='undefined'?authUser:null))scheduleNotificationOnboarding();
+    },delay);
+  });
+
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      notificationHiddenAt=Date.now();
+      return;
+    }
+    if(('Notification' in window)&&Notification.permission!=='granted'&&
+       notificationHiddenAt&&Date.now()-notificationHiddenAt>4000){
+      notificationOnboardingShown=false;
+      scheduleNotificationOnboarding();
+    }else if(('Notification' in window)&&Notification.permission==='granted'){
+      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+    }
+  });
 
   window.NEISPWA={
     install:installPwa,
