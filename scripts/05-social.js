@@ -1152,7 +1152,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
 
     const isCircle=!!row.closest('#circleChatFlow');
     const scope=isCircle?'circle':'dm';
-    const canDelete=row.dataset?.messageDeletable==='1';
+    const canDelete=row.dataset?.messageDeletable==='1'||row.classList?.contains('mine');
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
 
     const dialog=ensureDialog();
