@@ -1099,7 +1099,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
     const isCircle=!!row?.closest?.('#circleChatFlow');const targetMessage=isCircle?state.circleMessages.find(m=>same(m.id,messageId)):state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(isCircle?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id)):(same(targetMessage.sender_id,authUser.id)||state.isAdmin));
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}" ontouchend="return window.neisDeleteFromActionElement(this,event)" onpointerup="return window.neisDeleteFromActionElement(this,event)" onclick="return window.neisDeleteFromActionElement(this,event)"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
     const reply=document.querySelector('[data-mobile-reply-message]');
     if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)window.startCircleReply?.(messageId);else window.startDmReply?.(messageId)},0)};
@@ -1111,18 +1111,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         toast(t('Message copied.','تم نسخ الرسالة.'));
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
-    const actionModal=document.querySelector('#modalRoot .message-actions-modal');
-    const del=actionModal?.querySelector('[data-mobile-delete-message]');
-    if(del){
-      const runDelete=event=>{
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        window.neisDeleteMessageNow?.(isCircle?'circle':'dm',messageId,del);
-      };
-      del.addEventListener('touchstart',runDelete,{passive:false,once:true});
-      del.addEventListener('pointerdown',runDelete,{once:true});
-      del.addEventListener('click',runDelete,{once:true});
-    }
+
   };
 
   document.addEventListener('pointerdown',event=>{
@@ -1254,4 +1243,21 @@ window.neisDeleteMessageNow=async(scope,id,button)=>{
     toast(t('Could not delete this message.','تعذر حذف هذه الرسالة.'));
     if(btn){btn.disabled=false;btn.innerHTML=original}
   }
+};
+
+/* v102 — inline delete bridge for Android WebView action-sheet taps */
+window.neisDeleteFromActionElement=(element,event)=>{
+  try{
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    if(!element||element.dataset.deleteBusy==='1')return false;
+    element.dataset.deleteBusy='1';
+    const id=element.dataset.messageActionId||'';
+    const scope=element.dataset.messageActionScope||'dm';
+    window.neisDeleteMessageNow?.(scope,id,element);
+  }catch(error){
+    console.error('[NEIS inline delete action]',error);
+    try{if(element)element.dataset.deleteBusy='0'}catch(_){}
+  }
+  return false;
 };
