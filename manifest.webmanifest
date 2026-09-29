@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "NEIS Circle",
+  "short_name": "NEIS Circle",
+  "description": "NEIS Circle — a private student knowledge network.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#007e68",
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/assets/email-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
