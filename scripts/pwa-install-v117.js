@@ -321,13 +321,18 @@
     }
   });
 
-  const observer=new MutationObserver(()=>{
+  const themeObserver=new MutationObserver(()=>{
     syncThemeChrome();
-    updateInstallUI();
-    addPwaSettingsEntry();
   });
-  observer.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','data-style-theme']});
-  observer.observe(document.body,{childList:true,subtree:true});
+  themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','data-style-theme']});
+
+  const view=document.querySelector('#view');
+  if(view){
+    const viewObserver=new MutationObserver(()=>{
+      updateInstallUI();
+    });
+    viewObserver.observe(view,{childList:true,subtree:false});
+  }
 
   registerServiceWorker().then(()=>{
     hookLiveData();
