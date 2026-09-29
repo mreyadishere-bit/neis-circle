@@ -976,3 +976,14 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     margin:7px 9px 8px!important;
   }
 }
+
+@media(max-width:760px){
+  .circle-chat-mark{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    text-align:center!important;
+    padding:0!important;
+    line-height:1!important;
+  }
+}
