@@ -511,7 +511,7 @@ function circleTabContent(c,mine,members){
   const search=`<div class="circle-toolbar"><label class="field"><input id="circleSearch" value="${esc(state.circleQuery)}" placeholder="${t('Search this Circle…','ابحث داخل المجتمع…')}"></label>${state.circleQuery?`<button class="secondary" data-clear-circle-search>${t('Clear','مسح')}</button>`:''}</div>`;
   if(state.circleTab==='home')return `${search}<div class="circle-layout"><div><div class="composer-bar">${profileAvatar(profileData(authUser.id))}<button ${mine?.status==='active'?'data-circle-compose':''}>${mine?.status==='active'?t('Start a discussion in this Circle…','ابدأ نقاشًا في هذا المجتمع…'):t('Join to participate','انضم للمشاركة')}</button></div><div class="feed" style="margin-top:16px">${posts.length?posts.slice(0,10).map(postCard).join(''):emptyState(t('No Circle posts yet','لا توجد منشورات بعد'),query?t('No posts match your search.','لا توجد منشورات مطابقة للبحث.'):mine?.status==='active'?t('Start the first discussion.','ابدأ أول نقاش.'):t('Join to follow the conversation.','انضم لمتابعة النقاش.'))}</div></div><aside class="circle-panel"><h3>${t('About this Circle','عن المجتمع')}</h3><p>${esc(c.description)}</p><p><b>${t('Category','التصنيف')}:</b> ${esc(c.category)}</p><p><b>${t('Created','تاريخ الإنشاء')}:</b> ${formatDate(c.created_at)}</p></aside></div>`;
   if(state.circleTab==='posts')return `${search}<div class="page-title"><div><h2>${t('Circle posts','منشورات المجتمع')}</h2><p>${posts.length} ${t('results','نتيجة')}</p></div>${mine?.status==='active'?`<button class="primary" data-circle-compose>${t('+ New post','+ منشور جديد')}</button>`:''}</div><div class="feed">${posts.length?posts.map(postCard).join(''):emptyState(t('No posts found','لا توجد منشورات'),query?t('Try a different search.','جرّب بحثًا مختلفًا.'):t('Start the first discussion.','ابدأ أول نقاش.'))}</div>`;
-  if(state.circleTab==='chat'){const msgs=state.circleMessages.filter(m=>same(m.circle_id,c.id)&&match(query,m.body,m.profile?.full_name));return `<section class="circle-panel circle-chat dm-like-circle-chat"><div class="chat-head circle-chat-head"><div class="circle-chat-mark">${esc(initials(c.name)||'C')}</div><div class="circle-chat-title"><b>${esc(c.name)}</b><small>${t('Circle chat','دردشة المجتمع')} · ${members.length} ${t('members','أعضاء')}</small></div></div><div class="chat-flow" id="circleChatFlow">${msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${circleReplyComposer(c.id)}${mine?.status==='active'&&mine.status!=='muted'?`<form class="chat-form" id="circleChatForm"><input id="circleChatInput" required maxlength="4000" autocomplete="off" placeholder="${t('Write a message…','اكتب رسالة…')}" dir="auto" value="${esc(getCircleDraft(c.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="empty"><b>${t('Members only','للأعضاء فقط')}</b><span>${t('Join the Circle to chat.','انضم للمجتمع للمشاركة في الدردشة.')}</span></div>`}</section>`}
+  if(state.circleTab==='chat'){const msgs=state.circleMessages.filter(m=>same(m.circle_id,c.id)&&match(query,m.body,m.profile?.full_name));return `<section class="circle-panel circle-chat dm-like-circle-chat"><div class="chat-head circle-chat-head"><button class="round-btn circle-chat-back" data-circle-tab="home" aria-label="${t('Back to Circle','العودة للمجتمع')}">←</button><div class="circle-chat-mark">${esc(initials(c.name)||'C')}</div><div class="circle-chat-title"><b>${esc(c.name)}</b><small>${t('Circle chat','دردشة المجتمع')} · ${members.length} ${t('members','أعضاء')}</small></div></div><div class="chat-flow" id="circleChatFlow">${msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${circleReplyComposer(c.id)}${mine?.status==='active'&&mine.status!=='muted'?`<form class="chat-form" id="circleChatForm"><input id="circleChatInput" required maxlength="4000" autocomplete="off" placeholder="${t('Write a message…','اكتب رسالة…')}" dir="auto" value="${esc(getCircleDraft(c.id))}"><button aria-label="${t('Send','إرسال')}">→</button></form>`:`<div class="empty"><b>${t('Members only','للأعضاء فقط')}</b><span>${t('Join the Circle to chat.','انضم للمجتمع للمشاركة في الدردشة.')}</span></div>`}</section>`}
   if(state.circleTab==='meetings'){const meetings=state.circleMeetings.filter(m=>same(m.circle_id,c.id)&&!m.cancelled_at&&match(query,m.title,m.description,m.creator?.full_name));return `${search}<div class="page-title"><div><h2>${t('Online meetings','الاجتماعات الأونلاين')}</h2><p>${t('Secure in-browser video rooms powered by LiveKit.','غرف فيديو آمنة داخل المنصة عبر LiveKit.')}</p></div>${canModerateCircle(c.id)?`<button class="primary" data-new-meeting>${t('+ Schedule meeting','+ جدولة اجتماع')}</button>`:''}</div>${state.dataErrors.meetings?`<div class="error-state"><b>${t('Meetings could not refresh.','تعذر تحديث الاجتماعات.')}</b><span>${t('Your last loaded meetings are still shown. Try again.','تظل آخر اجتماعات تم تحميلها ظاهرة. حاول مرة أخرى.')}</span><button class="secondary" data-retry-meetings>${t('Try again','إعادة المحاولة')}</button></div>`:''}<div class="meeting-grid">${meetings.length?meetings.map(meetingCard).join(''):!state.dataErrors.meetings?emptyState(t('No meetings yet','لا توجد اجتماعات بعد'),query?t('Try another search.','جرّب بحثًا آخر.'):canModerateCircle(c.id)?t('Schedule the first meeting.','جدول أول اجتماع.'):t('Circle moderators schedule meetings here.','يقوم مشرفو المجتمع بجدولة الاجتماعات هنا.')):''}</div>`}
   if(state.circleTab==='members')return `${search}<div class="page-title"><div><h2>${t('Members','الأعضاء')}</h2><p>${filteredMembers.length} ${t('active members','عضو نشط')}</p></div></div><div class="result-list">${filteredMembers.length?filteredMembers.map(m=>`<div class="result-row">${profileAvatar(m.profile||profileData(m.user_id))}<div><h3><button class="author-link" data-open-profile="${m.user_id}">${esc(m.profile?.full_name||'Student')}</button></h3><p>@${esc(m.profile?.username||'student')} · ${esc(m.profile?.grade||'')} · ${esc(m.profile?.branch||'')}</p></div><div class="identity-line"><span class="role-pill ${m.role}">${esc(m.role)}</span>${canManageCircle(c.id)&&!same(m.user_id,authUser.id)&&m.role!=='owner'?`<select data-member-role="${m.user_id}"><option value="member" ${m.role==='member'?'selected':''}>Member</option><option value="moderator" ${m.role==='moderator'?'selected':''}>Moderator</option><option value="admin" ${m.role==='admin'?'selected':''}>Admin</option></select><button class="secondary danger" data-remove-member="${m.user_id}">${t('Remove','إزالة')}</button>`:''}</div></div>`).join(''):emptyState(t('No members found','لا يوجد أعضاء'),t('Try another search.','جرّب بحثًا آخر.'))}</div>`;
   return `<section class="circle-panel circle-about"><header class="circle-about-head"><h2>${t('About this Circle','حول هذا المجتمع')}</h2><p>${esc(c.description||t('A student community for learning and collaboration.','مجتمع طلابي للتعلم والتعاون.'))}</p></header><dl class="circle-facts"><div class="circle-fact"><dt>${t('Category','التصنيف')}</dt><dd>${esc(c.category)}</dd></div><div class="circle-fact"><dt>${t('Privacy','الخصوصية')}</dt><dd>${c.privacy==='private'?t('Private','خاص'):t('Public','عام')}</dd></div><div class="circle-fact"><dt>${t('Owner','المالك')}</dt><dd>${esc(profileData(c.owner_id).full_name||'Student')}</dd></div></dl>${canManageCircle(c.id)?`<div class="circle-management"><div><h3>${t('Circle management','إدارة المجتمع')}</h3><p>${t('Manage roles from Members, or permanently delete this Circle and its community data.','أدر الأدوار من تبويب الأعضاء، أو احذف هذا المجتمع وبياناته نهائيًا.')}</p></div><button class="secondary danger" data-delete-circle="${c.id}">${t('Delete Circle','حذف المجتمع')}</button></div>`:''}</section>`
@@ -1099,7 +1099,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const messageId=row?.dataset?.messageId||'';
     if(typeof openModal!=='function')return;
     const isCircle=!!row?.closest?.('#circleChatFlow');const targetMessage=isCircle?state.circleMessages.find(m=>same(m.id,messageId)):state.liveMessages.find(m=>same(m.id,messageId));const canDelete=!!targetMessage&&(isCircle?(same(targetMessage.sender_id,authUser.id)||canModerateCircle(targetMessage.circle_id)):(same(targetMessage.sender_id,authUser.id)||state.isAdmin));
-    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
+    openModal(`<div class="modal-head"><div><h2>${t('Message actions','خيارات الرسالة')}</h2></div><button class="close" data-close>×</button></div><div class="mobile-message-action-list"><button type="button" class="account-row" data-mobile-reply-message><span>${t('Reply','رد')}</span><b>↩</b></button><button type="button" class="account-row" data-mobile-copy-message><span>${t('Copy message','نسخ الرسالة')}</span><b>⧉</b></button>${canDelete?`<button type="button" class="account-row danger" data-mobile-delete-message data-message-action-id="${esc(messageId)}" data-message-action-scope="${isCircle?'circle':'dm'}"><span>${t('Delete message','حذف الرسالة')}</span><b>⌫</b></button>`:''}</div>`);
     document.querySelector('#modalRoot .modal')?.classList.add('message-actions-modal');
     const reply=document.querySelector('[data-mobile-reply-message]');
     if(reply)reply.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)window.startCircleReply?.(messageId);else window.startDmReply?.(messageId)},0)};
@@ -1112,7 +1112,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
       }catch(_){toast(t('Could not copy this message.','تعذر نسخ الرسالة.'))}
     };
     const del=document.querySelector('[data-mobile-delete-message]');
-    if(del)del.onclick=()=>{closeModal();setTimeout(()=>{if(isCircle)deleteCircleMessage(messageId);else window.neisDeleteDirectMessage?.(messageId)},0)};
+    if(del)del.onclick=()=>window.neisRunMessageDeleteAction?.(isCircle?'circle':'dm',messageId);
   };
 
   document.addEventListener('pointerdown',event=>{
@@ -1203,4 +1203,38 @@ if(!window.__neisDmKeyboardFocusGuardV95){
       },0);
     }
   });
+}
+
+/* v97 — one reliable delete dispatcher for DM + Circle action sheets */
+window.neisRunMessageDeleteAction=(scope,id)=>{
+  const messageId=String(id||'').trim();
+  if(!messageId)return;
+  try{closeModal()}catch(_){}
+  setTimeout(()=>{
+    try{
+      if(scope==='circle'){
+        if(typeof deleteCircleMessage==='function'){deleteCircleMessage(messageId);return}
+      }else{
+        if(typeof deleteDirectMessage==='function'){deleteDirectMessage(messageId);return}
+        if(typeof window.deleteDirectMessage==='function'){window.deleteDirectMessage(messageId);return}
+      }
+      toast(t('Delete action is unavailable.','خيار الحذف غير متاح حاليًا.'));
+    }catch(error){
+      console.error('[NEIS message delete action]',error);
+      toast(t('Could not start delete action.','تعذر بدء عملية الحذف.'));
+    }
+  },0);
+};
+if(!window.__neisDeleteActionDelegatedV97){
+  window.__neisDeleteActionDelegatedV97=true;
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('[data-mobile-delete-message],[data-native-delete-message]');
+    if(!button)return;
+    const id=button.dataset.messageActionId||button.dataset.messageId||'';
+    const scope=button.dataset.messageActionScope||'dm';
+    if(!id)return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.neisRunMessageDeleteAction(scope,id);
+  },true);
 }
