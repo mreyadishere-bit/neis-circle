@@ -1850,3 +1850,33 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     padding-inline-end:40px!important;
   }
 }
+
+/* v132 — place message actions outside the bubble, toward chat center */
+.chat-message .bubble{
+  position:relative!important;
+  overflow:visible!important;
+}
+.chat-message .message-actions-trigger{
+  top:50%!important;
+  transform:translateY(-50%)!important;
+  inset-inline-start:auto!important;
+  inset-inline-end:auto!important;
+}
+.chat-message:not(.mine) .message-actions-trigger{
+  left:auto!important;
+  right:-34px!important;
+}
+.chat-message.mine .message-actions-trigger{
+  right:auto!important;
+  left:-34px!important;
+}
+.chat-message .bubble:has(.message-actions-trigger){
+  padding-inline-end:10px!important;
+}
+@media(max-width:760px){
+  .chat-message .message-actions-trigger{
+    width:28px!important;
+    height:28px!important;
+    min-width:28px!important;
+  }
+}
