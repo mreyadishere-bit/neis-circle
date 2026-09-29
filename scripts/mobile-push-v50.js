@@ -259,7 +259,28 @@
         }
       };
       const del=document.querySelector('[data-native-delete-message]');
-      if(del)del.onclick=()=>{closeModal();setTimeout(()=>window.neisDeleteDirectMessage?.(messageId),0)};
+      if(del)del.onclick=async()=>{
+        closeModal();
+        await new Promise(resolve=>setTimeout(resolve,0));
+        const message=state.liveMessages?.find?.(item=>same(item.id,messageId));
+        if(!message||(!same(message.sender_id,authUser.id)&&!state.isAdmin)){
+          toast(lang('You cannot delete this message.','لا يمكنك حذف هذه الرسالة.'));
+          return;
+        }
+        const confirmed=await confirmAction(
+          lang('Permanently delete message?','حذف الرسالة نهائيًا؟'),
+          lang('The message will disappear for everyone and cannot be restored.','ستختفي الرسالة لدى الجميع ولا يمكن استعادتها.')
+        );
+        if(!confirmed)return;
+        const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:String(messageId||'').trim()});
+        if(error||!data){
+          toast(error?safeError(error,'delete this message'):lang('This message could not be deleted.','تعذر حذف هذه الرسالة.'));
+          return;
+        }
+        state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));
+        if(typeof render==='function')render();
+        toast(lang('Message permanently deleted.','تم حذف الرسالة نهائيًا.'));
+      };
     };
 
     const begin=(eventTarget,x,y)=>{
