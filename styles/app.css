@@ -1562,3 +1562,16 @@ body.rtl .reply-thread-toggle{
 .dm-like-circle-chat .circle-message-author{padding:0 4px 3px;font-size:9px;color:var(--muted);text-align:start}
 .dm-like-circle-chat .circle-message .bubble{max-width:100%!important}
 .dm-like-circle-chat .circle-message.grouped .circle-message-author{display:none}
+
+/* v98 — visually center Circle chat initials */
+.circle-chat-mark{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  text-align:center!important;
+  padding:0!important;
+  line-height:1!important;
+  font-size:13px!important;
+  font-weight:800!important;
+}
+.circle-chat-mark::first-letter{line-height:1!important}
