@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <title>NEIS Circle</title>
+</head>
+<body>
+<script>
+(function(){
+  var path=(location.pathname||'/').replace(/^\/+/, '');
+  var search=location.search||'';
+  var hash=location.hash||'';
+  if(hash && hash.indexOf('#/')===0){
+    location.replace('/'+hash);
+    return;
+  }
+  location.replace('/#/'+path+search);
+})();
+</script>
+</body>
+</html>
