@@ -78,7 +78,7 @@ grant execute on function public.disable_web_push_subscription(text) to authenti
 create table if not exists public.web_push_outbox (
   id uuid primary key default gen_random_uuid(),
   dispatch_token uuid not null default gen_random_uuid(),
-  notification_id uuid not null unique references public.notifications(id) on delete cascade,
+  notification_id bigint not null unique references public.notifications(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   category text not null,
   title text not null,
