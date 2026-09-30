@@ -53,6 +53,10 @@ function applyRoute(){
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
   render();
+  if(head==='articles'&&parts[1]){
+    setTimeout(()=>window.NEISOpenArticleDeepLink?.(),0);
+    setTimeout(()=>window.NEISOpenArticleDeepLink?.(),120);
+  }
 }
 const priorNav=nav;
 nav=function(view){if(view!=='search'){searchRequestId++;state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null}routeTo(view)};
