@@ -2004,3 +2004,30 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
   0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent)}
   50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
 }
+
+/* v141 — mobile keeps original post formatting in collapsed previews */
+@media(max-width:760px){
+  .post .post-body{
+    white-space:pre-wrap!important;
+    overflow-wrap:anywhere!important;
+    word-break:break-word!important;
+  }
+  .post .post-body.collapsed{
+    display:block!important;
+    max-height:8.5em!important;
+    overflow:hidden!important;
+    white-space:pre-wrap!important;
+    -webkit-line-clamp:unset!important;
+    -webkit-box-orient:unset!important;
+    position:relative!important;
+  }
+  .post .post-body.collapsed::after{
+    content:""!important;
+    position:absolute!important;
+    inset-inline:0!important;
+    bottom:0!important;
+    height:2.1em!important;
+    pointer-events:none!important;
+    background:linear-gradient(to bottom,transparent,var(--card))!important;
+  }
+}
