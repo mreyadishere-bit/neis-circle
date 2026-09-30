@@ -25,8 +25,12 @@
   function authScreen(){
     document.body.classList.remove('app-ready');
     var failed=oauthError();
-    authRoot.innerHTML=`<section class="auth-shell">${story()}<div class="auth-panel">${authTools()}<h2>${tr('Welcome to NEIS Circle','مرحبًا بك في NEIS Circle')}</h2><p>${tr('Sign in with your Google account to continue.','سجّل الدخول بحساب Google للمتابعة.')}</p>${failed?`<div class="form-error" role="alert">${esc(tr('Sign-in failed','فشل تسجيل الدخول'))}: ${esc(failed)}</div>`:''}<button class="google-btn" data-auth-google><span class="google-mark">G</span>${tr('Continue with Google','المتابعة باستخدام Google')}</button><p class="auth-note">${tr('After signing in, you will register your mobile number once before entering.','بعد تسجيل الدخول، ستسجّل رقم هاتفك مرة واحدة قبل الدخول.')}</p></div></section>`;
+    authRoot.innerHTML=`<section class="auth-shell">${story()}<div class="auth-panel">${authTools()}<h2>${tr('Welcome to NEIS Circle','مرحبًا بك في NEIS Circle')}</h2><p>${tr('Sign in with your Google account to continue.','سجّل الدخول بحساب Google للمتابعة.')}</p>${failed?`<div class="form-error" role="alert">${esc(tr('Sign-in failed','فشل تسجيل الدخول'))}: ${esc(failed)}</div>`:''}<label class="auth-stay-signed"><input type="checkbox" data-auth-stay ${localStorage.getItem('neis-auth-stay-signed-in')==='0'?'':'checked'}><span>${tr('Stay signed in on this device','البقاء مسجّل الدخول على هذا الجهاز')}</span></label><button class="google-btn" data-auth-google><span class="google-mark">G</span>${tr('Continue with Google','المتابعة باستخدام Google')}</button><p class="auth-note">${tr('After signing in, you will register your mobile number once before entering.','بعد تسجيل الدخول، ستسجّل رقم هاتفك مرة واحدة قبل الدخول.')}</p></div></section>`;
+    var stay=document.querySelector('[data-auth-stay]');
+    if(stay)stay.onchange=function(){localStorage.setItem('neis-auth-stay-signed-in',this.checked?'1':'0')};
     document.querySelector('[data-auth-google]').onclick=async function(){
+      var stayChoice=document.querySelector('[data-auth-stay]');
+      if(stayChoice)localStorage.setItem('neis-auth-stay-signed-in',stayChoice.checked?'1':'0');
       var button=this;
       if(button.disabled)return;
       button.disabled=true;
