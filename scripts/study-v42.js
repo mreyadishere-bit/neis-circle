@@ -271,7 +271,7 @@
 
   function bindStudy(){
     $$('[data-study-new]').forEach(button=>button.onclick=()=>editor());
-    $('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;loadResources()});
+    $$('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;loadResources()});
     const layer=$('[data-study-filter-layer]');
     const openFilter=()=>{
       if(!layer)return;
@@ -287,8 +287,8 @@
       $('[data-study-filter-open]')?.setAttribute('aria-expanded','false');
       setTimeout(()=>{if(!layer.classList.contains('open'))layer.hidden=true},180);
     };
-    $('[data-study-filter-open]').forEach(button=>button.onclick=openFilter);
-    $('[data-study-filter-close]').forEach(button=>button.onclick=closeFilter);
+    $$('[data-study-filter-open]').forEach(button=>button.onclick=openFilter);
+    $$('[data-study-filter-close]').forEach(button=>button.onclick=closeFilter);
     const stagedSubject=$('#studyFilterSubject'),stagedUnit=$('#studyFilterUnit');
     if(stagedSubject)stagedSubject.onchange=async()=>{
       const subject=stagedSubject.value;
@@ -317,7 +317,7 @@
       closeFilter();
       await loadResources();
     });
-    $('[data-study-clear-filter]').forEach(button=>button.onclick=async()=>{
+    $$('[data-study-clear-filter]').forEach(button=>button.onclick=async()=>{
       const key=button.dataset.studyClearFilter;
       if(key==='subject'){study.subject='';study.unit='';study.units=[]}
       else if(key==='unit')study.unit='';
