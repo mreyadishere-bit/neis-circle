@@ -88,7 +88,7 @@
 
   function desktopBoard(){
     const visible=schoolDays();
-    return '<section class="tt-board">'+visible.map(day=>{
+    return '<section class="tt-board" style="grid-template-columns:repeat('+visible.length+',minmax(180px,1fr))">'+visible.map(day=>{
       const rows=rowsForDay(day);
       return '<section class="tt-day '+(day===currentDay()?'today':'')+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
     }).join('')+'</section>';
