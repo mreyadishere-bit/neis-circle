@@ -37,7 +37,7 @@ as $$
 declare
   circle_name text;
   recipient record;
-  existing_id uuid;
+  existing_id bigint;
   existing_read_at timestamptz;
   notification_title text;
   notification_body text;
