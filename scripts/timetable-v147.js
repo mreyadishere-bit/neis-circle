@@ -111,7 +111,8 @@
     return '<section class="tt-board tt-days-'+visible.length+'">'+visible.map(day=>{
       const rows=rowsForDay(day);
       const removable=day===5||day===6;
-      return '<section class="tt-day '+(day===currentDay()?'today':'')+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><div class="tt-day-actions">'+(removable?'<button type="button" data-tt-remove-day="'+day+'" aria-label="'+esc(tr('Remove day','حذف اليوم'))+'">×</button>':'')+'<button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></div></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
+      const density='tt-count-'+Math.min(rows.length,6);
+      return '<section class="tt-day '+density+' '+(day===currentDay()?'today':'')+'" style="--tt-row-count:'+rows.length+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><div class="tt-day-actions">'+(removable?'<button type="button" data-tt-remove-day="'+day+'" aria-label="'+esc(tr('Remove day','حذف اليوم'))+'">×</button>':'')+'<button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></div></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
     }).join('')+'</section>';
   }
 
