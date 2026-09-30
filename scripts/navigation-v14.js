@@ -9,6 +9,7 @@
     ['gallery','image','Gallery','المعرض'],
     ['articles','article','Articles','المقالات'],
     ['study','book','Study','الدراسة'],
+    ['timetable','calendar','Timetable','الجدول'],
     ['admin','shield','Admin','الإدارة','admin']
   ];
   function isArabic(){return document.documentElement.lang==='ar'||document.documentElement.dir==='rtl'}
