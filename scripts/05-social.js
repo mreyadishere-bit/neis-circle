@@ -1083,7 +1083,21 @@ function bindV6(root=document){
   root.querySelectorAll('[data-delete-reply]').forEach(el=>{if(el.closest('#replyContent'))return;el.onclick=async()=>{const r=byId(state.allComments,el.dataset.deleteReply);if(!r||el.disabled)return;if(el.dataset.confirmDelete!=='1'){el.dataset.confirmDelete='1';el.dataset.originalText=el.textContent;el.textContent=t('Confirm delete','تأكيد الحذف');setTimeout(()=>{if(el.isConnected&&el.dataset.confirmDelete==='1'){el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف')}},5000);return}el.disabled=true;const {data,error}=await sb.from('comments').delete().eq('id',r.id).select('id');if(error||!data?.length){toast(error?safeError(error,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));el.disabled=false;el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف');return}await loadLiveData();render();toast(t('Reply deleted.','تم حذف الرد.'))}});
   root.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=async()=>{const {error}=await sb.from('circle_members').update({role:el.value}).match({circle_id:state.activeCircleId,user_id:el.dataset.memberRole});if(error)toast(safeError(error,'change this role'));else{await loadLiveData();render()}});
   root.querySelectorAll('[data-remove-member]').forEach(el=>el.onclick=async()=>{const p=profileData(el.dataset.removeMember);if(!await confirmAction(t('Remove member?','إزالة العضو؟'),p.full_name||'Student'))return;const {error}=await sb.from('circle_members').delete().match({circle_id:state.activeCircleId,user_id:el.dataset.removeMember});if(error)toast(safeError(error,'remove this member'));else{await loadLiveData();render()}});
-  root.querySelectorAll('[data-post-read-more]').forEach(el=>el.onclick=()=>{const id=String(el.dataset.postReadMore);if(expandedPostIds.has(id))expandedPostIds.delete(id);else expandedPostIds.add(id);render()});
+  root.querySelectorAll('[data-post-read-more]').forEach(el=>el.onclick=()=>{
+    const id=String(el.dataset.postReadMore);
+    const post=el.closest('.post');
+    const body=post?.querySelector('.post-body');
+    if(!body)return;
+    const expanding=body.classList.contains('collapsed');
+    if(expanding)expandedPostIds.add(id);else expandedPostIds.delete(id);
+    body.classList.toggle('collapsed',!expanding);
+    el.setAttribute('aria-expanded',expanding?'true':'false');
+    el.textContent=expanding?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد');
+    if(!expanding){
+      const top=post.getBoundingClientRect().top;
+      if(top<0)post.scrollIntoView({block:'start',behavior:'smooth'});
+    }
+  });
   root.querySelectorAll('[data-topic]').forEach(el=>el.onclick=()=>{$('#globalSearch').value=el.dataset.topic;state.query=el.dataset.topic;routeTo(`search?q=${encodeURIComponent(state.query)}`)});
   const rerenderSearchInput=(input,key)=>{const value=input.value,caret=input.selectionStart;state[key]=value;render();requestAnimationFrame(()=>{const next=$(`#${input.id}`);if(next){next.focus({preventScroll:true});next.setSelectionRange(caret,caret)}})};
   const cs=root.querySelector('#connectionSearch');if(cs)cs.oninput=()=>rerenderSearchInput(cs,'connectionsQuery');
