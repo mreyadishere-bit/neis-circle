@@ -252,3 +252,80 @@
   .tt-time-row time strong{font-size:16px}
   .tt-location-pill{font-size:9px}
 }
+
+
+/* v151 — removable optional days + adaptive card density */
+.tt-day-actions{display:flex;align-items:center;gap:6px}
+.tt-day-actions button{flex:0 0 auto}
+.tt-day-actions [data-tt-remove-day]{
+  background:color-mix(in srgb,#d64545 10%,var(--card));
+  color:#c93434;
+}
+.tt-day-actions [data-tt-remove-day]:hover{
+  background:color-mix(in srgb,#d64545 18%,var(--card));
+}
+
+.tt-board.tt-days-6 .tt-event,
+.tt-board.tt-days-7 .tt-event{
+  padding:12px 10px 12px 12px;
+  border-radius:16px;
+  gap:8px;
+}
+.tt-board.tt-days-6 .tt-event-title b,
+.tt-board.tt-days-7 .tt-event-title b{font-size:12px}
+.tt-board.tt-days-6 .tt-event-title span,
+.tt-board.tt-days-7 .tt-event-title span{font-size:7px;padding:4px 6px}
+.tt-board.tt-days-6 .tt-time-row,
+.tt-board.tt-days-7 .tt-time-row{
+  padding:7px 8px;
+  gap:6px;
+}
+.tt-board.tt-days-6 .tt-time-row time,
+.tt-board.tt-days-7 .tt-time-row time{
+  min-width:0;
+  gap:5px;
+  flex-wrap:wrap;
+}
+.tt-board.tt-days-6 .tt-time-row time strong{font-size:12px}
+.tt-board.tt-days-7 .tt-time-row time strong{font-size:11px}
+.tt-board.tt-days-6 .tt-time-row em,
+.tt-board.tt-days-7 .tt-time-row em{
+  font-size:6.5px;
+  padding:3px 5px;
+  max-width:100%;
+}
+.tt-board.tt-days-6 .tt-location-pill,
+.tt-board.tt-days-7 .tt-location-pill{
+  font-size:8px;
+  padding:4px 6px;
+}
+.tt-board.tt-days-6 .tt-event-menu,
+.tt-board.tt-days-7 .tt-event-menu{
+  width:24px;
+  height:24px;
+  font-size:11px;
+}
+.tt-board.tt-days-6 .tt-event,
+.tt-board.tt-days-7 .tt-event,
+.tt-board.tt-days-6 .tt-event-main,
+.tt-board.tt-days-7 .tt-event-main,
+.tt-board.tt-days-6 .tt-time-row,
+.tt-board.tt-days-7 .tt-time-row{
+  min-width:0;
+}
+.tt-board.tt-days-6 .tt-time-row,
+.tt-board.tt-days-7 .tt-time-row{flex-wrap:wrap}
+.tt-board.tt-days-6 .tt-time-row em,
+.tt-board.tt-days-7 .tt-time-row em{margin-left:0}
+.tt-board.tt-days-6 .tt-event p,
+.tt-board.tt-days-7 .tt-event p{
+  font-size:8px;
+  -webkit-line-clamp:2;
+}
+.tt-board.tt-days-7 .tt-day{min-width:160px}
+.tt-board.tt-days-6 .tt-day{min-width:170px}
+
+@media(max-width:1100px){
+  .tt-board.tt-days-6{grid-template-columns:repeat(6,minmax(185px,1fr))}
+  .tt-board.tt-days-7{grid-template-columns:repeat(7,minmax(175px,1fr))}
+}
