@@ -45,6 +45,11 @@
     const next=[...new Set([...savedExtraDays(),day])];
     try{localStorage.setItem(extraDaysKey(),JSON.stringify(next))}catch{}
   }
+  function forgetExtraDay(day){
+    day=Number(day);if(day!==5&&day!==6)return;
+    const next=savedExtraDays().filter(x=>x!==day);
+    try{localStorage.setItem(extraDaysKey(),JSON.stringify(next))}catch{}
+  }
   function schoolDays(){
     const used=new Set(tt.rows.map(r=>Number(r.day_of_week)));
     const enabled=new Set(savedExtraDays());
@@ -103,7 +108,8 @@
     const visible=schoolDays();
     return '<section class="tt-board tt-days-'+visible.length+'">'+visible.map(day=>{
       const rows=rowsForDay(day);
-      return '<section class="tt-day '+(day===currentDay()?'today':'')+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
+      const removable=day===5||day===6;
+      return '<section class="tt-day '+(day===currentDay()?'today':'')+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><div class="tt-day-actions">'+(removable?'<button type="button" data-tt-remove-day="'+day+'" aria-label="'+esc(tr('Remove day','حذف اليوم'))+'">×</button>':'')+'<button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></div></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
     }).join('')+'</section>';
   }
 
@@ -152,6 +158,26 @@
       }
     }
     if(typeof syncChrome==='function')syncChrome();
+  }
+
+  async function removeOptionalDay(day){
+    day=Number(day);if(day!==5&&day!==6)return;
+    const rows=rowsForDay(day);
+    if(rows.length){
+      const ok=confirm(tr(
+        'This day has '+rows.length+' saved item'+(rows.length===1?'':'s')+'. Removing the day will also delete those timetable items. Continue?',
+        'هذا اليوم يحتوي على '+rows.length+' عنصر محفوظ. حذف اليوم سيحذف هذه العناصر من الجدول أيضًا. هل تريد المتابعة؟'
+      ));
+      if(!ok)return;
+      const ids=rows.map(r=>r.id);
+      const {error}=await sb.from('user_timetable_entries').delete().in('id',ids).eq('user_id',authUser.id);
+      if(error){toast(friendly(error));return}
+      tt.rows=tt.rows.filter(r=>Number(r.day_of_week)!==day);
+    }
+    forgetExtraDay(day);
+    if(Number(tt.dayFilter)===day)tt.dayFilter='all';
+    renderTimetable();
+    toast(tr('Day removed.','تم حذف اليوم.'));
   }
 
   function extraDayPicker(){
@@ -250,7 +276,8 @@
   function bind(){
     $$('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
     $$('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
-    $$('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
+    $('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
+    $('[data-tt-remove-day]').forEach(b=>b.onclick=()=>removeOptionalDay(Number(b.dataset.ttRemoveDay)));
     $$('[data-tt-edit]').forEach(card=>card.onclick=e=>{if(e.target.closest('[data-tt-menu]'))return;editor(tt.rows.find(x=>same(x.id,card.dataset.ttEdit)))});
     $$('[data-tt-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();actions(b.dataset.ttMenu)});
     $$('[data-tt-day]').forEach(b=>b.onclick=()=>{tt.dayFilter=b.dataset.ttDay;renderTimetable()});
