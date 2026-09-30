@@ -284,7 +284,7 @@ async function refreshCircleMessagesV96(){
   },70);
 }
 
-let refreshBusy=false,refreshQueued=false;
+let refreshBusy=false,refreshQueued=false,deferredGlobalRefreshTimer=null;
 function chatInteractionProtected(){
   const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
   const active=document.activeElement;
@@ -296,26 +296,39 @@ function chatInteractionProtected(){
     circleForm?.dataset?.sending==='1'
   );
 }
+function deferGlobalRefreshUntilChatIdle(){
+  clearTimeout(deferredGlobalRefreshTimer);
+  deferredGlobalRefreshTimer=setTimeout(()=>{
+    deferredGlobalRefreshTimer=null;
+    if(chatInteractionProtected()){
+      deferGlobalRefreshUntilChatIdle();
+      return;
+    }
+    refreshV6();
+  },500);
+}
 async function refreshV6(){
+  if(chatInteractionProtected()){
+    deferGlobalRefreshUntilChatIdle();
+    return;
+  }
   if(refreshBusy){refreshQueued=true;return}
   refreshBusy=true;
   try{
     do{
       refreshQueued=false;
-      const protectChat=chatInteractionProtected();
-      const protectedView=state.view,protectedConversation=state.activeConversationId,protectedCircle=state.activeCircleId,protectedTab=state.circleTab;
+      if(chatInteractionProtected()){
+        deferGlobalRefreshUntilChatIdle();
+        break;
+      }
 
       await loadLiveData();
 
-      // Never rebuild the page underneath an active chat composer. Message
-      // tables have dedicated realtime refreshers, so skipping this global
-      // render while typing cannot hide incoming chat messages.
-      const sameProtectedPlace=
-        (protectedView==='messages'&&state.view==='messages'&&same(protectedConversation,state.activeConversationId))||
-        (protectedView==='circle-detail'&&protectedTab==='chat'&&state.view==='circle-detail'&&state.circleTab==='chat'&&same(protectedCircle,state.activeCircleId));
-      if(protectChat&&sameProtectedPlace){
-        updateBadges();
-        continue;
+      // The user may focus a composer while data is loading. In that case do
+      // not rebuild the page after the await; leave the live input untouched.
+      if(chatInteractionProtected()){
+        deferGlobalRefreshUntilChatIdle();
+        break;
       }
 
       const active=document.activeElement;
@@ -353,7 +366,10 @@ async function refreshV6(){
         if(nextCircleFlow&&circleBottom!==null)nextCircleFlow.scrollTop=Math.max(0,nextCircleFlow.scrollHeight-nextCircleFlow.clientHeight-circleBottom);
       });
     }while(refreshQueued)
-  }finally{refreshBusy=false}
+  }finally{
+    refreshBusy=false;
+    if(refreshQueued&&!chatInteractionProtected())setTimeout(refreshV6,0);
+  }
 }
 
 const originalPostCard=postCard;
