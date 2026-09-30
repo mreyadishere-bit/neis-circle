@@ -2,6 +2,7 @@
 (function(){
   'use strict';
   const PAGE_SIZE=12;
+  const DEFAULT_BLOCKS=['1','2','3','4','5','6','Revision'];
   const tr=(en,ar)=>state.lang==='ar'?ar:en;
   const same=(a,b)=>String(a)===String(b);
   const study=state.studyLibrary={
@@ -27,12 +28,19 @@
     return (data||[]).map(row=>row.value).filter(Boolean);
   }
   async function loadSubjects(){study.subjects=await loadValues('subject');study.ready=true;renderStudyPage()}
-  async function loadUnits(){study.units=study.subject?await loadValues('unit'):[];renderStudyPage()}
+  async function loadUnits(){
+    const existing=study.subject?await loadValues('unit'):[];
+    study.units=[...new Set([...DEFAULT_BLOCKS,...existing])];
+    renderStudyPage();
+  }
   async function loadUnitsForSubject(subject){
-    if(!subject)return [];
-    const {data,error}=await sb.rpc('study_filter_values',{level_input:'unit',subject_input:subject,unit_input:null});
-    if(error){toast(friendly(error));return []}
-    return (data||[]).map(row=>row.value).filter(Boolean);
+    let existing=[];
+    if(subject){
+      const {data,error}=await sb.rpc('study_filter_values',{level_input:'unit',subject_input:subject,unit_input:null});
+      if(error)toast(friendly(error));
+      else existing=(data||[]).map(row=>row.value).filter(Boolean);
+    }
+    return [...new Set([...DEFAULT_BLOCKS,...existing])];
   }
   function shouldLoadResources(){return study.tab!=='resources'||!!study.unit||clean(study.search).length>=2}
   async function loadResources(){
@@ -87,7 +95,8 @@
   }
   function filterPanel(){
     const subjectOptions=study.subjects.map(value=>option(value,value,study.subject)).join('');
-    const unitOptions=study.units.map(value=>option(value,value,study.unit)).join('');
+    const availableUnits=[...new Set([...DEFAULT_BLOCKS,...study.units])];
+    const unitOptions=availableUnits.map(value=>option(value,value,study.unit)).join('');
     return `<div class="study-filter-layer" data-study-filter-layer hidden>
       <button type="button" class="study-filter-scrim" data-study-filter-close aria-label="${tr('Close filters','إغلاق الفلاتر')}"></button>
       <section class="study-filter-panel" role="dialog" aria-modal="true" aria-labelledby="studyFilterTitle">
@@ -99,7 +108,7 @@
           <label class="study-search-field"><span>${tr('Search','البحث')}</span><div>${icon('search')}<input id="studyFilterSearch" value="${esc(study.search)}" placeholder="${tr('Search titles, descriptions, subjects…','ابحث في العناوين والوصف والمواد…')}" dir="auto"></div></label>
           <div class="study-filter-grid">
             <label><span>${tr('Subject','المادة')}</span><select id="studyFilterSubject">${option('',tr('All subjects','كل المواد'),study.subject)}${subjectOptions}</select></label>
-            <label><span>${tr('Block','البلوك')}</span><select id="studyFilterUnit" ${study.subject?'':'disabled'}>${option('',tr('All blocks','كل البلوكات'),study.unit)}${unitOptions}</select></label>
+            <label><span>${tr('Block','البلوك')}</span><select id="studyFilterUnit">${option('',tr('All blocks','كل البلوكات'),study.unit)}${unitOptions}</select></label>
             <label><span>${tr('Type','النوع')}</span><select id="studyFilterType">${option('',tr('All types','كل الأنواع'),study.type)}${['document','pdf','video','website','presentation','other'].map(value=>option(value,typeLabel(value),study.type)).join('')}</select></label>
             <label><span>${tr('Language','اللغة')}</span><select id="studyFilterLanguage">${option('',tr('All languages','كل اللغات'),study.language)}${['en','ar','both','other'].map(value=>option(value,languageLabel(value),study.language)).join('')}</select></label>
             <label class="study-filter-sort"><span>${tr('Sort','الترتيب')}</span><select id="studyFilterSort">${option('newest',tr('Newest','الأحدث'),study.sort)}${option('oldest',tr('Oldest','الأقدم'),study.sort)}</select></label>
@@ -284,14 +293,14 @@
     if(stagedSubject)stagedSubject.onchange=async()=>{
       const subject=stagedSubject.value;
       const units=await loadUnitsForSubject(subject);
-      stagedUnit.disabled=!subject;
+      stagedUnit.disabled=false;
       stagedUnit.innerHTML=option('',tr('All blocks','كل البلوكات'),'')+units.map(value=>option(value,value,'')).join('');
     };
     $('[data-study-filter-reset]')?.addEventListener('click',()=>{
       $('#studyFilterSearch').value='';
       $('#studyFilterSubject').value='';
-      $('#studyFilterUnit').innerHTML=option('',tr('All blocks','كل البلوكات'),'');
-      $('#studyFilterUnit').disabled=true;
+      $('#studyFilterUnit').innerHTML=option('',tr('All blocks','كل البلوكات'),'')+DEFAULT_BLOCKS.map(value=>option(value,value,'')).join('');
+      $('#studyFilterUnit').disabled=false;
       $('#studyFilterType').value='';
       $('#studyFilterLanguage').value='';
       $('#studyFilterSort').value='newest';
