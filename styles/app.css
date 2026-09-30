@@ -2052,3 +2052,19 @@ html,body{
     font-size:10.5px;
   }
 }
+
+
+/* v159.8 — manual refresh control */
+.app-refresh-btn>span{
+  display:block;
+  font-size:18px;
+  line-height:1;
+  transform-origin:center;
+}
+.app-refresh-btn.is-refreshing>span{
+  animation:neis-refresh-spin .65s linear infinite;
+}
+@keyframes neis-refresh-spin{to{transform:rotate(360deg)}}
+@media(max-width:760px){
+  .app-refresh-btn>span{font-size:17px}
+}
