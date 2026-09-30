@@ -2138,3 +2138,17 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     width:84px!important;
   }
 }
+
+
+/* v159.8 — compact top actions with refresh button */
+@media(max-width:380px){
+  .top-actions{gap:4px!important}
+  .top-actions .round-btn,
+  .top-actions .mini-avatar{
+    width:34px!important;
+    height:34px!important;
+    flex-basis:34px!important;
+    border-radius:11px!important;
+  }
+  .wordmark b{font-size:15px!important}
+}
