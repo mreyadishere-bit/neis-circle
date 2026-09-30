@@ -119,11 +119,11 @@ loadLiveData=async function(){
   if(conversationIds.length){[conversationRes,memberRes,messageRes]=await Promise.all([
     sb.from('conversations').select('*').in('id',conversationIds).order('updated_at',{ascending:false}),
     sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').in('conversation_id',conversationIds),
-    sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at').limit(500)
+    sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(500)
   ])}
   if(!conversationRes.error)state.conversations=conversationRes.data||[];
   if(!memberRes.error)state.conversationMembers=memberRes.data||ownConversationMemberships;
-  if(!messageRes.error){const clearedByConversation=new Map(ownConversationMemberships.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared})}
+  if(!messageRes.error){const clearedByConversation=new Map(ownConversationMemberships.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared}).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
   if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=circleMemberRes.data||[];
   if(!meetingRes.error){state.circleMeetings=meetingRes.data||[];state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
@@ -133,7 +133,7 @@ loadLiveData=async function(){
   if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
-  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at').limit(500);if(!cm.error)state.circleMessages=cm.data||[]}
+  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(500);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
   if(v6Channel)await sb.removeChannel(v6Channel);
   v6Channel=sb.channel(`neis-v7-${uid}`)
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
