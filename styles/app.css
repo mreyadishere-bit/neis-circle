@@ -2279,3 +2279,27 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .custom-theme-color-picker b{grid-column:1/-1;text-align:start}
   .custom-theme-swatches{grid-template-columns:repeat(4,1fr)}
 }
+
+
+/* v159.14 — notification bulk controls */
+.pwa-notification-actions{
+  align-items:center;
+  flex-wrap:wrap;
+}
+.pwa-notification-actions [data-pwa-toggle-all]{
+  margin-inline-end:auto;
+}
+@media(max-width:760px){
+  .pwa-notification-actions{
+    display:grid!important;
+    grid-template-columns:1fr!important;
+    gap:8px!important;
+  }
+  .pwa-notification-actions button{
+    width:100%!important;
+    margin:0!important;
+  }
+  .pwa-notification-actions [data-save-pwa-push]{
+    order:3;
+  }
+}
