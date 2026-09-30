@@ -275,12 +275,91 @@ async function refreshV6(){
 }
 
 const originalPostCard=postCard;
+function storagePathFromPublicUrl(url){
+  try{
+    const marker='/storage/v1/object/public/community-media/';
+    const value=String(url||''),index=value.indexOf(marker);
+    return index>=0?decodeURIComponent(value.slice(index+marker.length)):'';
+  }catch{return ''}
+}
+async function editOwnPost(postId){
+  const post=state.posts.find(item=>same(item.id,postId));
+  if(!post||!same(post.author_id,authUser?.id)){toast(t('You can only edit your own posts.','يمكنك تعديل منشوراتك فقط.'));return}
+  let removeImage=false;
+  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, or image without creating a new post.','عدّل النص أو الوسوم أو النوع أو الصورة بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
+    <form id="editPostForm">
+      <label class="field">${t('Type','النوع')}<select id="editPostKind">${['Discussion','Question','Resource','Experience'].map(value=>`<option value="${value}" ${post.kind===value?'selected':''}>${value}</option>`).join('')}</select></label>
+      <label class="field">${t('Title','العنوان')}<input id="editPostTitle" required maxlength="140" value="${esc(post.title||'')}"></label>
+      <label class="field">${t('Details','التفاصيل')}<textarea id="editPostBody" required rows="7">${esc(post.body||'')}</textarea></label>
+      <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
+      <label class="field">${t('Replace image (optional)','استبدال الصورة (اختياري)')}<input id="editPostImage" type="file" accept="image/*"></label>
+      <div class="post-edit-image-wrap ${post.image_url?'':'hidden'}" id="editPostCurrentImage">
+        <img id="editPostImagePreview" class="upload-preview" src="${esc(post.image_url||'')}" alt="">
+        <button type="button" class="secondary danger" id="editPostRemoveImage">${t('Remove image','حذف الصورة')}</button>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary danger" id="editPostDelete">${t('Delete post','حذف المنشور')}</button>
+        <button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button>
+        <button class="primary" id="editPostSave">${t('Save changes','حفظ التغييرات')}</button>
+      </div>
+    </form>`,true);
+  const imageInput=$('#editPostImage'),preview=$('#editPostImagePreview'),current=$('#editPostCurrentImage');
+  imageInput.onchange=()=>{
+    const file=imageInput.files?.[0];
+    if(!file)return;
+    removeImage=false;
+    preview.src=URL.createObjectURL(file);
+    current.classList.remove('hidden');
+  };
+  $('#editPostRemoveImage')?.addEventListener('click',()=>{
+    removeImage=true;
+    imageInput.value='';
+    current.classList.add('hidden');
+  });
+  $('#editPostDelete').onclick=()=>{closeModal();deletePost(post.id)};
+  $('#editPostForm').onsubmit=async event=>{
+    event.preventDefault();
+    const saveButton=$('#editPostSave');if(saveButton.disabled)return;
+    saveButton.disabled=true;
+    const file=imageInput.files?.[0];
+    let imageUrl=removeImage?'':(post.image_url||'');
+    let uploadedUrl='';
+    if(file){
+      uploadedUrl=await uploadMedia(file,'posts');
+      if(!uploadedUrl){saveButton.disabled=false;return}
+      imageUrl=uploadedUrl;
+    }
+    const payload={
+      kind:$('#editPostKind').value,
+      title:$('#editPostTitle').value.trim(),
+      body:$('#editPostBody').value.trim(),
+      tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),
+      image_url:imageUrl
+    };
+    if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));saveButton.disabled=false;return}
+    const {error}=await sb.from('posts').update(payload).eq('id',post.id).eq('author_id',authUser.id);
+    if(error){toast(safeError(error,'update this post'));saveButton.disabled=false;return}
+    const oldPath=storagePathFromPublicUrl(post.image_url);
+    if(oldPath&&(removeImage||uploadedUrl))sb.storage.from('community-media').remove([oldPath]).catch(()=>{});
+    closeModal();
+    await loadLiveData();
+    render();
+    toast(t('Post updated.','تم تحديث المنشور.'));
+  };
+}
+
 postCard=function(p){
   const liked=state.liked.map(String).includes(String(p.id)),saved=state.saved.map(String).includes(String(p.id));
-  const deletable=p.is_live&&(same(p.author_id,authUser.id)||state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id)));
+  const own=p.is_live&&same(p.author_id,authUser.id);
+  const moderatorDelete=p.is_live&&!own&&(state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id)));
   const titleDirection=articleTextDirection(p.title||''),bodyDirection=articleTextDirection(p.body||'');
   const longBody=String(p.body||'').length>420||String(p.body||'').split(/\n/).length>6,expanded=expandedPostIds.has(String(p.id));
-  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${deletable?`<button class="danger" data-delete-post="${esc(p.id)}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`:`<button data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">•••</button>`}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${p.image_url?`<button type="button" class="post-image-open" data-full-image="${esc(p.image_url)}" aria-label="Open image full size"><img class="upload-preview" style="margin-top:15px" src="${esc(p.image_url)}" alt="${esc(p.title)}" onerror="this.closest('.post-image-open')?.remove()"></button>`:''}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
+  const menu=own
+    ?`<button class="post-owner-menu" data-edit-post="${esc(p.id)}" aria-label="${t('Edit post','تعديل المنشور')}">•••</button>`
+    :moderatorDelete
+      ?`<button class="danger" data-delete-post="${esc(p.id)}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`
+      :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
+  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${p.image_url?`<button type="button" class="post-image-open" data-full-image="${esc(p.image_url)}" aria-label="Open image full size"><img class="upload-preview" style="margin-top:15px" src="${esc(p.image_url)}" alt="${esc(p.title)}" onerror="this.closest('.post-image-open')?.remove()"></button>`:''}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
 };
 
 discover=function(){
@@ -1081,6 +1160,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-copy-meeting-invite]').forEach(el=>el.onclick=()=>copyMeetingInvite(byId(state.circleMeetings,el.dataset.copyMeetingInvite)));
   root.querySelectorAll('[data-end-meeting]').forEach(el=>el.onclick=()=>endMeeting(el.dataset.endMeeting));
   root.querySelectorAll('[data-delete-meeting]').forEach(el=>el.onclick=()=>deleteMeeting(el.dataset.deleteMeeting));
+  root.querySelectorAll('[data-edit-post]').forEach(el=>el.onclick=e=>{e.stopPropagation();editOwnPost(el.dataset.editPost)});
   root.querySelectorAll('[data-delete-post]').forEach(el=>el.onclick=()=>deletePost(el.dataset.deletePost));
   root.querySelectorAll('[data-delete-gallery]').forEach(el=>el.onclick=()=>deleteGalleryItem(el.dataset.deleteGallery));
   root.querySelectorAll('[data-delete-article]').forEach(el=>el.onclick=()=>deleteArticle(el.dataset.deleteArticle));
