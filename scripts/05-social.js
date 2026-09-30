@@ -291,6 +291,10 @@ async function refreshV6(){
   try{
     do{
       refreshQueued=false;
+      await loadLiveData();
+
+      // Capture the chat draft only after async loading finishes. This prevents
+      // an old snapshot from overwriting characters typed while the refresh ran.
       const active=document.activeElement;
       const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
       const liveDraft=liveInput?.value??null,circleDraft=circleInput?.value??null;
@@ -300,12 +304,27 @@ async function refreshV6(){
       const flow=$('#chatFlow'),circleFlow=$('#circleChatFlow');
       const flowBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight:null;
       const circleBottom=circleFlow?circleFlow.scrollHeight-circleFlow.scrollTop-circleFlow.clientHeight:null;
-      await loadLiveData();
+
+      if(liveInput&&liveDraft!==null)setDmDraft(state.activeConversationId,liveDraft);
+      if(circleInput&&circleDraft!==null)setCircleDraft(state.activeCircleId,circleDraft);
+
       render();
       requestAnimationFrame(()=>{
         const nextLive=$('#liveChatInput'),nextCircle=$('#circleChatInput');
-        if(nextLive&&liveDraft!==null){nextLive.value=liveDraft;if(keepLiveFocus){nextLive.focus({preventScroll:true});if(liveSel)nextLive.setSelectionRange(liveSel[0],liveSel[1])}}
-        if(nextCircle&&circleDraft!==null){nextCircle.value=circleDraft;if(keepCircleFocus){nextCircle.focus({preventScroll:true});if(circleSel)nextCircle.setSelectionRange(circleSel[0],circleSel[1])}}
+        if(nextLive&&liveDraft!==null){
+          nextLive.value=liveDraft;
+          if(keepLiveFocus){
+            nextLive.focus({preventScroll:true});
+            if(liveSel)try{nextLive.setSelectionRange(liveSel[0],liveSel[1])}catch(_){}
+          }
+        }
+        if(nextCircle&&circleDraft!==null){
+          nextCircle.value=circleDraft;
+          if(keepCircleFocus){
+            nextCircle.focus({preventScroll:true});
+            if(circleSel)try{nextCircle.setSelectionRange(circleSel[0],circleSel[1])}catch(_){}
+          }
+        }
         const nextFlow=$('#chatFlow'),nextCircleFlow=$('#circleChatFlow');
         if(nextFlow&&flowBottom!==null)nextFlow.scrollTop=Math.max(0,nextFlow.scrollHeight-nextFlow.clientHeight-flowBottom);
         if(nextCircleFlow&&circleBottom!==null)nextCircleFlow.scrollTop=Math.max(0,nextCircleFlow.scrollHeight-nextCircleFlow.clientHeight-circleBottom);
@@ -1280,12 +1299,14 @@ function bindV6(root=document){
   if(root.querySelector('#liveChatForm'))requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}));
   const chat=root.querySelector('#liveChatForm');if(chat){const sendButton=chat.querySelector('button');if(sendButton)sendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#liveChatInput')?.focus({preventScroll:true})}},{passive:false});chat.onsubmit=async e=>{
     e.preventDefault();
+    if(chat.dataset.sending==='1')return;
     const input=$('#liveChatInput'),button=chat.querySelector('button'),conversationId=state.activeConversationId,body=input.value.trim();
     if(!body)return;
+    chat.dataset.sending='1';
     button.disabled=true;
     setDmDraft(conversationId,input.value);
     const replyTo=activeDmReply();const {data,error}=await sb.from('messages').insert({conversation_id:conversationId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();
-    if(error){toast(safeError(error,'send this message'));button.disabled=false;return}
+    if(error){toast(safeError(error,'send this message'));chat.dataset.sending='';button.disabled=false;return}
     setDmDraft(conversationId,'');
     input.value='';
     clearDmReplyTarget();
@@ -1298,13 +1319,14 @@ function bindV6(root=document){
       bindV6(flow);
     }
     await markConversationRead(conversationId);
+    chat.dataset.sending='';
     button.disabled=false;
     input.focus({preventScroll:true});
     scrollActiveDmToBottom();
   };}
   const circleInput=root.querySelector('#circleChatInput');if(circleInput){bindDmKeyboardBottom();circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
   root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();clearCircleReplyTarget()});
-  const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('button');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
+  const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('button');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();if(circleChat.dataset.sending==='1')return;const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;circleChat.dataset.sending='1';button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));circleChat.dataset.sending='';button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}circleChat.dataset.sending='';button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
 }
 
 function fitMobileConversationList(){
