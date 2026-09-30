@@ -137,7 +137,7 @@
       return;
     }
     const prefs=data||{
-      messages:true,replies:true,circles:true,social:true,announcements:true,reactions:true,sound:true
+      direct_messages:true,post_comments_replies:true,article_comments_replies:true,post_likes:true,article_likes:true,comment_reactions:true,new_posts:true,new_articles:true,new_circles:true,circle_posts:true,circle_messages:true,circle_meetings:true,circle_membership:true,followers:true,sound:true
     };
     const row=(key,en,arText)=>`<label class="account-row" style="cursor:pointer"><span><b>${lang(en,arText)}</b></span><input type="checkbox" data-mobile-push-pref="${key}" ${prefs[key]!==false?'checked':''}></label>`;
     openModal(`
@@ -149,12 +149,20 @@
         <button class="close" data-close>×</button>
       </div>
       <div class="account-menu">
-        ${row('messages','Messages','الرسائل')}
-        ${row('replies','Replies','الردود')}
-        ${row('circles','Circles','المجتمعات')}
-        ${row('social','Followers & social','المتابعون والتفاعل الاجتماعي')}
-        ${row('announcements','Announcements','الإعلانات')}
-        ${row('reactions','Likes & reactions','الإعجابات والتفاعلات')}
+        ${row('direct_messages','Direct messages','الرسائل الخاصة')}
+        ${row('post_comments_replies','Post comments & replies','تعليقات وردود المنشورات')}
+        ${row('article_comments_replies','Article comments & replies','تعليقات وردود المقالات')}
+        ${row('post_likes','Likes on your posts','الإعجابات على منشوراتك')}
+        ${row('article_likes','Likes on your articles','الإعجابات على مقالاتك')}
+        ${row('comment_reactions','Likes & hearts on comments','الإعجابات والقلوب على التعليقات')}
+        ${row('new_posts','New public posts','المنشورات العامة الجديدة')}
+        ${row('new_articles','New articles','المقالات الجديدة')}
+        ${row('new_circles','New Circles','المجتمعات الجديدة')}
+        ${row('circle_posts','New posts in your Circles','منشورات جديدة في مجتمعاتك')}
+        ${row('circle_messages','Circle chat messages','رسائل دردشة المجتمعات')}
+        ${row('circle_meetings','Circle meetings','اجتماعات المجتمعات')}
+        ${row('circle_membership','Circle membership updates','تحديثات عضوية المجتمعات')}
+        ${row('followers','New followers','المتابعون الجدد')}
         ${row('sound','Notification sound','صوت الإشعارات')}
       </div>
       <div class="modal-actions">
