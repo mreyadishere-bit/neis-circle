@@ -106,3 +106,7 @@ begin
   return new;
 end;
 $$;
+
+
+-- Trigger-only function: do not expose it as a callable RPC.
+revoke execute on function public.notify_circle_chat_message() from public, anon, authenticated;
