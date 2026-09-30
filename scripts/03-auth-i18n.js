@@ -71,16 +71,30 @@ const STYLE_THEME_PRESETS=[
   {id:'emerald',en:'Emerald',ar:'الزمردي',descEn:'Soft green, rounded and calm.',descAr:'أخضر هادئ بحواف أكثر نعومة.'},
   {id:'ocean',en:'Ocean',ar:'المحيطي',descEn:'Cool blue accents with a crisp feel.',descAr:'درجات زرقاء ولمسة أكثر حدة.'},
   {id:'sunset',en:'Sunset',ar:'الغروب',descEn:'Warm cream surfaces and coral accents.',descAr:'خلفيات دافئة ولمسات مرجانية.'},
-  {id:'minimal',en:'Minimal',ar:'البسيط',descEn:'Flatter, tighter and almost monochrome.',descAr:'أبسط وأكثر هدوءًا وأقل ظلالًا.'}
+  {id:'minimal',en:'Minimal',ar:'البسيط',descEn:'Flatter, tighter and almost monochrome.',descAr:'أبسط وأكثر هدوءًا وأقل ظلالًا.'},
+  {id:'custom',en:'Custom',ar:'مخصص',descEn:'Ocean style with your own accent color.',descAr:'ستايل Ocean بنفس الشكل مع لون من اختيارك.'}
 ];
 function styleThemeLabel(id){
   const item=STYLE_THEME_PRESETS.find(x=>x.id===id)||STYLE_THEME_PRESETS[0];
   return bi(item.en,item.ar);
 }
+function openCustomThemeColorPicker(){
+  const current=/^#[0-9a-f]{6}$/i.test(state.customThemeColor||'')?state.customThemeColor:'#256da8';
+  const swatches=['#256da8','#087f69','#7c3aed','#d97706','#dc2626','#db2777','#0891b2','#334155'];
+  openModal(`<div class="modal-head"><div><h2>${bi('Custom color','اللون المخصص')}</h2><p>${bi('Same Ocean style — only the accent color changes.','نفس ستايل Ocean بالضبط — اللون الأساسي فقط هو الذي يتغير.')}</p></div><button class="close" data-close>×</button></div><div class="custom-theme-color-panel"><label class="custom-theme-color-picker"><span>${bi('Choose any color','اختر أي لون')}</span><input id="customThemeColorInput" type="color" value="${current}"><b id="customThemeColorValue">${current.toUpperCase()}</b></label><div class="custom-theme-swatches">${swatches.map(color=>`<button type="button" data-custom-theme-swatch="${color}" style="--swatch:${color}" aria-label="${color}"></button>`).join('')}</div><div class="custom-theme-preview-live"><span></span><div><b>${bi('Live preview','معاينة مباشرة')}</b><small>${bi('Ocean layout with your selected color.','تنسيق Ocean مع اللون الذي اخترته.')}</small></div></div><div class="modal-actions"><button type="button" class="secondary" data-close>${bi('Cancel','إلغاء')}</button><button type="button" class="primary" id="applyCustomThemeColor">${bi('Apply custom style','تطبيق الستايل المخصص')}</button></div></div>`);
+  const input=$('#customThemeColorInput'),value=$('#customThemeColorValue'),preview=$('.custom-theme-preview-live');
+  const update=color=>{if(!/^#[0-9a-f]{6}$/i.test(color))return;input.value=color;value.textContent=color.toUpperCase();preview?.style.setProperty('--preview-accent',color)};
+  update(current);
+  input.oninput=()=>update(input.value);
+  $$('[data-custom-theme-swatch]').forEach(button=>button.onclick=()=>update(button.dataset.customThemeSwatch));
+  $('#applyCustomThemeColor').onclick=()=>{state.customThemeColor=input.value;state.styleTheme='custom';applyPrefs();closeModal();settings();toast(bi('Custom style applied.','تم تطبيق الستايل المخصص.'))};
+}
 function openStyleThemePicker(){
-  openModal(`<div class="modal-head"><div><h2>${bi('Choose your style','اختر مظهر المنصة')}</h2><p>${bi('This changes the visual style on web and in the mobile app. Light/Dark mode stays separate.','يغيّر هذا الشكل البصري على الويب وتطبيق الموبايل، بينما يظل الوضع الفاتح/الداكن منفصلًا.')}</p></div><button class="close" data-close>×</button></div><div class="style-theme-grid">${STYLE_THEME_PRESETS.map(item=>`<button type="button" class="style-theme-card ${(state.styleTheme||'classic')===item.id?'active':''}" data-style-theme-choice="${item.id}"><span class="style-theme-preview theme-${item.id}"><i></i><i></i><i></i></span><span><b>${bi(item.en,item.ar)}</b><small>${bi(item.descEn,item.descAr)}</small></span><em>${(state.styleTheme||'classic')===item.id?'✓':''}</em></button>`).join('')}</div>`);
+  openModal(`<div class="modal-head"><div><h2>${bi('Choose your style','اختر مظهر المنصة')}</h2><p>${bi('This changes the visual style on web and in the mobile app. Light/Dark mode stays separate.','يغيّر هذا الشكل البصري على الويب وتطبيق الموبايل، بينما يظل الوضع الفاتح/الداكن منفصلًا.')}</p></div><button class="close" data-close>×</button></div><div class="style-theme-grid">${STYLE_THEME_PRESETS.map(item=>`<button type="button" class="style-theme-card ${(state.styleTheme||'classic')===item.id?'active':''}" data-style-theme-choice="${item.id}"><span class="style-theme-preview theme-${item.id}" ${item.id==='custom'?`style="--custom-preview:${esc(state.customThemeColor||'#256da8')}"`:''}><i></i><i></i><i></i></span><span><b>${bi(item.en,item.ar)}</b><small>${bi(item.descEn,item.descAr)}</small></span><em>${(state.styleTheme||'classic')===item.id?'✓':''}</em></button>`).join('')}</div>`);
   document.querySelectorAll('[data-style-theme-choice]').forEach(button=>button.onclick=()=>{
-    state.styleTheme=button.dataset.styleThemeChoice||'classic';
+    const choice=button.dataset.styleThemeChoice||'classic';
+    if(choice==='custom'){openCustomThemeColorPicker();return}
+    state.styleTheme=choice;
     applyPrefs();
     closeModal();
     settings();
