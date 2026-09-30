@@ -140,7 +140,7 @@
     const root=$('#view');if(!root)return;
     document.body.classList.add('app-ready');
     root.innerHTML=view();
-    $('[data-nav]').forEach(button=>button.classList.toggle('active',button.dataset.nav==='timetable'));
+    $$('[data-nav]').forEach(button=>button.classList.toggle('active',button.dataset.nav==='timetable'));
     bind();
     const targetId=new URLSearchParams((location.hash.split('?')[1]||'')).get('entry');
     if(targetId){
@@ -159,7 +159,7 @@
     const available=[5,6].filter(day=>!visible.has(day));
     if(!available.length){toast(tr('Friday and Saturday are already available.','الجمعة والسبت مضافان بالفعل.'));return}
     openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+esc(tr('Optional days','أيام اختيارية'))+'</p><h2>'+esc(tr('Add another day','إضافة يوم آخر'))+'</h2><p>'+esc(tr('Your timetable stays Sunday–Thursday by default. Add Friday or Saturday only when you need them.','جدولك يظل من الأحد إلى الخميس افتراضيًا. أضف الجمعة أو السبت فقط عند الحاجة.'))+'</p></div><button class="close" data-close>×</button></div><div class="tt-extra-day-options">'+available.map(day=>'<button type="button" class="secondary" data-tt-enable-day="'+day+'"><b>+ '+esc(dayName(day))+'</b><small>'+esc(tr('Add this day to my timetable','أضف هذا اليوم إلى جدولي'))+'</small></button>').join('')+'</div>');
-    $('[data-tt-enable-day]').forEach(button=>button.onclick=()=>{
+    $$('[data-tt-enable-day]').forEach(button=>button.onclick=()=>{
       const day=Number(button.dataset.ttEnableDay);
       rememberExtraDay(day);
       tt.dayFilter=String(day);
@@ -248,8 +248,8 @@
   }
 
   function bind(){
-    $('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
-    $('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
+    $$('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
+    $$('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
     $$('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
     $$('[data-tt-edit]').forEach(card=>card.onclick=e=>{if(e.target.closest('[data-tt-menu]'))return;editor(tt.rows.find(x=>same(x.id,card.dataset.ttEdit)))});
     $$('[data-tt-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();actions(b.dataset.ttMenu)});
