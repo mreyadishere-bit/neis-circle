@@ -285,16 +285,39 @@ async function refreshCircleMessagesV96(){
 }
 
 let refreshBusy=false,refreshQueued=false;
+function chatInteractionProtected(){
+  const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
+  const active=document.activeElement;
+  const dmForm=$('#liveChatForm'),circleForm=$('#circleChatForm');
+  return !!(
+    (liveInput&&(active===liveInput||liveInput.value.length>0))||
+    (circleInput&&(active===circleInput||circleInput.value.length>0))||
+    dmForm?.dataset?.sending==='1'||
+    circleForm?.dataset?.sending==='1'
+  );
+}
 async function refreshV6(){
   if(refreshBusy){refreshQueued=true;return}
   refreshBusy=true;
   try{
     do{
       refreshQueued=false;
+      const protectChat=chatInteractionProtected();
+      const protectedView=state.view,protectedConversation=state.activeConversationId,protectedCircle=state.activeCircleId,protectedTab=state.circleTab;
+
       await loadLiveData();
 
-      // Capture the chat draft only after async loading finishes. This prevents
-      // an old snapshot from overwriting characters typed while the refresh ran.
+      // Never rebuild the page underneath an active chat composer. Message
+      // tables have dedicated realtime refreshers, so skipping this global
+      // render while typing cannot hide incoming chat messages.
+      const sameProtectedPlace=
+        (protectedView==='messages'&&state.view==='messages'&&same(protectedConversation,state.activeConversationId))||
+        (protectedView==='circle-detail'&&protectedTab==='chat'&&state.view==='circle-detail'&&state.circleTab==='chat'&&same(protectedCircle,state.activeCircleId));
+      if(protectChat&&sameProtectedPlace){
+        updateBadges();
+        continue;
+      }
+
       const active=document.activeElement;
       const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
       const liveDraft=liveInput?.value??null,circleDraft=circleInput?.value??null;
