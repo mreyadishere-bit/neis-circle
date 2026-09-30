@@ -54,8 +54,16 @@ function applyRoute(){
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
   render();
   if(head==='articles'&&parts[1]){
-    setTimeout(()=>window.NEISOpenArticleDeepLink?.(),0);
-    setTimeout(()=>window.NEISOpenArticleDeepLink?.(),120);
+    let deepLinkAttempt=0;
+    const kickArticleDeepLink=()=>{
+      if(!location.hash.startsWith('#/articles/'))return;
+      if(typeof window.NEISOpenArticleDeepLink==='function'){
+        window.NEISOpenArticleDeepLink(deepLinkAttempt);
+        return;
+      }
+      if(deepLinkAttempt++<20)setTimeout(kickArticleDeepLink,150);
+    };
+    kickArticleDeepLink();
   }
 }
 const priorNav=nav;
