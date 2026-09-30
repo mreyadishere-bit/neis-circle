@@ -1990,3 +1990,17 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     background:transparent!important;
   }
 }
+
+/* v137 — exact notification target focus */
+.notification-target-highlight{
+  position:relative;
+  z-index:1;
+  outline:2px solid color-mix(in srgb,var(--accent) 48%,transparent)!important;
+  outline-offset:3px!important;
+  border-radius:16px!important;
+  animation:neisNotificationTargetPulse 1.3s ease 2;
+}
+@keyframes neisNotificationTargetPulse{
+  0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent)}
+  50%{box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
+}
