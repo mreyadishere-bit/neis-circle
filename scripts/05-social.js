@@ -26,7 +26,7 @@ function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,in
 function circleChatAvatar(p){
   const me=profileData(authUser?.id),senderBranch=normalize(p?.branch||''),myBranch=normalize(me?.branch||state.profile?.branch||'');
   const sameBranch=!!senderBranch&&!!myBranch&&senderBranch===myBranch&&!same(p?.id,authUser?.id);
-  return avatar({name:p?.full_name||p?.name,initials:initials(p?.full_name||p?.name),color:sameBranch?'#b7791f':'#006f5b'});
+  return avatar({name:p?.full_name||p?.name,initials:initials(p?.full_name||p?.name),color:sameBranch?'var(--accent2)':'var(--accent)'});
 }
 async function markVisibleLocationNotificationsRead(){
   if(!sb||!authUser||!state.notifications?.length)return;
