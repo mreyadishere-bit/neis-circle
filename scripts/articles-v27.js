@@ -428,6 +428,7 @@
     const signature=`${location.hash}:${article.updated_at||article.created_at||''}`;if(deepLinkOpened===signature)return;
     deepLinkOpened=signature;readArticle(id);
   }
+  window.NEISOpenArticleDeepLink=openArticleDeepLink;
   window.addEventListener('hashchange',()=>setTimeout(()=>openArticleDeepLink(),80));
   setTimeout(()=>openArticleDeepLink(),450);
 })();
