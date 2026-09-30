@@ -218,29 +218,16 @@ async function refreshMessagesV6(){
         if(state.view==='messages'&&state.activeConversationId){
           const flow=$('#chatFlow'),input=$('#liveChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
           const inputWasFocused=!!input&&document.activeElement===input;
-          const inputValue=input?.value??'';
-          const selection=inputWasFocused?[input.selectionStart,input.selectionEnd]:null;
           const activeMessages=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
           if(flow){
             flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>messageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
             bindV6(flow);
           }
-          if(input){
-            if(inputWasFocused){
-              input.value=inputValue;
-              setDmDraft(state.activeConversationId,inputValue);
-            }else{
-              input.value=getDmDraft(state.activeConversationId);
-            }
-          }
+          // While the composer is focused, realtime updates must never rewrite
+          // its value, refocus it, or touch the caret. This is especially
+          // important for Arabic/IME keyboards on mobile.
+          if(input&&!inputWasFocused)input.value=getDmDraft(state.activeConversationId);
           requestAnimationFrame(()=>{
-            const liveInput=$('#liveChatInput');
-            if(inputWasFocused&&liveInput){
-              liveInput.focus({preventScroll:true});
-              if(selection&&Number.isInteger(selection[0])&&Number.isInteger(selection[1])){
-                try{liveInput.setSelectionRange(selection[0],selection[1])}catch(_){}
-              }
-            }
             if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight;
           });
           updateBadges();
@@ -273,11 +260,13 @@ async function refreshCircleMessagesV96(){
         }
         if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.activeCircleId){
           const flow=$('#circleChatFlow'),input=$('#circleChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
-          const inputWasFocused=!!input&&document.activeElement===input,inputValue=input?.value??'',selection=inputWasFocused?[input.selectionStart,input.selectionEnd]:null;
+          const inputWasFocused=!!input&&document.activeElement===input;
           const activeMessages=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
           if(flow){flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>circleMessageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
-          if(input){if(inputWasFocused){input.value=inputValue;setCircleDraft(state.activeCircleId,inputValue)}else input.value=getCircleDraft(state.activeCircleId)}
-          requestAnimationFrame(()=>{const next=$('#circleChatInput');if(inputWasFocused&&next){next.focus({preventScroll:true});if(selection)try{next.setSelectionRange(selection[0],selection[1])}catch(_){}}if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight});
+          // Never rewrite or reposition the focused Circle composer during
+          // realtime updates. Let the browser/keyboard own the caret entirely.
+          if(input&&!inputWasFocused)input.value=getCircleDraft(state.activeCircleId);
+          requestAnimationFrame(()=>{if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight});
         }
       }while(circleMessageRefreshQueued)
     }finally{circleMessageRefreshBusy=false}
@@ -522,11 +511,7 @@ function bindDmKeyboardBottom(){
       if(dmFocused&&(opening||document.querySelector('.messages.mobile-thread-open')))scrollActiveDmToBottom();
       if(circleFocused&&(opening||document.querySelector('.dm-like-circle-chat')))scrollActiveCircleChatToBottom();
     },{passive:true});
-    vv.addEventListener('scroll',()=>{
-      const input=document.querySelector('#liveChatInput'),circleInput=document.querySelector('#circleChatInput');
-      if(document.activeElement===input)scrollActiveDmToBottom();
-      if(document.activeElement===circleInput)scrollActiveCircleChatToBottom();
-    },{passive:true});
+    vv.addEventListener('scroll',()=>{}, {passive:true});
   }else{
     window.addEventListener('resize',()=>{
       const input=document.querySelector('#liveChatInput'),circleInput=document.querySelector('#circleChatInput');
