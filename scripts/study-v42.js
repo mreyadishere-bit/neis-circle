@@ -83,7 +83,6 @@
         <span>${tr('Filters','الفلاتر')}</span>
         ${count?`<b>${count}</b>`:''}
       </button>
-      ${activeFilterChips()}
     </section>`;
   }
   function filterPanel(){
