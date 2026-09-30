@@ -49,10 +49,36 @@ function applyRoute(){
   else if(head==='circles'&&parts[1]){state.view='circle-detail';state.activeCircleId=parts[1];state.circleTab=parts[2]||'home';const routeQuery=new URLSearchParams(queryPart);state.meetingInviteId=state.circleTab==='meetings'?(routeQuery.get('meeting')||''):'';state.circleMessageTarget=state.circleTab==='chat'?(routeQuery.get('message')||''):''}
   else if(head==='connections'){state.view='connections';state.connectionTab=parts[1]||'following'}
   else if(head==='search'){state.view='search';const q=(new URLSearchParams(queryPart).get('q')||state.query||'').trim();state.query=q;const input=$('#globalSearch');if(input)input.value=q;performSearch(q,false)}
-  else if(head==='post'&&parts[1]){state.view='home';const targetComment=(new URLSearchParams(queryPart).get('comment')||'');setTimeout(()=>comments(parts[1],targetComment),80)}
+  else if(head==='post'&&parts[1]){
+    const postId=parts[1],targetComment=(new URLSearchParams(queryPart).get('comment')||'');
+    state.view='home';
+    if(targetComment){
+      setTimeout(()=>comments(postId,targetComment),80);
+    }else{
+      state.filter='Latest';
+      state.notificationPostTarget=postId;
+    }
+  }
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
   render();
+  if(head==='post'&&parts[1]&&!new URLSearchParams(queryPart).get('comment')){
+    const targetId=String(parts[1]);
+    let tries=0;
+    const focusPost=()=>{
+      if(!location.hash.startsWith('#/post/'+encodeURIComponent(targetId))&&!location.hash.startsWith('#/post/'+targetId))return;
+      const post=document.querySelector('#post-'+CSS.escape(targetId));
+      if(post){
+        post.classList.add('notification-target-highlight');
+        post.scrollIntoView({behavior:'smooth',block:'center'});
+        setTimeout(()=>post.classList.remove('notification-target-highlight'),2600);
+        state.notificationPostTarget='';
+        return;
+      }
+      if(tries++<20)setTimeout(focusPost,150);
+    };
+    setTimeout(focusPost,40);
+  }
   if(head==='articles'&&parts[1]){
     let deepLinkAttempt=0;
     const kickArticleDeepLink=()=>{
