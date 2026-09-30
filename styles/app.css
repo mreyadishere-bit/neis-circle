@@ -1894,3 +1894,31 @@ html,body{
   accent-color:var(--accent);
   flex:0 0 auto;
 }
+
+/* v143 — stay signed in auth preference */
+.auth-stay-signed{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:16px 0 2px;
+  color:var(--muted);
+  font-size:12px;
+  cursor:pointer;
+  user-select:none;
+}
+.auth-stay-signed input{
+  width:18px;
+  height:18px;
+  margin:0;
+  accent-color:var(--accent);
+  flex:0 0 auto;
+}
+.auth-stay-signed span{
+  line-height:1.35;
+}
+@media(max-width:760px){
+  .auth-stay-signed{
+    margin-top:14px;
+    font-size:12px;
+  }
+}
