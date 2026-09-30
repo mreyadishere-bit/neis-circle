@@ -329,3 +329,10 @@
   .tt-board.tt-days-6{grid-template-columns:repeat(6,minmax(185px,1fr))}
   .tt-board.tt-days-7{grid-template-columns:repeat(7,minmax(175px,1fr))}
 }
+
+
+.tt-mobile-header-actions{display:flex;align-items:center;gap:8px}
+.tt-mobile-header-actions [data-tt-remove-day]{
+  width:36px;height:36px;padding:0;border-radius:11px;
+  color:#c93434;background:color-mix(in srgb,#d64545 10%,var(--card));
+}
