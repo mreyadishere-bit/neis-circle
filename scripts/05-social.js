@@ -45,11 +45,11 @@ function applyRoute(){
   const raw=location.hash.replace(/^#\/?/,'')||'home',[pathPart,queryPart='']=raw.split('?'),parts=pathPart.split('/').map(decodeURIComponent),head=parts[0];
   if(head!=='search'){state.query='';const globalInput=$('#globalSearch');if(globalInput)globalInput.value='';$('[data-global-search-clear]')?.classList.add('hidden');$('#searchSuggestions')?.classList.add('hidden')}
   if(head==='profile'&&parts[1]){state.view='profile-detail';state.activeProfileId=parts[1]}
-  else if(head==='messages'){state.view='messages';state.activeConversationId=parts[1]||''}
-  else if(head==='circles'&&parts[1]){state.view='circle-detail';state.activeCircleId=parts[1];state.circleTab=parts[2]||'home';state.meetingInviteId=state.circleTab==='meetings'?(new URLSearchParams(queryPart).get('meeting')||''):''}
+  else if(head==='messages'){state.view='messages';state.activeConversationId=parts[1]||'';state.notificationMessageTarget=(new URLSearchParams(queryPart).get('message')||'')}
+  else if(head==='circles'&&parts[1]){state.view='circle-detail';state.activeCircleId=parts[1];state.circleTab=parts[2]||'home';const routeQuery=new URLSearchParams(queryPart);state.meetingInviteId=state.circleTab==='meetings'?(routeQuery.get('meeting')||''):'';state.circleMessageTarget=state.circleTab==='chat'?(routeQuery.get('message')||''):''}
   else if(head==='connections'){state.view='connections';state.connectionTab=parts[1]||'following'}
   else if(head==='search'){state.view='search';const q=(new URLSearchParams(queryPart).get('q')||state.query||'').trim();state.query=q;const input=$('#globalSearch');if(input)input.value=q;performSearch(q,false)}
-  else if(head==='post'&&parts[1]){state.view='home';setTimeout(()=>comments(parts[1]),80)}
+  else if(head==='post'&&parts[1]){state.view='home';const targetComment=(new URLSearchParams(queryPart).get('comment')||'');setTimeout(()=>comments(parts[1],targetComment),80)}
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
   render();
@@ -657,6 +657,20 @@ function renderSuggestions(){const box=$('#searchSuggestions');if(!box)return;co
 
 function notificationsView(){const unread=state.notifications.filter(n=>!n.read_at).length;return `${pageTitle(t('Notifications','الإشعارات'),t('Replies, messages, follows and Circle activity.','الردود والرسائل والمتابعات ونشاط المجتمعات.'),unread?`<button class="secondary" data-mark-all-read>${t('Mark all read','تحديد الكل كمقروء')}</button>`:'')}<div class="result-list">${state.notifications.length?state.notifications.map(n=>`<button class="notification-row ${n.read_at?'':'unread'}" data-open-notification="${n.id}" data-route="${esc(n.route||'notifications')}"><span class="entity-icon">${n.type==='message'?'M':n.type==='reply'?'R':'N'}</span><div><b>${esc(n.title)}</b><p>${esc(n.body)}</p></div><time>${relative(n.created_at)}</time></button>`).join(''):emptyState(t('No notifications','لا توجد إشعارات'),t('Your notifications will appear here.','ستظهر إشعاراتك هنا.'))}</div>`}
 
+function notificationTargetRoute(item){
+  if(!item)return 'notifications';
+  let route=String(item.route||'notifications').replace(/^#?\/?/,'');
+  const entityType=String(item.entity_type||'');
+  const entityId=String(item.entity_id||'');
+  const join=route.includes('?')?'&':'?';
+  if(entityId&&entityType==='comment'&&route.startsWith('post/'))return route+(route.includes('comment=')?'':join+'comment='+encodeURIComponent(entityId));
+  if(entityId&&entityType==='article_comment'&&route.startsWith('articles/'))return route+(route.includes('comment=')?'':join+'comment='+encodeURIComponent(entityId));
+  if(entityId&&entityType==='message'&&route.startsWith('messages/'))return route+(route.includes('message=')?'':join+'message='+encodeURIComponent(entityId));
+  if(entityId&&entityType==='circle_message'&&route.includes('/chat'))return route+(route.includes('message=')?'':join+'message='+encodeURIComponent(entityId));
+  return route;
+}
+
+
 const originalAdmin=admin;
 const normalizedReportStatus=value=>String(value||'').trim().toLowerCase();
 const canControlAuthorLikeEmails=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN;
@@ -790,7 +804,7 @@ async function deleteResolvedReport(id){
   await loadLiveData();render();toast(t('Resolved report deleted.','تم حذف البلاغ المحسوم.'));
 }
 
-comments=async function(postId){
+comments=async function(postId,targetCommentId=''){
   const p=state.posts.find(x=>same(x.id,postId));if(!p)return;openModal(`<div class="modal-head"><div><h2>${t('Discussion','النقاش')}</h2><p>${esc(p.title)}</p></div><button class="close" data-close>×</button></div><div id="replyContent"><div class="loading-card"></div></div>`,true);
   const {data,error}=await sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').eq('post_id',postId).is('deleted_at',null).order('created_at');
   if(error){console.error('Discussion comments load failed',error);$('#replyContent').innerHTML=`<div class="error-state">${t('Replies could not load. Try again.','تعذر تحميل الردود. حاول مرة أخرى.')}</div>`;return}
@@ -904,6 +918,28 @@ comments=async function(postId){
   $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(renderThread).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><input id="replyInput" required maxlength="4000" placeholder="${t('Add a thoughtful comment…','أضف تعليقًا مفيدًا…')}" dir="auto"><button aria-label="${t('Send reply','إرسال الرد')}">→</button></form>`;
   bindDiscussionManagement();
   bindV6($('#modalRoot'));
+
+  if(targetCommentId){
+    const targetItem=replies.find(row=>same(row.id,targetCommentId));
+    if(targetItem){
+      let rootItem=targetItem;
+      const byCommentId=new Map(replies.map(row=>[String(row.id),row]));
+      while(rootItem?.parent_id&&byCommentId.has(String(rootItem.parent_id)))rootItem=byCommentId.get(String(rootItem.parent_id));
+      if(rootItem&&!same(rootItem.id,targetItem.id)){
+        const children=$('[data-reply-children="'+CSS.escape(String(rootItem.id))+'"]');
+        const toggle=$('[data-toggle-replies="'+CSS.escape(String(rootItem.id))+'"]');
+        if(children){children.classList.remove('hidden');toggle?.setAttribute('aria-expanded','true')}
+      }
+      setTimeout(()=>{
+        const target=document.querySelector('#reply-'+CSS.escape(String(targetCommentId)));
+        if(target){
+          target.classList.add('notification-target-highlight');
+          target.scrollIntoView({behavior:'smooth',block:'center'});
+          setTimeout(()=>target.classList.remove('notification-target-highlight'),2600);
+        }
+      },120);
+    }
+  }
 
   $('#replyContent').querySelectorAll('[data-toggle-replies]').forEach(button=>button.onclick=()=>{
     const children=$('[data-reply-children="'+button.dataset.toggleReplies+'"]');if(!children)return;
@@ -1022,8 +1058,11 @@ function bindV6(root=document){
   root.querySelectorAll('[data-retry-search]').forEach(el=>el.onclick=()=>performSearch(state.query,true));
   root.querySelectorAll('[data-retry-meetings]').forEach(el=>el.onclick=async()=>{el.disabled=true;await loadLiveData();render()});
   if(state.view==='circle-detail'&&state.circleTab==='meetings'&&state.meetingInviteId){const card=root.querySelector(`[data-meeting-card="${CSS.escape(String(state.meetingInviteId))}"]`);if(card){card.classList.add('meeting-invite-target');setTimeout(()=>card.scrollIntoView({block:'center',behavior:'smooth'}),50)}}
+  if(state.view==='messages'&&state.notificationMessageTarget){const row=root.querySelector(`#chatFlow > .chat-message[data-message-id="${CSS.escape(String(state.notificationMessageTarget))}"]`);if(row){row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
+  if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.circleMessageTarget){const row=root.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(String(state.circleMessageTarget))}"]`);if(row){row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
+
   root.querySelectorAll('[data-clear-global-search]').forEach(el=>el.onclick=()=>{state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null;const input=$('#globalSearch');if(input){input.value='';input.focus()}routeTo('discover')});
-  root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));if(item)item.read_at=readAt;updateBadges();const {error}=await sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification);if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}routeTo(el.dataset.route||'notifications')});
+  root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));if(item)item.read_at=readAt;updateBadges();const {error}=await sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification);if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}routeTo(notificationTargetRoute(item)||el.dataset.route||'notifications')});
   root.querySelectorAll('[data-mark-all-read]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString();state.notifications.forEach(n=>{if(!n.read_at)n.read_at=readAt});updateBadges();render();const {error}=await sb.from('notifications').update({read_at:readAt}).is('read_at',null);if(error){console.error('[NEIS notifications mark all]',error);refreshNotificationsOnly()}});
   root.querySelectorAll('[data-report-target]').forEach(el=>el.onclick=e=>{e.stopPropagation();openReport(el.dataset.reportTarget,el.dataset.reportId)});
   root.querySelectorAll('[data-report-status]').forEach(el=>el.onchange=async()=>{const report=state.reports.find(r=>same(r.id,el.dataset.reportStatus)),previous=report?.status||'open',next=normalizedReportStatus(el.value);el.disabled=true;const {data,error}=await sb.rpc('admin_update_report_status',{report_id_input:el.dataset.reportStatus,status_input:next});if(error||!data){el.value=previous;el.disabled=false;toast(error?safeError(error,'update this report'):t('This report could not be updated.','تعذر تحديث هذا البلاغ.'));return}if(report)report.status=next;render();await loadLiveData();render();toast(t('Report status updated.','تم تحديث حالة البلاغ.'))});
