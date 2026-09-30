@@ -90,13 +90,15 @@
 
   function eventCard(row){
     return '<article class="tt-event '+(isNow(row)?'is-now':'')+'" data-tt-edit="'+esc(row.id)+'" tabindex="0" style="--tt-color:'+esc(row.color||palette[0])+'">'+
-      '<span class="tt-event-bar"></span>'+
-      '<div class="tt-event-main"><div class="tt-event-title"><b>'+esc(row.title)+'</b><span>'+esc(categoryLabel(row.category))+'</span></div>'+
-      '<div class="tt-time-row"><time><strong>'+esc(fmtTime(row.start_time))+'</strong><span>→</span><strong>'+esc(fmtTime(row.end_time))+'</strong></time>'+(row.reminder_enabled?'<em>'+esc(row.reminder_minutes)+'m '+esc(tr('before','قبل'))+'</em>':'')+'</div>'+
-      (row.location?'<span class="tt-location-pill">'+esc(row.location)+'</span>':'')+
-      (row.notes?'<p>'+esc(row.notes)+'</p>':'')+
+      '<div class="tt-event-main">'+
+        '<div class="tt-event-top">'+
+          '<b class="tt-event-name">'+esc(row.title)+'</b>'+
+          '<div class="tt-event-tools"><span class="tt-event-category">'+esc(categoryLabel(row.category))+'</span><button type="button" class="tt-event-menu" data-tt-menu="'+esc(row.id)+'" aria-label="'+esc(tr('Timetable options','خيارات الجدول'))+'">•••</button></div>'+
+        '</div>'+
+        '<div class="tt-time-row"><time><strong>'+esc(fmtTime(row.start_time))+'</strong><span>→</span><strong>'+esc(fmtTime(row.end_time))+'</strong></time>'+(row.reminder_enabled?'<em>'+esc(row.reminder_minutes)+'m '+esc(tr('before','قبل'))+'</em>':'')+'</div>'+
+        (row.location?'<span class="tt-location-pill">'+esc(row.location)+'</span>':'')+
+        (row.notes?'<p>'+esc(row.notes)+'</p>':'')+
       '</div>'+
-      '<button type="button" class="tt-event-menu" data-tt-menu="'+esc(row.id)+'" aria-label="'+esc(tr('Timetable options','خيارات الجدول'))+'">•••</button>'+
       '</article>';
   }
 
