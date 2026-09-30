@@ -119,7 +119,7 @@ loadLiveData=async function(){
   if(conversationIds.length){[conversationRes,memberRes,messageRes]=await Promise.all([
     sb.from('conversations').select('*').in('id',conversationIds).order('updated_at',{ascending:false}),
     sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').in('conversation_id',conversationIds),
-    sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(500)
+    sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(200)
   ])}
   if(!conversationRes.error)state.conversations=conversationRes.data||[];
   if(!memberRes.error)state.conversationMembers=memberRes.data||ownConversationMemberships;
@@ -133,7 +133,7 @@ loadLiveData=async function(){
   if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
-  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(500);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
+  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
   if(v6Channel)await sb.removeChannel(v6Channel);
   v6Channel=sb.channel(`neis-v7-${uid}`)
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
@@ -170,7 +170,7 @@ async function refreshMessagesV6(){
         const [conversationRes,memberRes,messageRes]=await Promise.all([
           sb.from('conversations').select('*').in('id',ids).order('updated_at',{ascending:false}),
           sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').in('conversation_id',ids),
-          sb.from('messages').select('*').in('conversation_id',ids).order('created_at',{ascending:false}).limit(500)
+          sb.from('messages').select('*').in('conversation_id',ids).order('created_at',{ascending:false}).limit(200)
         ]);
         if(!conversationRes.error)state.conversations=conversationRes.data||[];
         if(!memberRes.error)state.conversationMembers=memberRes.data||state.conversationMembers;
@@ -231,7 +231,7 @@ async function refreshCircleMessagesV96(){
         circleMessageRefreshQueued=false;
         const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,authUser.id)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
         if(!joinedCircleIds.length){state.circleMessages=[];return}
-        const res=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(500);
+        const res=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);
         if(!res.error){
           const fetched=res.data||[];
           const freshLocal=state.circleMessages.filter(m=>same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
