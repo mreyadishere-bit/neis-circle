@@ -170,14 +170,16 @@ async function refreshMessagesV6(){
         const [conversationRes,memberRes,messageRes]=await Promise.all([
           sb.from('conversations').select('*').in('id',ids).order('updated_at',{ascending:false}),
           sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').in('conversation_id',ids),
-          sb.from('messages').select('*').in('conversation_id',ids).order('created_at').limit(500)
+          sb.from('messages').select('*').in('conversation_id',ids).order('created_at',{ascending:false}).limit(500)
         ]);
         if(!conversationRes.error)state.conversations=conversationRes.data||[];
         if(!memberRes.error)state.conversationMembers=memberRes.data||state.conversationMembers;
         if(!messageRes.error){
           const mineRows=state.conversationMembers.filter(m=>same(m.user_id,authUser.id));
           const clearedByConversation=new Map(mineRows.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));
-          state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared});
+          const fetched=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared});
+          const freshLocal=state.liveMessages.filter(m=>same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
+          state.liveMessages=[...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
         }
         if(state.view==='messages'&&state.activeConversationId){
           const flow=$('#chatFlow'),input=$('#liveChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
@@ -229,8 +231,12 @@ async function refreshCircleMessagesV96(){
         circleMessageRefreshQueued=false;
         const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,authUser.id)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
         if(!joinedCircleIds.length){state.circleMessages=[];return}
-        const res=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at').limit(500);
-        if(!res.error)state.circleMessages=res.data||[];
+        const res=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(500);
+        if(!res.error){
+          const fetched=res.data||[];
+          const freshLocal=state.circleMessages.filter(m=>same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
+          state.circleMessages=[...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        }
         if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.activeCircleId){
           const flow=$('#circleChatFlow'),input=$('#circleChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
           const inputWasFocused=!!input&&document.activeElement===input,inputValue=input?.value??'',selection=inputWasFocused?[input.selectionStart,input.selectionEnd]:null;
