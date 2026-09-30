@@ -28,6 +28,12 @@
   }
   async function loadSubjects(){study.subjects=await loadValues('subject');study.ready=true;renderStudyPage()}
   async function loadUnits(){study.units=study.subject?await loadValues('unit'):[];renderStudyPage()}
+  async function loadUnitsForSubject(subject){
+    if(!subject)return [];
+    const {data,error}=await sb.rpc('study_filter_values',{level_input:'unit',subject_input:subject,unit_input:null});
+    if(error){toast(friendly(error));return []}
+    return (data||[]).map(row=>row.value).filter(Boolean);
+  }
   function shouldLoadResources(){return study.tab!=='resources'||!!study.unit||clean(study.search).length>=2}
   async function loadResources(){
     const request=++study.request;
@@ -53,23 +59,60 @@
     renderStudyPage();
   }
 
-  function hierarchy(){
-    const subjectOptions=study.subjects.map(value=>option(value,value,study.subject)).join('');
-    const unitOptions=study.units.map(value=>option(value,value,study.unit)).join('');
-    return `<section class="study-path" aria-label="${tr('Resource hierarchy','تسلسل المصادر')}">
-      <label><span>1 · ${tr('Subject','المادة')}</span><select id="studySubject">${option('',tr('Choose subject','اختر المادة'),study.subject)}${subjectOptions}</select></label>
-      <span class="study-path-arrow">→</span>
-      <label><span>2 · ${tr('Block','البلوك')}</span><select id="studyUnit" ${study.subject?'':'disabled'}>${option('',tr('Choose block','اختر البلوك'),study.unit)}${unitOptions}</select></label>
+  function activeFilterCount(){
+    return [study.subject,study.unit,clean(study.search),study.type,study.language,study.sort!=='newest'?'oldest':''].filter(Boolean).length;
+  }
+  function activeFilterChips(){
+    const chips=[];
+    if(study.subject)chips.push(['subject',study.subject]);
+    if(study.unit)chips.push(['unit',tr('Block','البلوك')+' '+study.unit]);
+    if(clean(study.search))chips.push(['search','“'+clean(study.search)+'”']);
+    if(study.type)chips.push(['type',typeLabel(study.type)]);
+    if(study.language)chips.push(['language',languageLabel(study.language)]);
+    if(study.sort==='oldest')chips.push(['sort',tr('Oldest','الأقدم')]);
+    if(!chips.length)return '';
+    return `<div class="study-active-filters" aria-label="${tr('Active filters','الفلاتر النشطة')}">${chips.map(([key,label])=>`<button type="button" data-study-clear-filter="${key}"><span>${esc(label)}</span><b aria-hidden="true">×</b></button>`).join('')}</div>`;
+  }
+  function compactFilterBar(){
+    const count=activeFilterCount();
+    return `<section class="study-filter-bar">
+      <button type="button" class="study-filter-trigger ${count?'active':''}" data-study-filter-open aria-haspopup="dialog" aria-expanded="false">
+        <span class="study-filter-trigger-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"/></svg>
+        </span>
+        <span>${tr('Filters','الفلاتر')}</span>
+        ${count?`<b>${count}</b>`:''}
+      </button>
+      ${activeFilterChips()}
     </section>`;
   }
-  function toolbar(){return `<section class="study-toolbar">
-    <label class="study-search">${icon('search')}<input id="studySearch" value="${esc(study.search)}" placeholder="${tr('Search titles, descriptions, subjects…','ابحث في العناوين والوصف والمواد…')}" dir="auto"></label>
-    <div class="study-filters">
-      <label><span>${tr('Type','النوع')}</span><select id="studyType">${option('',tr('All types','كل الأنواع'),study.type)}${['document','pdf','video','website','presentation','other'].map(value=>option(value,typeLabel(value),study.type)).join('')}</select></label>
-      <label><span>${tr('Language','اللغة')}</span><select id="studyLanguage">${option('',tr('All languages','كل اللغات'),study.language)}${['en','ar','both','other'].map(value=>option(value,languageLabel(value),study.language)).join('')}</select></label>
-      <label><span>${tr('Sort','الترتيب')}</span><select id="studySort">${option('newest',tr('Newest','الأحدث'),study.sort)}${option('oldest',tr('Oldest','الأقدم'),study.sort)}</select></label>
-    </div>
-  </section>`}
+  function filterPanel(){
+    const subjectOptions=study.subjects.map(value=>option(value,value,study.subject)).join('');
+    const unitOptions=study.units.map(value=>option(value,value,study.unit)).join('');
+    return `<div class="study-filter-layer" data-study-filter-layer hidden>
+      <button type="button" class="study-filter-scrim" data-study-filter-close aria-label="${tr('Close filters','إغلاق الفلاتر')}"></button>
+      <section class="study-filter-panel" role="dialog" aria-modal="true" aria-labelledby="studyFilterTitle">
+        <div class="study-filter-panel-head">
+          <div><small>${tr('Refine resources','تصفية المصادر')}</small><h2 id="studyFilterTitle">${tr('Filters','الفلاتر')}</h2></div>
+          <button type="button" class="study-filter-close" data-study-filter-close aria-label="${tr('Close','إغلاق')}">×</button>
+        </div>
+        <div class="study-filter-panel-body">
+          <label class="study-search-field"><span>${tr('Search','البحث')}</span><div>${icon('search')}<input id="studyFilterSearch" value="${esc(study.search)}" placeholder="${tr('Search titles, descriptions, subjects…','ابحث في العناوين والوصف والمواد…')}" dir="auto"></div></label>
+          <div class="study-filter-grid">
+            <label><span>${tr('Subject','المادة')}</span><select id="studyFilterSubject">${option('',tr('All subjects','كل المواد'),study.subject)}${subjectOptions}</select></label>
+            <label><span>${tr('Block','البلوك')}</span><select id="studyFilterUnit" ${study.subject?'':'disabled'}>${option('',tr('All blocks','كل البلوكات'),study.unit)}${unitOptions}</select></label>
+            <label><span>${tr('Type','النوع')}</span><select id="studyFilterType">${option('',tr('All types','كل الأنواع'),study.type)}${['document','pdf','video','website','presentation','other'].map(value=>option(value,typeLabel(value),study.type)).join('')}</select></label>
+            <label><span>${tr('Language','اللغة')}</span><select id="studyFilterLanguage">${option('',tr('All languages','كل اللغات'),study.language)}${['en','ar','both','other'].map(value=>option(value,languageLabel(value),study.language)).join('')}</select></label>
+            <label class="study-filter-sort"><span>${tr('Sort','الترتيب')}</span><select id="studyFilterSort">${option('newest',tr('Newest','الأحدث'),study.sort)}${option('oldest',tr('Oldest','الأقدم'),study.sort)}</select></label>
+          </div>
+        </div>
+        <div class="study-filter-panel-actions">
+          <button type="button" class="secondary" data-study-filter-reset>${tr('Clear all','مسح الكل')}</button>
+          <button type="button" class="primary" data-study-filter-apply>${tr('Apply filters','تطبيق الفلاتر')}</button>
+        </div>
+      </section>
+    </div>`;
+  }
 
   function resourceCard(resource){
     const action=study.actions.get(String(resource.id))||{helpful:false,saved:false},author=resource.author||{},editable=canEdit(resource);
@@ -140,7 +183,7 @@
   function studyView(){
     return `<section class="study-head"><div><p class="kicker"><i></i>${tr('Shared academic library','مكتبة أكاديمية مشتركة')}</p><h1>Study</h1><p>${tr('Useful links organized by subject and block — without file storage or noise.','روابط مفيدة منظّمة حسب المادة والبلوك، دون تخزين ملفات أو تشتيت.')}</p></div><button class="primary study-create" data-study-new><span>+</span>${tr('Share resource','مشاركة مصدر')}</button></section>
       <div class="tabs study-tabs">${[['resources',tr('Resources','المصادر')],['saved',tr('Saved Resources','المصادر المحفوظة')],['my',tr('My Resources','مصادري')]].map(([value,label])=>`<button class="${study.tab===value?'active':''}" data-study-tab="${value}">${label}</button>`).join('')}</div>
-      ${study.tab==='resources'?hierarchy():''}${toolbar()}<div id="studyResults">${results()}</div>`;
+      ${compactFilterBar()}${filterPanel()}<div id="studyResults">${results()}</div>`;
   }
 
   function renderStudyPage(){
@@ -220,12 +263,63 @@
 
   function bindStudy(){
     $$('[data-study-new]').forEach(button=>button.onclick=()=>editor());
-    $$('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;if(study.tab!=='resources'){study.subject='';study.unit=''}loadResources()});
-    const subject=$('#studySubject'),unit=$('#studyUnit');
-    if(subject)subject.onchange=async()=>{study.subject=subject.value;study.unit='';study.page=0;study.units=[];study.resources=[];await loadUnits()};
-    if(unit)unit.onchange=()=>{study.unit=unit.value;study.page=0;loadResources()};
-    const search=$('#studySearch');if(search)search.oninput=()=>{study.search=search.value;study.page=0;clearTimeout(searchTimer);searchTimer=setTimeout(loadResources,350)};
-    [['studyType','type'],['studyLanguage','language'],['studySort','sort']].forEach(([id,key])=>{const field=$('#'+id);if(field)field.onchange=()=>{study[key]=field.value;study.page=0;loadResources()}});
+    $('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;loadResources()});
+    const layer=$('[data-study-filter-layer]');
+    const openFilter=()=>{
+      if(!layer)return;
+      layer.hidden=false;
+      document.body.classList.add('study-filter-open');
+      $('[data-study-filter-open]')?.setAttribute('aria-expanded','true');
+      requestAnimationFrame(()=>layer.classList.add('open'));
+    };
+    const closeFilter=()=>{
+      if(!layer)return;
+      layer.classList.remove('open');
+      document.body.classList.remove('study-filter-open');
+      $('[data-study-filter-open]')?.setAttribute('aria-expanded','false');
+      setTimeout(()=>{if(!layer.classList.contains('open'))layer.hidden=true},180);
+    };
+    $('[data-study-filter-open]').forEach(button=>button.onclick=openFilter);
+    $('[data-study-filter-close]').forEach(button=>button.onclick=closeFilter);
+    const stagedSubject=$('#studyFilterSubject'),stagedUnit=$('#studyFilterUnit');
+    if(stagedSubject)stagedSubject.onchange=async()=>{
+      const subject=stagedSubject.value;
+      const units=await loadUnitsForSubject(subject);
+      stagedUnit.disabled=!subject;
+      stagedUnit.innerHTML=option('',tr('All blocks','كل البلوكات'),'')+units.map(value=>option(value,value,'')).join('');
+    };
+    $('[data-study-filter-reset]')?.addEventListener('click',()=>{
+      $('#studyFilterSearch').value='';
+      $('#studyFilterSubject').value='';
+      $('#studyFilterUnit').innerHTML=option('',tr('All blocks','كل البلوكات'),'');
+      $('#studyFilterUnit').disabled=true;
+      $('#studyFilterType').value='';
+      $('#studyFilterLanguage').value='';
+      $('#studyFilterSort').value='newest';
+    });
+    $('[data-study-filter-apply]')?.addEventListener('click',async()=>{
+      study.search=clean($('#studyFilterSearch').value);
+      study.subject=$('#studyFilterSubject').value;
+      study.unit=$('#studyFilterUnit').value;
+      study.type=$('#studyFilterType').value;
+      study.language=$('#studyFilterLanguage').value;
+      study.sort=$('#studyFilterSort').value;
+      study.page=0;
+      study.units=study.subject?await loadUnitsForSubject(study.subject):[];
+      closeFilter();
+      await loadResources();
+    });
+    $('[data-study-clear-filter]').forEach(button=>button.onclick=async()=>{
+      const key=button.dataset.studyClearFilter;
+      if(key==='subject'){study.subject='';study.unit='';study.units=[]}
+      else if(key==='unit')study.unit='';
+      else if(key==='search')study.search='';
+      else if(key==='type')study.type='';
+      else if(key==='language')study.language='';
+      else if(key==='sort')study.sort='newest';
+      study.page=0;
+      await loadResources();
+    });
     const view=$('#view');
     if(view)view.onclick=event=>{
       const button=event.target.closest('button,a');
