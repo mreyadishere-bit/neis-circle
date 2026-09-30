@@ -216,6 +216,7 @@ document.addEventListener("click",async e=>{
   const a=e.target.closest("[data-action]");if(a){const x=a.dataset.action;
     if(x==="compose")compose(); if(x==="theme"){state.theme=state.theme==="light"?"dark":"light";applyPrefs()}
     if(x==="language"){state.lang=state.lang==="en"?"ar":"en";applyPrefs();render()} if(x==="profile")profile(); if(x==="settings")settings();
+    if(x==="refresh-app"){a.disabled=true;a.classList.add("is-refreshing");requestAnimationFrame(()=>location.reload());return}
     if(x==="notifications")nav("notifications");
     if(x==="setup")setup(); if(x==="login")googleSignIn(); if(x==="new-circle")newCircle(); if(x==="new-opportunity")compose("Resource"); if(x==="new-message"&&typeof openNewConversation==="function")openNewConversation()
     if(x==="like"||x==="save"||x==="comments"||x==="share"){const id=a.dataset.id;if(x==="comments"){comments(id);return}if(x==="share"){await navigator.clipboard.writeText(location.origin+location.pathname+`#/post/${id}`);toast("Link copied");return}if(sb&&!requireAccount())return;try{if(x==="like"){const on=!state.liked.map(String).includes(String(id));await liveToggle("reactions",id,on);state.liked=on?[...state.liked,id]:state.liked.filter(y=>String(y)!==String(id))}if(x==="save"){const on=!state.saved.map(String).includes(String(id));await liveToggle("bookmarks",id,on);state.saved=on?[...state.saved,id]:state.saved.filter(y=>String(y)!==String(id))}save();render()}catch(err){toast(err.message||"Could not sync this action")}}
