@@ -117,8 +117,9 @@
     let selected=tt.dayFilter==='all'?currentDay():Number(tt.dayFilter);
     if(!schoolDays().includes(selected))selected=schoolDays()[0]??0;
     const rows=rowsForDay(selected);
+    const removable=selected===5||selected===6;
     return '<div class="tt-mobile-days">'+schoolDays().map(day=>'<button class="'+(day===selected?'active':'')+'" data-tt-day="'+day+'"><b>'+esc(dayName(day).slice(0,3))+'</b><span>'+rowsForDay(day).length+'</span></button>').join('')+'</div>'+
-      '<section class="tt-mobile-day"><header><div><h2>'+esc(dayName(selected))+'</h2><p>'+esc(selected===currentDay()?tr('Today','اليوم'):tr('Your schedule','جدولك'))+'</p></div><button class="primary" data-tt-add-day="'+selected+'">+ '+esc(tr('Add','إضافة'))+'</button></header><div class="tt-mobile-list">'+(rows.length?rows.map(eventCard).join(''):emptyDay(selected))+'</div></section>';
+      '<section class="tt-mobile-day"><header><div><h2>'+esc(dayName(selected))+'</h2><p>'+esc(selected===currentDay()?tr('Today','اليوم'):tr('Your schedule','جدولك'))+'</p></div><div class="tt-mobile-header-actions">'+(removable?'<button class="secondary" type="button" data-tt-remove-day="'+selected+'" aria-label="'+esc(tr('Remove day','حذف اليوم'))+'">×</button>':'')+'<button class="primary" data-tt-add-day="'+selected+'">+ '+esc(tr('Add','إضافة'))+'</button></div></header><div class="tt-mobile-list">'+(rows.length?rows.map(eventCard).join(''):emptyDay(selected))+'</div></section>';
   }
 
   function summary(){
@@ -276,8 +277,8 @@
   function bind(){
     $$('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
     $$('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
-    $('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
-    $('[data-tt-remove-day]').forEach(b=>b.onclick=()=>removeOptionalDay(Number(b.dataset.ttRemoveDay)));
+    $$('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
+    $$('[data-tt-remove-day]').forEach(b=>b.onclick=()=>removeOptionalDay(Number(b.dataset.ttRemoveDay)));
     $$('[data-tt-edit]').forEach(card=>card.onclick=e=>{if(e.target.closest('[data-tt-menu]'))return;editor(tt.rows.find(x=>same(x.id,card.dataset.ttEdit)))});
     $$('[data-tt-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();actions(b.dataset.ttMenu)});
     $$('[data-tt-day]').forEach(b=>b.onclick=()=>{tt.dayFilter=b.dataset.ttDay;renderTimetable()});
