@@ -11,6 +11,7 @@
   let commentRequest=0;
   let engagementRequest=0;
   let deepLinkOpened='';
+  let pendingArticleCommentTarget='';
 
   function contentDirection(...values){
     const text=values.join(' ').replace(/<[^>]*>/g,' '),arabic=(text.match(/[\u0600-\u06ff]/g)||[]).length,latin=(text.match(/[A-Za-z]/g)||[]).length;
@@ -249,6 +250,29 @@
     root.innerHTML=`<div class="article-comment-list">${comments.length?buildArticleCommentThreads(comments,likesByComment,heartsByComment,article?.author_id||''):`<div class="empty"><b>${tr('No comments yet','لا توجد تعليقات بعد')}</b><span>${tr('Start a thoughtful conversation about this article.','ابدأ نقاشًا مفيدًا حول هذا المقال.')}</span></div>`}</div>`;
     $('#articleCommentCount').textContent=String(comments.length);
     bindArticleCommentActions(articleId,comments);
+    if(pendingArticleCommentTarget){
+      const targetId=String(pendingArticleCommentTarget);
+      const targetItem=comments.find(item=>same(item.id,targetId));
+      if(targetItem){
+        let rootItem=targetItem;
+        const byId=new Map(comments.map(item=>[String(item.id),item]));
+        while(rootItem?.parent_id&&byId.has(String(rootItem.parent_id)))rootItem=byId.get(String(rootItem.parent_id));
+        if(rootItem&&!same(rootItem.id,targetItem.id)){
+          const replies=root.querySelector(`[data-article-replies="${CSS.escape(String(rootItem.id))}"]`);
+          const toggle=root.querySelector(`[data-article-toggle-replies="${CSS.escape(String(rootItem.id))}"]`);
+          if(replies){replies.classList.remove('hidden');toggle?.setAttribute('aria-expanded','true')}
+        }
+        setTimeout(()=>{
+          const target=root.querySelector(`[data-article-comment="${CSS.escape(targetId)}"]`);
+          if(target){
+            target.classList.add('notification-target-highlight');
+            target.scrollIntoView({behavior:'smooth',block:'center'});
+            setTimeout(()=>target.classList.remove('notification-target-highlight'),2600);
+          }
+        },120);
+      }
+      pendingArticleCommentTarget='';
+    }
   }
 
   function bindArticleCommentActions(articleId,comments){
@@ -399,6 +423,8 @@
     const match=location.hash.match(/^#\/articles\/([^/?]+)/);if(!match)return;
     const id=decodeURIComponent(match[1]),article=state.articles.find(item=>same(item.id,id));
     if(!article){if(attempt<8)setTimeout(()=>openArticleDeepLink(attempt+1),300);return}
+    const query=(location.hash.split('?')[1]||''),params=new URLSearchParams(query);
+    pendingArticleCommentTarget=params.get('comment')||'';
     const signature=`${location.hash}:${article.updated_at||article.created_at||''}`;if(deepLinkOpened===signature)return;
     deepLinkOpened=signature;readArticle(id);
   }
