@@ -5,7 +5,7 @@
   var destinations=[
     ['connections','users','Connections','العلاقات'],
     ['library','library','Saved','المحفوظات'],
-    ['opportunities','calendar','Opportunities','الفرص'],
+    ['opportunities','graduation','Opportunities','الفرص'],
     ['gallery','image','Gallery','المعرض'],
     ['articles','article','Articles','المقالات'],
     ['study','book','Study','الدراسة'],
