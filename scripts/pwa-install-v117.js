@@ -240,17 +240,41 @@
         ${row('timetable_reminders','Timetable reminders','تذكيرات الجدول')}
         ${row('sound','Notification sound','صوت الإشعارات')}
       </div>
-      <div class="account-menu" style="margin-top:12px">
-        <button type="button" class="account-row" data-pwa-show-prompt-again>
-          <span><b>${lang('Automatic notification prompt','طلب تفعيل الإشعارات تلقائيًا')}</b><small>${localStorage.getItem(NOTIFICATION_PROMPT_DISABLED_KEY)==='1'?lang('Hidden on this device','مخفي على هذا الجهاز'):lang('Allowed to appear on this device','مسموح له بالظهور على هذا الجهاز')}</small></span>
-          <b>→</b>
-        </button>
-      </div>
-      <div class="modal-actions">
+      <div class="modal-actions pwa-notification-actions">
+        <button type="button" class="secondary" data-pwa-toggle-all></button>
         <button type="button" class="secondary" data-pwa-notification-permission>${notificationPermission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
         <button type="button" class="primary" data-save-pwa-push>${lang('Save','حفظ')}</button>
       </div>
     `);
+
+    const preferenceInputs=()=>[...document.querySelectorAll('[data-pwa-push-pref]')];
+    const toggleAllButton=document.querySelector('[data-pwa-toggle-all]');
+    const syncToggleAllLabel=()=>{
+      if(!toggleAllButton)return;
+      const inputs=preferenceInputs();
+      const anyEnabled=inputs.some(input=>input.checked);
+      toggleAllButton.textContent=anyEnabled?lang('Disable all notifications','إيقاف كل الإشعارات'):lang('Enable all notifications','تفعيل كل الإشعارات');
+      toggleAllButton.dataset.enableAll=anyEnabled?'0':'1';
+    };
+    const persistAllPreferences=async enabled=>{
+      const values={user_id:authUser.id};
+      preferenceInputs().forEach(input=>{input.checked=enabled;values[input.dataset.pwaPushPref]=enabled});
+      syncToggleAllLabel();
+      if(toggleAllButton)toggleAllButton.disabled=true;
+      const {error:bulkError}=await sb.from('push_preferences').upsert(values,{onConflict:'user_id'});
+      if(toggleAllButton)toggleAllButton.disabled=false;
+      if(bulkError){
+        preferenceInputs().forEach(input=>{input.checked=!enabled});
+        syncToggleAllLabel();
+        if(typeof toast==='function')toast(lang('Could not update notification settings.','تعذر تحديث إعدادات الإشعارات.'));
+        return;
+      }
+      if(enabled&&'Notification' in window&&Notification.permission==='granted')await ensureWebPush(false);
+      if(typeof toast==='function')toast(enabled?lang('All notifications enabled.','تم تفعيل كل الإشعارات.'):lang('All notifications disabled.','تم إيقاف كل الإشعارات.'));
+    };
+    if(toggleAllButton)toggleAllButton.onclick=()=>persistAllPreferences(toggleAllButton.dataset.enableAll==='1');
+    preferenceInputs().forEach(input=>input.addEventListener('change',syncToggleAllLabel));
+    syncToggleAllLabel();
 
     const permissionButton=document.querySelector('[data-pwa-notification-permission]');
     if(permissionButton)permissionButton.onclick=async()=>{
@@ -258,14 +282,6 @@
       await ensureWebPush(true);
       permissionButton.disabled=false;
       permissionButton.textContent=('Notification' in window&&Notification.permission==='granted')?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات');
-    };
-
-    const showAgain=document.querySelector('[data-pwa-show-prompt-again]');
-    if(showAgain)showAgain.onclick=()=>{
-      localStorage.removeItem(NOTIFICATION_PROMPT_DISABLED_KEY);
-      notificationOnboardingShown=false;
-      if(typeof toast==='function')toast(lang('Automatic notification prompt enabled on this device.','تم تفعيل طلب الإشعارات التلقائي على هذا الجهاز.'));
-      openPwaNotificationSettings();
     };
 
     const saveButton=document.querySelector('[data-save-pwa-push]');
