@@ -1288,15 +1288,17 @@ window.NEISChatActionBridge={
     const key=String(id||'');
     if(scope==='circle'){
       const message=state.circleMessages.find(item=>same(item.id,key));
-      if(!message)return {canDelete:false};
+      if(!message)return {canDelete:false,canEdit:false};
       return {
-        canDelete:!message.deleted_at&&(same(message.sender_id,authUser?.id)||canModerateCircle(message.circle_id))
+        canDelete:!message.deleted_at&&(same(message.sender_id,authUser?.id)||canModerateCircle(message.circle_id)),
+        canEdit:!message.deleted_at&&same(message.sender_id,authUser?.id)
       };
     }
     const message=state.liveMessages.find(item=>same(item.id,key));
-    if(!message)return {canDelete:false};
+    if(!message)return {canDelete:false,canEdit:false};
     return {
-      canDelete:same(message.sender_id,authUser?.id)||state.isAdmin
+      canDelete:same(message.sender_id,authUser?.id)||state.isAdmin,
+      canEdit:!message.deleted_at&&same(message.sender_id,authUser?.id)
     };
   },
   rowCanDelete(row){
@@ -1305,6 +1307,39 @@ window.NEISChatActionBridge={
   deleteMessage(scope,id){
     if(scope==='circle')return deleteCircleMessage(id);
     return deleteDirectMessage(id);
+  },
+  editMessage(scope,id){
+    const key=String(id||'').trim();
+    const isCircle=scope==='circle';
+    const message=(isCircle?state.circleMessages:state.liveMessages).find(item=>same(item.id,key));
+    if(!message||message.deleted_at||!same(message.sender_id,authUser?.id)){
+      toast(t('You can only edit your own messages.','يمكنك تعديل رسائلك فقط.'));
+      return;
+    }
+    openModal(`<div class="modal-head"><div><h2>${t('Edit message','تعديل الرسالة')}</h2></div><button class="close" data-close>×</button></div><form id="editChatMessageForm"><label class="field">${t('Message','الرسالة')}<textarea id="editChatMessageBody" rows="5" maxlength="4000" required dir="auto">${esc(message.body||'')}</textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary" id="saveChatMessageEdit">${t('Save','حفظ')}</button></div></form>`);
+    const input=$('#editChatMessageBody');
+    input?.focus();
+    input?.setSelectionRange?.(input.value.length,input.value.length);
+    $('#editChatMessageForm').onsubmit=async event=>{
+      event.preventDefault();
+      const body=input.value.trim(),button=$('#saveChatMessageEdit');
+      if(!body)return;
+      if(body===String(message.body||'').trim()){closeModal();return}
+      button.disabled=true;
+      const table=isCircle?'circle_messages':'messages';
+      const editedAt=new Date().toISOString();
+      const {data,error}=await sb.from(table).update({body,edited_at:editedAt}).eq('id',key).eq('sender_id',authUser.id).select('id,body,edited_at');
+      if(error||!data?.length){
+        toast(error?safeError(error,'edit this message'):t('This message could not be updated.','تعذر تعديل الرسالة.'));
+        button.disabled=false;
+        return;
+      }
+      message.body=body;
+      message.edited_at=editedAt;
+      closeModal();
+      render();
+      toast(t('Message updated.','تم تعديل الرسالة.'));
+    };
   }
 };
 setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history.replaceState(null,'','#/home');applyRoute()}},250);
@@ -1352,6 +1387,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     const scope=isCircle?'circle':'dm';
     const meta=window.NEISChatActionBridge?.getMessageMeta?.(scope,messageId);
     const canDelete=row.dataset?.messageDeletable==='1'||row.classList?.contains('mine')||meta?.canDelete===true;
+    const canEdit=meta?.canEdit===true;
     const text=bubble?.querySelector?.('.message-text')?.textContent||'';
 
     const dialog=ensureDialog();
@@ -1364,6 +1400,7 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         <button type="button" class="neis-message-dialog-action" data-message-dialog-reply>
           <span>${tr('Reply','رد')}</span><b>↩</b>
         </button>
+        ${canEdit?`<button type="button" class="neis-message-dialog-action" data-message-dialog-edit><span>${tr('Edit','تعديل')}</span><b>✎</b></button>`:''}
         <button type="button" class="neis-message-dialog-action" data-message-dialog-copy>
           <span>${tr('Copy message','نسخ الرسالة')}</span><b>⧉</b>
         </button>
@@ -1383,6 +1420,11 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
         if(isCircle)window.startCircleReply?.(messageId);
         else window.startDmReply?.(messageId);
       },0);
+    });
+
+    dialog.querySelector('[data-message-dialog-edit]')?.addEventListener('click',event=>{
+      event.preventDefault();event.stopPropagation();close();
+      setTimeout(()=>window.NEISChatActionBridge?.editMessage?.(scope,messageId),0);
     });
 
     dialog.querySelector('[data-message-dialog-copy]')?.addEventListener('click',async event=>{
