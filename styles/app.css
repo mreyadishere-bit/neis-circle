@@ -1922,3 +1922,42 @@ html,body{
     font-size:12px;
   }
 }
+
+
+/* v156 — owner post edit controls */
+.post-menu .post-owner-menu,
+.post-menu .post-report-menu{
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--soft);
+  color:var(--ink);
+  font-weight:800;
+}
+.post-menu .post-owner-menu:hover,
+.post-menu .post-report-menu:hover{
+  background:var(--accent2);
+  color:var(--accent);
+}
+.post-edit-image-wrap{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
+.post-edit-image-wrap .upload-preview{
+  max-height:320px;
+  width:100%;
+  object-fit:cover;
+  border-radius:16px;
+}
+.post-edit-image-wrap .danger{
+  justify-self:start;
+}
+@media(max-width:760px){
+  .post-menu .post-owner-menu,
+  .post-menu .post-report-menu{
+    width:34px;
+    min-width:34px;
+    height:34px;
+  }
+  .post-edit-image-wrap .upload-preview{max-height:240px}
+}
