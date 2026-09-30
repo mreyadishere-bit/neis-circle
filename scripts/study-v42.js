@@ -179,7 +179,7 @@
   function results(){
     if(study.loading)return `<div class="study-grid">${Array.from({length:6},()=>'<div class="study-card study-skeleton"></div>').join('')}</div>`;
     if(study.error)return empty(tr('Study could not load','تعذر تحميل Study'),study.error,`<button class="primary" data-study-retry>${tr('Try again','حاول مرة أخرى')}</button>`);
-    if(!shouldLoadResources())return empty(tr('Choose a block to begin','اختر بلوك للبدء'),tr('Resources load after you choose Subject and Block. You can also search directly.','يتم تحميل المصادر بعد اختيار المادة والبلوك، ويمكنك أيضًا البحث مباشرة.'));
+    if(!shouldLoadResources())return empty(tr('Choose a filter to begin','اختر فلتر للبدء'),tr('Use Filters to choose a subject, block, or search directly.','استخدم الفلاتر لاختيار المادة أو البلوك أو البحث مباشرة.'));
     if(!study.resources.length){
       const title=study.tab==='saved'?tr('No saved resources','لا توجد مصادر محفوظة'):study.tab==='my'?tr('You have not shared a resource yet','لم تشارك مصدرًا بعد'):tr('No resources found','لم يتم العثور على مصادر');
       return empty(title,tr('Try different filters or share a useful link.','جرّب فلاتر أخرى أو شارك رابطًا مفيدًا.'),`<button class="primary" data-study-new>${tr('Share a resource','مشاركة مصدر')}</button>`);
