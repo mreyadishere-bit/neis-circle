@@ -657,3 +657,85 @@
     align-self:start;
   }
 }
+
+
+/* v155 — refined timetable action sheet */
+.tt-action-menu{
+  display:grid;
+  gap:10px;
+  margin-top:18px;
+}
+.tt-action-row{
+  width:100%;
+  min-height:58px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 34px;
+  align-items:center;
+  gap:14px;
+  padding:0 16px 0 18px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--soft);
+  color:var(--ink);
+  text-align:left;
+}
+.tt-action-copy{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  white-space:nowrap;
+  overflow:hidden;
+}
+.tt-action-copy b{
+  flex:0 0 auto;
+  font-size:14px;
+  line-height:1;
+}
+.tt-action-copy small{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.2;
+}
+.tt-action-icon{
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  justify-self:end;
+  border-radius:10px;
+  background:var(--card);
+  color:var(--ink);
+  font-size:16px;
+  line-height:1;
+}
+.tt-action-row:hover{
+  background:color-mix(in srgb,var(--soft) 72%,var(--card));
+}
+.tt-action-row.danger{
+  border-color:color-mix(in srgb,#d64545 28%,var(--line));
+  background:color-mix(in srgb,#d64545 6%,var(--card));
+  color:#b83a31;
+}
+.tt-action-row.danger .tt-action-copy small{color:color-mix(in srgb,#b83a31 72%,var(--muted))}
+.tt-action-row.danger .tt-action-icon{
+  background:color-mix(in srgb,#d64545 10%,var(--card));
+  color:#b83a31;
+}
+@media(max-width:760px){
+  .tt-action-menu{gap:9px;margin-top:16px}
+  .tt-action-row{
+    min-height:56px;
+    padding:0 14px 0 16px;
+    border-radius:15px;
+    gap:12px;
+  }
+  .tt-action-copy{gap:8px}
+  .tt-action-copy b{font-size:13px}
+  .tt-action-copy small{font-size:10px}
+  .tt-action-icon{width:28px;height:28px;font-size:15px}
+}
