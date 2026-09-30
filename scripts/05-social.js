@@ -60,7 +60,7 @@ function applyRoute(){
     }
   }
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
-  else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','admin','notifications'].includes(head)?head:'home'}
+  else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','timetable','admin','notifications'].includes(head)?head:'home'}
   render();
   if(head==='post'&&parts[1]&&!new URLSearchParams(queryPart).get('comment')){
     const targetId=String(parts[1]);
