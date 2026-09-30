@@ -282,6 +282,7 @@ function storagePathFromPublicUrl(url){
     return index>=0?decodeURIComponent(value.slice(index+marker.length)):'';
   }catch{return ''}
 }
+function postButtonUrlValid(value){try{const url=new URL(String(value||'').trim());return url.protocol==='https:'&&!!url.hostname&&!/\s/.test(String(value||''))}catch{return false}}
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
   if(!post||!same(post.author_id,authUser?.id)){toast(t('You can only edit your own posts.','يمكنك تعديل منشوراتك فقط.'));return}
@@ -292,6 +293,7 @@ async function editOwnPost(postId){
       <label class="field">${t('Title','العنوان')}<input id="editPostTitle" required maxlength="140" value="${esc(post.title||'')}"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="editPostBody" required rows="7">${esc(post.body||'')}</textarea></label>
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
+      <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add one short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="editPostLinkLabel" maxlength="36" value="${esc(post.link_button_label||'')}" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="editPostLinkUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.link_button_url||'')}" placeholder="https://…"></label></div></div>
       <label class="field">${t('Replace image (optional)','استبدال الصورة (اختياري)')}<input id="editPostImage" type="file" accept="image/*"></label>
       <div class="post-edit-image-wrap ${post.image_url?'':'hidden'}" id="editPostCurrentImage">
         <img id="editPostImagePreview" class="upload-preview" src="${esc(post.image_url||'')}" alt="">
@@ -329,12 +331,17 @@ async function editOwnPost(postId){
       if(!uploadedUrl){saveButton.disabled=false;return}
       imageUrl=uploadedUrl;
     }
+    const linkButtonLabel=$('#editPostLinkLabel').value.trim(),linkButtonUrl=$('#editPostLinkUrl').value.trim();
+    if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));saveButton.disabled=false;return}
+    if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));saveButton.disabled=false;return}
     const payload={
       kind:$('#editPostKind').value,
       title:$('#editPostTitle').value.trim(),
       body:$('#editPostBody').value.trim(),
       tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),
-      image_url:imageUrl
+      image_url:imageUrl,
+      link_button_label:linkButtonLabel,
+      link_button_url:linkButtonUrl
     };
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));saveButton.disabled=false;return}
     const {error}=await sb.from('posts').update(payload).eq('id',post.id).eq('author_id',authUser.id);
@@ -359,7 +366,9 @@ postCard=function(p){
     :moderatorDelete
       ?`<button class="danger" data-delete-post="${esc(p.id)}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`
       :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
-  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${p.image_url?`<button type="button" class="post-image-open" data-full-image="${esc(p.image_url)}" aria-label="Open image full size"><img class="upload-preview" style="margin-top:15px" src="${esc(p.image_url)}" alt="${esc(p.title)}" onerror="this.closest('.post-image-open')?.remove()"></button>`:''}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
+  const hasLinkButton=!!(p.link_button_label&&p.link_button_url&&postButtonUrlValid(p.link_button_url));
+  const linkButton=hasLinkButton?`<div class="post-link-button-wrap"><a class="post-link-button" href="${esc(p.link_button_url)}" target="_blank" rel="noopener noreferrer nofollow ugc"><span>${esc(p.link_button_label)}</span><b aria-hidden="true">↗</b></a></div>`:'';
+  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${p.image_url?`<button type="button" class="post-image-open" data-full-image="${esc(p.image_url)}" aria-label="Open image full size"><img class="upload-preview" style="margin-top:15px" src="${esc(p.image_url)}" alt="${esc(p.title)}" onerror="this.closest('.post-image-open')?.remove()"></button>`:''}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
 };
 
 discover=function(){
