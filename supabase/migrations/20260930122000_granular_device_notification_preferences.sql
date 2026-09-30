@@ -62,8 +62,12 @@ returns trigger
 language plpgsql
 security definer
 set search_path=public
-as $$
+as $
 begin
+  if coalesce(new.privacy,'public') <> 'public' then
+    return new;
+  end if;
+
   insert into public.notifications(user_id,actor_id,type,title,body,entity_type,entity_id,route)
   select
     p.id,new.owner_id,'new_circle','New Circle',
@@ -74,7 +78,7 @@ begin
     and coalesce(p.account_status,'active')='active';
   return new;
 end;
-$$;
+$;
 
 drop trigger if exists circles_notify_new on public.circles;
 create trigger circles_notify_new
