@@ -508,3 +508,136 @@
   .tt-time-row time strong{font-size:12px}
   .tt-time-row em{font-size:6.5px;padding:3px 5px}
 }
+
+
+/* v153 — taller day columns, protected time text, adaptive dense schedules */
+.tt-day-body{
+  min-height:560px;
+  align-content:start;
+}
+.tt-time-row{
+  grid-template-columns:minmax(max-content,1fr) auto;
+}
+.tt-time-row time{
+  overflow:visible;
+  min-width:max-content;
+}
+.tt-time-row time strong{
+  overflow:visible;
+  text-overflow:clip;
+}
+.tt-time-row em{
+  max-width:none;
+}
+.tt-board.tt-days-6 .tt-time-row,
+.tt-board.tt-days-7 .tt-time-row{
+  grid-template-columns:1fr;
+  align-items:start;
+}
+.tt-board.tt-days-6 .tt-time-row em,
+.tt-board.tt-days-7 .tt-time-row em{
+  justify-self:start;
+}
+.tt-board.tt-days-6 .tt-time-row time,
+.tt-board.tt-days-7 .tt-time-row time{
+  min-width:0;
+  width:100%;
+  overflow:visible;
+}
+.tt-board.tt-days-6 .tt-time-row time strong,
+.tt-board.tt-days-7 .tt-time-row time strong{
+  flex:0 0 auto;
+}
+
+/* Per-day density: only the crowded column becomes more compact. */
+.tt-day.tt-count-4 .tt-day-body,
+.tt-day.tt-count-5 .tt-day-body,
+.tt-day.tt-count-6 .tt-day-body{gap:8px}
+
+.tt-day.tt-count-4 .tt-event,
+.tt-day.tt-count-5 .tt-event,
+.tt-day.tt-count-6 .tt-event{
+  padding:10px 10px 9px;
+  border-radius:15px;
+}
+.tt-day.tt-count-4 .tt-event-main,
+.tt-day.tt-count-5 .tt-event-main,
+.tt-day.tt-count-6 .tt-event-main{gap:6px}
+
+.tt-day.tt-count-4 .tt-event-name{font-size:12px}
+.tt-day.tt-count-5 .tt-event-name,
+.tt-day.tt-count-6 .tt-event-name{font-size:11px}
+
+.tt-day.tt-count-4 .tt-event-category,
+.tt-day.tt-count-5 .tt-event-category,
+.tt-day.tt-count-6 .tt-event-category{
+  min-height:23px;
+  padding:0 7px;
+  font-size:6.5px;
+}
+.tt-day.tt-count-4 .tt-event-menu,
+.tt-day.tt-count-5 .tt-event-menu,
+.tt-day.tt-count-6 .tt-event-menu{
+  width:23px;height:23px;flex-basis:23px;
+}
+
+.tt-day.tt-count-4 .tt-time-row,
+.tt-day.tt-count-5 .tt-time-row,
+.tt-day.tt-count-6 .tt-time-row{
+  padding:6px 7px;
+  gap:5px;
+}
+.tt-day.tt-count-4 .tt-time-row time strong{font-size:11px}
+.tt-day.tt-count-5 .tt-time-row time strong,
+.tt-day.tt-count-6 .tt-time-row time strong{font-size:10px}
+.tt-day.tt-count-4 .tt-time-row em,
+.tt-day.tt-count-5 .tt-time-row em,
+.tt-day.tt-count-6 .tt-time-row em{
+  font-size:6px;
+  padding:3px 4px;
+}
+.tt-day.tt-count-4 .tt-location-pill,
+.tt-day.tt-count-5 .tt-location-pill,
+.tt-day.tt-count-6 .tt-location-pill{
+  min-height:21px;
+  padding:0 6px;
+  font-size:7.5px;
+}
+.tt-day.tt-count-5 .tt-event p,
+.tt-day.tt-count-6 .tt-event p{
+  font-size:7.5px;
+  -webkit-line-clamp:1;
+}
+
+/* Keep complete time text visible in ordinary 5-day layout too. */
+.tt-board.tt-days-5 .tt-time-row{
+  grid-template-columns:minmax(0,1fr) auto;
+}
+.tt-board.tt-days-5 .tt-time-row time{
+  min-width:0;
+  overflow:visible;
+}
+.tt-board.tt-days-5 .tt-time-row time strong{
+  font-size:12px;
+  white-space:nowrap;
+}
+.tt-board.tt-days-5 .tt-time-row em{
+  font-size:6.5px;
+  padding:3px 5px;
+}
+
+@media(max-width:760px){
+  .tt-day-body{min-height:0}
+  .tt-mobile-list{min-height:360px}
+  .tt-time-row{
+    grid-template-columns:1fr;
+  }
+  .tt-time-row time{
+    min-width:0;
+    width:100%;
+    overflow:visible;
+  }
+  .tt-time-row em{
+    justify-self:start;
+  }
+}
