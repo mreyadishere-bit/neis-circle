@@ -1961,3 +1961,25 @@ html,body{
   }
   .post-edit-image-wrap .upload-preview{max-height:240px}
 }
+
+
+/* v158 — prevent comment threads from stretching into artificial vertical gaps */
+.reply-tree,
+.article-comment-list,
+.reply-children,
+.article-comment-replies{
+  align-content:start;
+}
+.reply-tree,
+.article-comment-list{
+  grid-auto-rows:max-content;
+}
+.modal.wide:has(#replyContent) .reply-tree{
+  align-content:start!important;
+  grid-auto-rows:max-content!important;
+}
+.reply-thread,
+.article-comment-thread{
+  align-self:start;
+  min-height:0;
+}
