@@ -33,7 +33,25 @@
   function sortRows(rows){return [...rows].sort((a,b)=>Number(a.day_of_week)-Number(b.day_of_week)||minutes(a.start_time)-minutes(b.start_time)||String(a.title).localeCompare(String(b.title)))}
   function currentDay(){return new Date().getDay()}
   function currentMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
-  function schoolDays(){return [0,1,2,3,4,5,6]}
+  function extraDaysKey(){return 'neis_timetable_extra_days_'+String(authUser?.id||'guest')}
+  function savedExtraDays(){
+    try{
+      const parsed=JSON.parse(localStorage.getItem(extraDaysKey())||'[]');
+      return Array.isArray(parsed)?parsed.map(Number).filter(day=>day===5||day===6):[];
+    }catch{return []}
+  }
+  function rememberExtraDay(day){
+    day=Number(day);if(day!==5&&day!==6)return;
+    const next=[...new Set([...savedExtraDays(),day])];
+    try{localStorage.setItem(extraDaysKey(),JSON.stringify(next))}catch{}
+  }
+  function schoolDays(){
+    const used=new Set(tt.rows.map(r=>Number(r.day_of_week)));
+    const enabled=new Set(savedExtraDays());
+    const base=[0,1,2,3,4];
+    for(const extra of [5,6])if(used.has(extra)||enabled.has(extra))base.push(extra);
+    return base;
+  }
   function rowsForDay(day){return tt.rows.filter(r=>Number(r.day_of_week)===Number(day)).sort((a,b)=>minutes(a.start_time)-minutes(b.start_time))}
   function nextEntry(){
     const nowDay=currentDay(),now=currentMinutes();
@@ -83,7 +101,7 @@
 
   function desktopBoard(){
     const visible=schoolDays();
-    return '<section class="tt-board" style="grid-template-columns:repeat('+visible.length+',minmax(180px,1fr))">'+visible.map(day=>{
+    return '<section class="tt-board tt-days-'+visible.length+'">'+visible.map(day=>{
       const rows=rowsForDay(day);
       return '<section class="tt-day '+(day===currentDay()?'today':'')+'"><header><div><span>'+esc(dayName(day))+'</span>'+(day===currentDay()?'<b>'+esc(tr('Today','اليوم'))+'</b>':'')+'</div><button type="button" data-tt-add-day="'+day+'" aria-label="'+esc(tr('Add','إضافة'))+'">+</button></header><div class="tt-day-body">'+(rows.length?rows.map(eventCard).join(''):emptyDay(day))+'</div></section>';
     }).join('')+'</section>';
@@ -111,7 +129,7 @@
   function view(){
     if(tt.loading&&!tt.ready)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
     if(tt.error)return '<section class="tt-shell"><div class="empty"><b>'+esc(tr('Timetable could not load','تعذر تحميل الجدول'))+'</b><span>'+esc(tt.error)+'</span><button class="primary" data-tt-retry>'+esc(tr('Try again','حاول مرة أخرى'))+'</button></div></section>';
-    return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
+    return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="secondary" data-tt-extra-day>+ '+esc(tr('Add day','إضافة يوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
       summary()+
       '<div class="tt-desktop-only">'+desktopBoard()+'</div>'+
       '<div class="tt-mobile-only">'+mobileBoard()+'</div>';
@@ -134,6 +152,21 @@
       }
     }
     if(typeof syncChrome==='function')syncChrome();
+  }
+
+  function extraDayPicker(){
+    const visible=new Set(schoolDays());
+    const available=[5,6].filter(day=>!visible.has(day));
+    if(!available.length){toast(tr('Friday and Saturday are already available.','الجمعة والسبت مضافان بالفعل.'));return}
+    openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+esc(tr('Optional days','أيام اختيارية'))+'</p><h2>'+esc(tr('Add another day','إضافة يوم آخر'))+'</h2><p>'+esc(tr('Your timetable stays Sunday–Thursday by default. Add Friday or Saturday only when you need them.','جدولك يظل من الأحد إلى الخميس افتراضيًا. أضف الجمعة أو السبت فقط عند الحاجة.'))+'</p></div><button class="close" data-close>×</button></div><div class="tt-extra-day-options">'+available.map(day=>'<button type="button" class="secondary" data-tt-enable-day="'+day+'"><b>+ '+esc(dayName(day))+'</b><small>'+esc(tr('Add this day to my timetable','أضف هذا اليوم إلى جدولي'))+'</small></button>').join('')+'</div>');
+    $('[data-tt-enable-day]').forEach(button=>button.onclick=()=>{
+      const day=Number(button.dataset.ttEnableDay);
+      rememberExtraDay(day);
+      tt.dayFilter=String(day);
+      closeModal();
+      renderTimetable();
+      setTimeout(()=>editor(null,day),0);
+    });
   }
 
   function editor(row=null,presetDay=null){
@@ -180,6 +213,7 @@
       reminder_minutes:Number($('#ttReminder').value)||15
     };
     if(!payload.title){toast(tr('Add a name first.','أضف اسمًا أولًا.'));return}
+    if(payload.day_of_week===5||payload.day_of_week===6)rememberExtraDay(payload.day_of_week);
     button.disabled=true;
     const query=row
       ?sb.from('user_timetable_entries').update(payload).eq('id',row.id).eq('user_id',authUser.id).select('*').single()
@@ -214,7 +248,8 @@
   }
 
   function bind(){
-    $$('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
+    $('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
+    $('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
     $$('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
     $$('[data-tt-edit]').forEach(card=>card.onclick=e=>{if(e.target.closest('[data-tt-menu]'))return;editor(tt.rows.find(x=>same(x.id,card.dataset.ttEdit)))});
     $$('[data-tt-menu]').forEach(b=>b.onclick=e=>{e.stopPropagation();actions(b.dataset.ttMenu)});
