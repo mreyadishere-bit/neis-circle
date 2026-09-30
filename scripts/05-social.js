@@ -46,7 +46,7 @@ function applyRoute(){
   if(head!=='search'){state.query='';const globalInput=$('#globalSearch');if(globalInput)globalInput.value='';$('[data-global-search-clear]')?.classList.add('hidden');$('#searchSuggestions')?.classList.add('hidden')}
   if(head==='profile'&&parts[1]){state.view='profile-detail';state.activeProfileId=parts[1]}
   else if(head==='messages'){state.view='messages';state.activeConversationId=parts[1]||'';state.notificationMessageTarget=(new URLSearchParams(queryPart).get('message')||'')}
-  else if(head==='circles'&&parts[1]){state.view='circle-detail';state.activeCircleId=parts[1];state.circleTab=parts[2]||'home';const routeQuery=new URLSearchParams(queryPart);state.meetingInviteId=state.circleTab==='meetings'?(routeQuery.get('meeting')||''):'';state.circleMessageTarget=state.circleTab==='chat'?(routeQuery.get('message')||''):''}
+  else if(head==='circles'&&parts[1]){state.view='circle-detail';state.activeCircleId=parts[1];state.circleTab=parts[2]||'home';const routeQuery=new URLSearchParams(queryPart);state.meetingInviteId=state.circleTab==='meetings'?(routeQuery.get('meeting')||''):'';state.circleMessageTarget=state.circleTab==='chat'?(routeQuery.get('message')||''):'';state.circlePostTarget=state.circleTab==='posts'?(routeQuery.get('post')||''):''}
   else if(head==='connections'){state.view='connections';state.connectionTab=parts[1]||'following'}
   else if(head==='search'){state.view='search';const q=(new URLSearchParams(queryPart).get('q')||state.query||'').trim();state.query=q;const input=$('#globalSearch');if(input)input.value=q;performSearch(q,false)}
   else if(head==='post'&&parts[1]){
@@ -789,6 +789,14 @@ function notificationTargetRoute(item){
   const entityType=String(item.entity_type||'');
   const entityId=String(item.entity_id||'');
   const join=route.includes('?')?'&':'?';
+
+  // A Circle post is not rendered in the public Home feed. Route it to its
+  // Circle Posts tab so the notification can actually reach the post card.
+  if(entityId&&entityType==='post'){
+    const post=state.posts.find(row=>same(row.id,entityId));
+    if(post?.circle_id)return `circles/${encodeURIComponent(post.circle_id)}/posts?post=${encodeURIComponent(post.id)}`;
+  }
+
   if(entityId&&entityType==='comment'&&route.startsWith('post/'))return route+(route.includes('comment=')?'':join+'comment='+encodeURIComponent(entityId));
   if(entityId&&entityType==='article_comment'&&route.startsWith('articles/'))return route+(route.includes('comment=')?'':join+'comment='+encodeURIComponent(entityId));
   if(entityId&&entityType==='message'&&route.startsWith('messages/'))return route+(route.includes('message=')?'':join+'message='+encodeURIComponent(entityId));
@@ -1185,8 +1193,9 @@ function bindV6(root=document){
   root.querySelectorAll('[data-retry-search]').forEach(el=>el.onclick=()=>performSearch(state.query,true));
   root.querySelectorAll('[data-retry-meetings]').forEach(el=>el.onclick=async()=>{el.disabled=true;await loadLiveData();render()});
   if(state.view==='circle-detail'&&state.circleTab==='meetings'&&state.meetingInviteId){const card=root.querySelector(`[data-meeting-card="${CSS.escape(String(state.meetingInviteId))}"]`);if(card){card.classList.add('meeting-invite-target');setTimeout(()=>card.scrollIntoView({block:'center',behavior:'smooth'}),50)}}
-  if(state.view==='messages'&&state.notificationMessageTarget){const row=root.querySelector(`#chatFlow > .chat-message[data-message-id="${CSS.escape(String(state.notificationMessageTarget))}"]`);if(row){row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
-  if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.circleMessageTarget){const row=root.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(String(state.circleMessageTarget))}"]`);if(row){row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
+  if(state.view==='circle-detail'&&state.circleTab==='posts'&&state.circlePostTarget){const targetId=String(state.circlePostTarget),post=root.querySelector('#post-'+CSS.escape(targetId));if(post){state.circlePostTarget='';post.classList.add('notification-target-highlight');setTimeout(()=>{post.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>post.classList.remove('notification-target-highlight'),2600)},60)}}
+  if(state.view==='messages'&&state.notificationMessageTarget){const targetId=String(state.notificationMessageTarget),row=root.querySelector(`#chatFlow > .chat-message[data-message-id="${CSS.escape(targetId)}"]`);if(row){state.notificationMessageTarget='';row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
+  if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.circleMessageTarget){const targetId=String(state.circleMessageTarget),row=root.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(targetId)}"]`);if(row){state.circleMessageTarget='';row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
 
   root.querySelectorAll('[data-clear-global-search]').forEach(el=>el.onclick=()=>{state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null;const input=$('#globalSearch');if(input){input.value='';input.focus()}routeTo('discover')});
   root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));if(item)item.read_at=readAt;updateBadges();const {error}=await sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification);if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}routeTo(notificationTargetRoute(item)||el.dataset.route||'notifications')});
