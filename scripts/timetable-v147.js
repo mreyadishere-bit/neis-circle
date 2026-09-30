@@ -271,7 +271,11 @@
 
   function actions(id){
     const row=tt.rows.find(x=>same(x.id,id));if(!row)return;
-    openModal('<div class="modal-head"><div><h2>'+esc(row.title)+'</h2><p>'+esc(dayName(row.day_of_week))+' · '+esc(fmtTime(row.start_time))+' – '+esc(fmtTime(row.end_time))+'</p></div><button class="close" data-close>×</button></div><div class="account-menu"><button class="account-row" data-tt-action-edit><span><b>'+esc(tr('Edit','تعديل'))+'</b><small>'+esc(tr('Change time, notes, color or details','غيّر الوقت أو الملاحظات أو اللون'))+'</small></span><b>→</b></button><button class="account-row" data-tt-action-copy><span><b>'+esc(tr('Duplicate','نسخ'))+'</b><small>'+esc(tr('Create another copy quickly','أنشئ نسخة أخرى بسرعة'))+'</small></span><b>⧉</b></button><button class="account-row danger" data-tt-action-delete><span><b>'+esc(tr('Delete','حذف'))+'</b></span><b>×</b></button></div>');
+    openModal('<div class="modal-head"><div><h2>'+esc(row.title)+'</h2><p>'+esc(dayName(row.day_of_week))+' · '+esc(fmtTime(row.start_time))+' – '+esc(fmtTime(row.end_time))+'</p></div><button class="close" data-close>×</button></div><div class="tt-action-menu">'+
+      '<button class="tt-action-row" data-tt-action-edit><span class="tt-action-copy"><b>'+esc(tr('Edit','تعديل'))+'</b><small>'+esc(tr('Change time, notes, color or details','غيّر الوقت أو الملاحظات أو اللون'))+'</small></span><span class="tt-action-icon">→</span></button>'+
+      '<button class="tt-action-row" data-tt-action-copy><span class="tt-action-copy"><b>'+esc(tr('Duplicate','نسخ'))+'</b><small>'+esc(tr('Create another copy quickly','أنشئ نسخة أخرى بسرعة'))+'</small></span><span class="tt-action-icon">⧉</span></button>'+
+      '<button class="tt-action-row danger" data-tt-action-delete><span class="tt-action-copy"><b>'+esc(tr('Delete','حذف'))+'</b><small>'+esc(tr('Remove this timetable item','احذف هذا العنصر من الجدول'))+'</small></span><span class="tt-action-icon">×</span></button>'+
+      '</div>');
     $('[data-tt-action-edit]').onclick=()=>{closeModal();setTimeout(()=>editor(row),0)};
     $('[data-tt-action-copy]').onclick=()=>duplicateEntry(row);
     $('[data-tt-action-delete]').onclick=()=>removeEntry(row.id);
