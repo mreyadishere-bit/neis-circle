@@ -33,12 +33,7 @@
   function sortRows(rows){return [...rows].sort((a,b)=>Number(a.day_of_week)-Number(b.day_of_week)||minutes(a.start_time)-minutes(b.start_time)||String(a.title).localeCompare(String(b.title)))}
   function currentDay(){return new Date().getDay()}
   function currentMinutes(){const d=new Date();return d.getHours()*60+d.getMinutes()}
-  function schoolDays(){
-    const used=new Set(tt.rows.map(r=>Number(r.day_of_week)));
-    const base=[0,1,2,3,4];
-    for(const extra of [5,6])if(used.has(extra))base.push(extra);
-    return base;
-  }
+  function schoolDays(){return [0,1,2,3,4,5,6]}
   function rowsForDay(day){return tt.rows.filter(r=>Number(r.day_of_week)===Number(day)).sort((a,b)=>minutes(a.start_time)-minutes(b.start_time))}
   function nextEntry(){
     const nowDay=currentDay(),now=currentMinutes();
@@ -74,8 +69,8 @@
     return '<article class="tt-event '+(isNow(row)?'is-now':'')+'" data-tt-edit="'+esc(row.id)+'" tabindex="0" style="--tt-color:'+esc(row.color||palette[0])+'">'+
       '<span class="tt-event-bar"></span>'+
       '<div class="tt-event-main"><div class="tt-event-title"><b>'+esc(row.title)+'</b><span>'+esc(categoryLabel(row.category))+'</span></div>'+
-      '<time>'+esc(fmtTime(row.start_time))+' – '+esc(fmtTime(row.end_time))+'</time>'+
-      (row.location?'<small>'+icon('calendar')+esc(row.location)+'</small>':'')+
+      '<div class="tt-time-row"><time><strong>'+esc(fmtTime(row.start_time))+'</strong><span>→</span><strong>'+esc(fmtTime(row.end_time))+'</strong></time>'+(row.reminder_enabled?'<em>'+esc(row.reminder_minutes)+'m '+esc(tr('before','قبل'))+'</em>':'')+'</div>'+
+      (row.location?'<span class="tt-location-pill">'+esc(row.location)+'</span>':'')+
       (row.notes?'<p>'+esc(row.notes)+'</p>':'')+
       '</div>'+
       '<button type="button" class="tt-event-menu" data-tt-menu="'+esc(row.id)+'" aria-label="'+esc(tr('Timetable options','خيارات الجدول'))+'">•••</button>'+
@@ -127,8 +122,17 @@
     const root=$('#view');if(!root)return;
     document.body.classList.add('app-ready');
     root.innerHTML=view();
-    $$('[data-nav]').forEach(button=>button.classList.toggle('active',button.dataset.nav==='timetable'));
+    $('[data-nav]').forEach(button=>button.classList.toggle('active',button.dataset.nav==='timetable'));
     bind();
+    const targetId=new URLSearchParams((location.hash.split('?')[1]||'')).get('entry');
+    if(targetId){
+      const target=root.querySelector('[data-tt-edit="'+CSS.escape(String(targetId))+'"]');
+      if(target){
+        target.classList.add('notification-target-highlight');
+        setTimeout(()=>target.scrollIntoView({behavior:'smooth',block:'center'}),60);
+        setTimeout(()=>target.classList.remove('notification-target-highlight'),2800);
+      }
+    }
     if(typeof syncChrome==='function')syncChrome();
   }
 
@@ -145,6 +149,7 @@
       '<div class="row"><label class="field">'+esc(tr('Starts','البداية'))+'<input id="ttStart" type="time" required value="'+esc(start)+'"></label><label class="field">'+esc(tr('Ends','النهاية'))+'<input id="ttEnd" type="time" required value="'+esc(end)+'"></label></div>'+
       '<label class="field">'+esc(tr('Room / place (optional)','المكان (اختياري)'))+'<input id="ttLocation" maxlength="120" value="'+esc(row?.location||'')+'" placeholder="'+esc(tr('Room 12, Lab, Online…','فصل 12، معمل، أونلاين…'))+'"></label>'+
       '<label class="field">'+esc(tr('Notes (optional)','ملاحظات (اختياري)'))+'<textarea id="ttNotes" rows="3" maxlength="1000" placeholder="'+esc(tr('Books, reminders, homework…','كتب، تذكيرات، واجب…'))+'">'+esc(row?.notes||'')+'</textarea></label>'+
+      '<div class="row"><label class="field">'+esc(tr('Reminder','التذكير'))+'<select id="ttReminder"><option value="0" '+(row&&row.reminder_enabled===false?'selected':'')+'>'+esc(tr('Off','إيقاف'))+'</option>'+[5,10,15,30,60].map(v=>'<option value="'+v+'" '+((row?.reminder_enabled!==false&&Number(row?.reminder_minutes||15)===v)?'selected':'')+'>'+esc(v+' '+tr('minutes before','دقيقة قبل'))+'</option>').join('')+'</select></label><div class="tt-reminder-note"><b>'+esc(tr('Device reminder','تذكير على الجهاز'))+'</b><span>'+esc(tr('Sent as a mobile/web notification — not email.','يُرسل كإشعار موبايل/ويب وليس بريدًا إلكترونيًا.'))+'</span></div></div>'+
       '<div class="tt-color-field"><span>'+esc(tr('Color','اللون'))+'</span><div class="tt-palette">'+palette.map(c=>'<button type="button" class="'+(c.toLowerCase()===String(color).toLowerCase()?'active':'')+'" data-tt-color="'+c+'" style="--swatch:'+c+'" aria-label="'+c+'"></button>').join('')+'<label class="tt-custom-color"><input id="ttColor" type="color" value="'+esc(color)+'"><span>'+esc(tr('Custom','مخصص'))+'</span></label></div></div>'+
       '<div class="modal-actions">'+(editing?'<button type="button" class="secondary danger" data-tt-delete="'+esc(row.id)+'">'+esc(tr('Delete','حذف'))+'</button><button type="button" class="secondary" data-tt-duplicate="'+esc(row.id)+'">'+esc(tr('Duplicate','نسخ'))+'</button>':'')+'<button type="button" class="secondary" data-close>'+esc(tr('Cancel','إلغاء'))+'</button><button class="primary" id="ttSave">'+esc(editing?tr('Save changes','حفظ التغييرات'):tr('Done','تم'))+'</button></div>'+
       '</form>',true);
@@ -170,7 +175,9 @@
       notes:clean($('#ttNotes').value),
       location:clean($('#ttLocation').value),
       category:categories.includes($('#ttCategory').value)?$('#ttCategory').value:'Class',
-      color:$('#ttColor').value
+      color:$('#ttColor').value,
+      reminder_enabled:Number($('#ttReminder').value)>0,
+      reminder_minutes:Number($('#ttReminder').value)||15
     };
     if(!payload.title){toast(tr('Add a name first.','أضف اسمًا أولًا.'));return}
     button.disabled=true;
@@ -192,7 +199,7 @@
   }
 
   async function duplicateEntry(row){
-    const copy={user_id:authUser.id,day_of_week:row.day_of_week,title:row.title,start_time:String(row.start_time).slice(0,5),end_time:String(row.end_time).slice(0,5),notes:row.notes||'',location:row.location||'',category:row.category||'Class',color:row.color||palette[0]};
+    const copy={user_id:authUser.id,day_of_week:row.day_of_week,title:row.title,start_time:String(row.start_time).slice(0,5),end_time:String(row.end_time).slice(0,5),notes:row.notes||'',location:row.location||'',category:row.category||'Class',color:row.color||palette[0],reminder_enabled:row.reminder_enabled!==false,reminder_minutes:Number(row.reminder_minutes||15)};
     const {data,error}=await sb.from('user_timetable_entries').insert(copy).select('*').single();
     if(error){toast(friendly(error));return}
     tt.rows=sortRows([...tt.rows,data]);closeModal();renderTimetable();toast(tr('Class duplicated.','تم نسخ الحصة.'));
