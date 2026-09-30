@@ -129,6 +129,28 @@ function loadSupabaseLibrary(){
   })().finally(()=>{window.__neisSupabaseLoader=null});
   return window.__neisSupabaseLoader;
 }
+const NEIS_AUTH_STAY_KEY='neis-auth-stay-signed-in';
+function neisStaySignedIn(){
+  return localStorage.getItem(NEIS_AUTH_STAY_KEY)!=='0';
+}
+const neisAuthStorage={
+  getItem(key){
+    try{return (neisStaySignedIn()?localStorage:sessionStorage).getItem(key)}catch(_){return null}
+  },
+  setItem(key,value){
+    try{
+      const primary=neisStaySignedIn()?localStorage:sessionStorage;
+      const secondary=neisStaySignedIn()?sessionStorage:localStorage;
+      primary.setItem(key,value);
+      secondary.removeItem(key);
+    }catch(_){}
+  },
+  removeItem(key){
+    try{localStorage.removeItem(key)}catch(_){}
+    try{sessionStorage.removeItem(key)}catch(_){}
+  }
+};
+
 async function initSupabase(){
   if(sb)return true;
   if(supabaseInitPromise)return supabaseInitPromise;
@@ -140,7 +162,14 @@ async function initSupabase(){
       if(!loaded)return false;
     }
     try{
-      sb=window.supabase.createClient(u,k);
+      sb=window.supabase.createClient(u,k,{
+        auth:{
+          persistSession:true,
+          autoRefreshToken:true,
+          detectSessionInUrl:true,
+          storage:neisAuthStorage
+        }
+      });
       const {data,error}=await sb.auth.getSession();
       if(error)throw error;
       authUser=data.session?.user||null;
