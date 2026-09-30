@@ -1195,7 +1195,75 @@ comments=async function(postId,targetCommentId=''){
 
 function openReport(type,id){openModal(`<div class="modal-head"><div><h2>${t('Report content','الإبلاغ عن محتوى')}</h2><p>${t('Reports go to the private admin queue.','تصل البلاغات إلى قائمة الأدمن الخاصة.')}</p></div><button class="close" data-close>×</button></div><form id="reportForm"><label class="field">${t('Reason','السبب')}<select id="reportReason"><option>${t('Spam','محتوى مزعج')}</option><option>${t('Harassment','إساءة أو مضايقة')}</option><option>${t('Unsafe content','محتوى غير آمن')}</option><option>${t('Other','سبب آخر')}</option></select></label><label class="field">${t('Details','التفاصيل')}<textarea id="reportDetails" rows="4" maxlength="1000"></textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Submit report','إرسال البلاغ')}</button></div></form>`);$('#reportForm').onsubmit=async e=>{e.preventDefault();const {error}=await sb.from('reports').insert({reporter_id:authUser.id,target_type:type,target_id:String(id),reason:$('#reportReason').value,details:$('#reportDetails').value.trim()});if(error){toast(safeError(error,'submit this report'));return}closeModal();toast(t('Report sent to the administrator.','تم إرسال البلاغ إلى الأدمن.'))}}
 
-function openCirclePost(){const c=byId(state.circleRows,state.activeCircleId);openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2></div><button class="close" data-close>×</button></div><form id="circlePostForm"><label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Announcement</option></select></label><label class="field">${t('Title','العنوان')}<input id="cpTitle" required maxlength="140"></label><label class="field">${t('Details','التفاصيل')}<textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label><div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Optional image','صورة اختيارية')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label></div><img id="cpImagePreview" class="upload-preview hidden" alt=""><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div></form>`);$('#cpImage').onchange=e=>{const f=e.target.files[0];if(f){$('#cpImagePreview').src=URL.createObjectURL(f);$('#cpImagePreview').classList.remove('hidden')}};$('#circlePostForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true,file=$('#cpImage').files[0];let image_url='';if(file){image_url=await uploadMedia(file,`circles/${c.id}`);if(!image_url){button.disabled=false;return}}const {error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:$('#cpKind').value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url});if(error){if(image_url)await removeMediaUrl(image_url);toast(safeError(error,'publish this post'));button.disabled=false;return}closeModal();await loadLiveData();render();toast(t('Published in the Circle.','تم النشر في المجتمع.'))}}
+function openCirclePost(){
+  const c=byId(state.circleRows,state.activeCircleId);
+  openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2></div><button class="close" data-close>×</button></div>
+    <form id="circlePostForm">
+      <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Announcement</option></select></label>
+      <label class="field">${t('Title','العنوان')}<input id="cpTitle" required maxlength="140"></label>
+      <label class="field">${t('Details','التفاصيل')}<textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
+      <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Optional image','صورة اختيارية')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label></div>
+      <img id="cpImagePreview" class="upload-preview hidden" alt="">
+      <div class="post-link-fields">
+        <p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p>
+        <div class="row">
+          <label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label>
+          <label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label>
+        </div>
+      </div>
+      <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
+    </form>`);
+  $('#cpImage').onchange=e=>{
+    const file=e.target.files[0];
+    if(file){
+      $('#cpImagePreview').src=URL.createObjectURL(file);
+      $('#cpImagePreview').classList.remove('hidden');
+    }
+  };
+  $('#circlePostForm').onsubmit=async e=>{
+    e.preventDefault();
+    const button=e.submitter;
+    if(button?.disabled)return;
+    const link_button_label=$('#cpLinkLabel').value.trim();
+    const link_button_url=$('#cpLinkUrl').value.trim();
+    if((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url)){
+      toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));
+      return;
+    }
+    if(link_button_url&&!postButtonUrlValid(link_button_url)){
+      toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));
+      return;
+    }
+    button.disabled=true;
+    const file=$('#cpImage').files[0];
+    let image_url='';
+    if(file){
+      image_url=await uploadMedia(file,`circles/${c.id}`);
+      if(!image_url){button.disabled=false;return}
+    }
+    const {error}=await sb.from('posts').insert({
+      author_id:authUser.id,
+      circle_id:c.id,
+      kind:$('#cpKind').value,
+      title:$('#cpTitle').value.trim(),
+      body:$('#cpBody').value.trim(),
+      tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),
+      image_url,
+      link_button_label,
+      link_button_url
+    });
+    if(error){
+      if(image_url)await removeMediaUrl(image_url);
+      toast(safeError(error,'publish this post'));
+      button.disabled=false;
+      return;
+    }
+    closeModal();
+    await loadLiveData();
+    render();
+    toast(t('Published in the Circle.','تم النشر في المجتمع.'));
+  };
+}
 
 function suggestedPersonItem(p){
   const meta=[`@${p.username||'student'}`,p.grade,p.branch].map(value=>String(value||'').trim()).filter(Boolean).join(' · ');
