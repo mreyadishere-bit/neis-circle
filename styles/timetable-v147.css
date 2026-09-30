@@ -641,3 +641,19 @@
     justify-self:start;
   }
 }
+
+
+/* v154 — keep mobile timetable cards at natural height */
+@media(max-width:760px){
+  .tt-mobile-list{
+    display:grid;
+    align-content:start;
+    grid-auto-rows:max-content;
+    min-height:360px;
+  }
+  .tt-mobile-list .tt-event{
+    height:auto;
+    min-height:0;
+    align-self:start;
+  }
+}
