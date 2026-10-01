@@ -82,7 +82,7 @@ function bindMessageReactionButtons(root=document){
 }
 function openMessageReactionPicker(scope,messageId){
   openModal(`<div class="modal-head"><div><h2>${t('React to message','تفاعل مع الرسالة')}</h2><p>${t('Choose an emoji. Tap the same reaction again to remove it.','اختر إيموجي. اضغط على نفس التفاعل مرة أخرى لإزالته.')}</p></div><button class="close" data-close>×</button></div><div class="chat-emoji-grid reaction-picker-grid">${CHAT_EMOJIS.map(emoji=>`<button type="button" data-picker-reaction="${esc(emoji)}">${esc(emoji)}</button>`).join('')}</div>`);
-  $('[data-picker-reaction]').forEach(button=>button.onclick=async()=>{const emoji=button.dataset.pickerReaction;closeModal();await toggleMessageReaction(scope,messageId,emoji)});
+  $$('[data-picker-reaction]').forEach(button=>button.onclick=async()=>{const emoji=button.dataset.pickerReaction;closeModal();await toggleMessageReaction(scope,messageId,emoji)});
 }
 function insertChatEmoji(scope,emoji){
   const input=$(scope==='circle'?'#circleChatInput':'#liveChatInput');
