@@ -3817,3 +3817,89 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     padding:10px;
   }
 }
+
+
+/* v159.43 — Circle poll voter lists */
+.circle-poll-option-foot{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.circle-poll-option-foot>small{
+  color:var(--muted);
+  font-size:9px;
+}
+.circle-poll-voter-link{
+  appearance:none;
+  border:0;
+  padding:2px 0;
+  background:transparent;
+  color:var(--accent);
+  font:inherit;
+  font-size:9px;
+  font-weight:800;
+  cursor:pointer;
+}
+.circle-poll-voter-link:hover,
+.circle-poll-voter-link:focus-visible{
+  text-decoration:underline;
+  outline:0;
+}
+.circle-poll-voter-list{
+  display:grid;
+  gap:8px;
+  max-height:min(560px,64dvh);
+  overflow:auto;
+  padding-right:2px;
+}
+.circle-poll-voter-row{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--card);
+}
+.circle-poll-voter-row>div{
+  display:grid;
+  min-width:0;
+  gap:2px;
+}
+.circle-poll-voter-row b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+}
+.circle-poll-voter-row span{
+  color:var(--muted);
+  font-size:9px;
+}
+.circle-poll-voter-row small{
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.35;
+}
+.circle-poll-voter-empty{
+  margin:0;
+  padding:18px 4px;
+  color:var(--muted);
+  text-align:center;
+  font-size:10px;
+}
+@media(max-width:760px){
+  .circle-poll-option-foot{
+    align-items:flex-start;
+  }
+  .circle-poll-voter-link{
+    min-height:28px;
+    padding:5px 0;
+    font-size:10px;
+  }
+  .circle-poll-voter-row{
+    padding:9px;
+  }
+}
