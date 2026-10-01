@@ -522,16 +522,18 @@ function postButtonUrlValid(value){try{const url=new URL(String(value||'').trim(
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
   if(!post||!same(post.author_id,authUser?.id)){toast(t('You can only edit your own posts.','يمكنك تعديل منشوراتك فقط.'));return}
-  let removeImages=false;
-  const existingImages=postImages(post);
-  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, links, or images without creating a new post.','عدّل النص أو الوسوم أو النوع أو الروابط أو الصور بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
+  let removeImages=false,selectedFiles=[];
+  const existingImages=postImages(post),currentMode=post.image_display_mode==='fill'?'fill':'fit';
+  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, links, image display, or images without creating a new post.','عدّل النص أو الوسوم أو النوع أو الروابط أو طريقة عرض الصور بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
     <form id="editPostForm">
       <label class="field">${t('Type','النوع')}<select id="editPostKind">${['Discussion','Question','Resource','Experience'].map(value=>`<option value="${value}" ${post.kind===value?'selected':''}>${value}</option>`).join('')}</select></label>
       <label class="field">${t('Title','العنوان')}<input id="editPostTitle" required maxlength="140" value="${esc(post.title||'')}"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="editPostBody" required rows="7">${esc(post.body||'')}</textarea></label>
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
+      <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="editPostImageDisplayMode" value="fit" ${currentMode==='fit'?'checked':''}><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="editPostImageDisplayMode" value="fill" ${currentMode==='fill'?'checked':''}><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add one short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="editPostLinkLabel" maxlength="36" value="${esc(post.link_button_label||'')}" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="editPostLinkUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.link_button_url||'')}" placeholder="https://…"></label></div></div>
       <label class="field">${t('Replace images (up to 8)','استبدال الصور (حتى 8)')}<input id="editPostImage" type="file" accept="image/*" multiple></label>
+      <p class="post-image-edit-hint hidden" id="editPostImageHint">${t('Tap an uploaded image to adjust its crop.','اضغط على أي صورة مرفوعة لتعديل القص الخاص بها.')}</p>
       <div class="post-edit-image-wrap ${existingImages.length?'':'hidden'}" id="editPostCurrentImage">
         <div id="editPostImagePreview" class="post-upload-preview-grid">${existingImages.map((url,index)=>`<div class="post-upload-preview-item"><img src="${esc(url)}" alt=""><span>${index+1}</span></div>`).join('')}</div>
         <button type="button" class="secondary danger" id="editPostRemoveImage">${t('Remove all images','حذف كل الصور')}</button>
@@ -542,34 +544,37 @@ async function editOwnPost(postId){
         <button class="primary" id="editPostSave">${t('Save changes','حفظ التغييرات')}</button>
       </div>
     </form>`,true);
-  const imageInput=$('#editPostImage'),preview=$('#editPostImagePreview'),current=$('#editPostCurrentImage');
+  const imageInput=$('#editPostImage'),preview=$('#editPostImagePreview'),current=$('#editPostCurrentImage'),hint=$('#editPostImageHint');
+  const renderSelected=()=>{
+    preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${t('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt=""><span>${index+1}</span><em>${t('Crop','قص')}</em></button>`).join('');
+    current.classList.toggle('hidden',!selectedFiles.length);
+    hint.classList.toggle('hidden',!selectedFiles.length);
+    preview.querySelectorAll('[data-edit-upload-image]').forEach(button=>button.onclick=async()=>{
+      const index=Number(button.dataset.editUploadImage),source=selectedFiles[index];
+      if(!source||!window.NEISImageEditor?.editFile)return;
+      const result=await window.NEISImageEditor.editFile(source,16/9,null);
+      if(result?.file){selectedFiles[index]=result.file;renderSelected()}
+    });
+  };
   imageInput.onchange=()=>{
-    const files=[...(imageInput.files||[])].slice(0,8);
+    selectedFiles=[...(imageInput.files||[])].slice(0,8);
     if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
-    removeImages=false;
-    preview.innerHTML=files.map((file,index)=>`<div class="post-upload-preview-item"><img src="${URL.createObjectURL(file)}" alt=""><span>${index+1}</span></div>`).join('');
-    current.classList.toggle('hidden',!files.length);
+    removeImages=false;renderSelected();
   };
   $('#editPostRemoveImage')?.addEventListener('click',()=>{
-    removeImages=true;
-    imageInput.value='';
-    preview.innerHTML='';
-    current.classList.add('hidden');
+    removeImages=true;selectedFiles=[];imageInput.value='';preview.innerHTML='';current.classList.add('hidden');hint.classList.add('hidden');
   });
   $('#editPostDelete').onclick=()=>{closeModal();deletePost(post.id)};
   $('#editPostForm').onsubmit=async event=>{
     event.preventDefault();
     const saveButton=$('#editPostSave');if(saveButton.disabled)return;
     saveButton.disabled=true;
-    const files=[...(imageInput.files||[])].slice(0,8),uploaded=[];
+    const uploaded=[];
     let imageUrls=removeImages?[]:existingImages;
-    if(files.length){
-      for(const file of files){
+    if(selectedFiles.length){
+      for(const file of selectedFiles){
         const url=await uploadMedia(file,'posts');
-        if(!url){
-          for(const uploadedUrl of uploaded)await removeMediaUrl(uploadedUrl);
-          saveButton.disabled=false;return;
-        }
+        if(!url){for(const uploadedUrl of uploaded)await removeMediaUrl(uploadedUrl);saveButton.disabled=false;return}
         uploaded.push(url);
       }
       imageUrls=uploaded;
@@ -577,26 +582,13 @@ async function editOwnPost(postId){
     const linkButtonLabel=$('#editPostLinkLabel').value.trim(),linkButtonUrl=$('#editPostLinkUrl').value.trim();
     if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
-    const payload={
-      kind:$('#editPostKind').value,
-      title:$('#editPostTitle').value.trim(),
-      body:$('#editPostBody').value.trim(),
-      tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),
-      image_url:imageUrls[0]||'',
-      image_urls:imageUrls,
-      link_button_label:linkButtonLabel,
-      link_button_url:linkButtonUrl
-    };
+    const imageDisplayMode=document.querySelector('input[name="editPostImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
+    const payload={kind:$('#editPostKind').value,title:$('#editPostTitle').value.trim(),body:$('#editPostBody').value.trim(),tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),image_url:imageUrls[0]||'',image_urls:imageUrls,image_display_mode:imageDisplayMode,link_button_label:linkButtonLabel,link_button_url:linkButtonUrl};
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     const {error}=await sb.from('posts').update(payload).eq('id',post.id).eq('author_id',authUser.id);
     if(error){toast(safeError(error,'update this post'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
-    if(removeImages||files.length){
-      for(const oldUrl of existingImages)if(!imageUrls.includes(oldUrl))await removeMediaUrl(oldUrl);
-    }
-    closeModal();
-    await loadLiveData();
-    render();
-    toast(t('Post updated.','تم تحديث المنشور.'));
+    if(removeImages||selectedFiles.length){for(const oldUrl of existingImages)if(!imageUrls.includes(oldUrl))await removeMediaUrl(oldUrl)}
+    closeModal();await loadLiveData();render();toast(t('Post updated.','تم تحديث المنشور.'));
   };
 }
 
@@ -608,8 +600,8 @@ function postImages(p){
 function postImageGallery(p){
   const images=postImages(p);
   if(!images.length)return '';
-  const visible=images.slice(0,5),remaining=Math.max(0,images.length-visible.length);
-  return `<div class="post-image-gallery count-${Math.min(images.length,5)}" data-post-image-count="${images.length}">${visible.map((url,index)=>`<button type="button" class="post-image-tile tile-${index+1}" data-post-gallery-id="${esc(p.id)}" data-post-gallery-index="${index}" aria-label="${t('Open image','فتح الصورة')} ${index+1}"><img src="${esc(url)}" alt="${esc(p.title||t('Post image','صورة المنشور'))}" loading="lazy" onerror="this.closest('.post-image-tile')?.remove()">${remaining&&index===visible.length-1?`<span class="post-image-more">+${remaining}</span>`:''}</button>`).join('')}</div>`;
+  const visible=images.slice(0,5),remaining=Math.max(0,images.length-visible.length),mode=p.image_display_mode==='fill'?'fill':'fit';
+  return `<div class="post-image-gallery count-${Math.min(images.length,5)} display-${mode}" data-post-image-count="${images.length}">${visible.map((url,index)=>`<button type="button" class="post-image-tile tile-${index+1}" data-post-gallery-id="${esc(p.id)}" data-post-gallery-index="${index}" aria-label="${t('Open image','فتح الصورة')} ${index+1}"><img src="${esc(url)}" alt="${esc(p.title||t('Post image','صورة المنشور'))}" loading="lazy" onerror="this.closest('.post-image-tile')?.remove()">${remaining&&index===visible.length-1?`<span class="post-image-more">+${remaining}</span>`:''}</button>`).join('')}</div>`;
 }
 postCard=function(p){
   const liked=state.liked.map(String).includes(String(p.id)),saved=state.saved.map(String).includes(String(p.id));
@@ -1421,70 +1413,36 @@ function openCirclePost(){
       <label class="field">${t('Title','العنوان')}<input id="cpTitle" required maxlength="140"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
       <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Images (up to 8)','الصور (حتى 8)')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
+      <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit" checked><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill"><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
+      <p class="post-image-edit-hint hidden" id="cpImageEditHint">${t('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
       <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
-      <div class="post-link-fields">
-        <p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p>
-        <div class="row">
-          <label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label>
-          <label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label>
-        </div>
-      </div>
+      <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
       <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
     </form>`);
-  const imageInput=$('#cpImage'),preview=$('#cpImagePreview');
-  imageInput.onchange=()=>{
-    const files=[...(imageInput.files||[])].slice(0,8);
-    if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
-    preview.innerHTML=files.map((file,index)=>`<div class="post-upload-preview-item"><img src="${URL.createObjectURL(file)}" alt="${t('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span></div>`).join('');
-    preview.classList.toggle('hidden',!files.length);
-  };
-  $('#circlePostForm').onsubmit=async e=>{
-    e.preventDefault();
-    const button=e.submitter;
-    if(button?.disabled)return;
-    const link_button_label=$('#cpLinkLabel').value.trim();
-    const link_button_url=$('#cpLinkUrl').value.trim();
-    if((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url)){
-      toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));
-      return;
-    }
-    if(link_button_url&&!postButtonUrlValid(link_button_url)){
-      toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));
-      return;
-    }
-    button.disabled=true;
-    const files=[...(imageInput.files||[])].slice(0,8),image_urls=[];
-    for(const file of files){
-      const url=await uploadMedia(file,`circles/${c.id}`);
-      if(!url){
-        for(const uploaded of image_urls)await removeMediaUrl(uploaded);
-        button.disabled=false;return;
-      }
-      image_urls.push(url);
-    }
-    const image_url=image_urls[0]||'';
-    const {error}=await sb.from('posts').insert({
-      author_id:authUser.id,
-      circle_id:c.id,
-      kind:$('#cpKind').value,
-      title:$('#cpTitle').value.trim(),
-      body:$('#cpBody').value.trim(),
-      tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),
-      image_url,
-      image_urls,
-      link_button_label,
-      link_button_url
+  const imageInput=$('#cpImage'),preview=$('#cpImagePreview'),hint=$('#cpImageEditHint');
+  let selectedFiles=[];
+  const renderSelected=()=>{
+    preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${t('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt="${t('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span><em>${t('Crop','قص')}</em></button>`).join('');
+    preview.classList.toggle('hidden',!selectedFiles.length);hint.classList.toggle('hidden',!selectedFiles.length);
+    preview.querySelectorAll('[data-edit-upload-image]').forEach(button=>button.onclick=async()=>{
+      const index=Number(button.dataset.editUploadImage),source=selectedFiles[index];
+      if(!source||!window.NEISImageEditor?.editFile)return;
+      const result=await window.NEISImageEditor.editFile(source,16/9,null);
+      if(result?.file){selectedFiles[index]=result.file;renderSelected()}
     });
-    if(error){
-      for(const uploaded of image_urls)await removeMediaUrl(uploaded);
-      toast(safeError(error,'publish this post'));
-      button.disabled=false;
-      return;
-    }
-    closeModal();
-    await loadLiveData();
-    render();
-    toast(t('Published in the Circle.','تم النشر في المجتمع.'));
+  };
+  imageInput.onchange=()=>{selectedFiles=[...(imageInput.files||[])].slice(0,8);if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));renderSelected()};
+  $('#circlePostForm').onsubmit=async e=>{
+    e.preventDefault();const button=e.submitter;if(button?.disabled)return;
+    const link_button_label=$('#cpLinkLabel').value.trim(),link_button_url=$('#cpLinkUrl').value.trim();
+    if((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
+    if(link_button_url&&!postButtonUrlValid(link_button_url)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
+    button.disabled=true;const image_urls=[];
+    for(const file of selectedFiles){const url=await uploadMedia(file,`circles/${c.id}`);if(!url){for(const uploaded of image_urls)await removeMediaUrl(uploaded);button.disabled=false;return}image_urls.push(url)}
+    const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
+    const {error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:$('#cpKind').value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url});
+    if(error){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(safeError(error,'publish this post'));button.disabled=false;return}
+    closeModal();await loadLiveData();render();toast(t('Published in the Circle.','تم النشر في المجتمع.'));
   };
 }
 
