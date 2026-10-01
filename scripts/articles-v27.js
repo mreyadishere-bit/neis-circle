@@ -507,7 +507,6 @@
         const emoji=button.dataset.articleCommentEmojiChoice,start=Number.isInteger(input.selectionStart)?input.selectionStart:input.value.length,end=Number.isInteger(input.selectionEnd)?input.selectionEnd:start;
         try{input.setRangeText(emoji,start,end,'end')}catch(_){input.value=input.value.slice(0,start)+emoji+input.value.slice(end)}
         input.dispatchEvent(new Event('input',{bubbles:true}));
-        popover.classList.add('hidden');
         input.focus({preventScroll:true});
       };
     });
