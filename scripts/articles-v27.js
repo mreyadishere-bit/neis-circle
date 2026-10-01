@@ -515,6 +515,19 @@
   function setupArticleComments(article){
     const form=$('#articleCommentForm');if(!form)return;
     bindArticleCommentEmojiPicker();
+    const input=$('#articleCommentInput');
+    if(input&&input.dataset.composerKeyboardBound!=='1'){
+      input.dataset.composerKeyboardBound='1';
+      input.addEventListener('keydown',event=>{
+        const mobileEnter=document.documentElement.classList.contains('neis-native-app')||
+          window.matchMedia('(max-width:760px)').matches||
+          window.matchMedia('(hover:none) and (pointer:coarse)').matches;
+        if(event.key!=='Enter'||event.isComposing||mobileEnter)return;
+        if(event.shiftKey||event.ctrlKey||event.metaKey||event.altKey)return;
+        event.preventDefault();
+        form.requestSubmit();
+      });
+    }
     form.onsubmit=async event=>{event.preventDefault();const input=$('#articleCommentInput'),button=form.querySelector('[type=submit]'),body=input.value.trim();if(!body||button.disabled)return;button.disabled=true;const {error}=await sb.from('article_comments').insert({article_id:article.id,parent_id:$('#articleCommentParent').value||null,author_id:uid(),body});if(error){toast(window.neisFriendlyError?.(error,'post this comment')||error.message);button.disabled=false;return}input.value='';$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden');await loadArticleComments(article.id);toast(tr('Comment posted.','تم نشر التعليق.'))};
     stopArticleCommentRealtime();
     loadArticleComments(article.id);loadArticleEngagement(article.id);
