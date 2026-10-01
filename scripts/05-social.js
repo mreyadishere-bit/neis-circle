@@ -609,7 +609,7 @@ function postImageGallery(p){
   const images=postImages(p);
   if(!images.length)return '';
   const visible=images.slice(0,5),remaining=Math.max(0,images.length-visible.length);
-  return `<div class="post-image-gallery count-${Math.min(images.length,5)}" data-post-image-count="${images.length}">${visible.map((url,index)=>`<button type="button" class="post-image-tile tile-${index+1}" data-full-image="${esc(url)}" aria-label="${t('Open image','فتح الصورة')} ${index+1}"><img src="${esc(url)}" alt="${esc(p.title||t('Post image','صورة المنشور'))}" loading="lazy" onerror="this.closest('.post-image-tile')?.remove()">${remaining&&index===visible.length-1?`<span class="post-image-more">+${remaining}</span>`:''}</button>`).join('')}</div>`;
+  return `<div class="post-image-gallery count-${Math.min(images.length,5)}" data-post-image-count="${images.length}">${visible.map((url,index)=>`<button type="button" class="post-image-tile tile-${index+1}" data-post-gallery-id="${esc(p.id)}" data-post-gallery-index="${index}" aria-label="${t('Open image','فتح الصورة')} ${index+1}"><img src="${esc(url)}" alt="${esc(p.title||t('Post image','صورة المنشور'))}" loading="lazy" onerror="this.closest('.post-image-tile')?.remove()">${remaining&&index===visible.length-1?`<span class="post-image-more">+${remaining}</span>`:''}</button>`).join('')}</div>`;
 }
 postCard=function(p){
   const liked=state.liked.map(String).includes(String(p.id)),saved=state.saved.map(String).includes(String(p.id));
@@ -1483,6 +1483,72 @@ render=function(){
 
 function openFullImage(src){if(!src)return;const layer=document.createElement('div');layer.className='image-lightbox';layer.innerHTML='<button type="button" class="image-lightbox-close" aria-label="Close">×</button><img src="'+esc(src)+'" alt="">';document.body.appendChild(layer);document.body.classList.add('image-lightbox-open');const close=()=>{layer.remove();document.body.classList.remove('image-lightbox-open');document.removeEventListener('keydown',onKey)};const onKey=e=>{if(e.key==='Escape')close()};layer.addEventListener('click',e=>{if(e.target===layer||e.target.closest('.image-lightbox-close'))close()});document.addEventListener('keydown',onKey);}
 
+function openPostImageGallery(postId,startIndex=0){
+  const post=state.posts.find(item=>same(item.id,postId)),images=postImages(post);
+  if(!images.length)return;
+  if(images.length===1){openFullImage(images[0]);return}
+  let index=Math.max(0,Math.min(Number(startIndex)||0,images.length-1));
+  let touchStartX=0,touchStartY=0,touchTracking=false,previousFocus=document.activeElement;
+  const layer=document.createElement('div');
+  layer.className='image-lightbox post-gallery-lightbox';
+  layer.setAttribute('role','dialog');
+  layer.setAttribute('aria-modal','true');
+  layer.setAttribute('aria-label',t('Post image gallery','معرض صور المنشور'));
+  layer.innerHTML=`<button type="button" class="image-lightbox-close" data-gallery-close aria-label="${t('Close gallery','إغلاق المعرض')}">×</button>
+    <button type="button" class="post-gallery-nav prev" data-gallery-prev aria-label="${t('Previous image','الصورة السابقة')}">‹</button>
+    <div class="post-gallery-stage"><img data-gallery-image src="" alt=""><div class="post-gallery-counter" data-gallery-counter></div></div>
+    <button type="button" class="post-gallery-nav next" data-gallery-next aria-label="${t('Next image','الصورة التالية')}">›</button>`;
+  document.body.appendChild(layer);
+  document.body.classList.add('image-lightbox-open');
+  const image=layer.querySelector('[data-gallery-image]'),counter=layer.querySelector('[data-gallery-counter]'),prev=layer.querySelector('[data-gallery-prev]'),next=layer.querySelector('[data-gallery-next]'),closeButton=layer.querySelector('[data-gallery-close]');
+  const preload=src=>{if(!src)return;const img=new Image();img.src=src};
+  const renderImage=()=>{
+    image.src=images[index];
+    image.alt=`${post?.title||t('Post image','صورة المنشور')} — ${index+1} / ${images.length}`;
+    counter.textContent=`${index+1} / ${images.length}`;
+    prev.disabled=index===0;
+    next.disabled=index===images.length-1;
+    prev.setAttribute('aria-disabled',String(index===0));
+    next.setAttribute('aria-disabled',String(index===images.length-1));
+    preload(images[index-1]);preload(images[index+1]);
+  };
+  const go=step=>{
+    const target=index+step;
+    if(target<0||target>=images.length)return;
+    index=target;
+    renderImage();
+  };
+  const close=()=>{
+    layer.remove();
+    document.body.classList.remove('image-lightbox-open');
+    document.removeEventListener('keydown',onKey);
+    if(previousFocus?.focus)previousFocus.focus({preventScroll:true});
+  };
+  const onKey=event=>{
+    if(event.key==='Escape'){event.preventDefault();close();return}
+    if(event.key==='ArrowLeft'){event.preventDefault();go(-1);return}
+    if(event.key==='ArrowRight'){event.preventDefault();go(1)}
+  };
+  prev.onclick=event=>{event.stopPropagation();go(-1)};
+  next.onclick=event=>{event.stopPropagation();go(1)};
+  closeButton.onclick=event=>{event.stopPropagation();close()};
+  layer.addEventListener('click',event=>{if(event.target===layer)close()});
+  layer.addEventListener('touchstart',event=>{
+    const touch=event.changedTouches?.[0];if(!touch)return;
+    touchStartX=touch.clientX;touchStartY=touch.clientY;touchTracking=true;
+  },{passive:true});
+  layer.addEventListener('touchend',event=>{
+    if(!touchTracking)return;touchTracking=false;
+    const touch=event.changedTouches?.[0];if(!touch)return;
+    const dx=touch.clientX-touchStartX,dy=touch.clientY-touchStartY;
+    if(Math.abs(dx)<48||Math.abs(dx)<=Math.abs(dy)*1.15)return;
+    if(dx<0)go(1);else go(-1);
+  },{passive:true});
+  document.addEventListener('keydown',onKey);
+  renderImage();
+  closeButton.focus({preventScroll:true});
+}
+
 function bindV6(root=document){
   if(canControlAuthorLikeEmails()&&!window.__neisAdminSettingsLoading&&(authorLikeEmailSetting===null||adminDmEmailSetting===null||adminPostEmailSetting===null)){
     window.__neisAdminSettingsLoading=true;
@@ -1504,6 +1570,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-admin-post-email-toggle]').forEach(el=>el.onclick=()=>changeAdminPostEmailSetting(el.dataset.adminPostEmailToggle==='true'));
   root.querySelectorAll('[data-toggle-content-moderation-visibility]').forEach(el=>el.onclick=()=>setAdminContentModerationVisibility(el.dataset.toggleContentModerationVisibility));
   root.querySelectorAll('[data-toggle-members-branches-visibility]').forEach(el=>el.onclick=()=>setAdminMembersBranchesVisibility(el.dataset.toggleMembersBranchesVisibility));
+  root.querySelectorAll('[data-post-gallery-id]').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();openPostImageGallery(el.dataset.postGalleryId,Number(el.dataset.postGalleryIndex||0))});
   root.querySelectorAll('[data-full-image]').forEach(el=>el.onclick=e=>{e.preventDefault();openFullImage(el.dataset.fullImage)});
   const discoverGrade=root.querySelector('#discoverGradeFilter');if(discoverGrade)discoverGrade.onchange=()=>{state.discoverGrade=discoverGrade.value;render()};
   const discoverBranch=root.querySelector('#discoverBranchFilter');if(discoverBranch)discoverBranch.onchange=()=>{state.discoverBranch=discoverBranch.value;render()};
