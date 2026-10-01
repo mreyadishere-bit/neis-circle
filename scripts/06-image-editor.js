@@ -176,6 +176,10 @@
     var input=event.target;
     var config=input&&targets[input.id];
     if(!config||active)return;
+    // Multi-image post inputs must keep the complete FileList intact.
+    // The legacy crop flow replaces input.files with one edited file,
+    // which would discard every other selected image.
+    if(input.multiple)return;
     var file=input.files&&input.files[0];
     if(!file)return;
     event.stopImmediatePropagation();
