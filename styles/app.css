@@ -2441,3 +2441,54 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .chat-emoji-popover,
   .chat-emoji-grid{grid-template-columns:repeat(6,1fr)}
 }
+
+
+/* v159.19 — reaction people + narrower desktop Circle chat */
+.message-reaction-people{
+  display:grid;
+  gap:8px;
+}
+.message-reaction-person{
+  width:100%;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--card);
+  color:var(--ink);
+  text-align:start;
+}
+.message-reaction-person:hover,
+.message-reaction-person:focus-visible{
+  background:var(--soft);
+  outline:0;
+}
+.message-reaction-person>span{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+.message-reaction-person b{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+}
+.message-reaction-person small{
+  color:var(--muted);
+  font-size:10px;
+}
+.message-reaction-person em{
+  font-style:normal;
+  font-size:20px;
+}
+@media(min-width:1100px){
+  .circle-panel.circle-chat.dm-like-circle-chat{
+    width:min(1180px,calc(100% - 32px));
+    max-width:1180px;
+    margin-inline:auto;
+  }
+}
