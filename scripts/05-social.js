@@ -120,6 +120,13 @@ function composerUsesMobileEnter(){
 function bindComposerKeyboard(input,form){
   if(!input||!form||input.dataset.composerKeyboardBound==='1')return;
   input.dataset.composerKeyboardBound='1';
+  const resize=()=>{
+    if(input.tagName!=='TEXTAREA')return;
+    input.style.height='auto';
+    input.style.height=Math.min(input.scrollHeight,120)+'px';
+  };
+  input.addEventListener('input',resize);
+  requestAnimationFrame(resize);
   input.addEventListener('keydown',event=>{
     if(event.key!=='Enter'||event.isComposing||composerUsesMobileEnter())return;
     if(event.shiftKey||event.ctrlKey||event.metaKey||event.altKey)return;
@@ -1572,6 +1579,7 @@ function bindV6(root=document){
     if(error){toast(safeError(error,'send this message'));chat.dataset.sending='';button.disabled=false;return}
     setDmDraft(conversationId,'');
     input.value='';
+    input.dispatchEvent(new Event('input',{bubbles:true}));
     clearDmReplyTarget();
     if(data&&!state.liveMessages.some(m=>same(m.id,data.id)))state.liveMessages.push(data);
     const flow=$('#chatFlow');
@@ -1603,7 +1611,7 @@ function bindV6(root=document){
     el.onclick=jump;
     el.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){jump(event)}};
   });
-  const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('[data-chat-send]');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();if(circleChat.dataset.sending==='1')return;const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;circleChat.dataset.sending='1';button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));circleChat.dataset.sending='';button.disabled=false;return}setCircleDraft(circleId,'');input.value='';clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}circleChat.dataset.sending='';button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
+  const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('[data-chat-send]');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();if(circleChat.dataset.sending==='1')return;const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;circleChat.dataset.sending='1';button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select('*').single();if(error){toast(safeError(error,'send this message'));circleChat.dataset.sending='';button.disabled=false;return}setCircleDraft(circleId,'');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}circleChat.dataset.sending='';button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
 }
 
 function fitMobileConversationList(){
