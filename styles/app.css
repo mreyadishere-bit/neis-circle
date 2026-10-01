@@ -3396,3 +3396,53 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     bottom:5px;
   }
 }
+
+
+/* v159.37 — compact persistent emoji pickers */
+#articleComments .article-comment-emoji-popover{
+  width:min(300px,calc(100vw - 48px))!important;
+  max-width:300px!important;
+  max-height:min(320px,48dvh)!important;
+  padding:9px!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group-grid{
+  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  gap:4px!important;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group-grid button{
+  height:34px!important;
+  font-size:20px!important;
+}
+.reply-composer .chat-emoji-popover{
+  width:min(300px,calc(100vw - 40px))!important;
+  max-width:300px!important;
+  max-height:min(320px,50dvh)!important;
+  overflow-x:hidden!important;
+}
+.chat-form .chat-emoji-popover{
+  overscroll-behavior:contain;
+}
+@media(max-width:760px){
+  #articleComments .article-comment-emoji-popover,
+  .reply-composer .chat-emoji-popover{
+    width:min(286px,calc(100vw - 32px))!important;
+    max-width:none!important;
+    max-height:min(300px,46dvh)!important;
+  }
+  #articleComments .article-comment-emoji-popover .chat-emoji-group-grid,
+  .reply-composer .chat-emoji-group-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  }
+}
+@media(max-width:380px){
+  #articleComments .article-comment-emoji-popover,
+  .reply-composer .chat-emoji-popover{
+    width:min(258px,calc(100vw - 24px))!important;
+  }
+  #articleComments .article-comment-emoji-popover .chat-emoji-group-grid,
+  .reply-composer .chat-emoji-group-grid{
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  }
+}
