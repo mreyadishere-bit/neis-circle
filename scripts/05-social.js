@@ -1381,8 +1381,8 @@ function openCirclePost(){
       <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Announcement</option></select></label>
       <label class="field">${t('Title','العنوان')}<input id="cpTitle" required maxlength="140"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
-      <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Optional image','صورة اختيارية')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label></div>
-      <img id="cpImagePreview" class="upload-preview hidden" alt="">
+      <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Images (up to 8)','الصور (حتى 8)')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
+      <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
       <div class="post-link-fields">
         <p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p>
         <div class="row">
@@ -1392,12 +1392,12 @@ function openCirclePost(){
       </div>
       <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
     </form>`);
-  $('#cpImage').onchange=e=>{
-    const file=e.target.files[0];
-    if(file){
-      $('#cpImagePreview').src=URL.createObjectURL(file);
-      $('#cpImagePreview').classList.remove('hidden');
-    }
+  const imageInput=$('#cpImage'),preview=$('#cpImagePreview');
+  imageInput.onchange=()=>{
+    const files=[...(imageInput.files||[])].slice(0,8);
+    if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
+    preview.innerHTML=files.map((file,index)=>`<div class="post-upload-preview-item"><img src="${URL.createObjectURL(file)}" alt="${t('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span></div>`).join('');
+    preview.classList.toggle('hidden',!files.length);
   };
   $('#circlePostForm').onsubmit=async e=>{
     e.preventDefault();
@@ -1414,12 +1414,16 @@ function openCirclePost(){
       return;
     }
     button.disabled=true;
-    const file=$('#cpImage').files[0];
-    let image_url='';
-    if(file){
-      image_url=await uploadMedia(file,`circles/${c.id}`);
-      if(!image_url){button.disabled=false;return}
+    const files=[...(imageInput.files||[])].slice(0,8),image_urls=[];
+    for(const file of files){
+      const url=await uploadMedia(file,`circles/${c.id}`);
+      if(!url){
+        for(const uploaded of image_urls)await removeMediaUrl(uploaded);
+        button.disabled=false;return;
+      }
+      image_urls.push(url);
     }
+    const image_url=image_urls[0]||'';
     const {error}=await sb.from('posts').insert({
       author_id:authUser.id,
       circle_id:c.id,
@@ -1428,11 +1432,12 @@ function openCirclePost(){
       body:$('#cpBody').value.trim(),
       tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),
       image_url,
+      image_urls,
       link_button_label,
       link_button_url
     });
     if(error){
-      if(image_url)await removeMediaUrl(image_url);
+      for(const uploaded of image_urls)await removeMediaUrl(uploaded);
       toast(safeError(error,'publish this post'));
       button.disabled=false;
       return;
