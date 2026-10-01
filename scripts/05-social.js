@@ -1800,6 +1800,39 @@ function bindV6(root=document){
   root.querySelectorAll('[data-circle-filter]').forEach(el=>el.onclick=()=>{state.circleFilter=el.dataset.circleFilter;render()});
   root.querySelectorAll('[data-circle-tab]').forEach(el=>el.onclick=()=>routeTo(`circles/${state.activeCircleId}/${el.dataset.circleTab}`));
   root.querySelectorAll('[data-circle-compose]').forEach(el=>el.onclick=openCirclePost);
+  root.querySelectorAll('[data-circle-poll-card] input[type="radio"],[data-circle-poll-card] input[type="checkbox"]').forEach(input=>input.onchange=()=>{
+    const card=input.closest('[data-circle-poll-card]'),poll=circlePollStore.polls.find(p=>same(p.id,card?.dataset.circlePollCard));
+    if(!card||!poll)return;
+    card.querySelectorAll('.circle-poll-option').forEach(label=>label.classList.toggle('selected',!!label.querySelector('input')?.checked));
+    if(poll.selection_type==='multiple'&&poll.max_selections){
+      const checked=[...card.querySelectorAll('input[type="checkbox"]:checked')];
+      if(checked.length>poll.max_selections){
+        input.checked=false;input.closest('.circle-poll-option')?.classList.remove('selected');
+        toast(t('You can choose up to','يمكنك اختيار حتى')+' '+poll.max_selections);
+      }
+    }
+  });
+  root.querySelectorAll('[data-vote-circle-poll]').forEach(button=>button.onclick=async()=>{
+    const card=button.closest('[data-circle-poll-card]'),poll=circlePollStore.polls.find(p=>same(p.id,button.dataset.voteCirclePoll));
+    if(!card||!poll||button.disabled)return;
+    const picked=[...card.querySelectorAll('input:checked')].map(input=>input.value);
+    if(!picked.length){toast(t('Choose an option first.','اختر اختيارًا أولًا.'));return}
+    if(poll.selection_type==='multiple'&&poll.max_selections&&picked.length>poll.max_selections){toast(t('Too many selections.','عدد الاختيارات أكبر من المسموح.'));return}
+    button.disabled=true;
+    const {error}=await sb.rpc('cast_circle_poll_vote',{p_poll_id:poll.id,p_option_ids:picked});
+    if(error){toast(safeError(error,'submit this vote'));button.disabled=false;return}
+    await loadCirclePolls(state.activeCircleId,{force:true});render();toast(t('Vote submitted.','تم تسجيل تصويتك.'));
+  });
+  root.querySelectorAll('[data-close-circle-poll]').forEach(button=>button.onclick=async()=>{
+    const poll=circlePollStore.polls.find(p=>same(p.id,button.dataset.closeCirclePoll));if(!poll||button.disabled)return;
+    if(!await confirmAction(t('Close this poll?','إغلاق هذا التصويت؟'),t('Members will no longer be able to vote.','لن يتمكن الأعضاء من التصويت بعد ذلك.')))return;
+    button.disabled=true;
+    const {error}=await sb.rpc('close_circle_poll',{p_poll_id:poll.id});
+    if(error){toast(safeError(error,'close this poll'));button.disabled=false;return}
+    await loadCirclePolls(state.activeCircleId,{force:true});render();toast(t('Poll closed.','تم إغلاق التصويت.'));
+  });
+  root.querySelectorAll('[data-circle-poll-settings]').forEach(button=>button.onclick=()=>openCirclePollSettings(button.dataset.circlePollSettings));
+  root.querySelectorAll('[data-circle-poll-settings-post]').forEach(button=>button.onclick=e=>{e.stopPropagation();const poll=circlePollForPost(button.dataset.circlePollSettingsPost);if(poll)openCirclePollSettings(poll.id)});
   root.querySelectorAll('[data-new-meeting]').forEach(el=>el.onclick=scheduleMeeting);
   root.querySelectorAll('[data-join-meeting]').forEach(el=>el.onclick=()=>joinMeeting(el.dataset.joinMeeting));
   root.querySelectorAll('[data-copy-meeting-invite]').forEach(el=>el.onclick=()=>copyMeetingInvite(byId(state.circleMeetings,el.dataset.copyMeetingInvite)));
