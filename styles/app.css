@@ -2827,3 +2827,53 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     order:2;
   }
 }
+
+
+/* v159.29 — emoji pickers in comments */
+.article-comment-input-wrap{
+  position:relative;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:8px;
+  align-items:end;
+}
+.article-comment-input-wrap textarea{
+  grid-column:2;
+  width:100%;
+}
+.comment-emoji-toggle{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--soft);
+  color:var(--ink);
+  font-size:20px;
+  line-height:1;
+  cursor:pointer;
+}
+.comment-emoji-toggle:hover,
+.comment-emoji-toggle:focus-visible{
+  background:var(--accent2);
+  outline:0;
+}
+.article-comment-emoji-popover{
+  inset-inline-start:0;
+  bottom:calc(100% + 8px);
+  max-height:min(360px,55dvh);
+  overflow:auto;
+}
+@media(max-width:760px){
+  .article-comment-input-wrap{
+    grid-template-columns:40px minmax(0,1fr);
+    gap:7px;
+  }
+  .comment-emoji-toggle{
+    width:40px;
+    height:40px;
+    font-size:19px;
+  }
+}
