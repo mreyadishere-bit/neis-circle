@@ -3794,3 +3794,26 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .circle-poll-toggles{grid-template-columns:1fr}
   .circle-poll-option-editor{grid-template-columns:24px minmax(0,1fr) 34px}
 }
+
+
+/* v159.42 — compact zero-vote Circle poll state */
+.circle-poll-card{
+  padding:12px 13px;
+}
+.circle-poll-meta{
+  margin-bottom:1px;
+}
+.circle-poll-option:not(.has-results){
+  gap:0;
+}
+.circle-poll-results-note{
+  margin-top:-2px;
+}
+.circle-poll-footer{
+  padding-top:0;
+}
+@media(max-width:760px){
+  .circle-poll-card{
+    padding:10px;
+  }
+}
