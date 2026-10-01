@@ -2746,3 +2746,15 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .article-connection-share-sheet>footer button{width:100%}
   .shared-article-message{width:100%}
 }
+
+
+/* v159.24 — constrain standalone post feeds like Home */
+@media(min-width:900px){
+  .feed.standalone-post-feed{
+    width:min(860px,100%);
+    margin-inline:auto;
+  }
+  .standalone-post-feed + *{
+    min-width:0;
+  }
+}
