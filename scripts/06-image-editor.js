@@ -172,6 +172,14 @@
     ensureAdjust(record);
     return true;
   }
+  window.NEISImageEditor={
+    editFile:async function(file,preferredAspect,savedState){
+      if(!file||active)return null;
+      active=true;
+      try{return await editor(file,preferredAspect,savedState||null)}
+      finally{active=false}
+    }
+  };
   document.addEventListener('change',async function(event){
     var input=event.target;
     var config=input&&targets[input.id];
