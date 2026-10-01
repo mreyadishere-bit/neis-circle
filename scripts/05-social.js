@@ -1482,6 +1482,22 @@ function circlePollWhen(poll){
   if(!poll?.closes_at)return t('No closing time','بدون موعد إغلاق');
   try{return t('Closes','يغلق')+' '+new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(new Date(poll.closes_at))}catch{return ''}
 }
+const circlePollCloseTimers=new Map();
+function scheduleCirclePollCloseRefresh(poll){
+  if(!poll?.closes_at||poll.closed_at)return;
+  const key=String(poll.id),existing=circlePollCloseTimers.get(key);
+  if(existing){clearTimeout(existing);circlePollCloseTimers.delete(key)}
+  const remaining=new Date(poll.closes_at).getTime()-Date.now();
+  if(remaining<=0)return;
+  const delay=Math.min(remaining+150,2147480000);
+  circlePollCloseTimers.set(key,setTimeout(async()=>{
+    circlePollCloseTimers.delete(key);
+    if(delay<remaining){scheduleCirclePollCloseRefresh(poll);return}
+    if(state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circlePollStore.circleId)){
+      await loadCirclePolls(state.activeCircleId,{force:true});render();
+    }
+  },delay));
+}
 async function loadCirclePolls(circleId,{force=false,rerender=false}={}){
   if(!sb||!authUser||!circleId||circlePollStore.loading)return;
   if(!force&&circlePollStore.loaded&&same(circlePollStore.circleId,circleId))return;
@@ -1519,6 +1535,7 @@ function circlePollMarkup(post){
   const poll=circlePollForPost(post.id);
   if(!poll)return '<section class="circle-poll-card circle-poll-loading"><small>'+t('Loading poll…','جارٍ تحميل التصويت…')+'</small></section>';
   const options=circlePollOptions(poll.id),results=circlePollResults(poll.id),resultMap=new Map(results.map(r=>[String(r.option_id),r]));
+  scheduleCirclePollCloseRefresh(poll);
   const first=results[0]||{},canView=!!first.can_view_results,hasVoted=results.some(r=>r.my_vote),closed=circlePollClosed(poll);
   const member=circlePollMember(post.circle_id),canVote=member?.status==='active'&&!closed&&(!hasVoted||poll.allow_vote_change);
   const total=canView?Number(first.total_voters||0):0,inputType=poll.selection_type==='multiple'?'checkbox':'radio';
