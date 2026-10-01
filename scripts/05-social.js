@@ -1569,20 +1569,60 @@ async function openCirclePollSettings(pollId){
 
 function openCirclePost(){
   const c=byId(state.circleRows,state.activeCircleId);
-  openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2></div><button class="close" data-close>×</button></div>
+  openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2><p>${t('Choose a post type. Polls include voting and live results.','اختر نوع المنشور. التصويتات تشمل تصويتًا ونتائج مباشرة.')}</p></div><button class="close" data-close>×</button></div>
     <form id="circlePostForm">
-      <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Announcement</option></select></label>
-      <label class="field">${t('Title','العنوان')}<input id="cpTitle" required maxlength="140"></label>
-      <label class="field">${t('Details','التفاصيل')}<textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
+      <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Announcement</option><option>Poll</option></select></label>
+      <label class="field"><span id="cpTitleLabel">${t('Title','العنوان')}</span><input id="cpTitle" required maxlength="140"></label>
+      <label class="field"><span id="cpBodyLabel">${t('Details','التفاصيل')}</span><textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
+
+      <section id="cpPollFields" class="circle-poll-composer hidden">
+        <div class="circle-poll-composer-head"><div><b>${t('Poll options','خيارات التصويت')}</b><small>${t('Add between 2 and 10 unique answers.','أضف من خيارين إلى 10 اختيارات مختلفة.')}</small></div><button type="button" class="secondary" id="cpAddPollOption">+ ${t('Add option','إضافة اختيار')}</button></div>
+        <div id="cpPollOptions" class="circle-poll-option-editors"></div>
+        <div class="circle-poll-settings">
+          <label class="field">${t('Voting type','نوع التصويت')}<select id="cpPollSelection"><option value="single">${t('Single choice','اختيار واحد')}</option><option value="multiple">${t('Multiple choice','اختيارات متعددة')}</option></select></label>
+          <label class="field hidden" id="cpPollMaxWrap">${t('Maximum choices','الحد الأقصى للاختيارات')}<input id="cpPollMax" type="number" min="1" max="10" placeholder="${t('No limit','بدون حد')}"></label>
+          <label class="field">${t('Results visibility','ظهور النتائج')}<select id="cpPollResults"><option value="after_vote" selected>${t('After voting','بعد التصويت')}</option><option value="always">${t('Always visible','ظاهرة دائمًا')}</option><option value="after_close">${t('After closing','بعد الإغلاق')}</option></select></label>
+          <label class="field">${t('Closing','الإغلاق')}<select id="cpPollClosing"><option value="none">${t('No end date','بدون موعد انتهاء')}</option><option value="custom">${t('Custom date & time','تاريخ ووقت مخصص')}</option></select></label>
+          <label class="field hidden" id="cpPollCloseAtWrap">${t('Close at','يغلق في')}<input id="cpPollCloseAt" type="datetime-local"></label>
+        </div>
+        <div class="circle-poll-toggles">
+          <label><input id="cpPollAllowChange" type="checkbox" checked><span><b>${t('Allow vote changes','السماح بتغيير التصويت')}</b><small>${t('Members can update their vote while the poll is open.','يمكن للأعضاء تعديل تصويتهم أثناء فتح التصويت.')}</small></span></label>
+          <label><input id="cpPollAnonymous" type="checkbox"><span><b>${t('Anonymous voting','تصويت مجهول')}</b><small>${t('Voter identities stay hidden.','تظل هوية المصوتين مخفية.')}</small></span></label>
+        </div>
+      </section>
+
       <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Images (up to 8)','الصور (حتى 8)')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
       <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit" checked><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill"><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <p class="post-image-edit-hint hidden" id="cpImageEditHint">${t('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
       <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
-      <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
+      <div class="post-link-fields" id="cpLinkFields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
       <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
     </form>`);
-  const imageInput=$('#cpImage'),preview=$('#cpImagePreview'),hint=$('#cpImageEditHint');
-  let selectedFiles=[];
+  const kind=$('#cpKind'),imageInput=$('#cpImage'),preview=$('#cpImagePreview'),hint=$('#cpImageEditHint'),pollFields=$('#cpPollFields'),linkFields=$('#cpLinkFields'),body=$('#cpBody');
+  let selectedFiles=[],pollOptions=['',''];
+
+  const renderPollOptions=()=>{
+    const host=$('#cpPollOptions');
+    host.innerHTML=pollOptions.map((value,index)=>`<div class="circle-poll-option-editor"><span>${index+1}</span><input data-cp-poll-option="${index}" maxlength="180" value="${esc(value)}" placeholder="${t('Option','اختيار')} ${index+1}"><button type="button" data-cp-remove-option="${index}" ${pollOptions.length<=2?'disabled':''}>×</button></div>`).join('');
+    host.querySelectorAll('[data-cp-poll-option]').forEach(input=>input.oninput=()=>{pollOptions[Number(input.dataset.cpPollOption)]=input.value});
+    host.querySelectorAll('[data-cp-remove-option]').forEach(button=>button.onclick=()=>{if(pollOptions.length<=2)return;pollOptions.splice(Number(button.dataset.cpRemoveOption),1);renderPollOptions()});
+    $('#cpAddPollOption').disabled=pollOptions.length>=10;
+  };
+  renderPollOptions();
+  $('#cpAddPollOption').onclick=()=>{if(pollOptions.length<10){pollOptions.push('');renderPollOptions();requestAnimationFrame(()=>$('#cpPollOptions')?.querySelector('[data-cp-poll-option="'+(pollOptions.length-1)+'"]')?.focus())}};
+
+  const updateComposer=()=>{
+    const isPoll=kind.value==='Poll';
+    pollFields.classList.toggle('hidden',!isPoll);
+    linkFields.classList.toggle('hidden',isPoll);
+    body.required=!isPoll;
+    $('#cpTitleLabel').textContent=isPoll?t('Poll question','سؤال التصويت'):t('Title','العنوان');
+    $('#cpBodyLabel').textContent=isPoll?t('Description / context (optional)','الوصف / السياق (اختياري)'):t('Details','التفاصيل');
+  };
+  kind.onchange=updateComposer;updateComposer();
+  $('#cpPollSelection').onchange=()=>$('#cpPollMaxWrap').classList.toggle('hidden',$('#cpPollSelection').value!=='multiple');
+  $('#cpPollClosing').onchange=()=>$('#cpPollCloseAtWrap').classList.toggle('hidden',$('#cpPollClosing').value!=='custom');
+
   const renderSelected=()=>{
     preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${t('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt="${t('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span><em>${t('Crop','قص')}</em></button>`).join('');
     preview.classList.toggle('hidden',!selectedFiles.length);hint.classList.toggle('hidden',!selectedFiles.length);
@@ -1594,15 +1634,36 @@ function openCirclePost(){
     });
   };
   imageInput.onchange=()=>{selectedFiles=[...(imageInput.files||[])].slice(0,8);if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));renderSelected()};
+
   $('#circlePostForm').onsubmit=async e=>{
     e.preventDefault();const button=e.submitter;if(button?.disabled)return;
+    const isPoll=kind.value==='Poll';
     const link_button_label=$('#cpLinkLabel').value.trim(),link_button_url=$('#cpLinkUrl').value.trim();
-    if((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
-    if(link_button_url&&!postButtonUrlValid(link_button_url)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
+    if(!isPoll&&((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url))){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
+    if(!isPoll&&link_button_url&&!postButtonUrlValid(link_button_url)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
+
+    let cleanOptions=[];
+    if(isPoll){
+      cleanOptions=pollOptions.map(v=>v.trim()).filter(Boolean);
+      if(cleanOptions.length<2||cleanOptions.length>10){toast(t('Add between 2 and 10 poll options.','أضف من خيارين إلى 10 خيارات للتصويت.'));return}
+      if(new Set(cleanOptions.map(v=>v.toLowerCase())).size!==cleanOptions.length){toast(t('Poll options must be unique.','يجب أن تكون خيارات التصويت مختلفة.'));return}
+      if($('#cpPollClosing').value==='custom'&&!$('#cpPollCloseAt').value){toast(t('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
+    }
+
     button.disabled=true;const image_urls=[];
     for(const file of selectedFiles){const url=await uploadMedia(file,`circles/${c.id}`);if(!url){for(const uploaded of image_urls)await removeMediaUrl(uploaded);button.disabled=false;return}image_urls.push(url)}
     const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
-    const {error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:$('#cpKind').value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url});
+
+    if(isPoll){
+      const selection=$('#cpPollSelection').value,rawMax=$('#cpPollMax').value.trim();
+      const maxSelections=selection==='multiple'?(rawMax?Math.max(1,Math.min(cleanOptions.length,Number(rawMax)||1)):null):1;
+      const closesAt=$('#cpPollClosing').value==='custom'?new Date($('#cpPollCloseAt').value).toISOString():null;
+      const {error}=await sb.rpc('create_circle_poll_post',{p_circle_id:c.id,p_title:$('#cpTitle').value.trim(),p_body:$('#cpBody').value.trim(),p_tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:cleanOptions,p_selection_type:selection,p_max_selections:maxSelections,p_allow_vote_change:$('#cpPollAllowChange').checked,p_anonymous:$('#cpPollAnonymous').checked,p_results_visibility:$('#cpPollResults').value,p_closes_at:closesAt});
+      if(error){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(safeError(error,'create this poll'));button.disabled=false;return}
+      closeModal();await loadLiveData();await loadCirclePolls(c.id,{force:true});render();toast(t('Poll published.','تم نشر التصويت.'));return;
+    }
+
+    const {error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url});
     if(error){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(safeError(error,'publish this post'));button.disabled=false;return}
     closeModal();await loadLiveData();render();toast(t('Published in the Circle.','تم النشر في المجتمع.'));
   };
