@@ -426,15 +426,21 @@
     const renderPeople=()=>{
       const rows=articleConnectionRows(search.value);
       list.innerHTML=rows.length?rows.map(p=>articleSharePersonRow(p,selected.has(String(p.id)))).join(''):`<div class="empty"><b>${tr('No connections found','لا توجد نتائج')}</b><span>${tr('Try another name.','جرّب اسمًا آخر.')}</span></div>`;
-      list.querySelectorAll('[data-article-share-person]').forEach(button=>button.onclick=()=>{
-        const id=button.dataset.articleSharePerson;
-        selected.has(id)?selected.delete(id):selected.add(id);
-        renderPeople();sync();
-      });
     };
+    list.addEventListener('click',event=>{
+      const button=event.target.closest('[data-article-share-person]');
+      if(!button||!list.contains(button))return;
+      event.preventDefault();
+      const id=button.dataset.articleSharePerson;
+      selected.has(id)?selected.delete(id):selected.add(id);
+      renderPeople();
+      sync();
+    });
     overlay.querySelectorAll('[data-article-share-close]').forEach(button=>button.onclick=close);
     overlay.addEventListener('click',event=>{if(event.target===overlay)close()});
     search.oninput=renderPeople;
+    renderPeople();
+    sync();
     overlay.querySelector('[data-article-copy-link]').onclick=async()=>{
       const url=`${location.origin}${location.pathname}#/articles/${article.id}`;
       await copyArticleLink(url);
