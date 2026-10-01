@@ -1467,6 +1467,106 @@ comments=async function(postId,targetCommentId=''){
 
 function openReport(type,id){openModal(`<div class="modal-head"><div><h2>${t('Report content','الإبلاغ عن محتوى')}</h2><p>${t('Reports go to the private admin queue.','تصل البلاغات إلى قائمة الأدمن الخاصة.')}</p></div><button class="close" data-close>×</button></div><form id="reportForm"><label class="field">${t('Reason','السبب')}<select id="reportReason"><option>${t('Spam','محتوى مزعج')}</option><option>${t('Harassment','إساءة أو مضايقة')}</option><option>${t('Unsafe content','محتوى غير آمن')}</option><option>${t('Other','سبب آخر')}</option></select></label><label class="field">${t('Details','التفاصيل')}<textarea id="reportDetails" rows="4" maxlength="1000"></textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Submit report','إرسال البلاغ')}</button></div></form>`);$('#reportForm').onsubmit=async e=>{e.preventDefault();const {error}=await sb.from('reports').insert({reporter_id:authUser.id,target_type:type,target_id:String(id),reason:$('#reportReason').value,details:$('#reportDetails').value.trim()});if(error){toast(safeError(error,'submit this report'));return}closeModal();toast(t('Report sent to the administrator.','تم إرسال البلاغ إلى الأدمن.'))}}
 
+
+const circlePollStore={circleId:'',polls:[],options:[],results:[],loaded:false,loading:false};
+let circlePollRealtime=null;
+
+function circlePollForPost(postId){return circlePollStore.polls.find(p=>same(p.post_id,postId))}
+function circlePollOptions(pollId){return circlePollStore.options.filter(o=>same(o.poll_id,pollId)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0))}
+function circlePollResults(pollId){return circlePollStore.results.filter(r=>same(r.poll_id,pollId))}
+function circlePollMember(circleId){return state.circleMembers.find(m=>same(m.circle_id,circleId)&&same(m.user_id,authUser?.id))}
+function circlePollClosed(poll){return !!poll&&(!!poll.closed_at||(poll.closes_at&&new Date(poll.closes_at).getTime()<=Date.now()))}
+function circlePollLocalDateTime(value){if(!value)return '';const d=new Date(value),pad=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes())}
+function circlePollWhen(poll){
+  if(circlePollClosed(poll))return t('Poll closed','تم إغلاق التصويت');
+  if(!poll?.closes_at)return t('No closing time','بدون موعد إغلاق');
+  try{return t('Closes','يغلق')+' '+new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}).format(new Date(poll.closes_at))}catch{return ''}
+}
+async function loadCirclePolls(circleId,{force=false,rerender=false}={}){
+  if(!sb||!authUser||!circleId||circlePollStore.loading)return;
+  if(!force&&circlePollStore.loaded&&same(circlePollStore.circleId,circleId))return;
+  circlePollStore.loading=true;
+  try{
+    const postIds=state.posts.filter(p=>same(p.circle_id,circleId)&&(p.kind==='Poll'||p.post_type==='poll')).map(p=>p.id);
+    circlePollStore.circleId=String(circleId);circlePollStore.polls=[];circlePollStore.options=[];circlePollStore.results=[];circlePollStore.loaded=true;
+    if(postIds.length){
+      const pollRes=await sb.from('circle_polls').select('*').in('post_id',postIds).order('created_at',{ascending:false});
+      if(pollRes.error){console.error('[NEIS Circle polls]',pollRes.error);return}
+      circlePollStore.polls=pollRes.data||[];
+      const pollIds=circlePollStore.polls.map(p=>p.id);
+      if(pollIds.length){
+        const [optionRes,resultRes]=await Promise.all([
+          sb.from('circle_poll_options').select('*').in('poll_id',pollIds).order('sort_order'),
+          sb.rpc('get_circle_poll_results',{p_poll_ids:pollIds})
+        ]);
+        if(!optionRes.error)circlePollStore.options=optionRes.data||[];else console.error('[NEIS Circle poll options]',optionRes.error);
+        if(!resultRes.error)circlePollStore.results=resultRes.data||[];else console.error('[NEIS Circle poll results]',resultRes.error);
+      }
+    }
+    if(circlePollRealtime){try{await sb.removeChannel(circlePollRealtime)}catch(_){}}
+    circlePollRealtime=sb.channel('circle-polls-'+circleId)
+      .on('postgres_changes',{event:'*',schema:'public',table:'circle_polls'},async payload=>{
+        const changedPost=payload.new?.post_id||payload.old?.post_id;
+        if(!changedPost||state.posts.some(p=>same(p.id,changedPost)&&same(p.circle_id,circleId))){
+          await loadCirclePolls(circleId,{force:true});
+          if(state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circleId))render();
+        }
+      }).subscribe();
+    if(rerender&&state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circleId))render();
+  }finally{circlePollStore.loading=false}
+}
+function circlePollMarkup(post){
+  const poll=circlePollForPost(post.id);
+  if(!poll)return '<section class="circle-poll-card circle-poll-loading"><small>'+t('Loading poll…','جارٍ تحميل التصويت…')+'</small></section>';
+  const options=circlePollOptions(poll.id),results=circlePollResults(poll.id),resultMap=new Map(results.map(r=>[String(r.option_id),r]));
+  const first=results[0]||{},canView=!!first.can_view_results,hasVoted=results.some(r=>r.my_vote),closed=circlePollClosed(poll);
+  const member=circlePollMember(post.circle_id),canVote=member?.status==='active'&&!closed&&(!hasVoted||poll.allow_vote_change);
+  const total=canView?Number(first.total_voters||0):0,inputType=poll.selection_type==='multiple'?'checkbox':'radio';
+  const chooseLabel=poll.selection_type==='multiple'?(poll.max_selections?t('Choose up to','اختر حتى')+' '+poll.max_selections:t('Choose one or more','اختر خيارًا أو أكثر')):t('Choose one','اختر خيارًا واحدًا');
+  const optionHtml=options.map(option=>{
+    const row=resultMap.get(String(option.id))||{},mine=!!row.my_vote,count=canView?Number(row.vote_count||0):0,pct=canView&&total>0?Math.round(count/total*100):0;
+    return '<label class="circle-poll-option '+(mine?'selected ':'')+(canView?'has-results':'')+'"><span class="circle-poll-option-row"><input type="'+inputType+'" name="circle-poll-'+esc(poll.id)+'" value="'+esc(option.id)+'" '+(mine?'checked ':'')+(canVote?'':'disabled')+'><b>'+esc(option.option_text)+'</b>'+(canView?'<strong>'+pct+'%</strong>':'')+'</span>'+(canView?'<span class="circle-poll-progress"><i style="width:'+pct+'%"></i></span><small>'+count+' '+t(count===1?'vote':'votes','صوت')+'</small>':'')+'</label>';
+  }).join('');
+  const own=same(poll.creator_id,authUser?.id),canClose=(own||canModerateCircle(post.circle_id))&&!closed;
+  return '<section class="circle-poll-card" data-circle-poll-card="'+esc(poll.id)+'"><div class="circle-poll-meta"><span class="circle-poll-badge">'+t('Poll','تصويت')+'</span><span>'+esc(chooseLabel)+'</span><span>·</span><span>'+esc(circlePollWhen(poll))+'</span>'+(poll.anonymous?'<span>· '+t('Anonymous','مجهول')+'</span>':'')+'</div><div class="circle-poll-options">'+optionHtml+'</div>'+(!canView?'<p class="circle-poll-results-note">'+(poll.results_visibility==='after_close'?t('Results appear when the poll closes.','تظهر النتائج بعد إغلاق التصويت.'):t('Vote to see the results.','صوّت لرؤية النتائج.'))+'</p>':'')+'<div class="circle-poll-footer"><span>'+(canView?total+' '+t(total===1?'voter':'voters','مشارك'):t('Results hidden','النتائج مخفية'))+'</span><div>'+(own&&!closed?'<button type="button" class="secondary circle-poll-mini" data-circle-poll-settings="'+esc(poll.id)+'">'+t('Poll settings','إعدادات التصويت')+'</button>':'')+(canClose?'<button type="button" class="secondary circle-poll-mini" data-close-circle-poll="'+esc(poll.id)+'">'+t('Close','إغلاق')+'</button>':'')+(canVote?'<button type="button" class="primary circle-poll-vote" data-vote-circle-poll="'+esc(poll.id)+'">'+(hasVoted?t('Change vote','تغيير التصويت'):t('Vote','تصويت'))+'</button>':hasVoted&&!poll.allow_vote_change?'<span class="circle-poll-locked">'+t('Vote submitted','تم التصويت')+'</span>':'')+'</div></div></section>';
+}
+function circlePostCard(post){
+  const base=postCard(post);
+  if(post.kind!=='Poll'&&post.post_type!=='poll')return base;
+  return base.replace('<div class="tag-row">',circlePollMarkup(post)+'<div class="tag-row">').replace('data-edit-post="'+esc(post.id)+'"','data-circle-poll-settings-post="'+esc(post.id)+'"');
+}
+async function openCirclePollSettings(pollId){
+  const poll=circlePollStore.polls.find(p=>same(p.id,pollId)),post=poll?state.posts.find(p=>same(p.id,poll.post_id)):null;
+  if(!poll||!post||!same(poll.creator_id,authUser?.id))return;
+  if(circlePollClosed(poll)){toast(t('Closed polls cannot be edited.','لا يمكن تعديل التصويت بعد إغلاقه.'));return}
+  const lockRes=await sb.rpc('get_circle_poll_edit_state',{p_poll_id:poll.id});
+  if(lockRes.error){toast(safeError(lockRes.error,'open this poll'));return}
+  const locked=!!lockRes.data?.[0]?.has_votes;
+  let values=circlePollOptions(poll.id).map(o=>o.option_text);
+  openModal('<div class="modal-head"><div><h2>'+t('Poll settings','إعدادات التصويت')+'</h2><p>'+(locked?t('Voting has started. Answer options and voting type are now locked.','بدأ التصويت، لذلك تم تثبيت الخيارات ونوع التصويت.'):t('Customize the poll before the first vote.','خصص التصويت قبل أول صوت.'))+'</p></div><button class="close" data-close>×</button></div>'+
+    '<form id="circlePollSettingsForm"><label class="field">'+t('Poll question','سؤال التصويت')+'<input id="cpsTitle" required maxlength="140" value="'+esc(post.title||'')+'"></label><label class="field">'+t('Description / context (optional)','الوصف / السياق (اختياري)')+'<textarea id="cpsBody" rows="5" maxlength="6000">'+esc(String(post.body||'').trim())+'</textarea></label>'+
+    '<div class="circle-poll-composer-head"><div><b>'+t('Answer options','خيارات الإجابة')+'</b><small>'+(locked?t('Locked after voting starts.','مثبتة بعد بدء التصويت.'):t('2–10 unique options.','من خيارين إلى 10 خيارات مختلفة.'))+'</small></div>'+(locked?'':'<button type="button" class="secondary" id="cpsAdd">+ '+t('Add option','إضافة خيار')+'</button>')+'</div><div id="cpsOptions" class="circle-poll-option-editors"></div>'+
+    '<div class="circle-poll-settings"><label class="field">'+t('Voting type','نوع التصويت')+'<select id="cpsSelection" '+(locked?'disabled':'')+'><option value="single" '+(poll.selection_type==='single'?'selected':'')+'>'+t('Single choice','اختيار واحد')+'</option><option value="multiple" '+(poll.selection_type==='multiple'?'selected':'')+'>'+t('Multiple choice','اختيارات متعددة')+'</option></select></label><label class="field '+(poll.selection_type==='multiple'?'':'hidden')+'" id="cpsMaxWrap">'+t('Maximum choices','الحد الأقصى للاختيارات')+'<input id="cpsMax" type="number" min="1" max="10" value="'+(poll.max_selections??'')+'" placeholder="'+t('No limit','بدون حد')+'" '+(locked?'disabled':'')+'></label><label class="field">'+t('Results visibility','ظهور النتائج')+'<select id="cpsResults"><option value="after_vote" '+(poll.results_visibility==='after_vote'?'selected':'')+'>'+t('After voting','بعد التصويت')+'</option><option value="always" '+(poll.results_visibility==='always'?'selected':'')+'>'+t('Always visible','ظاهرة دائمًا')+'</option><option value="after_close" '+(poll.results_visibility==='after_close'?'selected':'')+'>'+t('After closing','بعد الإغلاق')+'</option></select></label><label class="field">'+t('Closing','الإغلاق')+'<select id="cpsClosing"><option value="none" '+(poll.closes_at?'':'selected')+'>'+t('No end date','بدون موعد انتهاء')+'</option><option value="custom" '+(poll.closes_at?'selected':'')+'>'+t('Custom date & time','تاريخ ووقت مخصص')+'</option></select></label><label class="field '+(poll.closes_at?'':'hidden')+'" id="cpsCloseWrap">'+t('Close at','يغلق في')+'<input id="cpsCloseAt" type="datetime-local" value="'+esc(circlePollLocalDateTime(poll.closes_at))+'"></label></div>'+
+    '<div class="circle-poll-toggles"><label><input id="cpsAllowChange" type="checkbox" '+(poll.allow_vote_change?'checked':'')+'><span><b>'+t('Allow vote changes','السماح بتغيير التصويت')+'</b><small>'+t('Members can update their vote while open.','يمكن للأعضاء تعديل تصويتهم أثناء فتح التصويت.')+'</small></span></label><label><input id="cpsAnonymous" type="checkbox" '+(poll.anonymous?'checked':'')+'><span><b>'+t('Anonymous voting','تصويت مجهول')+'</b><small>'+t('Voter identities stay hidden.','تظل هوية المصوتين مخفية.')+'</small></span></label></div><label class="field">'+t('Tags','الوسوم')+'<input id="cpsTags" value="'+esc((post.tags||[]).join(', '))+'"></label><div class="modal-actions"><button type="button" class="secondary" data-close>'+t('Cancel','إلغاء')+'</button><button class="primary" id="cpsSave">'+t('Save changes','حفظ التغييرات')+'</button></div></form>',true);
+  const host=$('#cpsOptions');
+  const draw=()=>{host.innerHTML=values.map((v,i)=>'<div class="circle-poll-option-editor"><span>'+(i+1)+'</span><input data-cps-option="'+i+'" maxlength="180" value="'+esc(v)+'" '+(locked?'disabled':'')+'><button type="button" data-cps-remove="'+i+'" '+(locked||values.length<=2?'disabled':'')+'>×</button></div>').join('');host.querySelectorAll('[data-cps-option]').forEach(input=>input.oninput=()=>{values[Number(input.dataset.cpsOption)]=input.value});host.querySelectorAll('[data-cps-remove]').forEach(button=>button.onclick=()=>{if(locked||values.length<=2)return;values.splice(Number(button.dataset.cpsRemove),1);draw()})};
+  draw();
+  $('#cpsAdd')?.addEventListener('click',()=>{if(values.length<10){values.push('');draw()}});
+  $('#cpsSelection').onchange=()=>$('#cpsMaxWrap').classList.toggle('hidden',$('#cpsSelection').value!=='multiple');
+  $('#cpsClosing').onchange=()=>$('#cpsCloseWrap').classList.toggle('hidden',$('#cpsClosing').value!=='custom');
+  $('#circlePollSettingsForm').onsubmit=async e=>{
+    e.preventDefault();const save=$('#cpsSave'),opts=values.map(v=>v.trim()).filter(Boolean);
+    if(opts.length<2||opts.length>10){toast(t('Add between 2 and 10 poll options.','أضف من خيارين إلى 10 خيارات للتصويت.'));return}
+    if(new Set(opts.map(v=>v.toLowerCase())).size!==opts.length){toast(t('Poll options must be unique.','يجب أن تكون خيارات التصويت مختلفة.'));return}
+    const selection=$('#cpsSelection').value,raw=$('#cpsMax').value.trim(),max=selection==='multiple'?(raw?Math.max(1,Math.min(opts.length,Number(raw)||1)):null):1,closeValue=$('#cpsClosing').value==='custom'?$('#cpsCloseAt').value:'';
+    if($('#cpsClosing').value==='custom'&&!closeValue){toast(t('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
+    save.disabled=true;
+    const {error}=await sb.rpc('update_circle_poll_post',{p_poll_id:poll.id,p_title:$('#cpsTitle').value.trim(),p_body:$('#cpsBody').value.trim(),p_tags:$('#cpsTags').value.split(',').map(v=>v.trim()).filter(Boolean).slice(0,8),p_image_url:post.image_url||'',p_image_urls:postImages(post),p_image_display_mode:post.image_display_mode==='fill'?'fill':'fit',p_options:opts,p_selection_type:selection,p_max_selections:max,p_allow_vote_change:$('#cpsAllowChange').checked,p_anonymous:$('#cpsAnonymous').checked,p_results_visibility:$('#cpsResults').value,p_closes_at:closeValue?new Date(closeValue).toISOString():null});
+    if(error){toast(safeError(error,'update this poll'));save.disabled=false;return}
+    closeModal();await loadLiveData();await loadCirclePolls(post.circle_id,{force:true});render();toast(t('Poll updated.','تم تحديث التصويت.'));
+  };
+}
+
 function openCirclePost(){
   const c=byId(state.circleRows,state.activeCircleId);
   openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2></div><button class="close" data-close>×</button></div>
