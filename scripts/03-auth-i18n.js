@@ -65,20 +65,40 @@ saveArticle=async function(status){const file=$('#articleCover')?.files?.[0];if(
 
 compose=function(kind='Discussion'){
   if(!requireAccount())return;
-  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${bi('Create','إنشاء')}</p><h2>${bi('Share with NEIS Circle','شارك مع NEIS Circle')}</h2><p>${bi('Add a clear idea, useful context and optional images.','أضف فكرة واضحة وسياقًا مفيدًا وصورًا اختيارية.')}</p></div><button class="close" data-close>×</button></div><form id="postFormPlus"><label class="field">${bi('Type','النوع')}<select id="postKind"><option ${kind==='Discussion'?'selected':''}>Discussion</option><option ${kind==='Question'?'selected':''}>Question</option><option>Resource</option><option>Experience</option><option>Announcement</option></select></label><label class="field">${bi('Title','العنوان')}<input id="postTitle" required maxlength="140" placeholder="${bi('Make the value clear','اكتب عنوانًا واضحًا')}"></label><label class="field">${bi('Details','التفاصيل')}<textarea id="postBody" required rows="7" placeholder="${bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…')}"></textarea></label><div class="row"><label class="field">${bi('Tags','الوسوم')}<input id="postTags" placeholder="Physics, Grade11, Practical"></label><label class="field">${bi('Images (up to 8)','الصور (حتى 8)')}<input id="postImage" type="file" accept="image/*" multiple></label></div><div id="postImagePreview" class="post-upload-preview-grid hidden"></div><div class="modal-actions"><button type="button" class="secondary" data-close>${bi('Cancel','إلغاء')}</button><button id="postSubmit" class="primary">${bi('Publish post','نشر المنشور')}</button></div></form>`);
-  const imageInput=$('#postImage'),preview=$('#postImagePreview');
+  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${bi('Create','إنشاء')}</p><h2>${bi('Share with NEIS Circle','شارك مع NEIS Circle')}</h2><p>${bi('Add a clear idea, useful context and optional images.','أضف فكرة واضحة وسياقًا مفيدًا وصورًا اختيارية.')}</p></div><button class="close" data-close>×</button></div><form id="postFormPlus">
+    <label class="field">${bi('Type','النوع')}<select id="postKind"><option ${kind==='Discussion'?'selected':''}>Discussion</option><option ${kind==='Question'?'selected':''}>Question</option><option>Resource</option><option>Experience</option><option>Announcement</option></select></label>
+    <label class="field">${bi('Title','العنوان')}<input id="postTitle" required maxlength="140" placeholder="${bi('Make the value clear','اكتب عنوانًا واضحًا')}"></label>
+    <label class="field">${bi('Details','التفاصيل')}<textarea id="postBody" required rows="7" placeholder="${bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…')}"></textarea></label>
+    <div class="row"><label class="field">${bi('Tags','الوسوم')}<input id="postTags" placeholder="Physics, Grade11, Practical"></label><label class="field">${bi('Images (up to 8)','الصور (حتى 8)')}<input id="postImage" type="file" accept="image/*" multiple></label></div>
+    <div class="post-image-display-setting"><span>${bi('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="postImageDisplayMode" value="fit" checked><b>${bi('Fit','Fit')}</b><small>${bi('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="postImageDisplayMode" value="fill"><b>${bi('Fill','Fill')}</b><small>${bi('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
+    <p class="post-image-edit-hint hidden" id="postImageEditHint">${bi('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
+    <div id="postImagePreview" class="post-upload-preview-grid hidden"></div>
+    <div class="modal-actions"><button type="button" class="secondary" data-close>${bi('Cancel','إلغاء')}</button><button id="postSubmit" class="primary">${bi('Publish post','نشر المنشور')}</button></div>
+  </form>`);
+  const imageInput=$('#postImage'),preview=$('#postImagePreview'),hint=$('#postImageEditHint');
+  let selectedFiles=[];
+  const renderSelectedImages=()=>{
+    preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${bi('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt="${bi('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span><em>${bi('Crop','قص')}</em></button>`).join('');
+    preview.classList.toggle('hidden',!selectedFiles.length);
+    hint.classList.toggle('hidden',!selectedFiles.length);
+    preview.querySelectorAll('[data-edit-upload-image]').forEach(button=>button.onclick=async()=>{
+      const index=Number(button.dataset.editUploadImage),source=selectedFiles[index];
+      if(!source||!window.NEISImageEditor?.editFile)return;
+      const result=await window.NEISImageEditor.editFile(source,16/9,null);
+      if(result?.file){selectedFiles[index]=result.file;renderSelectedImages()}
+    });
+  };
   imageInput.onchange=()=>{
-    const files=[...(imageInput.files||[])].slice(0,8);
+    selectedFiles=[...(imageInput.files||[])].slice(0,8);
     if((imageInput.files?.length||0)>8)toast(bi('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
-    preview.innerHTML=files.map((file,index)=>`<div class="post-upload-preview-item"><img src="${URL.createObjectURL(file)}" alt="${bi('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span></div>`).join('');
-    preview.classList.toggle('hidden',!files.length);
+    renderSelectedImages();
   };
   $('#postFormPlus').onsubmit=async e=>{
     e.preventDefault();
-    const btn=$('#postSubmit'),files=[...(imageInput.files||[])].slice(0,8);
+    const btn=$('#postSubmit');
     btn.classList.add('button-loading');btn.disabled=true;
     const uploaded=[];
-    for(const file of files){
+    for(const file of selectedFiles){
       const media=await uploadRecord(file,'posts');
       if(!media){
         if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
@@ -87,7 +107,8 @@ compose=function(kind='Discussion'){
       uploaded.push(media);
     }
     const image_urls=uploaded.map(item=>item.url),image_url=image_urls[0]||'';
-    const {error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls});
+    const image_display_mode=document.querySelector('input[name="postImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
+    const {error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode});
     if(error){
       if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
       toast(error.message);btn.classList.remove('button-loading');btn.disabled=false;return;
