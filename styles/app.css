@@ -2908,3 +2908,146 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 .reply-body{
   white-space:pre-wrap;
 }
+
+
+/* v159.32 — article comments composer + emoji picker polish */
+#articleComments .article-comment-composer{
+  gap:10px;
+}
+#articleComments .article-comment-input-wrap{
+  position:relative;
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  gap:10px;
+  align-items:end;
+  width:100%;
+  min-width:0;
+}
+#articleComments .article-comment-input-wrap .comment-emoji-toggle{
+  width:42px;
+  min-width:42px;
+  height:42px;
+  margin:0;
+  align-self:end;
+}
+#articleComments #articleCommentInput{
+  grid-column:2;
+  width:100%;
+  min-width:0;
+  min-height:72px;
+  max-height:160px;
+  margin:0;
+  padding:12px 13px;
+  resize:none;
+  overflow-y:auto;
+  box-sizing:border-box;
+}
+#articleComments .article-comment-emoji-popover{
+  position:absolute;
+  inset-inline-start:0;
+  bottom:calc(100% + 8px);
+  width:min(320px,calc(100vw - 40px));
+  max-width:320px;
+  max-height:min(360px,55dvh);
+  display:block;
+  padding:10px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:var(--card);
+  box-shadow:var(--shadow);
+  z-index:80;
+}
+#articleComments .article-comment-emoji-popover.hidden{
+  display:none!important;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group{
+  display:block;
+  min-width:0;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group + .chat-emoji-group{
+  margin-top:10px;
+  padding-top:9px;
+  border-top:1px solid var(--line);
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group>b{
+  display:block;
+  margin-bottom:6px;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group-grid{
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:4px;
+  width:100%;
+  min-width:0;
+}
+#articleComments .article-comment-emoji-popover .chat-emoji-group-grid button{
+  width:100%;
+  min-width:0;
+  height:36px;
+  margin:0;
+  padding:0;
+}
+#articleComments .article-comment-composer footer{
+  align-items:center;
+}
+@media(max-width:760px){
+  #articleComments .article-comment-composer{
+    gap:9px;
+  }
+  #articleComments .article-comment-input-wrap{
+    grid-template-columns:40px minmax(0,1fr);
+    gap:8px;
+    align-items:end;
+  }
+  #articleComments .article-comment-input-wrap .comment-emoji-toggle{
+    width:40px;
+    min-width:40px;
+    height:40px;
+    align-self:end;
+  }
+  #articleComments #articleCommentInput{
+    min-height:76px;
+    max-height:150px;
+    padding:11px 12px;
+    font-size:16px;
+    line-height:1.45;
+  }
+  #articleComments .article-comment-emoji-popover{
+    inset-inline-start:0;
+    width:min(300px,calc(100vw - 56px));
+    max-width:none;
+    max-height:min(330px,50dvh);
+    padding:9px;
+  }
+  #articleComments .article-comment-emoji-popover .chat-emoji-group-grid{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    gap:3px;
+  }
+  #articleComments .article-comment-emoji-popover .chat-emoji-group-grid button{
+    height:35px;
+    font-size:20px;
+  }
+  #articleComments .article-comment-composer footer{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:9px;
+  }
+  #articleComments .article-comment-composer footer small{
+    line-height:1.45;
+  }
+  #articleComments .article-comment-composer footer .primary{
+    width:100%;
+    min-height:46px;
+    align-self:stretch;
+  }
+}
+@media(max-width:380px){
+  #articleComments .article-comment-emoji-popover{
+    width:min(272px,calc(100vw - 44px));
+  }
+  #articleComments .article-comment-emoji-popover .chat-emoji-group-grid{
+    grid-template-columns:repeat(5,minmax(0,1fr));
+  }
+}
