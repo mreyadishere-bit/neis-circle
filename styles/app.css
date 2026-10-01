@@ -2758,3 +2758,41 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     min-width:0;
   }
 }
+
+
+/* v159.25 — Circle members beside posts */
+.circle-posts-dashboard{
+  width:min(1200px,100%);
+  margin-inline:auto;
+  display:grid;
+  grid-template-columns:minmax(0,860px) minmax(260px,320px);
+  gap:18px;
+  align-items:start;
+}
+.circle-posts-dashboard .standalone-post-feed{
+  width:100%;
+  margin:0;
+}
+.circle-members-side-card{
+  position:sticky;
+  top:92px;
+}
+.circle-members-side-card h3{
+  margin-bottom:10px;
+}
+.circle-members-side-list{
+  display:grid;
+}
+.circle-member-side-item .suggested-person-follow.active{
+  background:color-mix(in srgb,var(--accent) 14%,var(--card));
+  color:var(--accent);
+}
+@media(max-width:980px){
+  .circle-posts-dashboard{
+    grid-template-columns:1fr;
+  }
+  .circle-members-side-card{
+    position:static;
+    order:2;
+  }
+}
