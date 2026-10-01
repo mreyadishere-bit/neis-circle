@@ -507,15 +507,33 @@
         const emoji=button.dataset.articleCommentEmojiChoice,start=Number.isInteger(input.selectionStart)?input.selectionStart:input.value.length,end=Number.isInteger(input.selectionEnd)?input.selectionEnd:start;
         try{input.setRangeText(emoji,start,end,'end')}catch(_){input.value=input.value.slice(0,start)+emoji+input.value.slice(end)}
         input.dispatchEvent(new Event('input',{bubbles:true}));
+        popover.classList.add('hidden');
         input.focus({preventScroll:true});
       };
     });
+    if(popover.dataset.outsideBound!=='1'){
+      popover.dataset.outsideBound='1';
+      document.addEventListener('pointerdown',event=>{
+        if(!popover.isConnected)return;
+        if(popover.contains(event.target)||toggle.contains(event.target))return;
+        popover.classList.add('hidden');
+      },{passive:true});
+    }
   }
 
   function setupArticleComments(article){
     const form=$('#articleCommentForm');if(!form)return;
     bindArticleCommentEmojiPicker();
     const input=$('#articleCommentInput');
+    if(input&&input.dataset.articleAutosizeBound!=='1'){
+      input.dataset.articleAutosizeBound='1';
+      const resize=()=>{
+        input.style.height='auto';
+        input.style.height=Math.min(input.scrollHeight,160)+'px';
+      };
+      input.addEventListener('input',resize);
+      requestAnimationFrame(resize);
+    }
     if(input&&input.dataset.composerKeyboardBound!=='1'){
       input.dataset.composerKeyboardBound='1';
       input.addEventListener('keydown',event=>{
@@ -528,7 +546,7 @@
         form.requestSubmit();
       });
     }
-    form.onsubmit=async event=>{event.preventDefault();const input=$('#articleCommentInput'),button=form.querySelector('[type=submit]'),body=input.value.trim();if(!body||button.disabled)return;button.disabled=true;const {error}=await sb.from('article_comments').insert({article_id:article.id,parent_id:$('#articleCommentParent').value||null,author_id:uid(),body});if(error){toast(window.neisFriendlyError?.(error,'post this comment')||error.message);button.disabled=false;return}input.value='';$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden');await loadArticleComments(article.id);toast(tr('Comment posted.','تم نشر التعليق.'))};
+    form.onsubmit=async event=>{event.preventDefault();const input=$('#articleCommentInput'),button=form.querySelector('[type=submit]'),body=input.value.trim();if(!body||button.disabled)return;button.disabled=true;const {error}=await sb.from('article_comments').insert({article_id:article.id,parent_id:$('#articleCommentParent').value||null,author_id:uid(),body});if(error){toast(window.neisFriendlyError?.(error,'post this comment')||error.message);button.disabled=false;return}input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));$('#articleCommentParent').value='';$('#articleCommentReplying').classList.add('hidden');await loadArticleComments(article.id);toast(tr('Comment posted.','تم نشر التعليق.'))};
     stopArticleCommentRealtime();
     loadArticleComments(article.id);loadArticleEngagement(article.id);
     articleCommentChannel=sb.channel(`article-activity-${article.id}-${uid()}`)
