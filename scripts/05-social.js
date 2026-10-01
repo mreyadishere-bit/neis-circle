@@ -817,7 +817,9 @@ function messageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
   const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
   const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
-  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${messageReactionChips('dm',m.id)}</div><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
+  const sharedArticle=m.shared_article_id?state.articles.find(a=>same(a.id,m.shared_article_id)):null;
+  const sharedArticleCard=sharedArticle?(()=>{const title=(state.lang==='ar'?sharedArticle.title_ar:sharedArticle.title_en)||sharedArticle.title_en||sharedArticle.title_ar||t('Article','مقال'),excerpt=(state.lang==='ar'?sharedArticle.excerpt_ar:sharedArticle.excerpt_en)||sharedArticle.excerpt_en||sharedArticle.excerpt_ar||'',author=sharedArticle.author?.full_name||sharedArticle.author?.name||t('NEIS Circle','NEIS Circle');return `<button type="button" class="shared-article-message" data-shared-article="${esc(sharedArticle.id)}"><span class="shared-article-kicker">${t('Shared article','مقال مُشارك')}</span><b>${esc(title)}</b>${excerpt?`<small>${esc(excerpt)}</small>`:''}<em>${esc(author)} · ${t('Open article','فتح المقال')} →</em></button>`})():'';
+  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span>${sharedArticleCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${messageReactionChips('dm',m.id)}</div><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
 }
 
 window.openNewConversation=function(){
@@ -1507,6 +1509,8 @@ function bindV6(root=document){
   root.querySelectorAll('[data-clear-circle-search]').forEach(el=>el.onclick=()=>{state.circleQuery='';render()});
   const ts=root.querySelector('#conversationSearch');if(ts)ts.oninput=()=>rerenderSearchInput(ts,'conversationQuery');
   root.querySelectorAll('[data-cancel-dm-reply]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();clearDmReplyTarget()});
+  root.querySelectorAll('[data-shared-article]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();routeTo(`articles/${el.dataset.sharedArticle}`)});
+
   const liveDraftInput=root.querySelector('#liveChatInput');
   if(liveDraftInput){
     bindDmKeyboardBottom();
