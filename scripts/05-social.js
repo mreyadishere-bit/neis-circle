@@ -35,7 +35,7 @@ function messageReactionChips(scope,messageId){
     if(!groups.has(key))groups.set(key,{emoji:key,count:0,mine:false});
     const item=groups.get(key);item.count++;if(same(r.user_id,authUser?.id))item.mine=true;
   });
-  return [...groups.values()].map(item=>`<button type="button" class="message-reaction-chip ${item.mine?'mine':''}" data-message-reaction-toggle="${scope}" data-message-id="${esc(messageId)}" data-emoji="${esc(item.emoji)}" aria-label="${t('React with','تفاعل بـ')} ${esc(item.emoji)}"><span>${esc(item.emoji)}</span><b>${item.count}</b></button>`).join('');
+  return [...groups.values()].map(item=>`<button type="button" class="message-reaction-chip ${item.mine?'mine':''}" data-message-reaction-details="${scope}" data-message-id="${esc(messageId)}" data-emoji="${esc(item.emoji)}" aria-label="${t('See who reacted with','اعرف من تفاعل بـ')} ${esc(item.emoji)}"><span>${esc(item.emoji)}</span><b>${item.count}</b></button>`).join('');
 }
 function syncMessageReactionUi(){
   document.querySelectorAll('#chatFlow > .chat-message, #circleChatFlow > .chat-message').forEach(row=>{
@@ -70,13 +70,20 @@ async function toggleMessageReaction(scope,messageId,emoji){
   state.messageReactions=state.messageReactions.map(r=>r===optimistic?data:r);
   syncMessageReactionUi();
 }
+function openMessageReactionDetails(scope,messageId,emoji){
+  const rows=messageReactionRows(scope,messageId).filter(r=>r.emoji===emoji);
+  if(!rows.length)return;
+  const people=rows.map(r=>profileData(r.user_id));
+  openModal(`<div class="modal-head"><div><h2>${esc(emoji)} ${t('Reactions','التفاعلات')}</h2><p>${rows.length} ${t(rows.length===1?'person reacted':'people reacted',rows.length===1?'شخص تفاعل':'أشخاص تفاعلوا')}</p></div><button class="close" data-close>×</button></div><div class="message-reaction-people">${rows.map((r,index)=>{const p=people[index],mine=same(r.user_id,authUser?.id);return `<button type="button" class="message-reaction-person" data-open-profile="${esc(r.user_id)}">${profileAvatar(p)}<span><b>${esc(p.full_name||t('NEIS Student','طالب NEIS'))}</b><small>${mine?t('You','أنت'):(p.username?'@'+esc(p.username):'')}</small></span><em>${esc(emoji)}</em></button>`}).join('')}</div>`);
+  $('[data-open-profile]').forEach(button=>button.onclick=()=>{closeModal();routeTo(`profile/${button.dataset.openProfile}`)});
+}
 function bindMessageReactionButtons(root=document){
-  root.querySelectorAll?.('[data-message-reaction-toggle]').forEach(button=>{
+  root.querySelectorAll?.('[data-message-reaction-details]').forEach(button=>{
     if(button.dataset.reactionBound==='1')return;
     button.dataset.reactionBound='1';
     button.onclick=event=>{
       event.preventDefault();event.stopPropagation();
-      toggleMessageReaction(button.dataset.messageReactionToggle,button.dataset.messageId,button.dataset.emoji);
+      openMessageReactionDetails(button.dataset.messageReactionDetails,button.dataset.messageId,button.dataset.emoji);
     };
   });
 }
