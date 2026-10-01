@@ -3446,3 +3446,11 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     grid-template-columns:repeat(5,minmax(0,1fr))!important;
   }
 }
+
+
+/* v159.38 — mobile post gallery uses swipe, not arrow buttons */
+@media(max-width:720px){
+  .post-gallery-lightbox .post-gallery-nav{
+    display:none!important;
+  }
+}
