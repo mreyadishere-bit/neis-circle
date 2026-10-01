@@ -392,18 +392,89 @@
     if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(url);return}
     const input=document.createElement('textarea');input.value=url;input.setAttribute('readonly','');input.style.position='fixed';input.style.opacity='0';document.body.appendChild(input);input.select();document.execCommand('copy');input.remove();
   }
+  function articleConnectionRows(query=''){
+    const me=uid(),ids=new Set();
+    (state.follows||[]).filter(f=>f.status==='accepted').forEach(f=>{
+      if(same(f.follower_id,me)&&!same(f.following_id,me))ids.add(String(f.following_id));
+      if(same(f.following_id,me)&&!same(f.follower_id,me))ids.add(String(f.follower_id));
+    });
+    const q=String(query||'').trim().toLocaleLowerCase(state.lang==='ar'?'ar':'en');
+    return (state.members||[])
+      .filter(p=>ids.has(String(p.id))&&!same(p.id,me))
+      .filter(p=>!q||[p.full_name,p.username,p.grade,p.branch].some(v=>String(v||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').includes(q)))
+      .sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||''),state.lang==='ar'?'ar':'en'));
+  }
+  function articleSharePersonRow(person,selected){
+    const name=person.full_name||tr('NEIS Student','طالب NEIS'),initials=String(name).split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase();
+    return `<button type="button" class="article-share-person ${selected?'selected':''}" data-article-share-person="${esc(String(person.id))}" aria-pressed="${selected?'true':'false'}"><span class="article-share-avatar">${esc(initials||'NC')}</span><span><b>${esc(name)}</b><small>@${esc(person.username||'student')}${person.branch?' · '+esc(person.branch):''}</small></span><i>${selected?'✓':''}</i></button>`;
+  }
+  function openArticleConnectionShare(article,title){
+    document.querySelector('#articleConnectionShareOverlay')?.remove();
+    const selected=new Set(),people=articleConnectionRows();
+    const overlay=document.createElement('div');
+    overlay.id='articleConnectionShareOverlay';
+    overlay.className='article-connection-share-overlay';
+    overlay.innerHTML=`<section class="article-connection-share-sheet" role="dialog" aria-modal="true" aria-label="${tr('Share article','مشاركة المقال')}">
+      <header><div><h2>${tr('Send to connections','إرسال إلى العلاقات')}</h2><p>${esc(title)}</p></div><button type="button" class="close" data-article-share-close>×</button></header>
+      <label class="article-share-search"><input id="articleShareConnectionSearch" placeholder="${tr('Search connections…','ابحث في العلاقات…')}" autocomplete="off"></label>
+      <div id="articleShareConnectionList" class="article-share-people">${people.length?people.map(p=>articleSharePersonRow(p,false)).join(''):`<div class="empty"><b>${tr('No connections yet','لا توجد علاقات بعد')}</b><span>${tr('Follow or connect with students first.','تابع أو تواصل مع الطلاب أولًا.')}</span></div>`}</div>
+      <footer><button type="button" class="secondary" data-article-copy-link>${tr('Copy link','نسخ الرابط')}</button><button type="button" class="primary" id="sendArticleToConnections" disabled>${tr('Send','إرسال')} <b id="articleShareSelectedCount">0</b></button></footer>
+    </section>`;
+    document.body.appendChild(overlay);
+    const close=()=>overlay.remove(),list=overlay.querySelector('#articleShareConnectionList'),send=overlay.querySelector('#sendArticleToConnections'),count=overlay.querySelector('#articleShareSelectedCount'),search=overlay.querySelector('#articleShareConnectionSearch');
+    const sync=()=>{count.textContent=String(selected.size);send.disabled=!selected.size};
+    const renderPeople=()=>{
+      const rows=articleConnectionRows(search.value);
+      list.innerHTML=rows.length?rows.map(p=>articleSharePersonRow(p,selected.has(String(p.id)))).join(''):`<div class="empty"><b>${tr('No connections found','لا توجد نتائج')}</b><span>${tr('Try another name.','جرّب اسمًا آخر.')}</span></div>`;
+      list.querySelectorAll('[data-article-share-person]').forEach(button=>button.onclick=()=>{
+        const id=button.dataset.articleSharePerson;
+        selected.has(id)?selected.delete(id):selected.add(id);
+        renderPeople();sync();
+      });
+    };
+    overlay.querySelectorAll('[data-article-share-close]').forEach(button=>button.onclick=close);
+    overlay.addEventListener('click',event=>{if(event.target===overlay)close()});
+    search.oninput=renderPeople;
+    overlay.querySelector('[data-article-copy-link]').onclick=async()=>{
+      const url=`${location.origin}${location.pathname}#/articles/${article.id}`;
+      await copyArticleLink(url);
+      toast(tr('Article link copied.','تم نسخ رابط المقال.'));
+    };
+    send.onclick=async()=>{
+      if(!selected.size||send.disabled)return;
+      send.disabled=true;
+      const targetIds=[...selected];
+      let sent=0,failed=0;
+      for(const targetUser of targetIds){
+        const started=await sb.rpc('start_direct_conversation',{target_user:targetUser});
+        if(started.error||!started.data){failed++;continue}
+        const conversationId=started.data;
+        await sb.rpc('restore_own_conversation',{conversation_id_input:conversationId});
+        const {error}=await sb.from('messages').insert({
+          conversation_id:conversationId,
+          sender_id:uid(),
+          body:`📖 ${title}`,
+          shared_article_id:article.id
+        });
+        error?failed++:sent++;
+      }
+      if(sent){
+        const {error:trackError}=await sb.from('article_shares').insert({article_id:article.id,user_id:uid(),method:'connections'});
+        if(trackError)console.error('[NEIS article share tracking]',trackError);
+        await loadArticleEngagement(article.id);
+        close();
+        toast(sent===1?tr('Article sent.','تم إرسال المقال.'):tr(`Article sent to ${sent} connections.`,`تم إرسال المقال إلى ${sent} من العلاقات.`));
+      }
+      if(failed){
+        toast(tr(`${failed} connection(s) could not receive the article.`,`تعذر إرسال المقال إلى ${failed} من العلاقات.`));
+        send.disabled=false;
+      }
+    };
+    search.focus({preventScroll:true});
+  }
   async function shareArticle(article,title){
     const button=$('[data-article-share]');if(!button||button.disabled)return;
-    button.disabled=true;const url=`${location.origin}${location.pathname}#/articles/${article.id}`;
-    let method='copy';
-    try{
-      if(navigator.share){await navigator.share({title,text:tr('Read this article on NEIS Circle','اقرأ هذا المقال على NEIS Circle'),url});method='native'}
-      else{await copyArticleLink(url);toast(tr('Article link copied.','تم نسخ رابط المقال.'))}
-      const {error}=await sb.from('article_shares').insert({article_id:article.id,user_id:uid(),method});
-      if(error)console.error('[NEIS article share tracking]',error);else await loadArticleEngagement(article.id);
-    }catch(error){
-      if(error?.name!=='AbortError')toast(tr('The article could not be shared.','تعذرت مشاركة المقال.'));
-    }finally{button.disabled=false}
+    openArticleConnectionShare(article,title);
   }
   function setupArticleComments(article){
     const form=$('#articleCommentForm');if(!form)return;
