@@ -2796,3 +2796,34 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     order:2;
   }
 }
+
+
+/* v159.26 — Circle Home posts + members layout */
+.circle-home-dashboard{
+  width:min(1200px,100%);
+  margin-inline:auto;
+  display:grid;
+  grid-template-columns:minmax(0,860px) minmax(260px,320px);
+  gap:18px;
+  align-items:start;
+}
+.circle-home-main{
+  min-width:0;
+}
+.circle-home-feed{
+  width:100%;
+  min-width:0;
+}
+.circle-home-dashboard .circle-members-side-card{
+  position:sticky;
+  top:92px;
+}
+@media(max-width:980px){
+  .circle-home-dashboard{
+    grid-template-columns:1fr;
+  }
+  .circle-home-dashboard .circle-members-side-card{
+    position:static;
+    order:2;
+  }
+}
