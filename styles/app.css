@@ -2877,3 +2877,34 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     font-size:19px;
   }
 }
+
+
+/* v159.30 — multiline chat/comment composers */
+.chat-form{
+  align-items:flex-end;
+}
+.chat-form textarea,
+#liveChatInput,
+#circleChatInput,
+#replyInput{
+  min-width:0;
+  flex:1 1 auto;
+  width:auto;
+  min-height:38px;
+  max-height:120px;
+  margin:0;
+  padding:9px 2px;
+  border:0;
+  outline:0;
+  resize:none;
+  overflow-y:auto;
+  background:transparent;
+  color:var(--ink);
+  font:inherit;
+  line-height:1.45;
+  box-sizing:border-box;
+}
+.message-text,
+.reply-body{
+  white-space:pre-wrap;
+}
