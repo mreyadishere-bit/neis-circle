@@ -849,11 +849,41 @@ window.cancelCircleReply=clearCircleReplyTarget;
 window.startCircleReply=setCircleReplyTarget;
 
 
+const dmHistoryLoadedAt=new Map(),dmHistoryLoading=new Set();
+async function loadConversationHistory(conversationId,force=false){
+  if(!sb||!authUser||!conversationId)return;
+  const key=String(conversationId),last=dmHistoryLoadedAt.get(key)||0;
+  if(!force&&Date.now()-last<15000)return;
+  if(dmHistoryLoading.has(key))return;
+  dmHistoryLoading.add(key);
+  try{
+    const {data,error}=await sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200);
+    if(error){console.error('[NEIS chat history]',error);return}
+    const membershipRow=state.conversationMembers.find(m=>same(m.conversation_id,conversationId)&&same(m.user_id,authUser.id));
+    const cleared=membershipRow?.cleared_at?new Date(membershipRow.cleared_at).getTime():0;
+    const fetched=(data||[]).filter(m=>!cleared||new Date(m.created_at).getTime()>cleared).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const other=state.liveMessages.filter(m=>!same(m.conversation_id,conversationId));
+    const freshLocal=state.liveMessages.filter(m=>same(m.conversation_id,conversationId)&&same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
+    state.liveMessages=[...other,...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    dmHistoryLoadedAt.set(key,Date.now());
+    if(state.view==='messages'&&same(state.activeConversationId,conversationId)){
+      const flow=$('#chatFlow');
+      if(flow){
+        const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<100;
+        const activeMessages=state.liveMessages.filter(m=>same(m.conversation_id,conversationId)&&!m.deleted_at);
+        flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>messageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+        bindV6(flow);
+        requestAnimationFrame(()=>{if(wasNearBottom||!flow.dataset.historyReady)flow.scrollTop=flow.scrollHeight;flow.dataset.historyReady='1'});
+      }
+      updateBadges();
+    }
+  }finally{dmHistoryLoading.delete(key)}
+}
 function conversationName(id){const other=state.conversationMembers.find(m=>same(m.conversation_id,id)&&!same(m.user_id,authUser.id));return other?.profile||profileData(other?.user_id)}
 function conversationLast(id){return state.liveMessages.filter(m=>same(m.conversation_id,id)&&!m.deleted_at).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0]}
 messages=function(){
   let threads=[...state.conversations].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));const q=normalize(state.conversationQuery);if(q)threads=threads.filter(c=>match(q,conversationName(c.id)?.full_name,conversationName(c.id)?.username,conversationLast(c.id)?.body));const compact=window.matchMedia('(max-width:760px)').matches,active=byId(state.conversations,state.activeConversationId)||(!compact?threads[0]:null);if(active&&!state.activeConversationId&&!compact)state.activeConversationId=active.id;
-  const activePerson=active?conversationName(active.id):null,msgs=active?state.liveMessages.filter(m=>same(m.conversation_id,active.id)&&!m.deleted_at):[];
+  const activePerson=active?conversationName(active.id):null,msgs=active?state.liveMessages.filter(m=>same(m.conversation_id,active.id)&&!m.deleted_at):[];if(active)setTimeout(()=>loadConversationHistory(active.id),0);
   return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${dmReplyComposer(active.id)}<form class="chat-form" id="liveChatForm"><button type="button" class="chat-emoji-toggle" data-chat-emoji-toggle="dm" aria-label="${t('Add emoji','إضافة إيموجي')}">☺</button><textarea id="liveChatInput" rows="1" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto">${esc(getDmDraft(active.id))}</textarea><button type="submit" data-chat-send aria-label="${t('Send','إرسال')}">→</button><div class="chat-emoji-popover hidden" data-chat-emoji-popover="dm">${emojiPickerMarkup('data-chat-emoji-choice')}</div></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
 };
 function messageBubble(m,previous){
@@ -869,7 +899,7 @@ window.openNewConversation=function(){
   const people=state.members.filter(p=>!same(p.id,authUser.id));openModal(`<div class="modal-head"><div><h2>${t('New conversation','محادثة جديدة')}</h2><p>${t('Search and message a student directly. Following is not required.','ابحث عن طالب وراسله مباشرة دون اشتراط المتابعة.')}</p></div><button class="close" data-close>×</button></div><label class="field"><input id="newChatSearch" placeholder="${t('Search students…','ابحث عن الطلاب…')}"></label><div id="newChatPeople" class="result-list">${people.slice(0,20).map(newChatRow).join('')}</div>`);const input=$('#newChatSearch');input.oninput=()=>{const q=normalize(input.value);$('#newChatPeople').innerHTML=people.filter(p=>match(q,p.full_name,p.username,p.grade,p.branch)).slice(0,30).map(newChatRow).join('')||blank(t('No students found','لا يوجد طلاب'),t('Try another name.','جرّب اسمًا آخر.'));bindV6($('#modalRoot'))};bindV6($('#modalRoot'))
 };
 function newChatRow(p){return `<button class="result-row" data-message-user="${p.id}">${profileAvatar(p)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} · ${esc(p.branch||'')}</p></div><span>→</span></button>`}
-async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await loadLiveData();state.activeConversationId=id;routeTo(`messages/${id}`);await markConversationRead(id)}
+async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await loadLiveData();state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
 async function markConversationRead(id){await sb.from('conversation_members').update({last_read_at:new Date().toISOString()}).match({conversation_id:id,user_id:authUser.id});const mine=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser.id));if(mine)mine.last_read_at=new Date().toISOString();updateBadges()}
 
 circles=function(){
@@ -1579,7 +1609,7 @@ function bindV6(root=document){
   root.querySelectorAll('[role="link"][tabindex="0"]').forEach(el=>el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click()}});
   root.querySelectorAll('[data-v6-follow]').forEach(el=>el.onclick=async e=>{e.stopPropagation();const id=el.dataset.v6Follow,on=isFollowing(id);el.disabled=true;const q=on?sb.from('follows').delete().match({follower_id:authUser.id,following_id:id}):sb.from('follows').upsert({follower_id:authUser.id,following_id:id,status:'accepted'});const {error}=await q;if(error){toast(safeError(error,on?'unfollow':'follow'));el.disabled=false;return}await loadLiveData();render();toast(on?t('Unfollowed.','تم إلغاء المتابعة.'):t('Following.','تتم المتابعة.'))});
   root.querySelectorAll('[data-message-user]').forEach(el=>el.onclick=e=>{e.stopPropagation();startConversation(el.dataset.messageUser)});
-  root.querySelectorAll('[data-open-conversation]').forEach(el=>el.onclick=()=>{state.activeConversationId=el.dataset.openConversation;routeTo(`messages/${state.activeConversationId}`);markConversationRead(state.activeConversationId);requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}))});
+  root.querySelectorAll('[data-open-conversation]').forEach(el=>el.onclick=async()=>{state.activeConversationId=el.dataset.openConversation;routeTo(`messages/${state.activeConversationId}`);await loadConversationHistory(state.activeConversationId,true);markConversationRead(state.activeConversationId);requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}))});
   root.querySelectorAll('[data-new-chat]').forEach(el=>el.onclick=openNewConversation);
   root.querySelectorAll('[data-mobile-threads]').forEach(el=>el.onclick=()=>{state.activeConversationId='';routeTo('messages',true);requestAnimationFrame(()=>{const shell=document.querySelector('.messages');if(shell)shell.classList.remove('mobile-thread-open')})});
   root.querySelectorAll('[data-connection-tab]').forEach(el=>el.onclick=()=>routeTo(`connections/${el.dataset.connectionTab}`));
