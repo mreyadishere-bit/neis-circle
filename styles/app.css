@@ -2492,3 +2492,60 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     margin-inline:auto;
   }
 }
+
+
+/* v159.20 — grouped emoji picker */
+.chat-emoji-picker,
+.chat-emoji-popover{
+  max-height:min(420px,60vh);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.chat-emoji-group{
+  display:grid;
+  gap:7px;
+}
+.chat-emoji-group + .chat-emoji-group{
+  margin-top:11px;
+  padding-top:10px;
+  border-top:1px solid var(--line);
+}
+.chat-emoji-group>b{
+  font-size:10px;
+  font-weight:800;
+  color:var(--muted);
+  letter-spacing:.02em;
+}
+.chat-emoji-group-grid{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  gap:5px;
+}
+.chat-emoji-group-grid button{
+  display:grid;
+  place-items:center;
+  min-width:0;
+  height:34px;
+  padding:0;
+  border:0;
+  border-radius:9px;
+  background:transparent;
+  font-size:21px;
+  cursor:pointer;
+}
+.chat-emoji-group-grid button:hover,
+.chat-emoji-group-grid button:focus-visible{
+  background:var(--soft);
+  outline:0;
+}
+.reaction-picker-grid{
+  padding:2px 0;
+}
+@media(max-width:760px){
+  .chat-emoji-group-grid{grid-template-columns:repeat(7,1fr);gap:4px}
+  .chat-emoji-picker,
+  .chat-emoji-popover{max-height:min(360px,56vh)}
+}
+@media(max-width:380px){
+  .chat-emoji-group-grid{grid-template-columns:repeat(6,1fr)}
+}
