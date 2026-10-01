@@ -11,7 +11,7 @@ const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
 const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value||Date.now()));
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
-Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
+Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
 let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificationRealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
@@ -20,6 +20,112 @@ let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
 let adminPostEmailSetting=null,adminPostEmailSettingLoading=false;
 const AUTHOR_LIKE_EMAIL_ADMIN='mreyadishere@gmail.com';
 const expandedPostIds=new Set();
+
+const CHAT_EMOJIS=['😀','😂','😍','👍','❤️','🔥','👏','🎉','😮','😢','🤔','🙏','💯','✅','✨','♟️'];
+const QUICK_REACTIONS=['❤️','😂','👍','🔥','👏','😮'];
+function messageReactionRows(scope,messageId){
+  const field=scope==='circle'?'circle_message_id':'dm_message_id';
+  return (state.messageReactions||[]).filter(r=>same(r[field],messageId));
+}
+function messageReactionChips(scope,messageId){
+  const rows=messageReactionRows(scope,messageId),groups=new Map();
+  rows.forEach(r=>{
+    const key=String(r.emoji||'');
+    if(!key)return;
+    if(!groups.has(key))groups.set(key,{emoji:key,count:0,mine:false});
+    const item=groups.get(key);item.count++;if(same(r.user_id,authUser?.id))item.mine=true;
+  });
+  return [...groups.values()].map(item=>`<button type="button" class="message-reaction-chip ${item.mine?'mine':''}" data-message-reaction-toggle="${scope}" data-message-id="${esc(messageId)}" data-emoji="${esc(item.emoji)}" aria-label="${t('React with','تفاعل بـ')} ${esc(item.emoji)}"><span>${esc(item.emoji)}</span><b>${item.count}</b></button>`).join('');
+}
+function syncMessageReactionUi(){
+  document.querySelectorAll('#chatFlow > .chat-message, #circleChatFlow > .chat-message').forEach(row=>{
+    const id=String(row.dataset.messageId||''),scope=row.closest('#circleChatFlow')?'circle':'dm';
+    const host=row.querySelector('.message-reactions');
+    if(host)host.innerHTML=messageReactionChips(scope,id);
+  });
+  bindMessageReactionButtons(document);
+}
+async function toggleMessageReaction(scope,messageId,emoji){
+  if(!sb||!authUser||!messageId||!emoji)return;
+  const field=scope==='circle'?'circle_message_id':'dm_message_id';
+  const existing=(state.messageReactions||[]).find(r=>same(r[field],messageId)&&same(r.user_id,authUser.id)&&r.emoji===emoji);
+  if(existing){
+    state.messageReactions=state.messageReactions.filter(r=>!same(r.id,existing.id));
+    syncMessageReactionUi();
+    const {error}=await sb.from('message_reactions').delete().eq('id',existing.id).eq('user_id',authUser.id);
+    if(error){await refreshMessageReactionsV1();toast(safeError(error,'remove this reaction'))}
+    return;
+  }
+  const optimistic={id:'local-'+Date.now()+'-'+Math.random(),[field]:messageId,user_id:authUser.id,emoji,created_at:new Date().toISOString()};
+  state.messageReactions=[...state.messageReactions,optimistic];
+  syncMessageReactionUi();
+  const payload={user_id:authUser.id,emoji};payload[field]=messageId;
+  const {data,error}=await sb.from('message_reactions').insert(payload).select('*').single();
+  if(error){
+    state.messageReactions=state.messageReactions.filter(r=>r!==optimistic);
+    syncMessageReactionUi();
+    toast(safeError(error,'add this reaction'));
+    return;
+  }
+  state.messageReactions=state.messageReactions.map(r=>r===optimistic?data:r);
+  syncMessageReactionUi();
+}
+function bindMessageReactionButtons(root=document){
+  root.querySelectorAll?.('[data-message-reaction-toggle]').forEach(button=>{
+    if(button.dataset.reactionBound==='1')return;
+    button.dataset.reactionBound='1';
+    button.onclick=event=>{
+      event.preventDefault();event.stopPropagation();
+      toggleMessageReaction(button.dataset.messageReactionToggle,button.dataset.messageId,button.dataset.emoji);
+    };
+  });
+}
+function openMessageReactionPicker(scope,messageId){
+  openModal(`<div class="modal-head"><div><h2>${t('React to message','تفاعل مع الرسالة')}</h2><p>${t('Choose an emoji. Tap the same reaction again to remove it.','اختر إيموجي. اضغط على نفس التفاعل مرة أخرى لإزالته.')}</p></div><button class="close" data-close>×</button></div><div class="chat-emoji-grid reaction-picker-grid">${CHAT_EMOJIS.map(emoji=>`<button type="button" data-picker-reaction="${esc(emoji)}">${esc(emoji)}</button>`).join('')}</div>`);
+  $('[data-picker-reaction]').forEach(button=>button.onclick=async()=>{const emoji=button.dataset.pickerReaction;closeModal();await toggleMessageReaction(scope,messageId,emoji)});
+}
+function insertChatEmoji(scope,emoji){
+  const input=$(scope==='circle'?'#circleChatInput':'#liveChatInput');
+  if(!input)return;
+  const start=Number.isInteger(input.selectionStart)?input.selectionStart:input.value.length;
+  const end=Number.isInteger(input.selectionEnd)?input.selectionEnd:start;
+  try{input.setRangeText(emoji,start,end,'end')}catch(_){input.value=input.value.slice(0,start)+emoji+input.value.slice(end)}
+  input.dispatchEvent(new Event('input',{bubbles:true}));
+  input.focus({preventScroll:true});
+}
+function bindChatEmojiPicker(root=document){
+  root.querySelectorAll?.('[data-chat-emoji-toggle]').forEach(button=>{
+    if(button.dataset.emojiBound==='1')return;
+    button.dataset.emojiBound='1';
+    const scope=button.dataset.chatEmojiToggle;
+    button.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
+    button.onclick=event=>{
+      event.preventDefault();event.stopPropagation();
+      const popover=root.querySelector(`[data-chat-emoji-popover="${scope}"]`);
+      if(!popover)return;
+      const opening=popover.classList.contains('hidden');
+      root.querySelectorAll('.chat-emoji-popover').forEach(p=>p.classList.add('hidden'));
+      popover.classList.toggle('hidden',!opening);
+    };
+  });
+  root.querySelectorAll?.('[data-chat-emoji-choice]').forEach(button=>{
+    if(button.dataset.emojiChoiceBound==='1')return;
+    button.dataset.emojiChoiceBound='1';
+    button.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
+    button.onclick=event=>{
+      event.preventDefault();event.stopPropagation();
+      const scope=button.closest('[data-chat-emoji-popover]')?.dataset.chatEmojiPopover;
+      if(scope)insertChatEmoji(scope,button.dataset.chatEmojiChoice);
+    };
+  });
+}
+async function refreshMessageReactionsV1(){
+  if(!sb||!authUser)return;
+  const {data,error}=await sb.from('message_reactions').select('*').order('created_at');
+  if(error){console.error('[NEIS message reactions]',error);return}
+  state.messageReactions=data||[];
+  syncMessageReactionUi();
+}
 
 function profileData(id){return state.members.find(x=>same(x.id,id))||{id,full_name:t('NEIS Student','طالب NEIS'),username:'student',grade:'',branch:'',bio:'',interests:[]}}
 function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,initials:initials(p.full_name||p.name),color:'#006f5b'},large)}
@@ -167,7 +273,8 @@ loadLiveData=async function(){
   if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
-  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
+  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
+  const messageReactionRes=await sb.from('message_reactions').select('*').order('created_at');if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   if(v6Channel)await sb.removeChannel(v6Channel);
   v6Channel=sb.channel(`neis-v7-${uid}`)
     .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
@@ -179,6 +286,7 @@ loadLiveData=async function(){
     .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
+    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
