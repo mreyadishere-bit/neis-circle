@@ -29,6 +29,7 @@ const CHAT_EMOJI_GROUPS=[
   {key:'symbols',en:'Symbols',ar:'رموز',items:['✅','❌','❗','❓','✔️','➕','➖','💡','📌','📚','📝','💬','🔔','🎯']},
   {key:'activities',en:'Activities',ar:'أنشطة',items:['♟️','⚽','🏀','🏓','🎮','🎨','📷','🎧','🎵','💻','🤖','🌍']}
 ];
+window.NEIS_COMMENT_EMOJI_GROUPS=CHAT_EMOJI_GROUPS;
 const CHAT_EMOJIS=CHAT_EMOJI_GROUPS.flatMap(group=>group.items);
 const QUICK_REACTIONS=['❤️','😂','👍','🔥','👏','😮'];
 function emojiPickerMarkup(attribute){
@@ -1259,9 +1260,26 @@ comments=async function(postId,targetCommentId=''){
     };
   };
 
-  $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(renderThread).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><input id="replyInput" required maxlength="4000" placeholder="${t('Add a thoughtful comment…','أضف تعليقًا مفيدًا…')}" dir="auto"><button aria-label="${t('Send reply','إرسال الرد')}">→</button></form>`;
+  $('#replyContent').innerHTML=`<div class="reply-tree">${roots.length?roots.map(renderThread).join(''):emptyState(t('No replies yet','لا توجد ردود بعد'),t('Start a useful discussion.','ابدأ نقاشًا مفيدًا.'))}</div><form id="replyForm" class="chat-form reply-composer"><input type="hidden" id="replyParent"><button type="button" class="chat-emoji-toggle" id="replyEmojiToggle" aria-label="${t('Add emoji','إضافة إيموجي')}">☺</button><input id="replyInput" required maxlength="4000" placeholder="${t('Add a thoughtful comment…','أضف تعليقًا مفيدًا…')}" dir="auto"><button type="submit" data-reply-send aria-label="${t('Send reply','إرسال الرد')}">→</button><div class="chat-emoji-popover hidden" id="replyEmojiPopover">${emojiPickerMarkup('data-comment-emoji-choice')}</div></form>`;
   bindDiscussionManagement();
   bindV6($('#modalRoot'));
+  {
+    const toggle=$('#replyEmojiToggle'),popover=$('#replyEmojiPopover'),input=$('#replyInput');
+    if(toggle&&popover&&input){
+      toggle.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
+      toggle.onclick=event=>{event.preventDefault();event.stopPropagation();popover.classList.toggle('hidden')};
+      popover.querySelectorAll('[data-comment-emoji-choice]').forEach(button=>{
+        button.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
+        button.onclick=event=>{
+          event.preventDefault();event.stopPropagation();
+          const emoji=button.dataset.commentEmojiChoice,start=Number.isInteger(input.selectionStart)?input.selectionStart:input.value.length,end=Number.isInteger(input.selectionEnd)?input.selectionEnd:start;
+          try{input.setRangeText(emoji,start,end,'end')}catch(_){input.value=input.value.slice(0,start)+emoji+input.value.slice(end)}
+          input.dispatchEvent(new Event('input',{bubbles:true}));
+          input.focus({preventScroll:true});
+        };
+      });
+    }
+  }
 
   if(targetCommentId){
     const targetItem=replies.find(row=>same(row.id,targetCommentId));
@@ -1317,7 +1335,7 @@ comments=async function(postId,targetCommentId=''){
   });
   $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.creatorHeart,hearted=heartsByComment.has(String(commentId));const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}await comments(postId)});
   $('#replyContent').querySelectorAll('[data-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.commentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('comment_likes').delete().match({comment_id:commentId,user_id:authUser.id}):await sb.from('comment_likes').insert({comment_id:commentId,user_id:authUser.id});if(error){toast(safeError(error,mine?'unlike this comment':'like this comment'));button.disabled=false;return}await comments(postId)});
-  $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm button'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{error}=await sb.from('comments').insert(payload);if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}await loadLiveData();comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
+  $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm [type="submit"]'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{error}=await sb.from('comments').insert(payload);if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}await loadLiveData();comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
 };
 
 function openReport(type,id){openModal(`<div class="modal-head"><div><h2>${t('Report content','الإبلاغ عن محتوى')}</h2><p>${t('Reports go to the private admin queue.','تصل البلاغات إلى قائمة الأدمن الخاصة.')}</p></div><button class="close" data-close>×</button></div><form id="reportForm"><label class="field">${t('Reason','السبب')}<select id="reportReason"><option>${t('Spam','محتوى مزعج')}</option><option>${t('Harassment','إساءة أو مضايقة')}</option><option>${t('Unsafe content','محتوى غير آمن')}</option><option>${t('Other','سبب آخر')}</option></select></label><label class="field">${t('Details','التفاصيل')}<textarea id="reportDetails" rows="4" maxlength="1000"></textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Submit report','إرسال البلاغ')}</button></div></form>`);$('#reportForm').onsubmit=async e=>{e.preventDefault();const {error}=await sb.from('reports').insert({reporter_id:authUser.id,target_type:type,target_id:String(id),reason:$('#reportReason').value,details:$('#reportDetails').value.trim()});if(error){toast(safeError(error,'submit this report'));return}closeModal();toast(t('Report sent to the administrator.','تم إرسال البلاغ إلى الأدمن.'))}}
