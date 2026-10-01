@@ -145,7 +145,7 @@ function bindChatEmojiPicker(root=document){
       const popover=root.querySelector(`[data-chat-emoji-popover="${scope}"]`);
       if(!popover)return;
       const opening=popover.classList.contains('hidden');
-      root.querySelectorAll('.chat-emoji-popover').forEach(p=>p.classList.add('hidden'));
+      root.querySelectorAll('.chat-emoji-popover').forEach(p=>{if(p!==popover)p.classList.add('hidden')});
       popover.classList.toggle('hidden',!opening);
     };
   });
@@ -159,6 +159,13 @@ function bindChatEmojiPicker(root=document){
       if(scope)insertChatEmoji(scope,button.dataset.chatEmojiChoice);
     };
   });
+  if(root===document&&document.documentElement.dataset.emojiOutsideBound!=='1'){
+    document.documentElement.dataset.emojiOutsideBound='1';
+    document.addEventListener('pointerdown',event=>{
+      if(event.target.closest('[data-chat-emoji-toggle],.chat-emoji-popover'))return;
+      document.querySelectorAll('.chat-emoji-popover').forEach(popover=>popover.classList.add('hidden'));
+    },{passive:true});
+  }
 }
 async function refreshMessageReactionsV1(){
   if(!sb||!authUser)return;
@@ -1360,6 +1367,14 @@ comments=async function(postId,targetCommentId=''){
     if(toggle&&popover&&input){
       toggle.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
       toggle.onclick=event=>{event.preventDefault();event.stopPropagation();popover.classList.toggle('hidden')};
+      if(popover.dataset.outsideBound!=='1'){
+        popover.dataset.outsideBound='1';
+        document.addEventListener('pointerdown',event=>{
+          if(!popover.isConnected)return;
+          if(popover.contains(event.target)||toggle.contains(event.target))return;
+          popover.classList.add('hidden');
+        },{passive:true});
+      }
       popover.querySelectorAll('[data-comment-emoji-choice]').forEach(button=>{
         button.addEventListener('pointerdown',event=>event.preventDefault(),{passive:false});
         button.onclick=event=>{
