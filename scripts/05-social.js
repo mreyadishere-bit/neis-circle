@@ -522,18 +522,19 @@ function postButtonUrlValid(value){try{const url=new URL(String(value||'').trim(
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
   if(!post||!same(post.author_id,authUser?.id)){toast(t('You can only edit your own posts.','يمكنك تعديل منشوراتك فقط.'));return}
-  let removeImage=false;
-  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, or image without creating a new post.','عدّل النص أو الوسوم أو النوع أو الصورة بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
+  let removeImages=false;
+  const existingImages=postImages(post);
+  openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, links, or images without creating a new post.','عدّل النص أو الوسوم أو النوع أو الروابط أو الصور بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
     <form id="editPostForm">
       <label class="field">${t('Type','النوع')}<select id="editPostKind">${['Discussion','Question','Resource','Experience'].map(value=>`<option value="${value}" ${post.kind===value?'selected':''}>${value}</option>`).join('')}</select></label>
       <label class="field">${t('Title','العنوان')}<input id="editPostTitle" required maxlength="140" value="${esc(post.title||'')}"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="editPostBody" required rows="7">${esc(post.body||'')}</textarea></label>
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
       <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add one short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="editPostLinkLabel" maxlength="36" value="${esc(post.link_button_label||'')}" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="editPostLinkUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.link_button_url||'')}" placeholder="https://…"></label></div></div>
-      <label class="field">${t('Replace image (optional)','استبدال الصورة (اختياري)')}<input id="editPostImage" type="file" accept="image/*"></label>
-      <div class="post-edit-image-wrap ${post.image_url?'':'hidden'}" id="editPostCurrentImage">
-        <img id="editPostImagePreview" class="upload-preview" src="${esc(post.image_url||'')}" alt="">
-        <button type="button" class="secondary danger" id="editPostRemoveImage">${t('Remove image','حذف الصورة')}</button>
+      <label class="field">${t('Replace images (up to 8)','استبدال الصور (حتى 8)')}<input id="editPostImage" type="file" accept="image/*" multiple></label>
+      <div class="post-edit-image-wrap ${existingImages.length?'':'hidden'}" id="editPostCurrentImage">
+        <div id="editPostImagePreview" class="post-upload-preview-grid">${existingImages.map((url,index)=>`<div class="post-upload-preview-item"><img src="${esc(url)}" alt=""><span>${index+1}</span></div>`).join('')}</div>
+        <button type="button" class="secondary danger" id="editPostRemoveImage">${t('Remove all images','حذف كل الصور')}</button>
       </div>
       <div class="modal-actions">
         <button type="button" class="secondary danger" id="editPostDelete">${t('Delete post','حذف المنشور')}</button>
@@ -543,15 +544,16 @@ async function editOwnPost(postId){
     </form>`,true);
   const imageInput=$('#editPostImage'),preview=$('#editPostImagePreview'),current=$('#editPostCurrentImage');
   imageInput.onchange=()=>{
-    const file=imageInput.files?.[0];
-    if(!file)return;
-    removeImage=false;
-    preview.src=URL.createObjectURL(file);
-    current.classList.remove('hidden');
+    const files=[...(imageInput.files||[])].slice(0,8);
+    if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
+    removeImages=false;
+    preview.innerHTML=files.map((file,index)=>`<div class="post-upload-preview-item"><img src="${URL.createObjectURL(file)}" alt=""><span>${index+1}</span></div>`).join('');
+    current.classList.toggle('hidden',!files.length);
   };
   $('#editPostRemoveImage')?.addEventListener('click',()=>{
-    removeImage=true;
+    removeImages=true;
     imageInput.value='';
+    preview.innerHTML='';
     current.classList.add('hidden');
   });
   $('#editPostDelete').onclick=()=>{closeModal();deletePost(post.id)};
@@ -559,31 +561,38 @@ async function editOwnPost(postId){
     event.preventDefault();
     const saveButton=$('#editPostSave');if(saveButton.disabled)return;
     saveButton.disabled=true;
-    const file=imageInput.files?.[0];
-    let imageUrl=removeImage?'':(post.image_url||'');
-    let uploadedUrl='';
-    if(file){
-      uploadedUrl=await uploadMedia(file,'posts');
-      if(!uploadedUrl){saveButton.disabled=false;return}
-      imageUrl=uploadedUrl;
+    const files=[...(imageInput.files||[])].slice(0,8),uploaded=[];
+    let imageUrls=removeImages?[]:existingImages;
+    if(files.length){
+      for(const file of files){
+        const url=await uploadMedia(file,'posts');
+        if(!url){
+          for(const uploadedUrl of uploaded)await removeMediaUrl(uploadedUrl);
+          saveButton.disabled=false;return;
+        }
+        uploaded.push(url);
+      }
+      imageUrls=uploaded;
     }
     const linkButtonLabel=$('#editPostLinkLabel').value.trim(),linkButtonUrl=$('#editPostLinkUrl').value.trim();
-    if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));saveButton.disabled=false;return}
-    if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));saveButton.disabled=false;return}
+    if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
+    if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     const payload={
       kind:$('#editPostKind').value,
       title:$('#editPostTitle').value.trim(),
       body:$('#editPostBody').value.trim(),
       tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),
-      image_url:imageUrl,
+      image_url:imageUrls[0]||'',
+      image_urls:imageUrls,
       link_button_label:linkButtonLabel,
       link_button_url:linkButtonUrl
     };
-    if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));saveButton.disabled=false;return}
+    if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     const {error}=await sb.from('posts').update(payload).eq('id',post.id).eq('author_id',authUser.id);
-    if(error){toast(safeError(error,'update this post'));saveButton.disabled=false;return}
-    const oldPath=storagePathFromPublicUrl(post.image_url);
-    if(oldPath&&(removeImage||uploadedUrl))sb.storage.from('community-media').remove([oldPath]).catch(()=>{});
+    if(error){toast(safeError(error,'update this post'));for(const url of uploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
+    if(removeImages||files.length){
+      for(const oldUrl of existingImages)if(!imageUrls.includes(oldUrl))await removeMediaUrl(oldUrl);
+    }
     closeModal();
     await loadLiveData();
     render();
