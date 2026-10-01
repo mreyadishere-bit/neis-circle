@@ -86,7 +86,7 @@ function openMessageReactionDetails(scope,messageId,emoji){
   if(!rows.length)return;
   const people=rows.map(r=>profileData(r.user_id));
   openModal(`<div class="modal-head"><div><h2>${esc(emoji)} ${t('Reactions','التفاعلات')}</h2><p>${rows.length} ${t(rows.length===1?'person reacted':'people reacted',rows.length===1?'شخص تفاعل':'أشخاص تفاعلوا')}</p></div><button class="close" data-close>×</button></div><div class="message-reaction-people">${rows.map((r,index)=>{const p=people[index],mine=same(r.user_id,authUser?.id);return `<button type="button" class="message-reaction-person" data-open-profile="${esc(r.user_id)}">${profileAvatar(p)}<span><b>${esc(p.full_name||t('NEIS Student','طالب NEIS'))}</b><small>${mine?t('You','أنت'):(p.username?'@'+esc(p.username):'')}</small></span><em>${esc(emoji)}</em></button>`}).join('')}</div>`);
-  $('[data-open-profile]').forEach(button=>button.onclick=()=>{closeModal();routeTo(`profile/${button.dataset.openProfile}`)});
+  $$('[data-open-profile]').forEach(button=>button.onclick=()=>{closeModal();routeTo(`profile/${button.dataset.openProfile}`)});
 }
 function bindMessageReactionButtons(root=document){
   root.querySelectorAll?.('[data-message-reaction-details]').forEach(button=>{
