@@ -178,6 +178,22 @@
       active=true;
       try{return await editor(file,preferredAspect,savedState||null)}
       finally{active=false}
+    },
+    editUrl:async function(url,preferredAspect,savedState,name){
+      if(!url||active)return null;
+      active=true;
+      try{
+        var response=await fetch(url,{mode:'cors',credentials:'omit'});
+        if(!response.ok)throw new Error('image_fetch_failed');
+        var blob=await response.blob();
+        var type=blob.type||'image/jpeg';
+        var ext=type.indexOf('png')>=0?'.png':type.indexOf('webp')>=0?'.webp':type.indexOf('gif')>=0?'.gif':'.jpg';
+        var file=new File([blob],String(name||'post-image').replace(/\.[^.]+$/,'')+ext,{type:type,lastModified:Date.now()});
+        return await editor(file,preferredAspect,savedState||null);
+      }catch(error){
+        tell(tr('This image could not be opened for editing.','تعذر فتح هذه الصورة للتعديل.'));
+        return null;
+      }finally{active=false}
     }
   };
   document.addEventListener('change',async function(event){
