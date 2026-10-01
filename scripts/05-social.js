@@ -1538,12 +1538,14 @@ function circlePollMarkup(post){
   const first=results[0]||{},canView=!!first.can_view_results,hasVoted=results.some(r=>r.my_vote),closed=circlePollClosed(poll);
   const member=circlePollMember(post.circle_id),canVote=member?.status==='active'&&!closed&&(!hasVoted||poll.allow_vote_change);
   const total=canView?Number(first.total_voters||0):0,hasAnyVotes=canView&&total>0,inputType=poll.selection_type==='multiple'?'checkbox':'radio';
+  const own=same(poll.creator_id,authUser?.id),moderator=canModerateCircle(post.circle_id);
+  const canViewVoters=!poll.anonymous&&hasAnyVotes&&(hasVoted||closed||own||moderator);
   const chooseLabel=poll.selection_type==='multiple'?(poll.max_selections?t('Choose up to','اختر حتى')+' '+poll.max_selections:t('Choose one or more','اختر خيارًا أو أكثر')):t('Choose one','اختر خيارًا واحدًا');
   const optionHtml=options.map(option=>{
     const row=resultMap.get(String(option.id))||{},mine=!!row.my_vote,count=hasAnyVotes?Number(row.vote_count||0):0,pct=hasAnyVotes&&total>0?Math.round(count/total*100):0;
-    return '<label class="circle-poll-option '+(mine?'selected ':'')+(hasAnyVotes?'has-results':'')+'"><span class="circle-poll-option-row"><input type="'+inputType+'" name="circle-poll-'+esc(poll.id)+'" value="'+esc(option.id)+'" '+(mine?'checked ':'')+(canVote?'':'disabled')+'><b>'+esc(option.option_text)+'</b>'+(hasAnyVotes?'<strong>'+pct+'%</strong>':'')+'</span>'+(hasAnyVotes?'<span class="circle-poll-progress"><i style="width:'+pct+'%"></i></span><small>'+count+' '+t(count===1?'vote':'votes','صوت')+'</small>':'')+'</label>';
+    return '<div class="circle-poll-option '+(mine?'selected ':'')+(hasAnyVotes?'has-results':'')+'"><label class="circle-poll-option-row"><input type="'+inputType+'" name="circle-poll-'+esc(poll.id)+'" value="'+esc(option.id)+'" '+(mine?'checked ':'')+(canVote?'':'disabled')+'><b>'+esc(option.option_text)+'</b>'+(hasAnyVotes?'<strong>'+pct+'%</strong>':'')+'</label>'+(hasAnyVotes?'<span class="circle-poll-progress"><i style="width:'+pct+'%"></i></span><div class="circle-poll-option-foot"><small>'+count+' '+t(count===1?'vote':'votes','صوت')+'</small>'+(canViewVoters&&count>0?'<button type="button" class="circle-poll-voter-link" data-circle-poll-voters="'+esc(poll.id)+'" data-circle-poll-option-voters="'+esc(option.id)+'">'+t('View voters','عرض المصوتين')+'</button>':'')+'</div>':'')+'</div>';
   }).join('');
-  const own=same(poll.creator_id,authUser?.id),canClose=(own||canModerateCircle(post.circle_id))&&!closed;
+  const canClose=(own||moderator)&&!closed;
   const resultNote=!canView
     ?(poll.results_visibility==='after_close'?t('Results appear when the poll closes.','تظهر النتائج بعد إغلاق التصويت.'):t('Vote to see the results.','صوّت لرؤية النتائج.'))
     :(!hasAnyVotes?t('No votes yet.','لا توجد أصوات بعد.'):'');
@@ -1554,6 +1556,15 @@ function circlePostCard(post){
   if(post.kind!=='Poll'&&post.post_type!=='poll')return base;
   return base.replace('<div class="tag-row">',circlePollMarkup(post)+'<div class="tag-row">').replace('data-edit-post="'+esc(post.id)+'"','data-circle-poll-settings-post="'+esc(post.id)+'"');
 }
+async function openCirclePollVoters(pollId,optionId){
+  const poll=circlePollStore.polls.find(p=>same(p.id,pollId)),option=circlePollOptions(pollId).find(o=>same(o.id,optionId));
+  if(!poll||!option||poll.anonymous)return;
+  const {data,error}=await sb.rpc('get_circle_poll_option_voters',{p_poll_id:pollId,p_option_id:optionId});
+  if(error){toast(safeError(error,'view these voters'));return}
+  const voters=data||[];
+  openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+t('Poll voters','المصوتون')+'</p><h2>'+esc(option.option_text)+'</h2><p>'+voters.length+' '+t(voters.length===1?'voter':'voters','مشارك')+'</p></div><button class="close" data-close>×</button></div><div class="circle-poll-voter-list">'+(voters.length?voters.map(v=>'<div class="circle-poll-voter-row">'+profileAvatar(v)+'<div><b>'+esc(v.full_name||v.username||t('Member','عضو'))+'</b><span>'+(v.username?'@'+esc(v.username):'')+'</span><small>'+[v.grade,v.branch||v.campus].filter(Boolean).map(esc).join(' · ')+'</small></div></div>').join(''):'<p class="circle-poll-voter-empty">'+t('No voters yet.','لا يوجد مصوتون بعد.')+'</p>')+'</div>',true);
+}
+
 async function openCirclePollSettings(pollId){
   const poll=circlePollStore.polls.find(p=>same(p.id,pollId)),post=poll?state.posts.find(p=>same(p.id,poll.post_id)):null;
   if(!poll||!post||!same(poll.creator_id,authUser?.id))return;
@@ -1850,6 +1861,7 @@ function bindV6(root=document){
     if(error){toast(safeError(error,'close this poll'));button.disabled=false;return}
     await loadCirclePolls(state.activeCircleId,{force:true});render();toast(t('Poll closed.','تم إغلاق التصويت.'));
   });
+  root.querySelectorAll('[data-circle-poll-voters]').forEach(button=>button.onclick=e=>{e.preventDefault();e.stopPropagation();openCirclePollVoters(button.dataset.circlePollVoters,button.dataset.circlePollOptionVoters)});
   root.querySelectorAll('[data-circle-poll-settings]').forEach(button=>button.onclick=()=>openCirclePollSettings(button.dataset.circlePollSettings));
   root.querySelectorAll('[data-circle-poll-settings-post]').forEach(button=>button.onclick=e=>{e.stopPropagation();const poll=circlePollForPost(button.dataset.circlePollSettingsPost);if(poll)openCirclePollSettings(poll.id)});
   root.querySelectorAll('[data-new-meeting]').forEach(el=>el.onclick=scheduleMeeting);
