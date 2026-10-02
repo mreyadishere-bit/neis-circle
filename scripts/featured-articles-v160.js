@@ -23,10 +23,8 @@
     const email=String((typeof authUser!=='undefined'&&authUser?.email)||'').trim().toLowerCase();
     return FEATURE_EDITOR_EMAILS.has(email);
   };
-  const articleContentLanguage=article=>{
-    if(!article)return '';
-    const raw=[article.content_en,article.content_ar].filter(Boolean).join(' ');
-    const text=String(raw)
+  const bodyLanguage=value=>{
+    const text=String(value||'')
       .replace(/<[^>]*>/g,' ')
       .replace(/&nbsp;|&#160;/gi,' ')
       .replace(/&[a-z0-9#]+;/gi,' ');
@@ -35,7 +33,12 @@
     if(!arabic&&!latin)return '';
     return arabic>=latin?'ar':'en';
   };
-  const hasLanguageContent=(article,language)=>articleContentLanguage(article)===language;
+  const hasLanguageContent=(article,language)=>{
+    if(!article)return false;
+    return [article.content_en,article.content_ar]
+      .filter(value=>String(value||'').replace(/<[^>]*>/g,' ').trim())
+      .some(value=>bodyLanguage(value)===language);
+  };
   const featuredArticles=()=>[...(state.articles||[])]
     .filter(article=>article?.status==='published'&&article?.featured===true)
     .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
