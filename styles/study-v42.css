@@ -372,3 +372,39 @@ body.study-filter-open{overflow:hidden}
     grid-template-columns:1fr 1.35fr;
   }
 }
+
+
+/* v157.3 — balanced actions for 3-column Study cards */
+@media(min-width:761px){
+  .study-card-footer{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:8px 10px;
+    padding:13px 16px 16px;
+  }
+  .study-open{
+    justify-self:start;
+  }
+  .study-owner-tools{
+    justify-self:end;
+  }
+  .study-card-tools{
+    grid-column:1/-1;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px;
+    width:100%;
+    padding-top:8px;
+    border-top:1px solid color-mix(in srgb,var(--line) 75%,transparent);
+  }
+  .study-tool{
+    width:100%;
+    min-width:0;
+    padding:0 6px;
+  }
+}
+@media(min-width:1121px){
+  .study-open{
+    min-height:38px;
+    padding-inline:12px;
+  }
+}
