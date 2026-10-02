@@ -66,9 +66,24 @@ saveArticle=async function(status){const file=$('#articleCover')?.files?.[0];if(
 compose=function(kind='Discussion'){
   if(!requireAccount())return;
   openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${bi('Create','إنشاء')}</p><h2>${bi('Share with NEIS Circle','شارك مع NEIS Circle')}</h2><p>${bi('Add a clear idea, useful context and optional images.','أضف فكرة واضحة وسياقًا مفيدًا وصورًا اختيارية.')}</p></div><button class="close" data-close>×</button></div><form id="postFormPlus">
-    <label class="field">${bi('Type','النوع')}<select id="postKind"><option ${kind==='Discussion'?'selected':''}>Discussion</option><option ${kind==='Question'?'selected':''}>Question</option><option>Resource</option><option>Experience</option><option>Announcement</option></select></label>
+    <label class="field">${bi('Type','النوع')}<select id="postKind"><option ${kind==='Discussion'?'selected':''}>Discussion</option><option ${kind==='Question'?'selected':''}>Question</option><option ${kind==='Resource'?'selected':''}>Resource</option><option ${kind==='Experience'?'selected':''}>Experience</option><option ${kind==='Announcement'?'selected':''}>Announcement</option><option ${kind==='Poll'?'selected':''}>Poll</option></select></label>
     <label class="field">${bi('Title','العنوان')}<input id="postTitle" required maxlength="140" placeholder="${bi('Make the value clear','اكتب عنوانًا واضحًا')}"></label>
-    <label class="field">${bi('Details','التفاصيل')}<textarea id="postBody" required rows="7" placeholder="${bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…')}"></textarea></label>
+    <label class="field"><span id="postBodyLabel">${bi('Details','التفاصيل')}</span><textarea id="postBody" required rows="7" placeholder="${bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…')}"></textarea></label>
+    <section id="postPollFields" class="circle-poll-composer hidden">
+      <div class="circle-poll-composer-head"><div><b>${bi('Poll options','خيارات التصويت')}</b><small>${bi('Add between 2 and 10 unique answers.','أضف من خيارين إلى 10 اختيارات مختلفة.')}</small></div><button type="button" class="secondary" id="postPollAdd">+ ${bi('Add option','إضافة اختيار')}</button></div>
+      <div id="postPollOptions" class="circle-poll-option-editors"></div>
+      <div class="circle-poll-settings">
+        <label class="field">${bi('Voting type','نوع التصويت')}<select id="postPollSelection"><option value="single">${bi('Single choice','اختيار واحد')}</option><option value="multiple">${bi('Multiple choice','اختيارات متعددة')}</option></select></label>
+        <label class="field hidden" id="postPollMaxWrap">${bi('Maximum choices','الحد الأقصى للاختيارات')}<input id="postPollMax" type="number" min="1" max="10" placeholder="${bi('No limit','بدون حد')}"></label>
+        <label class="field">${bi('Results visibility','ظهور النتائج')}<select id="postPollResults"><option value="after_vote" selected>${bi('After voting','بعد التصويت')}</option><option value="always">${bi('Always visible','ظاهرة دائمًا')}</option><option value="after_close">${bi('After closing','بعد الإغلاق')}</option></select></label>
+        <label class="field">${bi('Closing','الإغلاق')}<select id="postPollClosing"><option value="none">${bi('No end date','بدون موعد انتهاء')}</option><option value="custom">${bi('Custom date & time','تاريخ ووقت مخصص')}</option></select></label>
+        <label class="field hidden" id="postPollCloseWrap">${bi('Close at','يغلق في')}<input id="postPollCloseAt" type="datetime-local"></label>
+      </div>
+      <div class="circle-poll-toggles">
+        <label><input id="postPollAllowChange" type="checkbox" checked><span><b>${bi('Allow vote changes','السماح بتغيير التصويت')}</b><small>${bi('People can update their vote while the poll is open.','يمكن للمستخدمين تعديل تصويتهم أثناء فتح التصويت.')}</small></span></label>
+        <label><input id="postPollAnonymous" type="checkbox"><span><b>${bi('Anonymous voting','تصويت مجهول')}</b><small>${bi('Voter identities stay hidden.','تظل هوية المصوتين مخفية.')}</small></span></label>
+      </div>
+    </section>
     <div class="row"><label class="field">${bi('Tags','الوسوم')}<input id="postTags" placeholder="Physics, Grade11, Practical"></label><label class="field">${bi('Images (up to 8)','الصور (حتى 8)')}<input id="postImage" type="file" accept="image/*" multiple></label></div>
     <div class="post-image-display-setting"><span>${bi('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="postImageDisplayMode" value="fit" checked><b>${bi('Fit','Fit')}</b><small>${bi('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="postImageDisplayMode" value="fill"><b>${bi('Fill','Fill')}</b><small>${bi('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
     <p class="post-image-edit-hint hidden" id="postImageEditHint">${bi('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
@@ -76,7 +91,30 @@ compose=function(kind='Discussion'){
     <div class="modal-actions"><button type="button" class="secondary" data-close>${bi('Cancel','إلغاء')}</button><button id="postSubmit" class="primary">${bi('Publish post','نشر المنشور')}</button></div>
   </form>`);
   const imageInput=$('#postImage'),preview=$('#postImagePreview'),hint=$('#postImageEditHint');
-  let selectedFiles=[];
+  let selectedFiles=[],postPollOptions=['',''];
+  const postKind=$('#postKind'),postPollFields=$('#postPollFields'),postBody=$('#postBody'),postTitle=$('#postTitle'),postSubmit=$('#postSubmit');
+  const renderPostPollOptions=()=>{
+    const host=$('#postPollOptions');if(!host)return;
+    host.innerHTML=postPollOptions.map((value,index)=>`<div class="circle-poll-option-editor"><span>${index+1}</span><input data-post-poll-option="${index}" maxlength="180" value="${esc(value)}" placeholder="${bi('Option','اختيار')} ${index+1}"><button type="button" data-post-poll-remove="${index}" ${postPollOptions.length<=2?'disabled':''}>×</button></div>`).join('');
+    host.querySelectorAll('[data-post-poll-option]').forEach(input=>input.oninput=()=>{postPollOptions[Number(input.dataset.postPollOption)]=input.value});
+    host.querySelectorAll('[data-post-poll-remove]').forEach(button=>button.onclick=()=>{if(postPollOptions.length<=2)return;postPollOptions.splice(Number(button.dataset.postPollRemove),1);renderPostPollOptions()});
+    $('#postPollAdd').disabled=postPollOptions.length>=10;
+  };
+  renderPostPollOptions();
+  $('#postPollAdd').onclick=()=>{if(postPollOptions.length<10){postPollOptions.push('');renderPostPollOptions()}};
+  $('#postPollSelection').onchange=()=>$('#postPollMaxWrap').classList.toggle('hidden',$('#postPollSelection').value!=='multiple');
+  $('#postPollClosing').onchange=()=>$('#postPollCloseWrap').classList.toggle('hidden',$('#postPollClosing').value!=='custom');
+  const updatePostComposerMode=()=>{
+    const isPoll=postKind.value==='Poll';
+    postPollFields.classList.toggle('hidden',!isPoll);
+    postBody.required=!isPoll;
+    postTitle.placeholder=isPoll?bi('Ask a clear poll question','اكتب سؤال تصويت واضحًا'):bi('Make the value clear','اكتب عنوانًا واضحًا');
+    postBody.placeholder=isPoll?bi('Add optional context for the poll…','أضف وصفًا اختياريًا للتصويت…'):bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…');
+    const bodyLabel=$('#postBodyLabel');if(bodyLabel)bodyLabel.textContent=isPoll?bi('Description / context (optional)','الوصف / السياق (اختياري)'):bi('Details','التفاصيل');
+    if(postSubmit)postSubmit.textContent=isPoll?bi('Publish poll','نشر التصويت'):bi('Publish post','نشر المنشور');
+  };
+  postKind.onchange=updatePostComposerMode;
+  updatePostComposerMode();
   const renderSelectedImages=()=>{
     preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${bi('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt="${bi('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span><em>${bi('Crop','قص')}</em></button>`).join('');
     preview.classList.toggle('hidden',!selectedFiles.length);
@@ -95,7 +133,14 @@ compose=function(kind='Discussion'){
   };
   $('#postFormPlus').onsubmit=async e=>{
     e.preventDefault();
-    const btn=$('#postSubmit');
+    const btn=$('#postSubmit'),isPoll=$('#postKind').value==='Poll';
+    if(isPoll){
+      const clean=postPollOptions.map(x=>x.trim()).filter(Boolean);
+      if($('#postTitle').value.trim().length<3){toast(bi('Add a clear poll question.','أضف سؤال تصويت واضحًا.'));return}
+      if(clean.length<2||clean.length>10){toast(bi('Add between 2 and 10 poll options.','أضف من خيارين إلى 10 خيارات للتصويت.'));return}
+      if(new Set(clean.map(x=>x.toLowerCase())).size!==clean.length){toast(bi('Poll options must be unique.','يجب أن تكون خيارات التصويت مختلفة.'));return}
+      if($('#postPollClosing').value==='custom'&&!$('#postPollCloseAt').value){toast(bi('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
+    }
     btn.classList.add('button-loading');btn.disabled=true;
     const uploaded=[];
     for(const file of selectedFiles){
@@ -108,12 +153,25 @@ compose=function(kind='Discussion'){
     }
     const image_urls=uploaded.map(item=>item.url),image_url=image_urls[0]||'';
     const image_display_mode=document.querySelector('input[name="postImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
-    const {error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode});
+    let error=null;
+    if(isPoll){
+      const clean=postPollOptions.map(x=>x.trim()).filter(Boolean),selection=$('#postPollSelection').value,rawMax=$('#postPollMax').value.trim();
+      const maxSelections=selection==='single'?1:(rawMax?Math.min(clean.length,Math.max(1,Number(rawMax)||1)):null);
+      const closeValue=$('#postPollClosing').value==='custom'?$('#postPollCloseAt').value:'';
+      ({error}=await sb.rpc('create_public_poll_post',{
+        p_title:$('#postTitle').value.trim(),p_body:$('#postBody').value.trim(),p_tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),
+        p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:clean,p_selection_type:selection,p_max_selections:maxSelections,
+        p_allow_vote_change:$('#postPollAllowChange').checked,p_anonymous:$('#postPollAnonymous').checked,p_results_visibility:$('#postPollResults').value,
+        p_closes_at:closeValue?new Date(closeValue).toISOString():null
+      }));
+    }else{
+      ({error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode}));
+    }
     if(error){
       if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
       toast(error.message);btn.classList.remove('button-loading');btn.disabled=false;return;
     }
-    closeModal();await loadLiveData();nav('home');toast(bi('Published successfully.','تم النشر بنجاح.'));
+    closeModal();await loadLiveData();nav('home');toast(isPoll?bi('Poll published.','تم نشر التصويت.'):bi('Published successfully.','تم النشر بنجاح.'));
   };
 };
 
