@@ -1,11 +1,16 @@
-const VERSION = "neis-pwa-v6";
+const VERSION = "neis-pwa-v7";
+const STATIC_CACHE = "neis-static-v7";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter(name => name.startsWith("neis-static-") && name !== STATIC_CACHE).map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
 
 function normalizeRoute(route) {
@@ -54,4 +59,30 @@ self.addEventListener("push", (event) => {
     silent: data.silent === true
   };
   event.waitUntil(self.registration.showNotification(title, options));
+});
+
+
+/* Cache only immutable/versioned same-origin static assets.
+   Navigations and Supabase/API traffic always stay network-first/live. */
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  let url;
+  try { url = new URL(request.url); } catch (_) { return; }
+  if (url.origin !== self.location.origin) return;
+  if (request.mode === "navigate" || request.destination === "document") return;
+
+  const isStatic = /\.(?:css|js|png|jpe?g|webp|svg|woff2?)$/i.test(url.pathname);
+  if (!isStatic) return;
+
+  event.respondWith((async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    const cached = await cache.match(request);
+    const network = fetch(request).then(response => {
+      if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+      return response;
+    }).catch(() => cached);
+    return cached || network;
+  })());
 });
