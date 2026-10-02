@@ -27,7 +27,11 @@
     if(error){study.error=friendly(error);return []}
     return (data||[]).map(row=>row.value).filter(Boolean);
   }
-  async function loadSubjects(){study.subjects=await loadValues('subject');study.ready=true;renderStudyPage()}
+  async function loadSubjects(){
+    study.subjects=await loadValues('subject');
+    study.ready=true;
+    await loadResources();
+  }
   function normalizeBlockOptions(values){
     return [...new Set((values||[]).map(clean).filter(value=>{
       if(!value)return false;
@@ -50,7 +54,7 @@
     return [...new Set([...DEFAULT_BLOCKS,...normalizeBlockOptions(existing)])];
   }
   function shouldLoadResources(){
-    return study.tab!=='resources'||!!study.subject||!!study.unit||clean(study.search).length>=2||!!study.type||!!study.language;
+    return true;
   }
   async function loadResources(){
     const request=++study.request;
