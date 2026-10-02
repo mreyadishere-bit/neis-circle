@@ -36,6 +36,7 @@
   };
   const hasLanguageContent=(article,language)=>{
     if(!article)return false;
+    if(window.NEISArticleLanguage?.has)return window.NEISArticleLanguage.has(article,language);
     return [article.content_en,article.content_ar]
       .filter(value=>String(value||'').replace(/<[^>]*>/g,' ').trim())
       .some(value=>bodyLanguage(value)===language);
@@ -131,7 +132,6 @@
     document.querySelectorAll('[data-article-language-filter]').forEach(button=>{
       button.onclick=()=>{
         state.articleLanguageFilter=button.dataset.articleLanguageFilter||'All';
-        if(state.articleLanguageFilter==='en'||state.articleLanguageFilter==='ar')state.articleLanguage=state.articleLanguageFilter;
         render();
       };
     });
