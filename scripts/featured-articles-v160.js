@@ -98,6 +98,7 @@
     document.querySelectorAll('[data-article-feature-filter]').forEach(button=>{
       button.onclick=()=>{
         state.articleFilter=button.dataset.articleFeatureFilter||'All';
+        state.articleAuthor='';
         render();
       };
     });
