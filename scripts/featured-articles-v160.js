@@ -24,17 +24,14 @@
     let html=baseArticleCard(article);
     if(!article||typeof html!=='string')return html;
 
-    if(article.featured){
-      html=html.replace(
-        '<div class="article-meta">',
-        '<div class="article-meta"><span class="best-article-badge" title="Featured article">★ Best Article</span>'
-      );
-    }
-
+    let metaExtras='';
     if(isMainAdmin()&&article.status==='published'){
-      const control='<button type="button" class="secondary article-feature-toggle '+(article.featured?'active':'')+'" data-feature-article="'+String(article.id)+'">'+(article.featured?'Unfeature':'★ Feature')+'</button>';
-      html=html.replace('<div class="article-actions">','<div class="article-actions">'+control);
+      metaExtras+='<button type="button" class="article-feature-star '+(article.featured?'active':'')+'" data-feature-article="'+String(article.id)+'" aria-pressed="'+(article.featured?'true':'false')+'" title="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'" aria-label="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'">'+(article.featured?'★':'☆')+'</button>';
     }
+    if(article.featured){
+      metaExtras+='<span class="best-article-badge" title="Featured article">★ Best Article</span>';
+    }
+    if(metaExtras)html=html.replace('<div class="article-meta">','<div class="article-meta">'+metaExtras);
 
     return html;
   };
