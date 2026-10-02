@@ -133,17 +133,51 @@ const NEIS_AUTH_STAY_KEY='neis-auth-stay-signed-in';
 function neisStaySignedIn(){
   return localStorage.getItem(NEIS_AUTH_STAY_KEY)!=='0';
 }
+function neisAuthStores(){
+  return neisStaySignedIn()
+    ? {primary:localStorage,secondary:sessionStorage}
+    : {primary:sessionStorage,secondary:localStorage};
+}
+function neisSetStaySignedIn(enabled){
+  try{localStorage.setItem(NEIS_AUTH_STAY_KEY,enabled?'1':'0')}catch(_){}
+  const {primary,secondary}=neisAuthStores();
+  try{
+    const keys=[];
+    for(let i=0;i<secondary.length;i++){
+      const key=secondary.key(i);
+      if(key&&((key.startsWith('sb-')&&key.includes('-auth-token'))||key.includes('supabase.auth')))keys.push(key);
+    }
+    keys.forEach(key=>{
+      const value=secondary.getItem(key);
+      if(value!==null){primary.setItem(key,value);secondary.removeItem(key)}
+    });
+  }catch(_){}
+}
+window.NEISSetStaySignedIn=neisSetStaySignedIn;
 const neisAuthStorage={
   getItem(key){
-    try{return (neisStaySignedIn()?localStorage:sessionStorage).getItem(key)}catch(_){return null}
+    const {primary,secondary}=neisAuthStores();
+    try{
+      const direct=primary.getItem(key);
+      if(direct!==null)return direct;
+      const fallback=secondary.getItem(key);
+      if(fallback!==null){
+        try{primary.setItem(key,fallback);secondary.removeItem(key)}catch(_){}
+        return fallback;
+      }
+      return null;
+    }catch(_){
+      try{return secondary.getItem(key)}catch(__){return null}
+    }
   },
   setItem(key,value){
+    const {primary,secondary}=neisAuthStores();
     try{
-      const primary=neisStaySignedIn()?localStorage:sessionStorage;
-      const secondary=neisStaySignedIn()?sessionStorage:localStorage;
       primary.setItem(key,value);
       secondary.removeItem(key);
-    }catch(_){}
+    }catch(_){
+      try{secondary.setItem(key,value)}catch(__){}
+    }
   },
   removeItem(key){
     try{localStorage.removeItem(key)}catch(_){}
