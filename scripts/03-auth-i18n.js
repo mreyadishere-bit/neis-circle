@@ -85,6 +85,7 @@ compose=function(kind='Discussion'){
       </div>
     </section>
     <div class="row"><label class="field">${bi('Tags','الوسوم')}<input id="postTags" placeholder="Physics, Grade11, Practical"></label><label class="field">${bi('Images (up to 8)','الصور (حتى 8)')}<input id="postImage" type="file" accept="image/*" multiple></label></div>
+    <label class="field" id="postYoutubeField">${bi('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="postYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/…"></label>
     <div class="post-image-display-setting"><span>${bi('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="postImageDisplayMode" value="fit" checked><b>${bi('Fit','Fit')}</b><small>${bi('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="postImageDisplayMode" value="fill"><b>${bi('Fill','Fill')}</b><small>${bi('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
     <p class="post-image-edit-hint hidden" id="postImageEditHint">${bi('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
     <div id="postImagePreview" class="post-upload-preview-grid hidden"></div>
@@ -112,6 +113,7 @@ compose=function(kind='Discussion'){
     postBody.placeholder=isPoll?bi('Add optional context for the poll…','أضف وصفًا اختياريًا للتصويت…'):bi('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…');
     const bodyLabel=$('#postBodyLabel');if(bodyLabel)bodyLabel.textContent=isPoll?bi('Description / context (optional)','الوصف / السياق (اختياري)'):bi('Details','التفاصيل');
     if(postSubmit)postSubmit.textContent=isPoll?bi('Publish poll','نشر التصويت'):bi('Publish post','نشر المنشور');
+    $('#postYoutubeField')?.classList.toggle('hidden',isPoll);
   };
   postKind.onchange=updatePostComposerMode;
   updatePostComposerMode();
@@ -153,6 +155,12 @@ compose=function(kind='Discussion'){
     }
     const image_urls=uploaded.map(item=>item.url),image_url=image_urls[0]||'';
     const image_display_mode=document.querySelector('input[name="postImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
+    const youtube_url=$('#postYoutubeUrl')?.value.trim()||'';
+    if(!isPoll&&youtube_url&&typeof window.NEISYouTubeUrlValid==='function'&&!window.NEISYouTubeUrlValid(youtube_url)){
+      if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
+      toast(bi('Add a valid YouTube video link.','أضف رابط فيديو YouTube صحيحًا.'));
+      btn.classList.remove('button-loading');btn.disabled=false;return;
+    }
     let error=null;
     if(isPoll){
       const clean=postPollOptions.map(x=>x.trim()).filter(Boolean),selection=$('#postPollSelection').value,rawMax=$('#postPollMax').value.trim();
@@ -165,7 +173,7 @@ compose=function(kind='Discussion'){
         p_closes_at:closeValue?new Date(closeValue).toISOString():null
       }));
     }else{
-      ({error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode}));
+      ({error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode,youtube_url}));
     }
     if(error){
       if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
