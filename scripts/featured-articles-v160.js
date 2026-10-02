@@ -3,7 +3,10 @@
 (function(){
   'use strict';
 
-  const MAIN_ADMIN_ID='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
+  const FEATURE_EDITOR_EMAILS=new Set([
+    'mreyadishere@gmail.com',
+    'fatemarateb5@gmail.com'
+  ]);
 
   if(typeof window==='undefined'||typeof state==='undefined')return;
   if(typeof articleCard!=='function'||typeof articles!=='function'||typeof home!=='function'||typeof bindDynamic!=='function')return;
@@ -15,7 +18,17 @@
   const baseHome=home;
   const baseBindDynamic=bindDynamic;
 
-  const isMainAdmin=()=>typeof authUser!=='undefined'&&!!authUser&&String(authUser.id)===MAIN_ADMIN_ID;
+  const canFeatureArticle=()=>{
+    const email=String((typeof authUser!=='undefined'&&authUser?.email)||'').trim().toLowerCase();
+    return FEATURE_EDITOR_EMAILS.has(email);
+  };
+  const hasLanguageContent=(article,language)=>{
+    if(!article)return false;
+    const keys=language==='ar'
+      ? ['title_ar','excerpt_ar','content_ar']
+      : ['title_en','excerpt_en','content_en'];
+    return keys.some(key=>String(article[key]||'').replace(/<[^>]*>/g,' ').trim().length>0);
+  };
   const featuredArticles=()=>[...(state.articles||[])]
     .filter(article=>article?.status==='published'&&article?.featured===true)
     .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
@@ -24,14 +37,10 @@
     let html=baseArticleCard(article);
     if(!article||typeof html!=='string')return html;
 
-    let metaExtras='';
-    if(isMainAdmin()&&article.status==='published'){
-      metaExtras+='<button type="button" class="article-feature-star '+(article.featured?'active':'')+'" data-feature-article="'+String(article.id)+'" aria-pressed="'+(article.featured?'true':'false')+'" title="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'" aria-label="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'">'+(article.featured?'★':'☆')+'</button>';
+    if(canFeatureArticle()&&article.status==='published'){
+      const star='<button type="button" class="article-feature-star '+(article.featured?'active':'')+'" data-feature-article="'+String(article.id)+'" aria-pressed="'+(article.featured?'true':'false')+'" title="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'" aria-label="'+(article.featured?'Remove from Best Articles':'Feature as Best Article')+'">'+(article.featured?'★':'☆')+'</button>';
+      html=html.replace('<div class="article-copy">','<div class="article-copy">'+star);
     }
-    if(article.featured){
-      metaExtras+='<span class="best-article-badge" title="Featured article">★ Best Article</span>';
-    }
-    if(metaExtras)html=html.replace('<div class="article-meta">','<div class="article-meta">'+metaExtras);
 
     return html;
   };
@@ -39,10 +48,14 @@
   articles=function(){
     const originalArticles=state.articles;
     const filter=state.articleFilter||'All';
+    const language=state.articleLanguage==='ar'?'ar':'en';
     let html='';
 
     try{
-      if(filter==='Best')state.articles=featuredArticles();
+      let visible=[...(originalArticles||[])].filter(article=>hasLanguageContent(article,language));
+      if(filter==='Best')visible=visible.filter(article=>article?.status==='published'&&article?.featured===true)
+        .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
+      state.articles=visible;
       html=baseArticles();
     }finally{
       state.articles=originalArticles;
@@ -59,10 +72,12 @@
     if(html.includes(controlsMarker))html=html.replace(controlsMarker,filterTabs+controlsMarker);
     else html=filterTabs+html;
 
-    if(filter==='Best'&&!featuredArticles().length){
+    if(filter==='Best'&&!featuredArticles().filter(article=>hasLanguageContent(article,language)).length){
       html=html
         .replace('<b>No articles yet</b>','<b>No featured articles yet</b>')
-        .replace('<span>Publish the first complete student article.</span>','<span>The main admin can feature published articles from All Articles.</span>');
+        .replace('<b>No articles match</b>','<b>No featured articles match</b>')
+        .replace('<span>Publish the first complete student article.</span>','<span>Featured articles in this language will appear here.</span>')
+        .replace('<span>Try another title, writer, or phrase.</span>','<span>Try another search or language.</span>');
     }
 
     return html;
@@ -124,7 +139,7 @@
         event.preventDefault();
         event.stopPropagation();
 
-        if(!isMainAdmin()||button.disabled)return;
+        if(!canFeatureArticle()||button.disabled)return;
         const article=(state.articles||[]).find(item=>String(item.id)===String(button.dataset.featureArticle));
         if(!article||article.status!=='published')return;
 
