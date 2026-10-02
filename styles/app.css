@@ -3903,3 +3903,12 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     padding:9px;
   }
 }
+
+
+/* v159.44 — align profile Posts heading with the standalone post feed on desktop */
+@media(min-width:900px){
+  .profile-posts-title{
+    width:min(860px,100%);
+    margin-inline:auto;
+  }
+}
