@@ -23,13 +23,19 @@
     const email=String((typeof authUser!=='undefined'&&authUser?.email)||'').trim().toLowerCase();
     return FEATURE_EDITOR_EMAILS.has(email);
   };
-  const hasLanguageContent=(article,language)=>{
-    if(!article)return false;
-    const keys=language==='ar'
-      ? ['title_ar','excerpt_ar','content_ar']
-      : ['title_en','excerpt_en','content_en'];
-    return keys.some(key=>String(article[key]||'').replace(/<[^>]*>/g,' ').trim().length>0);
+  const articleContentLanguage=article=>{
+    if(!article)return '';
+    const raw=[article.content_en,article.content_ar].filter(Boolean).join(' ');
+    const text=String(raw)
+      .replace(/<[^>]*>/g,' ')
+      .replace(/&nbsp;|&#160;/gi,' ')
+      .replace(/&[a-z0-9#]+;/gi,' ');
+    const arabic=(text.match(/[\u0600-\u06FF]/g)||[]).length;
+    const latin=(text.match(/[A-Za-z]/g)||[]).length;
+    if(!arabic&&!latin)return '';
+    return arabic>=latin?'ar':'en';
   };
+  const hasLanguageContent=(article,language)=>articleContentLanguage(article)===language;
   const featuredArticles=()=>[...(state.articles||[])]
     .filter(article=>article?.status==='published'&&article?.featured===true)
     .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
