@@ -103,6 +103,16 @@
       };
     });
 
+    document.querySelectorAll('[data-nav="articles"]:not([data-open-best-articles])').forEach(button=>{
+      const previous=button.onclick;
+      button.onclick=event=>{
+        state.articleFilter='All';
+        state.articleAuthor='';
+        if(typeof previous==='function')return previous.call(button,event);
+        nav('articles');
+      };
+    });
+
     document.querySelectorAll('[data-open-best-articles]').forEach(button=>{
       button.onclick=event=>{
         event.preventDefault();
