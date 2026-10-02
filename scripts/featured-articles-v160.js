@@ -15,7 +15,7 @@
   const baseHome=home;
   const baseBindDynamic=bindDynamic;
 
-  const isMainAdmin=()=>!!authUser&&String(authUser.id)===MAIN_ADMIN_ID;
+  const isMainAdmin=()=>typeof authUser!=='undefined'&&!!authUser&&String(authUser.id)===MAIN_ADMIN_ID;
   const featuredArticles=()=>[...(state.articles||[])]
     .filter(article=>article?.status==='published'&&article?.featured===true)
     .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
@@ -123,7 +123,7 @@
         button.disabled=true;
         const makeFeatured=!article.featured;
         const {error}=await sb.rpc('set_article_featured',{
-          p_article_id:Number(article.id),
+          p_article_id:String(article.id),
           p_featured:makeFeatured
         });
 
