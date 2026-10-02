@@ -1,0 +1,41 @@
+/* Best Articles — isolated styles */
+.best-articles-tabs{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+}
+
+.best-article-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:23px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:color-mix(in srgb,var(--accent) 12%,var(--card));
+  color:var(--accent);
+  font-size:10px;
+  font-weight:850;
+  white-space:nowrap;
+}
+
+.article-card:has(.best-article-badge){
+  border-color:color-mix(in srgb,var(--accent) 24%,var(--line));
+}
+
+.article-feature-toggle.active{
+  border-color:color-mix(in srgb,var(--accent) 42%,var(--line));
+  color:var(--accent);
+}
+
+@media(max-width:760px){
+  .best-articles-tabs{
+    width:100%;
+    overflow-x:auto;
+    flex-wrap:nowrap;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .best-articles-tabs::-webkit-scrollbar{display:none}
+  .best-articles-tabs button{flex:0 0 auto}
+  .article-feature-toggle{min-height:40px}
+}
