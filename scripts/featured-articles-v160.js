@@ -12,6 +12,7 @@
   if(typeof articleCard!=='function'||typeof articles!=='function'||typeof home!=='function'||typeof bindDynamic!=='function')return;
 
   if(!state.articleFilter)state.articleFilter='All';
+  if(!state.articleLanguageFilter)state.articleLanguageFilter='All';
 
   const baseArticleCard=articleCard;
   const baseArticles=articles;
@@ -48,11 +49,12 @@
   articles=function(){
     const originalArticles=state.articles;
     const filter=state.articleFilter||'All';
-    const language=state.articleLanguage==='ar'?'ar':'en';
+    const languageFilter=state.articleLanguageFilter||'All';
     let html='';
 
     try{
-      let visible=[...(originalArticles||[])].filter(article=>hasLanguageContent(article,language));
+      let visible=[...(originalArticles||[])];
+      if(languageFilter==='en'||languageFilter==='ar')visible=visible.filter(article=>hasLanguageContent(article,languageFilter));
       if(filter==='Best')visible=visible.filter(article=>article?.status==='published'&&article?.featured===true)
         .sort((a,b)=>new Date(b.featured_at||0)-new Date(a.featured_at||0));
       state.articles=visible;
@@ -63,16 +65,25 @@
 
     if(typeof html!=='string')return html;
 
+    const languageTabs='<div class="tabs article-language-tabs" style="margin:0">'+
+      '<button class="'+(languageFilter==='All'?'active':'')+'" data-article-language-filter="All">All</button>'+ 
+      '<button class="'+(languageFilter==='en'?'active':'')+'" data-article-language-filter="en">English</button>'+ 
+      '<button class="'+(languageFilter==='ar'?'active':'')+'" data-article-language-filter="ar">العربية</button>'+ 
+      '</div>';
+
     const filterTabs='<div class="tabs best-articles-tabs" style="margin:0 0 14px 0">'+
       '<button class="'+(filter==='All'?'active':'')+'" data-article-feature-filter="All">All Articles</button>'+
       '<button class="'+(filter==='Best'?'active':'')+'" data-article-feature-filter="Best">★ Best Articles</button>'+
       '</div>';
 
     const controlsMarker='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px">';
-    if(html.includes(controlsMarker))html=html.replace(controlsMarker,filterTabs+controlsMarker);
+    if(html.includes(controlsMarker)){
+      html=html.replace(controlsMarker,filterTabs+controlsMarker);
+      html=html.replace(/<div class="tabs" style="margin:0"><button class="[^"]*" data-article-lang="en">English<\/button><button class="[^"]*" data-article-lang="ar">العربية<\/button>([\s\S]*?)<\/div>/,languageTabs);
+    }
     else html=filterTabs+html;
 
-    if(filter==='Best'&&!featuredArticles().filter(article=>hasLanguageContent(article,language)).length){
+    if(filter==='Best'&&!featuredArticles().filter(article=>languageFilter==='All'||hasLanguageContent(article,languageFilter)).length){
       html=html
         .replace('<b>No articles yet</b>','<b>No featured articles yet</b>')
         .replace('<b>No articles match</b>','<b>No featured articles match</b>')
@@ -106,6 +117,14 @@
 
   bindDynamic=function(){
     baseBindDynamic();
+
+    document.querySelectorAll('[data-article-language-filter]').forEach(button=>{
+      button.onclick=()=>{
+        state.articleLanguageFilter=button.dataset.articleLanguageFilter||'All';
+        if(state.articleLanguageFilter==='en'||state.articleLanguageFilter==='ar')state.articleLanguage=state.articleLanguageFilter;
+        render();
+      };
+    });
 
     document.querySelectorAll('[data-article-feature-filter]').forEach(button=>{
       button.onclick=()=>{
