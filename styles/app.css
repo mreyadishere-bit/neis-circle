@@ -3912,3 +3912,19 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     margin-inline:auto;
   }
 }
+
+
+/* v159.46 — performance: article covers use lazy-loadable images without changing card layout */
+.article-cover{
+  position:relative;
+  overflow:hidden;
+}
+.article-cover>img{
+  display:block;
+  width:100%;
+  height:100%;
+  min-width:100%;
+  min-height:100%;
+  object-fit:cover;
+  object-position:center;
+}
