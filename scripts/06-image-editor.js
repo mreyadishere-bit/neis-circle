@@ -1,12 +1,13 @@
 (function(){
   'use strict';
   var targets={
-    postImage:{preview:'postImagePreview',aspect:16/9},
-    galleryFile:{preview:'galleryPreview',aspect:4/3},
-    articleCover:{preview:'articleCoverPreview',aspect:16/9},
-    cpImage:{preview:'cpImagePreview',aspect:16/9}
+    postImage:{preview:'postImagePreview',aspect:'natural'},
+    galleryFile:{preview:'galleryPreview',aspect:'natural'},
+    articleCover:{preview:'articleCoverPreview',aspect:'natural'},
+    cpImage:{preview:'cpImagePreview',aspect:'natural'}
   };
   var records=new WeakMap();
+  var fileStates=new WeakMap();
   var active=false;
   function arabic(){return document.documentElement.lang==='ar'||document.documentElement.dir==='rtl'}
   function tr(en,ar){return arabic()?ar:en}
@@ -24,13 +25,15 @@
       var image;
       try{image=await loadImage(file)}catch(error){tell(tr('This image could not be opened.','تعذر فتح هذه الصورة.'));resolve(null);return}
       var natural=image.naturalWidth/image.naturalHeight;
-      var initialAspect=Number(preferredAspect)||natural;
+      var remembered=savedState||fileStates.get(file)||null;
+      var initialAspect=natural;
       var crop={
-        aspect:savedState&&savedState.aspect||initialAspect,
-        zoom:savedState&&savedState.zoom||1,
-        rotation:savedState&&savedState.rotation||0,
-        x:savedState&&savedState.x||0,
-        y:savedState&&savedState.y||0
+        aspect:remembered&&Number(remembered.aspect)>0?Number(remembered.aspect):initialAspect,
+        aspectMode:remembered&&remembered.aspectMode?remembered.aspectMode:'natural',
+        zoom:remembered&&Number(remembered.zoom)>0?Number(remembered.zoom):1,
+        rotation:remembered&&Number.isFinite(Number(remembered.rotation))?Number(remembered.rotation):0,
+        x:remembered&&Number.isFinite(Number(remembered.x))?Number(remembered.x):0,
+        y:remembered&&Number.isFinite(Number(remembered.y))?Number(remembered.y):0
       };
       var layer=document.createElement('div');
       layer.className='neis-crop-layer';
@@ -76,8 +79,9 @@
       }
       function markAspect(){
         layer.querySelectorAll('[data-neis-aspect]').forEach(function(button){
-          var value=button.dataset.neisAspect==='natural'?natural:Number(button.dataset.neisAspect);
-          button.classList.toggle('is-active',Math.abs(value-crop.aspect)<.002);
+          var mode=button.dataset.neisAspect;
+          var activeMode=crop.aspectMode==='natural'?mode==='natural':mode===crop.aspectMode;
+          button.classList.toggle('is-active',activeMode);
         });
       }
       function finish(value){
@@ -104,11 +108,12 @@
       frame.addEventListener('wheel',function(event){event.preventDefault();crop.zoom=Math.max(1,Math.min(3,crop.zoom+(event.deltaY<0?.08:-.08)));zoom.value=String(crop.zoom);draw()},{passive:false});
       zoom.addEventListener('input',function(){crop.zoom=Number(zoom.value);draw()});
       layer.querySelectorAll('[data-neis-aspect]').forEach(function(button){button.addEventListener('click',function(){
-        crop.aspect=button.dataset.neisAspect==='natural'?natural:Number(button.dataset.neisAspect);
+        crop.aspectMode=button.dataset.neisAspect;
+        crop.aspect=crop.aspectMode==='natural'?natural:Number(crop.aspectMode);
         crop.zoom=1;crop.x=0;crop.y=0;zoom.value='1';sizeCanvas();markAspect();draw();
       })});
       layer.querySelectorAll('[data-neis-rotate]').forEach(function(button){button.addEventListener('click',function(){crop.rotation=(crop.rotation+Number(button.dataset.neisRotate)+360)%360;crop.x=0;crop.y=0;draw()})});
-      layer.querySelector('[data-neis-reset]').addEventListener('click',function(){crop={aspect:initialAspect,zoom:1,rotation:0,x:0,y:0};zoom.value='1';sizeCanvas();markAspect();draw()});
+      layer.querySelector('[data-neis-reset]').addEventListener('click',function(){crop={aspect:initialAspect,aspectMode:'natural',zoom:1,rotation:0,x:0,y:0};zoom.value='1';sizeCanvas();markAspect();draw()});
       layer.querySelectorAll('[data-neis-cancel]').forEach(function(button){button.addEventListener('click',function(){finish(null)})});
       layer.addEventListener('mousedown',function(event){if(event.target===layer)finish(null)});
       layer.querySelector('[data-neis-apply]').addEventListener('click',function(){
@@ -120,7 +125,9 @@
           var base=(file.name||'image').replace(/\.[^.]+$/,'');
           var extension=outputType==='image/png'?'.png':'.jpg';
           var edited=new File([blob],base+'-cropped'+extension,{type:outputType,lastModified:Date.now()});
-          finish({file:edited,state:{aspect:crop.aspect,zoom:crop.zoom,rotation:crop.rotation,x:crop.x,y:crop.y}});
+          var state={aspect:crop.aspect,aspectMode:crop.aspectMode,zoom:crop.zoom,rotation:crop.rotation,x:crop.x,y:crop.y};
+          fileStates.set(edited,state);
+          finish({file:edited,state:state});
         },outputType,outputType==='image/jpeg'?.9:undefined);
       });
       document.addEventListener('keydown',onKey);
@@ -176,7 +183,7 @@
     editFile:async function(file,preferredAspect,savedState){
       if(!file||active)return null;
       active=true;
-      try{return await editor(file,preferredAspect,savedState||null)}
+      try{return await editor(file,'natural',savedState||fileStates.get(file)||null)}
       finally{active=false}
     },
     editUrl:async function(url,preferredAspect,savedState,name){
