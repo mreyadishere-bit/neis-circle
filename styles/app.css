@@ -3928,3 +3928,26 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   object-fit:cover;
   object-position:center;
 }
+
+
+/* v159.47 — desktop image viewer: keep images centered at a quality-friendly size */
+@media(min-width:721px){
+  .image-lightbox{
+    padding:40px 56px;
+  }
+  .image-lightbox>img{
+    max-width:min(72vw,980px);
+    max-height:min(78vh,780px);
+    border-radius:10px;
+    box-shadow:0 18px 60px rgba(0,0,0,.24);
+  }
+  .post-gallery-stage{
+    width:min(72vw,980px);
+    height:min(78dvh,780px);
+  }
+  .post-gallery-stage>img{
+    max-width:100%;
+    max-height:100%;
+    border-radius:10px;
+  }
+}
