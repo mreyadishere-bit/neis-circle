@@ -5,7 +5,8 @@
 
   const FEATURE_EDITOR_EMAILS=new Set([
     'mreyadishere@gmail.com',
-    'fatemarateb5@gmail.com'
+    'fatemarateb5@gmail.com',
+    'bassantasaad12@gmail.com'
   ]);
 
   if(typeof window==='undefined'||typeof state==='undefined')return;
