@@ -5,29 +5,19 @@
   flex-wrap:wrap;
 }
 
-.best-article-badge{
-  display:inline-flex;
-  align-items:center;
-  min-height:23px;
-  padding:4px 8px;
-  border-radius:999px;
-  background:color-mix(in srgb,var(--accent) 12%,var(--card));
-  color:var(--accent);
-  font-size:10px;
-  font-weight:850;
-  white-space:nowrap;
-}
-
-.article-card:has(.best-article-badge){
-  border-color:color-mix(in srgb,var(--accent) 24%,var(--line));
+.article-card .article-copy{
+  position:relative;
 }
 
 .article-feature-star{
+  position:absolute;
+  z-index:2;
+  inset-block-start:16px;
+  inset-inline-end:16px;
   display:inline-grid;
   place-items:center;
   width:30px;
   height:30px;
-  flex:0 0 30px;
   margin:0;
   padding:0;
   border:1px solid var(--line);
@@ -38,7 +28,11 @@
   font-size:17px;
   line-height:1;
   cursor:pointer;
+  box-shadow:0 3px 10px rgba(17,45,37,.05);
   transition:transform .15s ease,border-color .15s ease,background .15s ease,color .15s ease;
+}
+.article-card:has(.article-feature-star) .article-meta{
+  padding-inline-end:38px;
 }
 .article-feature-star:hover,
 .article-feature-star:focus-visible{
@@ -69,39 +63,14 @@
   .best-articles-tabs::-webkit-scrollbar{display:none}
   .best-articles-tabs button{flex:0 0 auto}
 
-  .article-card .article-meta{
-    align-items:center;
-    gap:6px;
-    flex-wrap:wrap;
-  }
   .article-feature-star{
-    width:32px;
-    height:32px;
-    flex-basis:32px;
-    font-size:18px;
+    inset-block-start:13px;
+    inset-inline-end:13px;
+    width:30px;
+    height:30px;
+    font-size:17px;
   }
-  .article-card .article-actions{
-    display:grid!important;
-    grid-template-columns:minmax(0,1fr) auto auto!important;
-    gap:7px!important;
-    width:100%;
-  }
-  .article-card .article-actions .primary{
-    width:100%;
-    min-width:0;
-  }
-  .article-card .article-actions .secondary,
-  .article-card .article-actions button{
-    min-width:0;
-    padding-inline:12px;
-  }
-}
-
-@media(max-width:420px){
-  .article-card .article-actions{
-    grid-template-columns:minmax(0,1fr) auto!important;
-  }
-  .article-card .article-actions [data-delete-article]{
-    grid-column:2;
+  .article-card:has(.article-feature-star) .article-meta{
+    padding-inline-end:36px;
   }
 }
