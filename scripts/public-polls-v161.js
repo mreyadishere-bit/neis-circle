@@ -246,7 +246,7 @@
     ['Discussion','Question','Resource','Experience','Announcement','Poll'].forEach(function(value){addTypeOption(select,value)});
     if(['Discussion','Question','Resource','Experience','Announcement'].indexOf(kind)>=0)select.value=kind;
     select.onchange=function(){
-      if(select.value==='Poll'){closeModal();setTimeout(openPublicPollComposer,0)}
+      if(select.value==='Poll')openPublicPollComposer();
     };
   };
 
