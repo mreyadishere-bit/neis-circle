@@ -28,9 +28,16 @@
     return (data||[]).map(row=>row.value).filter(Boolean);
   }
   async function loadSubjects(){study.subjects=await loadValues('subject');study.ready=true;renderStudyPage()}
+  function normalizeBlockOptions(values){
+    return [...new Set((values||[]).map(clean).filter(value=>{
+      if(!value)return false;
+      const normalized=value.toLowerCase().replace(/\s+/g,' ');
+      return normalized!=='all'&&normalized!=='all blocks'&&normalized!=='كل البلوكات';
+    }))];
+  }
   async function loadUnits(){
     const existing=study.subject?await loadValues('unit'):[];
-    study.units=[...new Set([...DEFAULT_BLOCKS,...existing])];
+    study.units=[...new Set([...DEFAULT_BLOCKS,...normalizeBlockOptions(existing)])];
     renderStudyPage();
   }
   async function loadUnitsForSubject(subject){
@@ -38,11 +45,13 @@
     if(subject){
       const {data,error}=await sb.rpc('study_filter_values',{level_input:'unit',subject_input:subject,unit_input:null});
       if(error)toast(friendly(error));
-      else existing=(data||[]).map(row=>row.value).filter(Boolean);
+      else existing=(data||[]).map(row=>row.value);
     }
-    return [...new Set([...DEFAULT_BLOCKS,...existing])];
+    return [...new Set([...DEFAULT_BLOCKS,...normalizeBlockOptions(existing)])];
   }
-  function shouldLoadResources(){return study.tab!=='resources'||!!study.unit||clean(study.search).length>=2}
+  function shouldLoadResources(){
+    return study.tab!=='resources'||!!study.subject||!!study.unit||clean(study.search).length>=2||!!study.type||!!study.language;
+  }
   async function loadResources(){
     const request=++study.request;
     if(!shouldLoadResources()){study.resources=[];study.actions=new Map();study.total=0;study.loading=false;study.error='';renderStudyPage();return}
