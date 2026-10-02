@@ -2166,7 +2166,7 @@ html,body{
 html[data-style-theme="custom"]{
   --accent:var(--custom-accent,#256da8);
   --accent2:color-mix(in srgb,var(--custom-accent,#256da8) 12%,#fff);
-  --paper:color-mix(in srgb,var(--custom-accent,#256da8) 4%,#fff);
+  --paper:color-mix(in srgb,var(--custom-accent,#256da8) 1.25%,#fff);
   --card:#fff;
   --soft:color-mix(in srgb,var(--custom-accent,#256da8) 8%,#fff);
   --line:color-mix(in srgb,var(--custom-accent,#256da8) 18%,#fff);
@@ -2199,7 +2199,7 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 }
 
 .style-theme-preview.theme-custom i:first-child{background:var(--custom-preview,#256da8)}
-.style-theme-preview.theme-custom{background:color-mix(in srgb,var(--custom-preview,#256da8) 4%,#fff)}
+.style-theme-preview.theme-custom{background:color-mix(in srgb,var(--custom-preview,#256da8) 1.25%,#fff)}
 .style-theme-preview.theme-custom i:nth-child(3){background:color-mix(in srgb,var(--custom-preview,#256da8) 10%,#fff)}
 
 .custom-theme-color-panel{display:grid;gap:16px}
