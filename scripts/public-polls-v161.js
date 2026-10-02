@@ -236,18 +236,147 @@
     return baseHome();
   };
 
+  function enhanceGlobalComposer(initialKind){
+    var form=$('#postFormPlus'),select=$('#postKind'),title=$('#postTitle'),body=$('#postBody'),imageInput=$('#postImage'),preview=$('#postImagePreview'),hint=$('#postImageEditHint');
+    if(!form||!select||!title||!body)return;
+
+    ['Discussion','Question','Resource','Experience','Announcement','Poll'].forEach(function(value){addTypeOption(select,value)});
+    if(initialKind==='Poll')select.value='Poll';
+
+    var pollSection=document.createElement('section');
+    pollSection.id='globalPollFields';
+    pollSection.className='circle-poll-composer hidden';
+    pollSection.innerHTML=
+      '<div class="circle-poll-composer-head"><div><b>'+t('Poll options','خيارات التصويت')+'</b><small>'+t('Add between 2 and 10 unique answers.','أضف من خيارين إلى 10 اختيارات مختلفة.')+'</small></div><button type="button" class="secondary" id="gpAddOption">+ '+t('Add option','إضافة اختيار')+'</button></div>'+
+      '<div id="gpOptions" class="circle-poll-option-editors"></div>'+
+      '<div class="circle-poll-settings">'+
+        '<label class="field">'+t('Voting type','نوع التصويت')+'<select id="gpSelection"><option value="single">'+t('Single choice','اختيار واحد')+'</option><option value="multiple">'+t('Multiple choice','اختيارات متعددة')+'</option></select></label>'+
+        '<label class="field hidden" id="gpMaxWrap">'+t('Maximum choices','الحد الأقصى للاختيارات')+'<input id="gpMax" type="number" min="1" max="10" placeholder="'+t('No limit','بدون حد')+'"></label>'+
+        '<label class="field">'+t('Results visibility','ظهور النتائج')+'<select id="gpResults"><option value="after_vote" selected>'+t('After voting','بعد التصويت')+'</option><option value="always">'+t('Always visible','ظاهرة دائمًا')+'</option><option value="after_close">'+t('After closing','بعد الإغلاق')+'</option></select></label>'+
+        '<label class="field">'+t('Closing','الإغلاق')+'<select id="gpClosing"><option value="none">'+t('No end date','بدون موعد انتهاء')+'</option><option value="custom">'+t('Custom date & time','تاريخ ووقت مخصص')+'</option></select></label>'+
+        '<label class="field hidden" id="gpCloseAtWrap">'+t('Close at','يغلق في')+'<input id="gpCloseAt" type="datetime-local"></label>'+
+      '</div>'+
+      '<div class="circle-poll-toggles">'+
+        '<label><input id="gpAllowChange" type="checkbox" checked><span><b>'+t('Allow vote changes','السماح بتغيير التصويت')+'</b><small>'+t('People can update their vote while the poll is open.','يمكن للمستخدمين تعديل تصويتهم أثناء فتح التصويت.')+'</small></span></label>'+
+        '<label><input id="gpAnonymous" type="checkbox"><span><b>'+t('Anonymous voting','تصويت مجهول')+'</b><small>'+t('Voter identities stay hidden.','تظل هوية المصوتين مخفية.')+'</small></span></label>'+
+      '</div>';
+    body.closest('.field').insertAdjacentElement('afterend',pollSection);
+
+    var values=['',''],selectedFiles=[];
+    var optionsHost=$('#gpOptions');
+    function drawOptions(){
+      drawOptionEditors(optionsHost,values,'gp',false);
+      optionsHost.querySelectorAll('[data-gp-option]').forEach(function(input){input.oninput=function(){values[Number(input.dataset.gpOption)]=input.value}});
+      optionsHost.querySelectorAll('[data-gp-remove]').forEach(function(button){button.onclick=function(){if(values.length<=2)return;values.splice(Number(button.dataset.gpRemove),1);drawOptions()}});
+      $('#gpAddOption').disabled=values.length>=10;
+    }
+    drawOptions();
+    $('#gpAddOption').onclick=function(){if(values.length<10){values.push('');drawOptions()}};
+    $('#gpSelection').onchange=function(){$('#gpMaxWrap').classList.toggle('hidden',$('#gpSelection').value!=='multiple')};
+    $('#gpClosing').onchange=function(){$('#gpCloseAtWrap').classList.toggle('hidden',$('#gpClosing').value!=='custom')};
+
+    function renderSelectedImages(){
+      if(!preview)return;
+      preview.innerHTML=selectedFiles.map(function(file,index){
+        return '<button type="button" class="post-upload-preview-item post-upload-editable" data-gp-edit-image="'+index+'" aria-label="'+esc(t('Adjust image','تعديل الصورة'))+' '+(index+1)+'"><img src="'+URL.createObjectURL(file)+'" alt="'+esc(t('Selected image','صورة مختارة'))+' '+(index+1)+'"><span>'+(index+1)+'</span><em>'+t('Crop','قص')+'</em></button>';
+      }).join('');
+      preview.classList.toggle('hidden',!selectedFiles.length);
+      if(hint)hint.classList.toggle('hidden',!selectedFiles.length);
+      preview.querySelectorAll('[data-gp-edit-image]').forEach(function(button){
+        button.onclick=async function(){
+          var index=Number(button.dataset.gpEditImage),source=selectedFiles[index];
+          if(!source||!window.NEISImageEditor||!window.NEISImageEditor.editFile)return;
+          var result=await window.NEISImageEditor.editFile(source,16/9,null);
+          if(result&&result.file){selectedFiles[index]=result.file;renderSelectedImages()}
+        };
+      });
+    }
+    if(imageInput){
+      imageInput.onchange=function(){
+        selectedFiles=[].slice.call(imageInput.files||[]).slice(0,8);
+        if((imageInput.files&&imageInput.files.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
+        renderSelectedImages();
+      };
+    }
+
+    var titleLabel=title.closest('.field'),bodyLabel=body.closest('.field');
+    var originalTitleLabel=titleLabel&&titleLabel.childNodes[0]&&titleLabel.childNodes[0].textContent;
+    var originalBodyLabel=bodyLabel&&bodyLabel.childNodes[0]&&bodyLabel.childNodes[0].textContent;
+    var submit=$('#postSubmit');
+
+    function updateMode(){
+      var isPoll=select.value==='Poll';
+      pollSection.classList.toggle('hidden',!isPoll);
+      body.required=!isPoll;
+      title.placeholder=isPoll?t('Ask a clear poll question','اكتب سؤال تصويت واضح'):t('Make the value clear','اكتب عنوانًا واضحًا');
+      body.placeholder=isPoll?t('Add optional context for the poll…','أضف وصفًا اختياريًا للتصويت…'):t('Add context, what you tried, or what others can learn…','أضف السياق وما جرّبته أو ما يمكن للآخرين تعلمه…');
+      if(titleLabel&&titleLabel.childNodes[0])titleLabel.childNodes[0].textContent=isPoll?t('Poll question','سؤال التصويت'):(originalTitleLabel||t('Title','العنوان'));
+      if(bodyLabel&&bodyLabel.childNodes[0])bodyLabel.childNodes[0].textContent=isPoll?t('Description / context (optional)','الوصف / السياق (اختياري)'):(originalBodyLabel||t('Details','التفاصيل'));
+      if(submit)submit.textContent=isPoll?t('Publish poll','نشر التصويت'):t('Publish post','نشر المنشور');
+    }
+    select.addEventListener('change',updateMode);
+    select.addEventListener('input',updateMode);
+    updateMode();
+
+    var originalSubmit=form.onsubmit;
+    form.onsubmit=async function(event){
+      if(select.value!=='Poll'){
+        return originalSubmit&&originalSubmit.call(form,event);
+      }
+      event.preventDefault();
+
+      var clean=values.map(function(value){return value.trim()}).filter(Boolean);
+      if(title.value.trim().length<3){toast(t('Add a clear poll question.','أضف سؤال تصويت واضحًا.'));return}
+      if(clean.length<2||clean.length>10){toast(t('Add between 2 and 10 poll options.','أضف من خيارين إلى 10 خيارات للتصويت.'));return}
+      if(new Set(clean.map(function(value){return value.toLowerCase()})).size!==clean.length){toast(t('Poll options must be unique.','يجب أن تكون خيارات التصويت مختلفة.'));return}
+      if($('#gpClosing').value==='custom'&&!$('#gpCloseAt').value){toast(t('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
+
+      var button=$('#postSubmit');
+      if(button){button.disabled=true;button.classList.add('button-loading')}
+      var uploaded=[];
+      for(var file of selectedFiles){
+        var media=await uploadRecord(file,'posts');
+        if(!media){
+          if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(function(item){return item.path}));
+          if(button){button.disabled=false;button.classList.remove('button-loading')}
+          return;
+        }
+        uploaded.push(media);
+      }
+
+      var selection=$('#gpSelection').value,rawMax=$('#gpMax').value.trim();
+      var maxSelections=selection==='single'?1:(rawMax?Math.min(clean.length,Math.max(1,Number(rawMax)||1)):null);
+      var closeValue=$('#gpClosing').value==='custom'?$('#gpCloseAt').value:'';
+      var result=await sb.rpc('create_public_poll_post',{
+        p_title:title.value.trim(),
+        p_body:body.value.trim(),
+        p_tags:$('#postTags').value.split(',').map(function(value){return value.trim()}).filter(Boolean).slice(0,8),
+        p_image_url:uploaded[0]&&uploaded[0].url||'',
+        p_image_urls:uploaded.map(function(item){return item.url}),
+        p_image_display_mode:document.querySelector('input[name="postImageDisplayMode"]:checked')&&document.querySelector('input[name="postImageDisplayMode"]:checked').value==='fill'?'fill':'fit',
+        p_options:clean,
+        p_selection_type:selection,
+        p_max_selections:maxSelections,
+        p_allow_vote_change:$('#gpAllowChange').checked,
+        p_anonymous:$('#gpAnonymous').checked,
+        p_results_visibility:$('#gpResults').value,
+        p_closes_at:closeValue?new Date(closeValue).toISOString():null
+      });
+      if(result.error){
+        if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(function(item){return item.path}));
+        toast(safeError(result.error,'create this poll'));
+        if(button){button.disabled=false;button.classList.remove('button-loading')}
+        return;
+      }
+      closeModal();await loadLiveData();store.loaded=false;nav('home');toast(t('Poll published.','تم نشر التصويت.'));
+    };
+  }
+
   var baseCompose=compose;
   compose=function(kind){
     kind=kind||'Discussion';
-    if(kind==='Poll'){openPublicPollComposer();return}
-    baseCompose(kind);
-    var select=$('#postKind');
-    if(!select)return;
-    ['Discussion','Question','Resource','Experience','Announcement','Poll'].forEach(function(value){addTypeOption(select,value)});
-    if(['Discussion','Question','Resource','Experience','Announcement'].indexOf(kind)>=0)select.value=kind;
-    select.onchange=function(){
-      if(select.value==='Poll')openPublicPollComposer();
-    };
+    baseCompose(kind==='Poll'?'Discussion':kind);
+    enhanceGlobalComposer(kind);
   };
 
   if(typeof openCirclePost==='function'){
