@@ -14,7 +14,7 @@ const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
 Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
-let v6Channel=null,notificationChannel=null,notificationChannelUid='',notificationPollTimer=null,notificationRealtimeStatus='CLOSED',notificationRefreshPromise=null,notificationLastFullSyncAt=0,searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
+let v6Channel=null,v6ChannelUid='',v6RealtimeStatus='CLOSED',notificationChannel=null,notificationChannelUid='',notificationPollTimer=null,notificationRealtimeStatus='CLOSED',notificationRefreshPromise=null,notificationLastFullSyncAt=0,searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
@@ -329,6 +329,59 @@ function applyRoute(){
 const priorNav=nav;
 nav=function(view){if(view!=='search'){searchRequestId++;state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null}routeTo(view)};
 
+async function setupV6Realtime(uid){
+  if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
+  if(v6Channel){
+    try{await sb.removeChannel(v6Channel)}catch(_){}
+    v6Channel=null;
+  }
+  v6ChannelUid=uid;
+  v6RealtimeStatus='CONNECTING';
+  v6Channel=sb.channel(`neis-v7-${uid}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
+    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6)
+    .subscribe(status=>{v6RealtimeStatus=status});
+}
+async function stopRealtimeRuntime(){
+  clearInterval(notificationPollTimer);
+  notificationPollTimer=null;
+  notificationRefreshPromise=null;
+  notificationLastFullSyncAt=0;
+  if(v6Channel){
+    try{await sb?.removeChannel(v6Channel)}catch(_){}
+    v6Channel=null;
+  }
+  if(notificationChannel){
+    try{await sb?.removeChannel(notificationChannel)}catch(_){}
+    notificationChannel=null;
+  }
+  v6ChannelUid='';
+  notificationChannelUid='';
+  v6RealtimeStatus='CLOSED';
+  notificationRealtimeStatus='CLOSED';
+}
+window.NEISRealtimeRuntime={
+  stop:stopRealtimeRuntime,
+  snapshot:()=>({
+    v6Status:v6RealtimeStatus,
+    v6User:v6ChannelUid,
+    notificationStatus:notificationRealtimeStatus,
+    notificationUser:notificationChannelUid
+  })
+};
+
 const coreLoad=loadLiveData;
 loadLiveData=async function(){
   if(!sb||!authUser)return;
@@ -367,23 +420,7 @@ loadLiveData=async function(){
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
   const messageReactionRes=await sb.from('message_reactions').select('*').order('created_at');if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
-  if(v6Channel)await sb.removeChannel(v6Channel);
-  v6Channel=sb.channel(`neis-v7-${uid}`)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
-    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6)
-    .subscribe();
+  await setupV6Realtime(uid);
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };

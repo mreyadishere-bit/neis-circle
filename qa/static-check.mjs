@@ -125,6 +125,12 @@ if (fs.existsSync(socialPath)) {
     if (/from\(['"]notifications['"]\)/.test(globalLoadSource)) {
       failures.push('Global loadLiveData must not fetch notifications; use the targeted notification loader.');
     }
+    if (/removeChannel\(v6Channel\)/.test(globalLoadSource)) {
+      failures.push('Global loadLiveData must not tear down the persistent v6 realtime channel.');
+    }
+    if (!/setupV6Realtime\(uid\)/.test(globalLoadSource)) {
+      failures.push('Global loadLiveData must use setupV6Realtime(uid).');
+    }
   }
 }
 
