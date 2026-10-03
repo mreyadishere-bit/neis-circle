@@ -296,7 +296,7 @@ loadLiveData=async function(){
     sb.from('circle_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').order('joined_at'),
     sb.from('circle_meetings').select('*,creator:profiles(id,full_name,username,avatar_url)').order('starts_at'),
     sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
-    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at'),
+    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles!comments_author_id_fkey(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at'),
     state.isAdmin?sb.rpc('admin_report_details'):Promise.resolve({data:[],error:null}),
     sb.from('profile_badges').select('user_id,badge_key,awarded_at')
   ]);
