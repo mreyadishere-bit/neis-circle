@@ -641,7 +641,7 @@ function patchDmThread(conversationId){
   template.innerHTML=dmThreadMarkup(conversation).trim();
   const replacement=template.content.firstElementChild;
   if(!replacement)return;
-  if(node)node.replaceWith(replacement);else container.prepend(replacement);
+  if(node)node.replaceWith(replacement);else{container.querySelector('.empty')?.remove();container.prepend(replacement)}
   bindV6(replacement);
   sortConversations();
   const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
@@ -662,6 +662,10 @@ function patchActiveDmFlow({insertedId='',force=false}={}){
   const messages=activeDmMessages();
   const inserted=insertedId?messages.find(item=>same(item.id,insertedId)):null;
   const existing=insertedId?flow.querySelector('[data-message-id="'+CSS.escape(String(insertedId))+'"]'):null;
+  if(inserted&&existing&&!force){
+    if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+    return;
+  }
   if(inserted&&!existing&&!force){
     const index=messages.findIndex(item=>same(item.id,inserted.id));
     const previous=index>0?messages[index-1]:null;
@@ -793,7 +797,7 @@ async function handleMessageRealtime(payload){
   }
   patchDmThread(conversationId);
   if(same(state.activeConversationId,conversationId)){
-    patchActiveDmFlow({insertedId:newlyInserted?id:'',force:event!=='INSERT'});
+    patchActiveDmFlow({insertedId:event==='INSERT'?id:'',force:event!=='INSERT'});
     if(event==='INSERT'&&!same(incoming.sender_id,authUser.id)&&document.visibilityState==='visible'){
       Promise.resolve(markConversationRead(conversationId)).catch(()=>{});
     }
@@ -831,7 +835,9 @@ async function handleCircleMessageRealtime(payload){
       const active=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
       const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
       const existing=flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]');
-      if(inserted&&!existing){
+      if(event==='INSERT'&&existing){
+        if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      }else if(inserted&&!existing){
         const pos=active.findIndex(item=>same(item.id,id)),previousMessage=pos>0?active[pos-1]:null;
         flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
         if(flow.lastElementChild)bindV6(flow.lastElementChild);
