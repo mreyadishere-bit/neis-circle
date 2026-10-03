@@ -234,6 +234,8 @@ const conversationData=window.NEISConversationData;
 if(!conversationData)throw new Error('NEIS Conversation Data failed to load.');
 const messageReactionData=window.NEISMessageReactionData;
 if(!messageReactionData)throw new Error('NEIS Message Reaction Data failed to load.');
+const chatBootstrapData=window.NEISChatBootstrapData;
+if(!chatBootstrapData)throw new Error('NEIS Chat Bootstrap Data failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -870,33 +872,21 @@ loadLiveData=async function(){
   await coreLoad();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const uid=authUser.id;
-  const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
+  const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
+  const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
     sb.from('follows').select('*').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
-    sb.from('conversation_members').select('*').eq('user_id',uid),
     sb.from('circles').select('*').order('created_at',{ascending:false}),
     sb.from('circle_members').select('*').order('joined_at'),
     sb.from('circle_meetings').select('*').order('starts_at'),
     sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').is('deleted_at',null).order('created_at')
   ]);
   if(!followRes.error)state.follows=followRes.data||[];else state.dataErrors.connections=followRes.error;
-  const ownConversationMemberships=myMembershipRes.data||[];
-  let conversationIds=ownConversationMemberships.filter(x=>!x.hidden_at).map(x=>x.conversation_id);
-  let conversationRes={data:[]},memberRes={data:[]},messageRes={data:[]};
-  if(conversationIds.length){[conversationRes,memberRes,messageRes]=await Promise.all([
-    sb.from('conversations').select('*').in('id',conversationIds).order('updated_at',{ascending:false}),
-    sb.from('conversation_members').select('*').in('conversation_id',conversationIds),
-    sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(200)
-  ])}
-  if(!conversationRes.error)state.conversations=conversationRes.data||[];
-  if(!memberRes.error)state.conversationMembers=(memberRes.data||ownConversationMemberships).map(member=>({...member,profile:profileData(member.user_id)}));
-  if(!messageRes.error){const clearedByConversation=new Map(ownConversationMemberships.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));state.liveMessages=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared}).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
+  await directChatPromise;
   if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=(circleMemberRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
   if(!meetingRes.error){state.circleMeetings=(meetingRes.data||[]).map(meeting=>({...meeting,creator:profileData(meeting.creator_id)}));state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
   if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));const commentCounts=new Map();for(const comment of state.allComments){const key=String(comment.post_id||'');if(key)commentCounts.set(key,(commentCounts.get(key)||0)+1)}state.posts.forEach(p=>{p.comments=commentCounts.get(String(p.id))||0})}
-  const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
-  state.circleMessages=[];
-  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
+  await chatBootstrapData.loadCircle({sb,userId:uid,state,profileData,isAdmin:state.isAdmin});
   const messageReactionRes=await messageReactionData.load({sb,...messageReactionData.idsFromState(state)});if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   await setupV6Realtime(uid);
   await setupNotificationRealtime(uid);
