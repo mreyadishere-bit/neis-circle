@@ -1814,7 +1814,13 @@ home=function(){
   }).slice(0,3);
 
   const renderPostSafe=post=>{
-    try{return postCard(post)}
+    try{
+      let html=postCard(post);
+      if(window.NEISPublicPolls?.isPublicPollPost?.(post)&&window.NEISPublicPolls?.decoratePostCard){
+        html=window.NEISPublicPolls.decoratePostCard(post,html);
+      }
+      return html;
+    }
     catch(error){
       console.error('[NEIS home post render]',error,post);
       const id=esc(post?.id||''),title=esc(post?.title||t('Post','منشور')),body=esc(post?.body||''),name=esc(post?.user||t('NEIS Student','طالب NEIS'));
