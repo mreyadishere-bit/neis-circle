@@ -126,6 +126,24 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const messageStatePath = path.join(root, 'scripts', 'social', 'messages-state-v177.js');
+if (!fs.existsSync(messageStatePath)) {
+  failures.push('Missing isolated realtime message state module.');
+} else {
+  const messageStateSource = fs.readFileSync(messageStatePath, 'utf8');
+  for (const token of ['applyDirectMessage','applyCircleMessage','applyMessageReaction','applyConversationMember']) {
+    if (!messageStateSource.includes(token)) failures.push('Message state module is missing expected mutation: ' + token);
+  }
+}
+const messageStateScripts = localScriptSrcs.filter(src => /social\/messages-state-v\d+\.js/i.test(src));
+if (messageStateScripts.length !== 1) {
+  failures.push(`Expected exactly one message state module, found ${messageStateScripts.length}: ${messageStateScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageStateScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Message state module must load before 05-social.js.');
+}
+
 const videoEmbedsPath = path.join(root, 'scripts', 'social', 'video-embeds-v176.js');
 if (!fs.existsSync(videoEmbedsPath)) {
   failures.push('Missing isolated video embed parser.');
@@ -186,6 +204,7 @@ const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
+  if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
   for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
