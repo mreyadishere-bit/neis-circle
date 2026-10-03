@@ -261,7 +261,9 @@ if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
   if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
-  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');\n  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');\n  if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
+  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
+  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
+  if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
