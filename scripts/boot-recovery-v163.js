@@ -27,11 +27,14 @@
       }
 
       if(session){
+        const sameUser=authUser&&String(authUser.id)===String(session.user?.id||'');
         authUser=session.user||authUser;
         window.NEISCleanAuthCallbackUrl?.();
-        try{await loadLiveData()}catch(error){console.error('[NEIS startup recovery] live-data load failed',error)}
+        if(!(sameUser&&document.body.classList.contains('app-ready'))){
+          try{await loadLiveData()}catch(error){console.error('[NEIS startup recovery] live-data load failed',error)}
+          if(typeof render==='function')render();
+        }
         if(typeof setupBanner==='function')setupBanner=()=>'';
-        if(typeof render==='function')render();
         done=true;
         return;
       }
