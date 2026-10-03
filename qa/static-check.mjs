@@ -126,6 +126,24 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const messageReactionDataPath = path.join(root, 'scripts', 'social', 'message-reactions-data-v180.js');
+if (!fs.existsSync(messageReactionDataPath)) {
+  failures.push('Missing scoped message reaction data module.');
+} else {
+  const messageReactionDataSource = fs.readFileSync(messageReactionDataPath, 'utf8');
+  for (const token of ['dm_message_id','circle_message_id','CHUNK_SIZE=100','idsFromState']) {
+    if (!messageReactionDataSource.includes(token)) failures.push('Message reaction data module is missing expected behavior: ' + token);
+  }
+}
+const messageReactionDataScripts = localScriptSrcs.filter(src => /social\/message-reactions-data-v\d+\.js/i.test(src));
+if (messageReactionDataScripts.length !== 1) {
+  failures.push(`Expected exactly one message reaction data module, found ${messageReactionDataScripts.length}: ${messageReactionDataScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageReactionDataScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Message reaction data module must load before 05-social.js.');
+}
+
 const conversationDataPath = path.join(root, 'scripts', 'social', 'conversation-data-v179.js');
 if (!fs.existsSync(conversationDataPath)) {
   failures.push('Missing isolated conversation data module.');
@@ -243,7 +261,7 @@ if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
   if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
-  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');\n  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
+  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');\n  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');\n  if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
@@ -268,6 +286,9 @@ if (fs.existsSync(socialPath)) {
   }
   if (/state\.posts\.forEach\([^\n]+state\.allComments\.filter/.test(socialSource)) {
     failures.push('Loaded comment counts must be computed in one pass, not by filtering all comments once per post.');
+  }
+  if (/from\('message_reactions'\)\.select\('\*'\)\.order\('created_at'\)/.test(socialSource)) {
+    failures.push('Unscoped message_reactions select must not return to 05-social.js.');
   }
   const forbiddenMessageBindings = [
     "table:'messages'},refreshMessagesV6",
