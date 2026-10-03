@@ -4,6 +4,7 @@
   "scripts": {
     "qa:static": "node qa/static-check.mjs",
     "qa:smoke": "node qa/smoke.mjs",
-    "qa": "npm run qa:static && npm run qa:smoke"
+    "qa": "npm run qa:static && npm run qa:smoke",
+    "qa:unit": "node qa/data-coordinator.test.mjs"
   }
 }
