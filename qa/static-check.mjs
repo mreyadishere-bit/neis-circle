@@ -537,6 +537,25 @@ else {
   if (postEditSection.includes("select('*')")) failures.push('Post edit must not request wildcard fields.');
 }
 
+
+const mobileNavCssPath = path.join(root, 'styles', 'mobile-v30.css');
+if (fs.existsSync(mobileNavCssPath)) {
+  const mobileNavCss = fs.readFileSync(mobileNavCssPath, 'utf8');
+  const reserveStart = mobileNavCss.indexOf('v65 — mobile bottom-nav reserve');
+  const reserveSection = reserveStart >= 0 ? mobileNavCss.slice(reserveStart) : '';
+  if (!reserveSection) failures.push('Missing mobile bottom-nav reserve contract.');
+  else {
+    for (const token of [
+      'padding-bottom:calc(124px + env(safe-area-inset-bottom))!important',
+      'scroll-padding-bottom:calc(124px + env(safe-area-inset-bottom))',
+      '.bottom-nav::before',
+      'background:var(--paper)'
+    ]) {
+      if (!reserveSection.includes(token)) failures.push('Mobile bottom-nav reserve contract is missing: ' + token);
+    }
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
