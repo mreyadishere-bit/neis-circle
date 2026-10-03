@@ -875,9 +875,9 @@ loadLiveData=async function(){
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
   const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
     sb.from('follows').select('follower_id,following_id,status,created_at').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
-    sb.from('circles').select('*').order('created_at',{ascending:false}),
-    sb.from('circle_members').select('*').order('joined_at'),
-    sb.from('circle_meetings').select('*').order('starts_at'),
+    sb.from('circles').select('id,owner_id,name,description,category,privacy,created_at').order('created_at',{ascending:false}),
+    sb.from('circle_members').select('circle_id,user_id,role,status,joined_at').order('joined_at'),
+    sb.from('circle_meetings').select('id,circle_id,creator_id,title,description,starts_at,duration_minutes,room_name,cancelled_at,ended_at,created_at').order('starts_at'),
     sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').is('deleted_at',null).order('created_at')
   ]);
   if(!followRes.error)state.follows=followRes.data||[];else state.dataErrors.connections=followRes.error;
