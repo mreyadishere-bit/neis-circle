@@ -1777,7 +1777,62 @@ function circleMemberSideItem(member){
   return `<div class="suggested-person circle-member-side-item"><button class="suggested-person-profile" data-open-profile="${esc(id)}">${profileAvatar(p)}<span class="suggested-person-copy"><b>${esc(p?.full_name||t('Student','طالب'))}</b>${meta?`<small>${esc(meta)}</small>`:''}</span></button>${own?'':`<button class="suggested-person-follow ${following?'active':''}" data-v6-follow="${esc(id)}" aria-label="${following?t('Unfollow','إلغاء المتابعة'):t('Follow','متابعة')} ${esc(p?.full_name||t('Student','طالب'))}">${following?'✓':'+'}</button>`}</div>`;
 }
 
-home=function(){let posts=state.posts.filter(p=>!p.circle_id&&(!state.query||match(normalize(state.query),p.title,p.body,p.tags,p.user)));if(state.filter==='Questions')posts=posts.filter(p=>p.kind==='Question');if(state.filter==='Resources')posts=posts.filter(p=>p.kind==='Resource');if(state.filter==='Latest')posts=[...posts].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));if(state.filter==='For you'){const following=state.follows.filter(f=>same(f.follower_id,authUser.id)&&f.status==='accepted').map(f=>f.following_id),joined=state.circleMembers.filter(m=>same(m.user_id,authUser.id)&&m.status==='active').map(m=>m.circle_id);posts=[...posts].sort((a,b)=>Number(same(b.author_id,authUser.id)||following.some(id=>same(id,b.author_id))||joined.some(id=>same(id,b.circle_id)))-Number(same(a.author_id,authUser.id)||following.some(id=>same(id,a.author_id))||joined.some(id=>same(id,a.circle_id)))||new Date(b.created_at)-new Date(a.created_at))}const latest=state.articles.filter(a=>a.status==='published').slice(0,2),suggested=state.members.filter(p=>!same(p.id,authUser.id)&&!isFollowing(p.id)).slice(0,3);return `<section class="hero"><div class="hero-main"><p class="kicker"><i></i>${t('Welcome back','مرحبًا بعودتك')}، ${esc(state.profile.name)}</p><h1>${t('Learn together. Build what matters.','نتعلم معًا ونبني ما يستحق.')}</h1><p>${t('Your feed is connected to people you follow and Circles you joined.','تغذيتك مرتبطة بمن تتابعهم والمجتمعات التي انضممت إليها.')}</p><div style="display:flex;gap:8px;margin-top:20px"><button class="primary" data-nav="circles">${t('Explore Circles','استكشف المجتمعات')}</button><button class="secondary" data-nav="connections">${t('Your connections','علاقاتك')}</button></div></div><div class="hero-side"><div class="pulse"><div><strong>${state.members.length}</strong><small>${t('real profiles','ملفات حقيقية')}</small></div><span class="pulse-orb"></span></div><div class="profile-meter"><div class="meter-row"><b>${t('Your identity','هويتك')}</b><strong>${esc(state.profile.grade||t('Student','طالب'))}</strong></div><small>${esc(state.profile.branch||t('Add your branch','أضف فرعك'))}</small><div class="bar"><i style="width:${state.profile.branch?'100':'55'}%"></i></div></div></div></section><section class="pwa-install-card" data-pwa-install-card><div><p class="kicker"><i></i>${t('Mobile app','تطبيق الموبايل')}</p><h2>${t('Install NEIS Circle','ثبّت NEIS Circle')}</h2><p>${t('Install the secure web app directly from your browser. No APK, no unknown-source permission, and updates arrive automatically.','ثبّت تطبيق الويب الآمن مباشرة من المتصفح. بدون APK أو صلاحية مصادر خارجية، والتحديثات تصل تلقائيًا.')}</p></div><div class="pwa-install-actions"><button class="primary" type="button" data-pwa-install>${t('Install app','تثبيت التطبيق')}</button><button class="secondary" type="button" data-pwa-enable-notifications>${t('Enable notifications','تفعيل الإشعارات')}</button></div></section>${latest.length?`<section style="margin-bottom:22px"><div class="page-title" style="margin-bottom:14px"><div><p class="kicker"><i></i>${t('Editorial','المقالات')}</p><h2>${t('Latest articles','أحدث المقالات')}</h2></div><button class="secondary" data-nav="articles">${t('View all','عرض الكل')}</button></div><div class="article-grid">${latest.map(articleCard).join('')}</div></section>`:''}<div class="dashboard"><div class="main-column"><div class="composer-bar">${profileAvatar(profileData(authUser.id))}<button data-action="compose">${t('Share something useful…','شارك شيئًا مفيدًا…')}</button><button class="compose" data-action="compose">+</button></div><div class="tabs">${[['For you',t('For you','لك')],['Latest',t('Latest','الأحدث')],['Questions',t('Questions','أسئلة')],['Resources',t('Resources','مصادر')]].map(([v,l])=>`<button class="${state.filter===v?'active':''}" data-filter="${v}">${l}</button>`).join('')}</div><div class="feed">${posts.length?posts.map(postCard).join(''):emptyState(t('No posts yet','لا توجد منشورات بعد'),t('Create the first meaningful post.','أنشئ أول منشور مفيد.'))}</div></div><aside class="side-column"><section class="side-card"><h3>${t('Suggested people','أشخاص مقترحون')}</h3>${suggested.length?suggested.map(suggestedPersonItem).join(''):blank(t('No suggestions','لا توجد اقتراحات'),t('Your network is up to date.','شبكتك محدثة.'))}</section><section class="side-card"><h3>${t('Your spaces','مساحاتك')}</h3><div class="account-menu"><button class="account-row" data-nav="gallery"><span>${t('Community gallery','معرض المجتمع')}</span><b>→</b></button><button class="account-row" data-nav="articles"><span>${t('Student journal','مجلة الطلاب')}</span><b>→</b></button></div></section></aside></div>`};
+home=function(){
+  const sourcePosts=Array.isArray(state.posts)?state.posts:[];
+  let posts=sourcePosts.filter(p=>{
+    try{return !p?.circle_id&&(!state.query||match(normalize(state.query),p?.title,p?.body,p?.tags,p?.user))}
+    catch(error){console.error('[NEIS home post filter]',error,p);return false}
+  });
+  if(state.filter==='Questions')posts=posts.filter(p=>p?.kind==='Question');
+  if(state.filter==='Resources')posts=posts.filter(p=>p?.kind==='Resource');
+  if(state.filter==='Latest')posts=[...posts].sort((a,b)=>new Date(b?.created_at||0)-new Date(a?.created_at||0));
+  if(state.filter==='For you'){
+    const follows=Array.isArray(state.follows)?state.follows:[];
+    const memberships=Array.isArray(state.circleMembers)?state.circleMembers:[];
+    const following=follows.filter(f=>same(f?.follower_id,authUser?.id)&&f?.status==='accepted').map(f=>f.following_id);
+    const joined=memberships.filter(m=>same(m?.user_id,authUser?.id)&&m?.status==='active').map(m=>m.circle_id);
+    posts=[...posts].sort((a,b)=>
+      Number(same(b?.author_id,authUser?.id)||following.some(id=>same(id,b?.author_id))||joined.some(id=>same(id,b?.circle_id)))-
+      Number(same(a?.author_id,authUser?.id)||following.some(id=>same(id,a?.author_id))||joined.some(id=>same(id,a?.circle_id)))||
+      new Date(b?.created_at||0)-new Date(a?.created_at||0)
+    );
+  }
+
+  const articlesSource=Array.isArray(state.articles)?state.articles:[];
+  const membersSource=Array.isArray(state.members)?state.members:[];
+  const latest=articlesSource.filter(a=>a?.status==='published').slice(0,2);
+  const suggested=membersSource.filter(p=>{
+    try{return !same(p?.id,authUser?.id)&&!isFollowing(p?.id)}
+    catch(error){console.error('[NEIS suggested people filter]',error,p);return false}
+  }).slice(0,3);
+
+  const renderPostSafe=post=>{
+    try{return postCard(post)}
+    catch(error){
+      console.error('[NEIS home post render]',error,post);
+      const id=esc(post?.id||''),title=esc(post?.title||t('Post','منشور')),body=esc(post?.body||''),name=esc(post?.user||t('NEIS Student','طالب NEIS'));
+      return `<article class="post" id="post-${id}" data-post="${id}"><div class="post-top"><div class="post-person"><b>${name}</b><small>${esc(post?.meta||'NEIS Circle')}</small></div></div><h3>${title}</h3><p dir="auto">${body}</p></article>`;
+    }
+  };
+  const renderArticleSafe=article=>{
+    try{return articleCard(article)}
+    catch(error){
+      console.error('[NEIS home article render]',error,article);
+      const title=esc(article?.title_en||article?.title_ar||t('Article','مقال'));
+      return `<article class="article-card"><div class="article-copy"><h3>${title}</h3></div></article>`;
+    }
+  };
+  const renderSuggestedSafe=person=>{
+    try{return suggestedPersonItem(person)}
+    catch(error){
+      console.error('[NEIS suggested person render]',error,person);
+      const id=esc(person?.id||''),name=esc(person?.full_name||t('Student','طالب'));
+      return `<div class="suggested-person"><button class="suggested-person-profile" data-open-profile="${id}"><span class="suggested-person-copy"><b>${name}</b></span></button></div>`;
+    }
+  };
+
+  return `<section class="hero"><div class="hero-main"><p class="kicker"><i></i>${t('Welcome back','مرحبًا بعودتك')}، ${esc(state.profile?.name||t('Student','طالب'))}</p><h1>${t('Learn together. Build what matters.','نتعلم معًا ونبني ما يستحق.')}</h1><p>${t('Your feed is connected to people you follow and Circles you joined.','تغذيتك مرتبطة بمن تتابعهم والمجتمعات التي انضممت إليها.')}</p><div style="display:flex;gap:8px;margin-top:20px"><button class="primary" data-nav="circles">${t('Explore Circles','استكشف المجتمعات')}</button><button class="secondary" data-nav="connections">${t('Your connections','علاقاتك')}</button></div></div><div class="hero-side"><div class="pulse"><div><strong>${membersSource.length}</strong><small>${t('real profiles','ملفات حقيقية')}</small></div><span class="pulse-orb"></span></div><div class="profile-meter"><div class="meter-row"><b>${t('Your identity','هويتك')}</b><strong>${esc(state.profile?.grade||t('Student','طالب'))}</strong></div><small>${esc(state.profile?.branch||t('Add your branch','أضف فرعك'))}</small><div class="bar"><i style="width:${state.profile?.branch?'100':'55'}%"></i></div></div></div></section><section class="pwa-install-card" data-pwa-install-card><div><p class="kicker"><i></i>${t('Mobile app','تطبيق الموبايل')}</p><h2>${t('Install NEIS Circle','ثبّت NEIS Circle')}</h2><p>${t('Install the secure web app directly from your browser. No APK, no unknown-source permission, and updates arrive automatically.','ثبّت تطبيق الويب الآمن مباشرة من المتصفح. بدون APK أو صلاحية مصادر خارجية، والتحديثات تصل تلقائيًا.')}</p></div><div class="pwa-install-actions"><button class="primary" type="button" data-pwa-install>${t('Install app','تثبيت التطبيق')}</button><button class="secondary" type="button" data-pwa-enable-notifications>${t('Enable notifications','تفعيل الإشعارات')}</button></div></section>${latest.length?`<section style="margin-bottom:22px"><div class="page-title" style="margin-bottom:14px"><div><p class="kicker"><i></i>${t('Editorial','المقالات')}</p><h2>${t('Latest articles','أحدث المقالات')}</h2></div><button class="secondary" data-nav="articles">${t('View all','عرض الكل')}</button></div><div class="article-grid">${latest.map(renderArticleSafe).join('')}</div></section>`:''}<div class="dashboard"><div class="main-column"><div class="composer-bar">${profileAvatar(profileData(authUser?.id))}<button data-action="compose">${t('Share something useful…','شارك شيئًا مفيدًا…')}</button><button class="compose" data-action="compose">+</button></div><div class="tabs">${[['For you',t('For you','لك')],['Latest',t('Latest','الأحدث')],['Questions',t('Questions','أسئلة')],['Resources',t('Resources','مصادر')]].map(([v,l])=>`<button class="${state.filter===v?'active':''}" data-filter="${v}">${l}</button>`).join('')}</div><div class="feed">${posts.length?posts.map(renderPostSafe).join(''):emptyState(t('No posts yet','لا توجد منشورات بعد'),t('Create the first meaningful post.','أنشئ أول منشور مفيد.'))}</div></div><aside class="side-column"><section class="side-card"><h3>${t('Suggested people','أشخاص مقترحون')}</h3>${suggested.length?suggested.map(renderSuggestedSafe).join(''):blank(t('No suggestions','لا توجد اقتراحات'),t('Your network is up to date.','شبكتك محدثة.'))}</section><section class="side-card"><h3>${t('Your spaces','مساحاتك')}</h3><div class="account-menu"><button class="account-row" data-nav="gallery"><span>${t('Community gallery','معرض المجتمع')}</span><b>→</b></button><button class="account-row" data-nav="articles"><span>${t('Student journal','مجلة الطلاب')}</span><b>→</b></button></div></section></aside></div>`;
+};
 opportunities=function(){return `${pageTitle(t('Opportunities','الفرص'),t('Verified opportunities will appear here when publishing is enabled.','ستظهر الفرص الموثقة هنا عند تفعيل النشر.'))}${emptyState(t('No verified opportunities yet','لا توجد فرص موثقة بعد'),t('This page no longer displays demo events.','لم تعد هذه الصفحة تعرض فعاليات تجريبية.'))}`};
 
 const baseRender=render;
