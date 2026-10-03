@@ -183,6 +183,9 @@ if (fs.existsSync(socialPath)) {
   for (const legacyRealtimeToken of ['v6ChannelUid','v6RealtimeStatus','sb.channel(\`neis-v7-']) {
     if (socialSource.includes(legacyRealtimeToken)) failures.push('Realtime subscription lifecycle leaked back into 05-social.js: ' + legacyRealtimeToken);
   }
+  for (const deadRefresh of ['async function refreshMessagesV6','async function refreshCircleMessagesV96']) {
+    if (socialSource.includes(deadRefresh)) failures.push('Unused full-refresh chat loader must not return: ' + deadRefresh);
+  }
   const forbiddenMessageBindings = [
     "table:'messages'},refreshMessagesV6",
     "table:'conversations'},refreshMessagesV6",
