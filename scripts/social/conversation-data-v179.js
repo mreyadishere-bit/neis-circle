@@ -2,6 +2,8 @@
 (function(){
   const inflight=new Map();
   const same=(a,b)=>String(a)===String(b);
+  const fields=window.NEISChatFields;
+  if(!fields)throw new Error('NEIS Chat Fields failed to load.');
 
   function upsertById(list,row){
     const items=Array.isArray(list)?list:[];
@@ -19,9 +21,9 @@
     const task=(async()=>{
       try{
         const [conversationRes,membersRes,messagesRes]=await Promise.all([
-          sb.from('conversations').select('*').eq('id',conversationId).maybeSingle(),
-          sb.from('conversation_members').select('*').eq('conversation_id',conversationId),
-          sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
+          sb.from('conversations').select(fields.conversation).eq('id',conversationId).maybeSingle(),
+          sb.from('conversation_members').select(fields.member).eq('conversation_id',conversationId),
+          sb.from('messages').select(fields.message).eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
         ]);
         if(conversationRes.error||!conversationRes.data){
           return {ok:false,reason:'conversation',error:conversationRes.error||null};
