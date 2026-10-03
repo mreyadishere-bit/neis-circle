@@ -126,6 +126,24 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const realtimeRegistryPath = path.join(root, 'scripts', 'social', 'realtime-v175.js');
+if (!fs.existsSync(realtimeRegistryPath)) {
+  failures.push('Missing isolated realtime subscription registry.');
+} else {
+  const realtimeRegistrySource = fs.readFileSync(realtimeRegistryPath, 'utf8');
+  for (const table of ['posts','comments','reactions','messages','conversations','conversation_members','circle_messages','message_reactions','circle_meetings','follows','circle_members','profiles','articles','gallery_items','reports']) {
+    if (!realtimeRegistrySource.includes("'" + table + "'")) failures.push('Realtime registry is missing table: ' + table);
+  }
+}
+const realtimeRegistryScripts = localScriptSrcs.filter(src => /social\/realtime-v\d+\.js/i.test(src));
+if (realtimeRegistryScripts.length !== 1) {
+  failures.push(`Expected exactly one realtime registry module, found ${realtimeRegistryScripts.length}: ${realtimeRegistryScripts.join(', ')}`);
+} else {
+  const registryIndex = localScriptSrcs.indexOf(realtimeRegistryScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || registryIndex > socialIndex) failures.push('Realtime registry must load before 05-social.js.');
+}
+
 const notificationRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
 if (!fs.existsSync(notificationRuntimePath)) {
   failures.push('Missing isolated notification runtime.');
@@ -161,6 +179,9 @@ if (fs.existsSync(socialPath)) {
   }
   for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime','handleFollowRealtime','handleCircleMemberRealtime','handleCircleMeetingRealtime','handleMessageRealtime','handleConversationRealtime','handleConversationMemberRealtime','handleCircleMessageRealtime','handleMessageReactionRealtime']) {
     if (!socialSource.includes(handler)) failures.push('Missing targeted realtime handler: ' + handler);
+  }
+  for (const legacyRealtimeToken of ['v6ChannelUid','v6RealtimeStatus','sb.channel(\`neis-v7-']) {
+    if (socialSource.includes(legacyRealtimeToken)) failures.push('Realtime subscription lifecycle leaked back into 05-social.js: ' + legacyRealtimeToken);
   }
   const forbiddenMessageBindings = [
     "table:'messages'},refreshMessagesV6",
