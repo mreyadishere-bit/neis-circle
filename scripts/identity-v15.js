@@ -123,10 +123,17 @@
       if(!sb)await initSupabase();
       if(!sb){identityAuthSettled=true;authScreen();return}
       var result=await sb.auth.getSession();
-      if(result.error)throw result.error;
+      if(result.error&&!window.NEISAuthCallbackPending?.())throw result.error;
       authUser=result.data?.session?.user||null;
+      if(!authUser&&window.NEISAuthCallbackPending?.()){
+        var session=await window.NEISWaitForSession?.(7000);
+        authUser=session?.user||null;
+      }
       identityAuthSettled=true;
-      if(authUser)await loadLiveData();
+      if(authUser){
+        window.NEISCleanAuthCallbackUrl?.();
+        await loadLiveData();
+      }
       render();
     }catch(error){
       console.error('[NEIS identity auth settle]',error);
