@@ -225,6 +225,8 @@ const notificationRuntime=window.NEISNotificationRuntime;
 if(!notificationRuntime)throw new Error('NEIS Notification Runtime failed to load.');
 const realtimeRegistry=window.NEISRealtimeRegistry;
 if(!realtimeRegistry)throw new Error('NEIS Realtime Registry failed to load.');
+const messageState=window.NEISMessageState;
+if(!messageState)throw new Error('NEIS Message State failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -701,17 +703,10 @@ async function handleConversationMemberRealtime(payload){
   const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
   const conversationId=row.conversation_id,userId=row.user_id;
   if(!conversationId||!userId)return;
-  const list=Array.isArray(state.conversationMembers)?state.conversationMembers:[];
-  const index=list.findIndex(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
-  const previous=index>=0?list[index]:null;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const profile=previous?.profile||await ensureRealtimePostProfile(userId);
-    const merged={...(previous||{}),...row,profile};
-    if(index>=0)list[index]=merged;else list.push(merged);
-  }else return;
-  state.conversationMembers=list;
+  const previous=(state.conversationMembers||[]).find(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
+  const profile=event==='DELETE'?previous?.profile:(previous?.profile||await ensureRealtimePostProfile(userId));
+  const result=messageState.applyConversationMember(state,payload,{profile});
+  if(!result.changed)return;
 
   if(same(userId,authUser?.id)){
     if(event==='DELETE'||row.hidden_at){
@@ -733,22 +728,10 @@ async function handleConversationMemberRealtime(payload){
 async function handleMessageRealtime(payload){
   const event=payload?.eventType||'';
   const incoming=payload?.new||{},oldRow=payload?.old||{};
-  const id=incoming.id||oldRow.id;if(!id)return;
-  const list=Array.isArray(state.liveMessages)?state.liveMessages:[];
-  const index=list.findIndex(message=>same(message.id,id));
-  const previous=index>=0?list[index]:null;
-  const conversationId=incoming.conversation_id||previous?.conversation_id||oldRow.conversation_id;
-  if(!conversationId)return;
-  if(!conversationIsVisible(conversationId))return;
-
-  let newlyInserted=false;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const merged={...(previous||{}),...incoming};
-    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
-  }else return;
-  state.liveMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const candidateConversationId=incoming.conversation_id||oldRow.conversation_id||(state.liveMessages||[]).find(message=>same(message.id,incoming.id||oldRow.id))?.conversation_id;
+  const result=messageState.applyDirectMessage(state,payload,{visible:!!candidateConversationId&&conversationIsVisible(candidateConversationId)});
+  if(!result.changed)return;
+  const {id,conversationId}=result;
 
   if(event==='INSERT'){
     const conversation=(state.conversations||[]).find(item=>same(item.id,conversationId));
@@ -769,24 +752,16 @@ async function handleCircleMessageRealtime(payload){
   const event=payload?.eventType||'';
   const incoming=payload?.new||{},oldRow=payload?.old||{};
   const id=incoming.id||oldRow.id;if(id==null)return;
-  const list=Array.isArray(state.circleMessages)?state.circleMessages:[];
-  const index=list.findIndex(message=>same(message.id,id));
-  const previous=index>=0?list[index]:null;
+  const previous=(state.circleMessages||[]).find(message=>same(message.id,id));
   const circleId=incoming.circle_id||previous?.circle_id||oldRow.circle_id;
   if(!circleId)return;
   const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
   if(!allowed)return;
-
-  let newlyInserted=false;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const senderId=incoming.sender_id||previous?.sender_id;
-    const profile=previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null);
-    const merged={...(previous||{}),...incoming,profile};
-    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
-  }else return;
-  state.circleMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const senderId=incoming.sender_id||previous?.sender_id;
+  const profile=event==='DELETE'?previous?.profile:(previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null));
+  const result=messageState.applyCircleMessage(state,payload,{allowed,profile});
+  if(!result.changed)return;
+  const newlyInserted=result.newlyInserted;
 
   if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
     const flow=$('#circleChatFlow');
@@ -813,18 +788,8 @@ async function handleCircleMessageRealtime(payload){
   }
 }
 function handleMessageReactionRealtime(payload){
-  const event=payload?.eventType||'';
-  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
-  const id=row.id;if(id==null)return;
-  const list=Array.isArray(state.messageReactions)?state.messageReactions:[];
-  const index=list.findIndex(item=>same(item.id,id));
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const merged={...(index>=0?list[index]:{}),...row};
-    if(index>=0)list[index]=merged;else list.push(merged);
-  }else return;
-  state.messageReactions=list;
+  const result=messageState.applyMessageReaction(state,payload);
+  if(!result.changed)return;
   syncMessageReactionUi();
 }
 
