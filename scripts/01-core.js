@@ -154,6 +154,22 @@ function neisSetStaySignedIn(enabled){
   }catch(_){}
 }
 window.NEISSetStaySignedIn=neisSetStaySignedIn;
+function neisClearAuthStorage(){
+  for(const store of [localStorage,sessionStorage]){
+    try{
+      const keys=[];
+      for(let i=0;i<store.length;i++){
+        const key=store.key(i);
+        if(key&&((key.startsWith('sb-')&&key.includes('-auth-token'))||key.includes('supabase.auth')))keys.push(key);
+      }
+      keys.forEach(key=>store.removeItem(key));
+    }catch(_){}
+  }
+  try{sessionStorage.removeItem('neis-oauth-started-at')}catch(_){}
+  window.__neisOAuthStarting=false;
+}
+window.NEISClearAuthStorage=neisClearAuthStorage;
+
 const neisAuthStorage={
   getItem(key){
     const {primary,secondary}=neisAuthStores();
