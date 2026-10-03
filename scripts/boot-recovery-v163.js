@@ -4,6 +4,9 @@
   'use strict';
   let running=false,done=false,attempts=0;
 
+  // The old technical connection banner must never leak into the normal student UI.
+  if(typeof setupBanner==='function')setupBanner=()=>'';
+
   async function recover(){
     if(running||done)return;
     running=true;
@@ -32,9 +35,11 @@
         window.NEISCleanAuthCallbackUrl?.();
         if(!(sameUser&&document.body.classList.contains('app-ready'))){
           try{await loadLiveData()}catch(error){console.error('[NEIS startup recovery] live-data load failed',error)}
-          if(typeof render==='function')render();
         }
         if(typeof setupBanner==='function')setupBanner=()=>'';
+        const homeRoute=!location.hash||location.hash==='#/'||location.hash==='#/home';
+        if(homeRoute&&typeof applyRoute==='function')applyRoute();
+        else if(typeof render==='function')render();
         done=true;
         return;
       }
@@ -57,4 +62,22 @@
   setTimeout(recover,0);
   setTimeout(()=>{if(!done)recover()},900);
   document.addEventListener('visibilitychange',()=>{if(!done&&document.visibilityState==='visible')recover()});
+
+  // Home must always render Home, even when the hash is already #/home.
+  document.addEventListener('click',event=>{
+    const button=event.target?.closest?.('[data-nav="home"]');
+    if(!button||!authUser)return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    state.view='home';
+    state.query='';
+    state.activeConversationId='';
+    state.activeCircleId='';
+    state.activeProfileId='';
+    if(typeof routeTo==='function')routeTo('home');
+    else{
+      location.hash='#/home';
+      if(typeof render==='function')render();
+    }
+  },true);
 })();
