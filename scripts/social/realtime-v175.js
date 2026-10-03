@@ -1,21 +1,25 @@
 /* NEIS Circle realtime subscription registry — owns the shared social channel lifecycle. */
 (function(){
+  const chatFields=window.NEISChatFields;
+  if(!chatFields)throw new Error('NEIS Chat Fields failed to load before Realtime Registry.');
   let channel=null;
   let channelUid='';
   let status='CLOSED';
 
   const same=(a,b)=>String(a)===String(b);
+  const MESSAGE_REACTION_FIELDS='id,dm_message_id,circle_message_id,user_id,emoji,created_at';
+  const columns=value=>String(value||'').split(',').map(column=>column.trim()).filter(Boolean);
   const TABLE_BINDINGS=[
     ['posts','handlePostRealtime'],
     ['comments','handleCommentRealtime'],
     ['reactions','handleReactionRealtime'],
     ['comment_likes','handleCommentEngagementRealtime'],
     ['comment_creator_hearts','handleCommentEngagementRealtime'],
-    ['messages','handleMessageRealtime'],
-    ['conversations','handleConversationRealtime'],
-    ['conversation_members','handleConversationMemberRealtime'],
-    ['circle_messages','handleCircleMessageRealtime'],
-    ['message_reactions','handleMessageReactionRealtime'],
+    ['messages','handleMessageRealtime',columns(chatFields.message)],
+    ['conversations','handleConversationRealtime',columns(chatFields.conversation)],
+    ['conversation_members','handleConversationMemberRealtime',columns(chatFields.member)],
+    ['circle_messages','handleCircleMessageRealtime',columns(chatFields.circleMessage)],
+    ['message_reactions','handleMessageReactionRealtime',columns(MESSAGE_REACTION_FIELDS)],
     ['circle_meetings','handleCircleMeetingRealtime'],
     ['follows','handleFollowRealtime'],
     ['circle_members','handleCircleMemberRealtime'],
@@ -48,10 +52,12 @@
     channelUid=uid;
     status='CONNECTING';
     let next=sb.channel(`neis-v7-${uid}`);
-    for(const [table,handlerName] of TABLE_BINDINGS){
+    for(const [table,handlerName,select] of TABLE_BINDINGS){
+      const filter={event:'*',schema:'public',table};
+      if(select?.length)filter.select=select;
       next=next.on(
         'postgres_changes',
-        {event:'*',schema:'public',table},
+        filter,
         handlers[handlerName]
       );
     }
@@ -70,16 +76,16 @@
 
   function snapshot(){
     return {
-      version:'175.0',
+      version:'175.1',
       status,
       user:channelUid,
       active:!!channel,
-      bindings:TABLE_BINDINGS.map(([table,handler])=>({table,handler}))
+      bindings:TABLE_BINDINGS.map(([table,handler,select])=>({table,handler,select:select||null}))
     };
   }
 
   window.NEISRealtimeRegistry={
-    version:'175.0',
+    version:'175.1',
     setup,
     reset,
     snapshot
