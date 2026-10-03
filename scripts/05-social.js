@@ -598,6 +598,7 @@ const messageDom=messageDomFactory.createRuntime({
   conversationIsVisible,
   dmThreadMarkup,
   messageBubble,
+  circleMessageBubble,
   emptyState,
   t,
   bindV6,
@@ -726,29 +727,8 @@ async function handleCircleMessageRealtime(payload){
   if(!result.changed)return;
   const newlyInserted=result.newlyInserted;
 
-  if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
-    const flow=$('#circleChatFlow');
-    if(flow){
-      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
-      const active=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
-      const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
-      const existing=flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]');
-      if(event==='INSERT'&&existing){
-        if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-      }else if(inserted&&!existing){
-        const pos=active.findIndex(item=>same(item.id,id)),previousMessage=pos>0?active[pos-1]:null;
-        flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
-        if(flow.lastElementChild)bindV6(flow.lastElementChild);
-      }else{
-        const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
-        flow.innerHTML=active.length?active.map((message,pos)=>circleMessageBubble(message,active[pos-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
-        bindV6(flow);
-        if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
-      }
-      if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-      Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
-    }
-  }
+  const patched=messageDom.patchCircleFlow({circleId,id,event,newlyInserted});
+  if(patched)Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
 }
 function handleMessageReactionRealtime(payload){
   const result=messageState.applyMessageReaction(state,payload);
