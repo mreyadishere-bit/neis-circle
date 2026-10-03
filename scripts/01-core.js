@@ -208,14 +208,16 @@ async function initSupabase(){
       if(error)throw error;
       authUser=data.session?.user||null;
       if(!supabaseAuthSubscription){
-        const listener=sb.auth.onAuthStateChange(async(_event,session)=>{
+        const listener=sb.auth.onAuthStateChange(async(event,session)=>{
           authUser=session?.user||null;
-          if(authUser)await loadLiveData();
+          if(event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED')return;
+          if(authUser&&(event==='SIGNED_IN'||event==='USER_UPDATED')){
+            try{await loadLiveData()}catch(error){console.error('[NEIS] auth refresh failed',error)}
+          }
           render();
         });
         supabaseAuthSubscription=listener?.data?.subscription||true;
       }
-      if(authUser)await loadLiveData();
       return true;
     }catch(e){
       console.error("[NEIS] Supabase initialization failed",e);
