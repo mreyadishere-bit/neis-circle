@@ -126,9 +126,32 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const notificationRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
+if (!fs.existsSync(notificationRuntimePath)) {
+  failures.push('Missing isolated notification runtime.');
+} else {
+  const notificationRuntimeSource = fs.readFileSync(notificationRuntimePath, 'utf8');
+  for (const token of ['refreshPromise','lastFullSyncAt','applyRealtime','startFallback']) {
+    if (!notificationRuntimeSource.includes(token)) failures.push('Notification runtime is missing expected behavior: ' + token);
+  }
+}
+const notificationRuntimeScripts = localScriptSrcs.filter(src => /social\/notifications-v\d+\.js/i.test(src));
+if (notificationRuntimeScripts.length !== 1) {
+  failures.push(`Expected exactly one notification runtime module, found ${notificationRuntimeScripts.length}: ${notificationRuntimeScripts.join(', ')}`);
+} else {
+  const runtimeIndex = localScriptSrcs.indexOf(notificationRuntimeScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || runtimeIndex > socialIndex) {
+    failures.push('Notification runtime must load before 05-social.js.');
+  }
+}
+
 const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
+  for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
+    if (socialSource.includes(legacyNotificationToken)) failures.push('Notification runtime leaked back into 05-social.js: ' + legacyNotificationToken);
+  }
   const targetedRealtimeTables = ['posts','comments','reactions','comment_likes','comment_creator_hearts','follows','circle_members','circle_meetings'];
   for (const table of targetedRealtimeTables) {
     const legacyPattern = new RegExp("table:'" + table + "'\\},refreshV6");
