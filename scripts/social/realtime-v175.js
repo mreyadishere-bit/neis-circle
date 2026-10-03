@@ -85,7 +85,7 @@
   }
 
   window.NEISRealtimeRegistry={
-    version:'175.0',
+    version:'175.1',
     setup,
     reset,
     snapshot
