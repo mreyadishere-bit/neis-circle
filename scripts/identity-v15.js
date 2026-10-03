@@ -114,8 +114,7 @@
   signOut=async function(){
     identityAuthSettled=true;
     state.identityVerification={};
-    await previousSignOut();
-    authScreen();
+    return previousSignOut();
   };
 
   async function settleIdentityAuth(){
