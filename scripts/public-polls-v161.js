@@ -378,11 +378,15 @@
       button.onclick=function(){openPublicPollVoters(button.dataset.publicPollVoters,button.dataset.publicPollOptionVoters)};
     });
     root.querySelectorAll('[data-public-poll-settings]').forEach(function(button){button.onclick=function(){openSettings(button.dataset.publicPollSettings)}});
-    root.querySelectorAll('[data-public-poll-settings-post]').forEach(function(button){button.onclick=function(event){
+    root.querySelectorAll('[data-public-poll-settings-post]').forEach(function(button){button.onclick=async function(event){
       event.stopPropagation();
       var poll=pollForPost(button.dataset.publicPollSettingsPost);
+      if(!poll){
+        await loadPublicPolls(true,false);
+        poll=pollForPost(button.dataset.publicPollSettingsPost);
+      }
       if(poll)openSettings(poll.id);
-      else loadPublicPolls(true,true);
+      else toast(t('Poll data is still loading. Please try again.','بيانات التصويت ما زالت قيد التحميل. حاول مرة أخرى.'));
     }});
   };
 
