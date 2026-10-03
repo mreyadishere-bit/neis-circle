@@ -1,40 +1,56 @@
-/* NEIS Circle v163 — final startup recovery.
-   Runs after all feature layers so a transient OAuth/Supabase race cannot leave the app in the old empty shell. */
+/* NEIS Circle v164 — auth-safe startup recovery.
+   Runs after all feature layers and never treats a still-processing OAuth callback as signed out. */
 (function(){
   'use strict';
-  let running=false,done=false;
+  let running=false,done=false,attempts=0;
 
   async function recover(){
     if(running||done)return;
     running=true;
+    attempts++;
     try{
       if(!window.supabase?.createClient&&typeof loadSupabaseLibrary==='function')await loadSupabaseLibrary();
       if(!sb&&typeof initSupabase==='function')await initSupabase();
       if(!sb)return;
 
-      const result=await sb.auth.getSession();
-      if(result.error)throw result.error;
-      const session=result.data?.session||null;
-      authUser=session?.user||null;
+      let session=null;
+      try{
+        const result=await sb.auth.getSession();
+        if(result.error)console.warn('[NEIS startup recovery] session read failed',result.error);
+        session=result.data?.session||null;
+      }catch(error){
+        console.warn('[NEIS startup recovery] session read failed',error);
+      }
 
-      if(!authUser){
+      if(!session&&window.NEISAuthCallbackPending?.()){
+        session=await window.NEISWaitForSession?.(7000)||null;
+      }
+
+      if(session){
+        authUser=session.user||authUser;
+        window.NEISCleanAuthCallbackUrl?.();
+        try{await loadLiveData()}catch(error){console.error('[NEIS startup recovery] live-data load failed',error)}
+        if(typeof setupBanner==='function')setupBanner=()=>'';
         if(typeof render==='function')render();
         done=true;
         return;
       }
 
-      if(typeof loadLiveData==='function')await loadLiveData();
-      if(typeof setupBanner==='function')setupBanner=()=>'';
+      if(window.NEISAuthCallbackPending?.()){
+        return;
+      }
+
+      authUser=null;
       if(typeof render==='function')render();
       done=true;
     }catch(error){
       console.error('[NEIS startup recovery]',error);
     }finally{
       running=false;
+      if(!done&&attempts<4)setTimeout(recover,Math.min(1200,250*attempts));
     }
   }
 
-  // Defer until every normal defer script has completed and OAuth storage has settled.
   setTimeout(recover,0);
   setTimeout(()=>{if(!done)recover()},900);
   document.addEventListener('visibilitychange',()=>{if(!done&&document.visibilityState==='visible')recover()});
