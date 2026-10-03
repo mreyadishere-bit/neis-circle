@@ -171,7 +171,8 @@ function bindChatEmojiPicker(root=document){
 }
 async function refreshMessageReactionsV1(){
   if(!sb||!authUser)return;
-  const {data,error}=await sb.from('message_reactions').select('*').order('created_at');
+  const ids=messageReactionData.idsFromState(state);
+  const {data,error}=await messageReactionData.load({sb,...ids});
   if(error){console.error('[NEIS message reactions]',error);return}
   state.messageReactions=data||[];
   syncMessageReactionUi();
@@ -231,6 +232,8 @@ const messageDomFactory=window.NEISMessageDom;
 if(!messageDomFactory)throw new Error('NEIS Message DOM failed to load.');
 const conversationData=window.NEISConversationData;
 if(!conversationData)throw new Error('NEIS Conversation Data failed to load.');
+const messageReactionData=window.NEISMessageReactionData;
+if(!messageReactionData)throw new Error('NEIS Message Reaction Data failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -894,7 +897,7 @@ loadLiveData=async function(){
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
-  const messageReactionRes=await sb.from('message_reactions').select('*').order('created_at');if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
+  const messageReactionRes=await messageReactionData.load({sb,...messageReactionData.idsFromState(state)});if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   await setupV6Realtime(uid);
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
