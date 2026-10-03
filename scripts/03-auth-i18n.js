@@ -222,6 +222,43 @@ function openStyleThemePicker(){
 settings=function(){openModal(`<div class="modal-head"><div><h2>${bi('Settings','الإعدادات')}</h2><p>${bi('Account, appearance, language and privacy.','الحساب والمظهر واللغة والخصوصية.')}</p></div><button class="close" data-close>×</button></div><div class="account-menu"><div class="account-row"><div><b>${esc(state.profile.name)}</b><small>${esc(state.profile.grade)} · ${esc(state.profile.branch)}</small></div>${state.isAdmin?`<span class="badge-admin">${bi('Admin','أدمن')}</span>`:`<span class="status-pill">${bi('Student','طالب')}</span>`}</div><button class="account-row" data-setting-plus="theme"><span>${bi('Light / Dark mode','الوضع الفاتح / الداكن')}</span><b>${state.theme==='light'?bi('Light','فاتح'):bi('Dark','داكن')}</b></button><button class="account-row" data-setting-plus="style-theme"><span>${bi('Style theme','نمط التصميم')}</span><b>${styleThemeLabel(state.styleTheme||'classic')}</b></button><button class="account-row" data-setting-plus="lang"><span>${bi('Language','اللغة')}</span><b>${ar()?'العربية':'English'}</b></button><button class="account-row" data-setting-plus="notifications"><span>${bi('Notifications','الإشعارات')}</span><b>${bi('Push & preferences','التنبيهات والإعدادات')}</b></button>${state.isAdmin?`<button class="account-row" data-nav="admin"><span>${bi('Private admin workspace','مساحة الأدمن الخاصة')}</span><b>${bi('Open →','فتح ←')}</b></button><button class="account-row" data-action="admin-connection"><span>${bi('Technical connection','الاتصال التقني')}</span><b>${bi('Admin only','للأدمن فقط')}</b></button>`:''}</div><button class="secondary signout" data-action="signout">${bi('Sign out of this account','تسجيل الخروج من الحساب')}</button>`);$('[data-setting-plus=theme]').onclick=()=>{state.theme=state.theme==='light'?'dark':'light';applyPrefs();settings()};$('[data-setting-plus=style-theme]').onclick=openStyleThemePicker;$('[data-setting-plus=lang]').onclick=()=>{state.lang=ar()?'en':'ar';state.articleLanguage=state.lang;applyPrefs();closeModal();render()};const notificationSettings=$('[data-setting-plus=notifications]');if(notificationSettings)notificationSettings.onclick=()=>{if(window.NEISPWA?.openNotificationSettings)window.NEISPWA.openNotificationSettings();else toast(bi('Notification settings are loading. Try again in a moment.','إعدادات الإشعارات ما زالت تُحمّل. حاول بعد لحظة.'))};$$('.modal [data-nav]').forEach(b=>b.onclick=()=>{closeModal();nav(b.dataset.nav)});translateTree($('#modalRoot'))};
 signOut=async function(){if(sb)await sb.auth.signOut();authUser=null;state.isAdmin=false;state.onboardingComplete=null;state.profile={name:'Student',username:'',grade:'',branch:'',campus:'',bio:'',interests:'',role:'student'};state.articles=[];state.gallery=[];state.members=[];save();closeModal();authScreen();toast(bi('Signed out safely.','تم تسجيل الخروج بأمان.'))};
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action="language"]');if(a)setTimeout(()=>{state.articleLanguage=state.lang;syncChrome();render()},0)},false);
-async function v4Init(){loadingScreen();if(!sb)await initSupabase();if(!sb){authScreen();toast(bi('Could not connect. Please refresh the page.','تعذر الاتصال. حدّث الصفحة وحاول مرة أخرى.'));return}const {data,error}=await sb.auth.getSession();if(error){authScreen();toast(error.message);return}authUser=data.session?.user||null;if(!authUser){authScreen();return}await loadLiveData();render()}
+async function v4Init(){
+  loadingScreen();
+  if(!sb)await initSupabase();
+  if(!sb){authScreen();toast(bi('Could not connect. Please refresh the page.','تعذر الاتصال. حدّث الصفحة وحاول مرة أخرى.'));return}
+  const {data,error}=await sb.auth.getSession();
+  if(error){authScreen();toast(error.message);return}
+  authUser=data.session?.user||null;
+  if(!authUser){authScreen();return}
+
+  try{
+    const profileCheck=await Promise.race([
+      sb.from('profiles').select('onboarding_complete').eq('id',authUser.id).maybeSingle(),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('profile_check_timeout')),3500))
+    ]);
+    if(!profileCheck.error&&profileCheck.data)state.onboardingComplete=profileCheck.data.onboarding_complete===true;
+  }catch(error){console.warn('[NEIS] quick profile check failed',error)}
+
+  if(state.onboardingComplete===true)render();
+
+  setTimeout(async()=>{
+    try{
+      await Promise.race([
+        loadLiveData(),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('live_data_timeout')),12000))
+      ]);
+      render();
+    }catch(error){
+      console.error('[NEIS] live data startup failed',error);
+      if(state.onboardingComplete===true)render();
+      else if(state.onboardingComplete===false)onboardingScreen();
+      else{
+        authRoot.innerHTML=`<div class="auth-loading"><i></i><span>${bi('Could not finish loading. Refresh and try again.','تعذر إكمال التحميل. حدّث الصفحة وحاول مرة أخرى.')}</span></div>`;
+      }
+    }
+  },0);
+
+  if(state.onboardingComplete===false)onboardingScreen();
+}
 v4Init();
 })();
