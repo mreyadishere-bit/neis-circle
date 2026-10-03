@@ -2061,7 +2061,30 @@ function fitMobileConversationList(){
   if(available>180)messages.style.height=available+'px';
 }
 
-function updateBadges(){const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;$$('[data-nav="messages"] i').forEach(i=>{i.className=msg?'count-badge':'';i.textContent=msg||''});const bell=$('[data-action="notifications"]');if(bell){let badge=bell.querySelector('.count-badge');if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}if(badge){badge.textContent=not||'';badge.classList.toggle('hidden',!not)}}}
+function updateBadges(){
+  const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;
+  $('[data-nav="messages"]').forEach(button=>{
+    let badge=button.querySelector('i[data-message-count],i.count-badge');
+    if(msg&&!badge){
+      badge=document.createElement('i');
+      badge.dataset.messageCount='';
+      button.append(badge);
+    }
+    if(badge){
+      badge.dataset.messageCount='';
+      badge.className='count-badge message-count-badge';
+      badge.textContent=msg>99?'99+':String(msg||'');
+      badge.classList.toggle('hidden',!msg);
+      badge.setAttribute('aria-hidden',msg?'false':'true');
+    }
+  });
+  const bell=$('[data-action="notifications"]');
+  if(bell){
+    let badge=bell.querySelector('.count-badge');
+    if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}
+    if(badge){badge.textContent=not>99?'99+':String(not||'');badge.classList.toggle('hidden',!not)}
+  }
+}
 
 const searchForm=$('#globalSearchForm'),searchInput6=$('#globalSearch');
 const globalSearchClear=$('[data-global-search-clear]');
