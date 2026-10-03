@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
-const fieldsSource=fs.readFileSync(new URL('../scripts/social/chat-fields-v182.js',import.meta.url),'utf8');\nconst source=fs.readFileSync(new URL('../scripts/social/conversation-data-v179.js',import.meta.url),'utf8');
+const fieldsSource=fs.readFileSync(new URL('../scripts/social/chat-fields-v182.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../scripts/social/conversation-data-v179.js',import.meta.url),'utf8');
 const context={console};
 context.window=context;
 vm.createContext(context);
