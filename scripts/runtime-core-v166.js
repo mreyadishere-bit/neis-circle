@@ -76,7 +76,7 @@
       });
     }
 
-    if(!reactions?.error)state.liked=safeArray(reactions.data).filter(row=>same(row.user_id,authUser?.id)).map(row=>row.post_id);
+    if(!reactions?.error){state.postReactionKeys=safeArray(reactions.data).map(row=>[row.post_id,row.user_id,row.reaction||'like'].map(String).join('|'));state.liked=safeArray(reactions.data).filter(row=>same(row.user_id,authUser?.id)).map(row=>row.post_id)}
     if(!bookmarks?.error)state.saved=safeArray(bookmarks.data).map(row=>row.post_id);
     if(!articles?.error)state.articles=safeArray(articles.data);
     state.platformReady=!posts?.error&&!profiles?.error;
@@ -146,7 +146,7 @@
       const [posts,comments,reactions,bookmarks,profiles,articles]=await Promise.all([
         safeQuery('posts',sb.from('posts').select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type').order('created_at',{ascending:false}),8000),
         safeQuery('comments',sb.from('comments').select('post_id').is('deleted_at',null),8000),
-        safeQuery('reactions',sb.from('reactions').select('post_id,user_id'),8000),
+        safeQuery('reactions',sb.from('reactions').select('post_id,user_id,reaction'),8000),
         safeQuery('bookmarks',sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),8000),
         profileRequest,
         safeQuery('articles',sb.from('articles').select('*,author:profiles!articles_author_id_fkey(full_name,username,grade,branch)').order('created_at',{ascending:false}),8000)
