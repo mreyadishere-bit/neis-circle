@@ -90,6 +90,7 @@
   }
 
   state.identityVerification=state.identityVerification||{};
+  var identityAuthSettled=!!authUser;
   var previousLoad=loadLiveData;
   loadLiveData=async function(){
     await previousLoad();if(!sb||!authUser)return;
@@ -98,11 +99,40 @@
   };
   var previousRender=render;
   render=function(){
-    if(!authUser){authScreen();return}
+    if(!authUser){
+      if(!identityAuthSettled){
+        document.body.classList.remove('app-ready');
+        return;
+      }
+      authScreen();
+      return;
+    }
     if(needsPhone()){phoneGate();return}
     return previousRender();
   };
   var previousSignOut=signOut;
-  signOut=async function(){state.identityVerification={};await previousSignOut();authScreen()};
-  if(!authUser){setTimeout(authScreen,0);setTimeout(function(){if(!authUser)authScreen()},600)}
+  signOut=async function(){
+    identityAuthSettled=true;
+    state.identityVerification={};
+    await previousSignOut();
+    authScreen();
+  };
+
+  async function settleIdentityAuth(){
+    try{
+      if(!sb)await initSupabase();
+      if(!sb){identityAuthSettled=true;authScreen();return}
+      var result=await sb.auth.getSession();
+      if(result.error)throw result.error;
+      authUser=result.data?.session?.user||null;
+      identityAuthSettled=true;
+      if(authUser)await loadLiveData();
+      render();
+    }catch(error){
+      console.error('[NEIS identity auth settle]',error);
+      identityAuthSettled=true;
+      authScreen();
+    }
+  }
+  settleIdentityAuth();
 })();
