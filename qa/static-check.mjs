@@ -231,6 +231,26 @@ if (fs.existsSync(socialPath)) {
   }
 }
 
+const primaryHydrationPath = path.join(root, 'scripts', '02-content-admin.js');
+if (fs.existsSync(primaryHydrationPath)) {
+  const source = fs.readFileSync(primaryHydrationPath, 'utf8');
+  const start = source.indexOf('loadLiveData=async function');
+  const end = source.indexOf('window.NEISPrimaryContentLoad', start);
+  const loader = start >= 0 ? source.slice(start, end > start ? end : start + 14000) : '';
+  if (loader.includes("from('comments')")) failures.push('Primary content loader must not duplicate the social comments query.');
+  if (loader.includes('profiles!posts_author_id_fkey')) failures.push('Primary posts loader must use the cached member directory instead of an embedded profile join.');
+}
+
+const socialHydrationPath = path.join(root, 'scripts', '05-social.js');
+if (fs.existsSync(socialHydrationPath)) {
+  const source = fs.readFileSync(socialHydrationPath, 'utf8');
+  for (const forbidden of ['profile:profiles','creator:profiles','comments_author_id_fkey']) {
+    if (source.includes(forbidden)) failures.push('Social hydration must not use embedded profile join: ' + forbidden);
+  }
+  if (!source.includes('profile:profileData(comment.author_id)')) failures.push('Comments must attach profiles locally from state.members.');
+  if (!source.includes('profile:profileData(message.sender_id)')) failures.push('Circle messages must attach sender profiles locally.');
+}
+
 const largeFiles = [
   ...jsFiles,
   ...walk(path.join(root, 'styles'), '.css')
