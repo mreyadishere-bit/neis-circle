@@ -404,12 +404,13 @@ for (const pattern of [
   if (bootstrapSection.includes(pattern)) failures.push("Bootstrap social queries must not request select('*'): " + pattern);
 }
 
-const circleMembershipActionStart = socialSource.indexOf("root.querySelectorAll('[data-v6-circle-join]')");
+const circleMembershipSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const circleMembershipActionStart = circleMembershipSource.indexOf("root.querySelectorAll('[data-v6-circle-join]')");
 const circleMembershipActionEnd = circleMembershipActionStart >= 0
-  ? socialSource.indexOf("root.querySelectorAll('[data-share-circle]')", circleMembershipActionStart)
+  ? circleMembershipSource.indexOf("root.querySelectorAll('[data-share-circle]')", circleMembershipActionStart)
   : -1;
 const circleMembershipActionSection = circleMembershipActionStart >= 0 && circleMembershipActionEnd > circleMembershipActionStart
-  ? socialSource.slice(circleMembershipActionStart, circleMembershipActionEnd)
+  ? circleMembershipSource.slice(circleMembershipActionStart, circleMembershipActionEnd)
   : '';
 if (!circleMembershipActionSection) {
   failures.push('Circle membership action section could not be located.');
@@ -417,12 +418,12 @@ if (!circleMembershipActionSection) {
   if (circleMembershipActionSection.includes('loadLiveData()')) failures.push('Circle join/leave actions must remain targeted and must not call loadLiveData().');
   if (!circleMembershipActionSection.includes('handleCircleMemberRealtime')) failures.push('Circle join/leave actions must delegate to handleCircleMemberRealtime.');
 }
-const circleMemberAdminStart = socialSource.indexOf("root.querySelectorAll('[data-member-role]')");
+const circleMemberAdminStart = circleMembershipSource.indexOf("root.querySelectorAll('[data-member-role]')");
 const circleMemberAdminEnd = circleMemberAdminStart >= 0
-  ? socialSource.indexOf("root.querySelectorAll('[data-post-read-more]')", circleMemberAdminStart)
+  ? circleMembershipSource.indexOf("root.querySelectorAll('[data-post-read-more]')", circleMemberAdminStart)
   : -1;
 const circleMemberAdminSection = circleMemberAdminStart >= 0 && circleMemberAdminEnd > circleMemberAdminStart
-  ? socialSource.slice(circleMemberAdminStart, circleMemberAdminEnd)
+  ? circleMembershipSource.slice(circleMemberAdminStart, circleMemberAdminEnd)
   : '';
 if (!circleMemberAdminSection) {
   failures.push('Circle member admin action section could not be located.');
