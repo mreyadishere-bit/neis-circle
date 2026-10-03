@@ -91,6 +91,16 @@ if (activeHomePollModules.length !== 1) {
   failures.push(`Expected exactly one active Home poll module, found ${activeHomePollModules.length}: ${activeHomePollModules.join(', ')}`);
 }
 
+const dataCoordinators = localScriptSrcs.filter(src => /data-coordinator-v\d+\.js/i.test(src));
+if (dataCoordinators.length !== 1) {
+  failures.push(`Expected exactly one active data coordinator, found ${dataCoordinators.length}: ${dataCoordinators.join(', ')}`);
+} else {
+  const localRuntimeScripts = localScriptSrcs.filter(src => src.startsWith('scripts/'));
+  if (localRuntimeScripts.at(-1) !== dataCoordinators[0]) {
+    failures.push(`Data coordinator must be the last local runtime script. Last script is ${localRuntimeScripts.at(-1)}`);
+  }
+}
+
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
