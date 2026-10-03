@@ -112,6 +112,17 @@ if (profileCaches.length !== 1) {
   }
 }
 
+const secondaryLoaders = localScriptSrcs.filter(src => /secondary-data-v\d+\.js/i.test(src));
+if (secondaryLoaders.length !== 1) {
+  failures.push(`Expected exactly one active secondary data loader, found ${secondaryLoaders.length}: ${secondaryLoaders.join(', ')}`);
+} else {
+  const runtimeIndex = localScriptSrcs.findIndex(src => /runtime-core-v\d+\.js/i.test(src));
+  const secondaryIndex = localScriptSrcs.indexOf(secondaryLoaders[0]);
+  if (runtimeIndex < 0 || secondaryIndex < 0 || secondaryIndex > runtimeIndex) {
+    failures.push('Secondary data loader must load before runtime-core.');
+  }
+}
+
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
@@ -175,6 +186,48 @@ if (fs.existsSync(contentAdminPath)) {
   const contentAdminSource = fs.readFileSync(contentAdminPath, 'utf8');
   if (/table:'posts'\},async\(\)=>\{await loadLiveData\(\);render\(\)\}/.test(contentAdminSource)) {
     failures.push('02-content-admin.js must not keep the legacy full-refresh posts realtime listener.');
+  }
+}
+
+const secondaryPath = path.join(root, 'scripts', 'secondary-data-v173.js');
+if (!fs.existsSync(secondaryPath)) {
+  failures.push('Missing secondary-data-v173.js.');
+} else {
+  const secondarySource = fs.readFileSync(secondaryPath, 'utf8');
+  for (const resource of ['articles','gallery_items','profile_badges']) {
+    if (!secondarySource.includes(resource)) failures.push('Secondary data loader is missing resource: ' + resource);
+  }
+  if (!secondarySource.includes('admin_report_details')) failures.push('Admin reports must be owned by the secondary data loader.');
+}
+
+const contentAdminSecondaryPath = path.join(root, 'scripts', '02-content-admin.js');
+if (fs.existsSync(contentAdminSecondaryPath)) {
+  const source = fs.readFileSync(contentAdminSecondaryPath, 'utf8');
+  const loadStart = source.indexOf('loadLiveData=async function');
+  const loadEnd = source.indexOf('window.NEISPrimaryContentLoad', loadStart);
+  const loader = loadStart >= 0 ? source.slice(loadStart, loadEnd > loadStart ? loadEnd : loadStart + 12000) : '';
+  for (const forbidden of ["from('articles')","from('gallery_items')"]) {
+    if (loader.includes(forbidden)) failures.push('Primary content loader must not fetch ' + forbidden + '.');
+  }
+  if (source.includes("sb.channel('neis-platform-v3')")) failures.push('Legacy neis-platform-v3 realtime channel must not return.');
+}
+
+const runtimeCorePath = path.join(root, 'scripts', 'runtime-core-v166.js');
+if (fs.existsSync(runtimeCorePath)) {
+  const runtimeSource = fs.readFileSync(runtimeCorePath, 'utf8');
+  if (runtimeSource.includes("safeQuery('articles'")) failures.push('runtime-core must use NEISSecondaryData for articles.');
+  if (!runtimeSource.includes('NEISSecondaryData.loadArticles')) failures.push('runtime-core must route startup articles through NEISSecondaryData.');
+}
+
+if (fs.existsSync(socialPath)) {
+  const source = fs.readFileSync(socialPath, 'utf8');
+  const globalLoadStart = source.indexOf('const coreLoad=loadLiveData;');
+  const globalLoadEnd = source.indexOf('let messageRefreshTimer=', globalLoadStart);
+  const globalLoad = globalLoadStart >= 0 ? source.slice(globalLoadStart, globalLoadEnd) : '';
+  if (globalLoad.includes('admin_report_details')) failures.push('Global social load must not fetch admin reports.');
+  if (globalLoad.includes("from('profile_badges')")) failures.push('Global social load must not fetch profile badges.');
+  for (const handler of ['handleProfileRealtime','handleArticleRealtime','handleGalleryRealtime','handleReportRealtime']) {
+    if (!source.includes(handler)) failures.push('Missing targeted secondary realtime handler: ' + handler);
   }
 }
 
