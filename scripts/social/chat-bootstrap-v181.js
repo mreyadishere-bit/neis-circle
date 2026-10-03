@@ -2,6 +2,8 @@
 (function(){
   const inflight=new Map();
   const same=(a,b)=>String(a)===String(b);
+  const fields=window.NEISChatFields;
+  if(!fields)throw new Error('NEIS Chat Fields failed to load.');
 
   async function load({sb,userId,profileData}={}){
     if(!sb||!userId)return {ok:false,reason:'missing-input'};
@@ -10,7 +12,7 @@
 
     const task=(async()=>{
       try{
-        const membershipRes=await sb.from('conversation_members').select('*').eq('user_id',userId);
+        const membershipRes=await sb.from('conversation_members').select(fields.member).eq('user_id',userId);
         if(membershipRes.error){
           return {ok:false,reason:'memberships',error:membershipRes.error,memberships:[],conversations:[],members:[],messages:[]};
         }
@@ -22,9 +24,9 @@
         }
 
         const [conversationRes,memberRes,messageRes]=await Promise.all([
-          sb.from('conversations').select('*').in('id',conversationIds).order('updated_at',{ascending:false}),
-          sb.from('conversation_members').select('*').in('conversation_id',conversationIds),
-          sb.from('messages').select('*').in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(200)
+          sb.from('conversations').select(fields.conversation).in('id',conversationIds).order('updated_at',{ascending:false}),
+          sb.from('conversation_members').select(fields.member).in('conversation_id',conversationIds),
+          sb.from('messages').select(fields.message).in('conversation_id',conversationIds).order('created_at',{ascending:false}).limit(200)
         ]);
 
         const members=memberRes.error
