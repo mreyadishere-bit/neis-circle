@@ -5,6 +5,6 @@
     "qa:static": "node qa/static-check.mjs",
     "qa:smoke": "node qa/smoke.mjs",
     "qa": "npm run qa:static && npm run qa:smoke",
-    "qa:unit": "node qa/data-coordinator.test.mjs && node qa/profile-cache.test.mjs && node qa/secondary-data.test.mjs && node qa/notifications-runtime.test.mjs && node qa/realtime-registry.test.mjs && node qa/video-embeds.test.mjs && node qa/messages-state.test.mjs"
+    "qa:unit": "node qa/data-coordinator.test.mjs && node qa/profile-cache.test.mjs && node qa/secondary-data.test.mjs && node qa/notifications-runtime.test.mjs && node qa/realtime-registry.test.mjs && node qa/video-embeds.test.mjs && node qa/messages-state.test.mjs && node qa/messages-dom.test.mjs && node qa/conversation-data.test.mjs && node qa/message-reactions-data.test.mjs"
   }
 }

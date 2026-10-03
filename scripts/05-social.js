@@ -171,7 +171,8 @@ function bindChatEmojiPicker(root=document){
 }
 async function refreshMessageReactionsV1(){
   if(!sb||!authUser)return;
-  const {data,error}=await sb.from('message_reactions').select('*').order('created_at');
+  const ids=messageReactionData.idsFromState(state);
+  const {data,error}=await messageReactionData.load({sb,...ids});
   if(error){console.error('[NEIS message reactions]',error);return}
   state.messageReactions=data||[];
   syncMessageReactionUi();
@@ -227,6 +228,12 @@ const realtimeRegistry=window.NEISRealtimeRegistry;
 if(!realtimeRegistry)throw new Error('NEIS Realtime Registry failed to load.');
 const messageState=window.NEISMessageState;
 if(!messageState)throw new Error('NEIS Message State failed to load.');
+const messageDomFactory=window.NEISMessageDom;
+if(!messageDomFactory)throw new Error('NEIS Message DOM failed to load.');
+const conversationData=window.NEISConversationData;
+if(!conversationData)throw new Error('NEIS Conversation Data failed to load.');
+const messageReactionData=window.NEISMessageReactionData;
+if(!messageReactionData)throw new Error('NEIS Message Reaction Data failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -588,95 +595,37 @@ function dmThreadMarkup(conversation){
   const p=conversationName(conversation.id),last=conversationLast(conversation.id),unread=conversationUnread(conversation.id);
   return `<button class="thread ${same(conversation.id,state.activeConversationId)?'active':''}" data-open-conversation="${conversation.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`;
 }
-function patchDmThread(conversationId){
-  if(state.view!=='messages')return;
-  const id=String(conversationId||'');if(!id)return;
-  const container=document.querySelector('.thread-list-scroll');
-  if(!container)return;
-  const conversation=(state.conversations||[]).find(item=>same(item.id,id));
-  let node=container.querySelector('[data-open-conversation="'+CSS.escape(id)+'"]');
-  if(!conversation||!conversationIsVisible(id)){
-    node?.remove();
-    return;
-  }
-  const template=document.createElement('template');
-  template.innerHTML=dmThreadMarkup(conversation).trim();
-  const replacement=template.content.firstElementChild;
-  if(!replacement)return;
-  if(node)node.replaceWith(replacement);else{container.querySelector('.empty')?.remove();container.prepend(replacement)}
-  bindV6(container);
-  sortConversations();
-  const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
-  [...container.querySelectorAll('[data-open-conversation]')]
-    .sort((a,b)=>(order.get(String(a.dataset.openConversation))??9999)-(order.get(String(b.dataset.openConversation))??9999))
-    .forEach(item=>container.appendChild(item));
-}
-function activeDmMessages(){
-  return (state.liveMessages||[])
-    .filter(message=>same(message.conversation_id,state.activeConversationId)&&!message.deleted_at)
-    .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-}
-function patchActiveDmFlow({insertedId='',force=false}={}){
-  if(state.view!=='messages'||!state.activeConversationId)return;
-  const flow=$('#chatFlow');if(!flow)return;
-  const input=$('#liveChatInput');
-  const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
-  const messages=activeDmMessages();
-  const inserted=insertedId?messages.find(item=>same(item.id,insertedId)):null;
-  const existing=insertedId?flow.querySelector('[data-message-id="'+CSS.escape(String(insertedId))+'"]'):null;
-  if(inserted&&existing&&!force){
-    if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-    return;
-  }
-  if(inserted&&!existing&&!force){
-    const index=messages.findIndex(item=>same(item.id,inserted.id));
-    const previous=index>0?messages[index-1]:null;
-    flow.insertAdjacentHTML('beforeend',messageBubble(inserted,previous));
-    const added=flow.lastElementChild;if(added)bindV6(added);
-  }else{
-    const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
-    flow.innerHTML=messages.length?messages.map((message,index)=>messageBubble(message,messages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
-    bindV6(flow);
-    if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
-  }
-  if(input&&document.activeElement===input){
-    // Intentionally never touch value/focus/caret.
-  }
-  if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-}
+const messageDom=messageDomFactory.createRuntime({
+  state,
+  document,
+  CSS,
+  requestAnimationFrame,
+  conversationIsVisible,
+  dmThreadMarkup,
+  messageBubble,
+  circleMessageBubble,
+  emptyState,
+  t,
+  bindV6,
+  sortConversations
+});
+const patchDmThread=(conversationId)=>messageDom.patchThread(conversationId);
+const activeDmMessages=()=>messageDom.activeMessages();
+const patchActiveDmFlow=(options)=>messageDom.patchActiveFlow(options);
+
 async function hydrateConversation(conversationId){
   if(!sb||!authUser||!conversationId)return false;
-  const [conversationRes,membersRes,messagesRes]=await Promise.all([
-    sb.from('conversations').select('*').eq('id',conversationId).maybeSingle(),
-    sb.from('conversation_members').select('*').eq('conversation_id',conversationId),
-    sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
-  ]);
-  if(conversationRes.error||!conversationRes.data)return false;
-  const members=membersRes.error?[]:(membersRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
-  const mine=members.find(member=>same(member.user_id,authUser.id));
-  state.conversationMembers=[
-    ...(state.conversationMembers||[]).filter(member=>!same(member.conversation_id,conversationId)),
-    ...members
-  ];
-  if(!mine||mine.hidden_at){
-    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
-    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
-    patchDmThread(conversationId);
-    updateBadges();
-    return true;
-  }
-  state.conversations=upsertById(state.conversations,conversationRes.data);
+  const result=await conversationData.hydrate(conversationId,{
+    sb,
+    userId:authUser.id,
+    state,
+    profileData
+  });
+  if(!result?.ok)return false;
+  if(result.hidden&&same(state.activeConversationId,conversationId))state.activeConversationId='';
   sortConversations();
-  if(!messagesRes.error){
-    const cleared=mine.cleared_at?new Date(mine.cleared_at).getTime():0;
-    const rows=(messagesRes.data||[]).filter(message=>!cleared||new Date(message.created_at).getTime()>cleared);
-    state.liveMessages=[
-      ...(state.liveMessages||[]).filter(message=>!same(message.conversation_id,conversationId)),
-      ...rows
-    ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  }
   patchDmThread(conversationId);
-  if(same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
+  if(!result.hidden&&same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
   updateBadges();
   return true;
 }
@@ -763,29 +712,8 @@ async function handleCircleMessageRealtime(payload){
   if(!result.changed)return;
   const newlyInserted=result.newlyInserted;
 
-  if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
-    const flow=$('#circleChatFlow');
-    if(flow){
-      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
-      const active=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
-      const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
-      const existing=flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]');
-      if(event==='INSERT'&&existing){
-        if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-      }else if(inserted&&!existing){
-        const pos=active.findIndex(item=>same(item.id,id)),previousMessage=pos>0?active[pos-1]:null;
-        flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
-        if(flow.lastElementChild)bindV6(flow.lastElementChild);
-      }else{
-        const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
-        flow.innerHTML=active.length?active.map((message,pos)=>circleMessageBubble(message,active[pos-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
-        bindV6(flow);
-        if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
-      }
-      if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-      Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
-    }
-  }
+  const patched=messageDom.patchCircleFlow({circleId,id,event,newlyInserted});
+  if(patched)Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
 }
 function handleMessageReactionRealtime(payload){
   const result=messageState.applyMessageReaction(state,payload);
@@ -965,11 +893,11 @@ loadLiveData=async function(){
   if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=(circleMemberRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
   if(!meetingRes.error){state.circleMeetings=(meetingRes.data||[]).map(meeting=>({...meeting,creator:profileData(meeting.creator_id)}));state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
-  if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
+  if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));const commentCounts=new Map();for(const comment of state.allComments){const key=String(comment.post_id||'');if(key)commentCounts.set(key,(commentCounts.get(key)||0)+1)}state.posts.forEach(p=>{p.comments=commentCounts.get(String(p.id))||0})}
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
-  const messageReactionRes=await sb.from('message_reactions').select('*').order('created_at');if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
+  const messageReactionRes=await messageReactionData.load({sb,...messageReactionData.idsFromState(state)});if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   await setupV6Realtime(uid);
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}

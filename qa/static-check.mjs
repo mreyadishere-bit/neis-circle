@@ -126,6 +126,62 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const messageReactionDataPath = path.join(root, 'scripts', 'social', 'message-reactions-data-v180.js');
+if (!fs.existsSync(messageReactionDataPath)) {
+  failures.push('Missing scoped message reaction data module.');
+} else {
+  const messageReactionDataSource = fs.readFileSync(messageReactionDataPath, 'utf8');
+  for (const token of ['dm_message_id','circle_message_id','CHUNK_SIZE=100','idsFromState']) {
+    if (!messageReactionDataSource.includes(token)) failures.push('Message reaction data module is missing expected behavior: ' + token);
+  }
+}
+const messageReactionDataScripts = localScriptSrcs.filter(src => /social\/message-reactions-data-v\d+\.js/i.test(src));
+if (messageReactionDataScripts.length !== 1) {
+  failures.push(`Expected exactly one message reaction data module, found ${messageReactionDataScripts.length}: ${messageReactionDataScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageReactionDataScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Message reaction data module must load before 05-social.js.');
+}
+
+const conversationDataPath = path.join(root, 'scripts', 'social', 'conversation-data-v179.js');
+if (!fs.existsSync(conversationDataPath)) {
+  failures.push('Missing isolated conversation data module.');
+} else {
+  const conversationDataSource = fs.readFileSync(conversationDataPath, 'utf8');
+  for (const token of ['hydrate','inflight','limit(200)','conversation_members']) {
+    if (!conversationDataSource.includes(token)) failures.push('Conversation data module is missing expected behavior: ' + token);
+  }
+  if (conversationDataSource.includes('render()')) failures.push('Conversation data module must never call full render().');
+}
+const conversationDataScripts = localScriptSrcs.filter(src => /social\/conversation-data-v\d+\.js/i.test(src));
+if (conversationDataScripts.length !== 1) {
+  failures.push(`Expected exactly one conversation data module, found ${conversationDataScripts.length}: ${conversationDataScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(conversationDataScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Conversation data module must load before 05-social.js.');
+}
+
+const messageDomPath = path.join(root, 'scripts', 'social', 'messages-dom-v178.js');
+if (!fs.existsSync(messageDomPath)) {
+  failures.push('Missing isolated DM DOM patch module.');
+} else {
+  const messageDomSource = fs.readFileSync(messageDomPath, 'utf8');
+  for (const token of ['patchThread','patchActiveFlow','patchCircleFlow','activeMessages']) {
+    if (!messageDomSource.includes(token)) failures.push('DM DOM module is missing expected capability: ' + token);
+  }
+  if (messageDomSource.includes('render()')) failures.push('DM DOM patch module must never call full render().');
+}
+const messageDomScripts = localScriptSrcs.filter(src => /social\/messages-dom-v\d+\.js/i.test(src));
+if (messageDomScripts.length !== 1) {
+  failures.push(`Expected exactly one DM DOM module, found ${messageDomScripts.length}: ${messageDomScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageDomScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('DM DOM module must load before 05-social.js.');
+}
+
 const messageStatePath = path.join(root, 'scripts', 'social', 'messages-state-v177.js');
 if (!fs.existsSync(messageStatePath)) {
   failures.push('Missing isolated realtime message state module.');
@@ -205,6 +261,10 @@ if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
   if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
+  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
+  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
+  if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
+  if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
   for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
@@ -225,6 +285,12 @@ if (fs.existsSync(socialPath)) {
   }
   for (const deadRefresh of ['async function refreshMessagesV6','async function refreshCircleMessagesV96']) {
     if (socialSource.includes(deadRefresh)) failures.push('Unused full-refresh chat loader must not return: ' + deadRefresh);
+  }
+  if (/state\.posts\.forEach\([^\n]+state\.allComments\.filter/.test(socialSource)) {
+    failures.push('Loaded comment counts must be computed in one pass, not by filtering all comments once per post.');
+  }
+  if (/from\('message_reactions'\)\.select\('\*'\)\.order\('created_at'\)/.test(socialSource)) {
+    failures.push('Unscoped message_reactions select must not return to 05-social.js.');
   }
   const forbiddenMessageBindings = [
     "table:'messages'},refreshMessagesV6",
