@@ -7,6 +7,7 @@ const source=fs.readFileSync(new URL('../scripts/social/conversation-data-v179.j
 const context={console};
 context.window=context;
 vm.createContext(context);
+vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'conversation-data-v179.js'});
 
 const api=context.NEISConversationData;
