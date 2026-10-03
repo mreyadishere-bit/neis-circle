@@ -101,6 +101,17 @@ if (dataCoordinators.length !== 1) {
   }
 }
 
+const profileCaches = localScriptSrcs.filter(src => /profile-cache-v\d+\.js/i.test(src));
+if (profileCaches.length !== 1) {
+  failures.push(`Expected exactly one active profile cache module, found ${profileCaches.length}: ${profileCaches.join(', ')}`);
+} else {
+  const runtimeIndex = localScriptSrcs.findIndex(src => /runtime-core-v\d+\.js/i.test(src));
+  const cacheIndex = localScriptSrcs.indexOf(profileCaches[0]);
+  if (runtimeIndex < 0 || cacheIndex < 0 || cacheIndex > runtimeIndex) {
+    failures.push('Profile cache module must load before runtime-core.');
+  }
+}
+
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 

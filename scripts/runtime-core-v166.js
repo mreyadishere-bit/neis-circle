@@ -31,8 +31,10 @@
       state.members=rows;
       const own=rows.find(row=>same(row.id,authUser?.id));
       if(own){
-        state.isAdmin=own.role==='admin'||same(authUser?.id,typeof NEIS_ADMIN_ID!=='undefined'?NEIS_ADMIN_ID:'25b556a3-ec6f-49e7-ac6c-1b09720e3bfd');
-        if(own.onboarding_complete===true)state.onboardingComplete=true;
+        if(!profiles.cached){
+          state.isAdmin=own.role==='admin'||same(authUser?.id,typeof NEIS_ADMIN_ID!=='undefined'?NEIS_ADMIN_ID:'25b556a3-ec6f-49e7-ac6c-1b09720e3bfd');
+          if(own.onboarding_complete===true)state.onboardingComplete=true;
+        }
         state.profile={
           ...state.profile,
           name:own.full_name||authUser?.user_metadata?.full_name||state.profile?.name||'Student',
@@ -130,15 +132,29 @@
       if(sessionResult.error||!session)return false;
       authUser=session.user;
 
+      const profileCache=window.NEISProfileCache?.read?.(authUser.id)||null;
+      const canUseProfileCache=!!(
+        profileCache?.fresh &&
+        Array.isArray(profileCache.rows) &&
+        profileCache.rows.length &&
+        state.onboardingComplete===true
+      );
+      const profileRequest=canUseProfileCache
+        ? Promise.resolve({data:profileCache.rows,error:null,cached:true})
+        : safeQuery('profiles',sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name'),8000);
+
       const [posts,comments,reactions,bookmarks,profiles,articles]=await Promise.all([
         safeQuery('posts',sb.from('posts').select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type').order('created_at',{ascending:false}),8000),
         safeQuery('comments',sb.from('comments').select('post_id').is('deleted_at',null),8000),
         safeQuery('reactions',sb.from('reactions').select('post_id,user_id'),8000),
         safeQuery('bookmarks',sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),8000),
-        safeQuery('profiles',sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name'),8000),
+        profileRequest,
         safeQuery('articles',sb.from('articles').select('*,author:profiles!articles_author_id_fkey(full_name,username,grade,branch)').order('created_at',{ascending:false}),8000)
       ]);
 
+      if(!profiles.error&&!profiles.cached&&Array.isArray(profiles.data)){
+        window.NEISProfileCache?.write?.(authUser.id,profiles.data);
+      }
       applyCore(posts,profiles,comments,reactions,bookmarks,articles);
       const criticalOk=!posts.error&&!profiles.error;
       if(criticalOk)lastSuccessAt=Date.now();
