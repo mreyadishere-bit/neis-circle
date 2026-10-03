@@ -642,7 +642,7 @@ function patchDmThread(conversationId){
   const replacement=template.content.firstElementChild;
   if(!replacement)return;
   if(node)node.replaceWith(replacement);else{container.querySelector('.empty')?.remove();container.prepend(replacement)}
-  bindV6(replacement);
+  bindV6(container);
   sortConversations();
   const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
   [...container.querySelectorAll('[data-open-conversation]')]
