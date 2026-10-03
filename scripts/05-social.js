@@ -227,6 +227,8 @@ const realtimeRegistry=window.NEISRealtimeRegistry;
 if(!realtimeRegistry)throw new Error('NEIS Realtime Registry failed to load.');
 const messageState=window.NEISMessageState;
 if(!messageState)throw new Error('NEIS Message State failed to load.');
+const messageDomFactory=window.NEISMessageDom;
+if(!messageDomFactory)throw new Error('NEIS Message DOM failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -588,62 +590,23 @@ function dmThreadMarkup(conversation){
   const p=conversationName(conversation.id),last=conversationLast(conversation.id),unread=conversationUnread(conversation.id);
   return `<button class="thread ${same(conversation.id,state.activeConversationId)?'active':''}" data-open-conversation="${conversation.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`;
 }
-function patchDmThread(conversationId){
-  if(state.view!=='messages')return;
-  const id=String(conversationId||'');if(!id)return;
-  const container=document.querySelector('.thread-list-scroll');
-  if(!container)return;
-  const conversation=(state.conversations||[]).find(item=>same(item.id,id));
-  let node=container.querySelector('[data-open-conversation="'+CSS.escape(id)+'"]');
-  if(!conversation||!conversationIsVisible(id)){
-    node?.remove();
-    return;
-  }
-  const template=document.createElement('template');
-  template.innerHTML=dmThreadMarkup(conversation).trim();
-  const replacement=template.content.firstElementChild;
-  if(!replacement)return;
-  if(node)node.replaceWith(replacement);else{container.querySelector('.empty')?.remove();container.prepend(replacement)}
-  bindV6(container);
-  sortConversations();
-  const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
-  [...container.querySelectorAll('[data-open-conversation]')]
-    .sort((a,b)=>(order.get(String(a.dataset.openConversation))??9999)-(order.get(String(b.dataset.openConversation))??9999))
-    .forEach(item=>container.appendChild(item));
-}
-function activeDmMessages(){
-  return (state.liveMessages||[])
-    .filter(message=>same(message.conversation_id,state.activeConversationId)&&!message.deleted_at)
-    .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-}
-function patchActiveDmFlow({insertedId='',force=false}={}){
-  if(state.view!=='messages'||!state.activeConversationId)return;
-  const flow=$('#chatFlow');if(!flow)return;
-  const input=$('#liveChatInput');
-  const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
-  const messages=activeDmMessages();
-  const inserted=insertedId?messages.find(item=>same(item.id,insertedId)):null;
-  const existing=insertedId?flow.querySelector('[data-message-id="'+CSS.escape(String(insertedId))+'"]'):null;
-  if(inserted&&existing&&!force){
-    if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-    return;
-  }
-  if(inserted&&!existing&&!force){
-    const index=messages.findIndex(item=>same(item.id,inserted.id));
-    const previous=index>0?messages[index-1]:null;
-    flow.insertAdjacentHTML('beforeend',messageBubble(inserted,previous));
-    const added=flow.lastElementChild;if(added)bindV6(added);
-  }else{
-    const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
-    flow.innerHTML=messages.length?messages.map((message,index)=>messageBubble(message,messages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
-    bindV6(flow);
-    if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
-  }
-  if(input&&document.activeElement===input){
-    // Intentionally never touch value/focus/caret.
-  }
-  if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
-}
+const messageDom=messageDomFactory.createRuntime({
+  state,
+  document,
+  CSS,
+  requestAnimationFrame,
+  conversationIsVisible,
+  dmThreadMarkup,
+  messageBubble,
+  emptyState,
+  t,
+  bindV6,
+  sortConversations
+});
+const patchDmThread=(conversationId)=>messageDom.patchThread(conversationId);
+const activeDmMessages=()=>messageDom.activeMessages();
+const patchActiveDmFlow=(options)=>messageDom.patchActiveFlow(options);
+
 async function hydrateConversation(conversationId){
   if(!sb||!authUser||!conversationId)return false;
   const [conversationRes,membersRes,messagesRes]=await Promise.all([
