@@ -1869,9 +1869,9 @@ async function loadCircleHistory(circleId,force=false){
   if(circleHistoryLoading.has(key))return;
   circleHistoryLoading.add(key);
   try{
-    const {data,error}=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').eq('circle_id',circleId).order('created_at',{ascending:false}).limit(200);
+    const {data,error}=await sb.from('circle_messages').select('*').eq('circle_id',circleId).order('created_at',{ascending:false}).limit(200);
     if(error){console.error('[NEIS circle history]',error);return}
-    const fetched=(data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const fetched=(data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     const other=state.circleMessages.filter(m=>!same(m.circle_id,circleId));
     const freshLocal=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
     state.circleMessages=[...other,...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
