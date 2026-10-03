@@ -2151,7 +2151,7 @@ function fitMobileConversationList(){
 
 function updateBadges(){
   const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;
-  $('[data-nav="messages"]').forEach(button=>{
+  $$('[data-nav="messages"]').forEach(button=>{
     let badge=button.querySelector('.count-badge')||button.querySelector('i');
     if(!badge&&msg){
       badge=document.createElement('i');
