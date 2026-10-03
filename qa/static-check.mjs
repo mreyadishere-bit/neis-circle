@@ -526,6 +526,17 @@ if (!adminReplyDeleteSection) {
   if (!adminReplyDeleteSection.includes('handleCommentRealtime')) failures.push('Admin reply delete must delegate to handleCommentRealtime.');
 }
 
+const postEditSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const postEditStart = postEditSource.indexOf('async function editOwnPost');
+const postEditEnd = postEditStart >= 0 ? postEditSource.indexOf('\nfunction postImages', postEditStart) : -1;
+const postEditSection = postEditStart >= 0 && postEditEnd > postEditStart ? postEditSource.slice(postEditStart,postEditEnd) : '';
+if (!postEditSection) failures.push('Post edit section could not be located.');
+else {
+  if (postEditSection.includes('loadLiveData()')) failures.push('Post edit must remain targeted and must not call loadLiveData().');
+  if (!postEditSection.includes('handlePostRealtime')) failures.push('Post edit must delegate to handlePostRealtime.');
+  if (postEditSection.includes("select('*')")) failures.push('Post edit must not request wildcard fields.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');

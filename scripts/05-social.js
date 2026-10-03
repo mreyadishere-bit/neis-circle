@@ -239,6 +239,7 @@ if(!chatBootstrapData)throw new Error('NEIS Chat Bootstrap Data failed to load.'
 const chatFields=window.NEISChatFields;
 if(!chatFields)throw new Error('NEIS Chat Fields failed to load.');
 const circleMeetingFields='id,circle_id,creator_id,title,description,starts_at,duration_minutes,room_name,cancelled_at,ended_at,created_at';
+const postRealtimeFields='id,author_id,circle_id,pinned,post_type,created_at,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url';
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -1122,11 +1123,11 @@ async function editOwnPost(postId){
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     let updateRequest=sb.from('posts').update(payload).eq('id',post.id);
     if(!isMainAdminUser())updateRequest=updateRequest.eq('author_id',authUser.id);
-    const {error}=await updateRequest;
-    if(error){toast(safeError(error,'update this post'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
+    const {data:updated,error}=await updateRequest.select(postRealtimeFields).maybeSingle();
+    if(error||!updated){toast(error?safeError(error,'update this post'):t('This post could not be updated.','تعذر تحديث المنشور.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     for(const oldUrl of existingImages)if(!imageUrls.includes(oldUrl))await removeMediaUrl(oldUrl);
     imageItems.forEach(revokePreview);
-    closeModal();await loadLiveData();render();toast(t('Post updated.','تم تحديث المنشور.'));
+    closeModal();await handlePostRealtime({eventType:'UPDATE',new:updated,old:post});toast(t('Post updated.','تم تحديث المنشور.'));
   };
 }
 
