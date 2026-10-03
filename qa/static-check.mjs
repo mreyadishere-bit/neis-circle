@@ -118,6 +118,16 @@ if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
+  const targetedRealtimeTables = ['posts','comments','reactions','comment_likes','comment_creator_hearts'];
+  for (const table of targetedRealtimeTables) {
+    const legacyPattern = new RegExp("table:'" + table + "'\\},refreshV6");
+    if (legacyPattern.test(socialSource)) {
+      failures.push('High-frequency realtime table ' + table + ' must not use refreshV6.');
+    }
+  }
+  for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime']) {
+    if (!socialSource.includes(handler)) failures.push('Missing targeted realtime handler: ' + handler);
+  }
   const globalLoadStart = socialSource.indexOf('const coreLoad=loadLiveData;');
   const globalLoadEnd = socialSource.indexOf('let messageRefreshTimer=', globalLoadStart);
   if (globalLoadStart >= 0 && globalLoadEnd > globalLoadStart) {
@@ -131,6 +141,14 @@ if (fs.existsSync(socialPath)) {
     if (!/setupV6Realtime\(uid\)/.test(globalLoadSource)) {
       failures.push('Global loadLiveData must use setupV6Realtime(uid).');
     }
+  }
+}
+
+const contentAdminPath = path.join(root, 'scripts', '02-content-admin.js');
+if (fs.existsSync(contentAdminPath)) {
+  const contentAdminSource = fs.readFileSync(contentAdminPath, 'utf8');
+  if (/table:'posts'\},async\(\)=>\{await loadLiveData\(\);render\(\)\}/.test(contentAdminSource)) {
+    failures.push('02-content-admin.js must not keep the legacy full-refresh posts realtime listener.');
   }
 }
 
