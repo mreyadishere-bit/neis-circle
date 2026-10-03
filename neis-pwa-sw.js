@@ -1,5 +1,5 @@
-const VERSION = "neis-pwa-v7";
-const STATIC_CACHE = "neis-static-v7";
+const VERSION = "neis-pwa-v8";
+const STATIC_CACHE = "neis-static-v8";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -62,8 +62,8 @@ self.addEventListener("push", (event) => {
 });
 
 
-/* Cache only immutable/versioned same-origin static assets.
-   Navigations and Supabase/API traffic always stay network-first/live. */
+/* App code must never be served cache-first after a deployment.
+   JS/CSS are network-first with cache fallback; images/fonts stay cache-first. */
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -73,16 +73,35 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
   if (request.mode === "navigate" || request.destination === "document") return;
 
-  const isStatic = /\.(?:css|js|png|jpe?g|webp|svg|woff2?)$/i.test(url.pathname);
-  if (!isStatic) return;
+  const isCode = /\.(?:css|js)$/i.test(url.pathname);
+  const isAsset = /\.(?:png|jpe?g|webp|svg|woff2?)$/i.test(url.pathname);
+  if (!isCode && !isAsset) return;
 
   event.respondWith((async () => {
     const cache = await caches.open(STATIC_CACHE);
+
+    if (isCode) {
+      try {
+        const response = await fetch(request, { cache: "no-store" });
+        if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+        return response;
+      } catch (_) {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        throw _;
+      }
+    }
+
     const cached = await cache.match(request);
-    const network = fetch(request).then(response => {
-      if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
-      return response;
-    }).catch(() => cached);
-    return cached || network;
+    if (cached) {
+      event.waitUntil(fetch(request).then(response => {
+        if (response && response.ok) return cache.put(request, response.clone());
+      }).catch(() => {}));
+      return cached;
+    }
+
+    const response = await fetch(request);
+    if (response && response.ok) cache.put(request, response.clone()).catch(() => {});
+    return response;
   })());
 });
