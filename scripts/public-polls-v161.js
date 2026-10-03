@@ -67,12 +67,12 @@
   }
 
   async function loadPublicPolls(force,rerender){
-    if(!sb||!authUser||store.loading)return;
+    if(!sb||!authUser||store.loading)return false;
     var ids=currentPublicPollIds(),signature=ids.join('|');
-    if(!force&&store.loaded&&store.signature===signature)return;
+    if(!force&&store.loaded&&store.signature===signature)return true;
     store.loading=true;
     try{
-      store.polls=[];store.options=[];store.results=[];store.loaded=true;store.signature=signature;
+      store.polls=[];store.options=[];store.results=[];store.loaded=false;store.signature=signature;
       if(ids.length){
         var pollRes=await sb.from('circle_polls').select('*').in('post_id',ids).order('created_at',{ascending:false});
         if(pollRes.error){console.error('[NEIS public polls]',pollRes.error);return}
@@ -87,6 +87,21 @@
           if(!responses[1].error)store.results=responses[1].data||[];else console.error('[NEIS public poll results]',responses[1].error);
         }
       }
+
+      var complete=ids.length===0||(
+        store.polls.length===ids.length&&
+        store.polls.every(function(poll){
+          return store.options.filter(function(option){return same(option.poll_id,poll.id)}).length>=2;
+        })
+      );
+      store.loaded=complete;
+      if(!complete&&ids.length){
+        console.warn('[NEIS public polls] incomplete hydration; retrying',{
+          postIds:ids,polls:store.polls.length,options:store.options.length
+        });
+        setTimeout(function(){loadPublicPolls(true,state.view==='home')},650);
+      }
+
       if(realtime){try{await sb.removeChannel(realtime)}catch(_){}}
       realtime=sb.channel('neis-public-polls')
         .on('postgres_changes',{event:'*',schema:'public',table:'circle_polls'},function(payload){
@@ -107,6 +122,7 @@
     }finally{
       store.loading=false;
     }
+    return store.loaded;
   }
 
   function markup(post){
@@ -412,6 +428,16 @@
       await openSettingsForPost(button.dataset.publicPollSettingsPost);
     }});
   };
+
+  function bootstrapPublicPolls(){
+    if(!authUser||!sb)return;
+    if(currentPublicPollIds().length)loadPublicPolls(true,state.view==='home');
+  }
+  [0,500,1400,3200].forEach(function(delay){setTimeout(bootstrapPublicPolls,delay)});
+  window.addEventListener('pageshow',bootstrapPublicPolls);
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible')bootstrapPublicPolls();
+  });
 
   window.NEISPublicPolls={load:loadPublicPolls,openComposer:function(){return compose('Poll')},openSettingsForPost:openSettingsForPost,decoratePostCard:decoratePostCard,isPublicPollPost:isPublicPollPost,store:store};
 })();
