@@ -7,6 +7,7 @@ const source=fs.readFileSync(new URL('../scripts/social/chat-bootstrap-v181.js',
 const context={console};
 context.window=context;
 vm.createContext(context);
+vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'chat-bootstrap-v181.js'});
 
 const api=context.NEISChatBootstrapData;
