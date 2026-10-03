@@ -491,8 +491,13 @@ async function refreshV6(){
       if(liveInput&&liveDraft!==null)setDmDraft(state.activeConversationId,liveDraft);
       if(circleInput&&circleDraft!==null)setCircleDraft(state.activeCircleId,circleDraft);
 
-      const homePatched=state.view==='home'&&typeof window.NEISPatchHomeRealtime==='function'&&window.NEISPatchHomeRealtime();
-      if(!homePatched)render();
+      let realtimePatched=false;
+      if(state.view==='home'&&typeof window.NEISPatchHomeRealtime==='function'){
+        realtimePatched=window.NEISPatchHomeRealtime();
+      }else if(state.view==='circle-detail'&&state.circleTab==='home'&&typeof window.NEISPatchCircleHomeRealtime==='function'){
+        realtimePatched=window.NEISPatchCircleHomeRealtime();
+      }
+      if(!realtimePatched)render();
       requestAnimationFrame(()=>{
         const nextLive=$('#liveChatInput'),nextCircle=$('#circleChatInput');
         if(nextLive&&liveDraft!==null){
@@ -827,6 +832,88 @@ function patchHomeRealtime(options={}){
   return true;
 }
 window.NEISPatchHomeRealtime=patchHomeRealtime;
+
+function circlePostsForRealtimePatch(){
+  if(state.view!=='circle-detail'||state.circleTab!=='home'||!state.activeCircleId)return [];
+  const query=normalize(state.circleQuery||'');
+  return (Array.isArray(state.posts)?state.posts:[]).filter(post=>
+    same(post?.circle_id,state.activeCircleId)&&
+    (!query||match(query,post?.title,post?.body,post?.tags,post?.user))
+  );
+}
+function renderCirclePostNode(post){
+  let html='';
+  try{html=circlePostCard(post)}
+  catch(error){console.error('[NEIS realtime Circle post patch]',error,post);return null}
+  const template=document.createElement('template');
+  template.innerHTML=String(html).trim();
+  return template.content.firstElementChild;
+}
+function patchCircleHomeRealtime(options={}){
+  if(state.view!=='circle-detail'||state.circleTab!=='home')return false;
+  const feed=document.querySelector('#view .circle-home-feed');
+  if(!feed)return false;
+  const forceIds=new Set((options.forcePostIds||[]).map(String));
+  const posts=circlePostsForRealtimePatch();
+  const wanted=new Set(posts.map(post=>String(post.id)));
+  const existing=new Map();
+  Array.from(feed.children).forEach(node=>{
+    if(node?.classList?.contains('post')&&node.dataset?.post)existing.set(String(node.dataset.post),node);
+  });
+
+  let changed=false;
+  for(const [id,node] of existing){
+    if(!wanted.has(id)){node.remove();existing.delete(id);changed=true}
+  }
+
+  posts.forEach((post,index)=>{
+    const id=String(post.id),version=postRealtimeVersion(post);
+    let node=existing.get(id)||null;
+    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)){
+      const replacement=renderCirclePostNode(post);
+      if(replacement){
+        node.replaceWith(replacement);
+        node=replacement;
+        existing.set(id,node);
+        changed=true;
+      }
+    }else if(node){
+      syncHomePostEngagement(node,post);
+    }
+
+    if(!node){
+      const fresh=renderCirclePostNode(post);
+      if(!fresh)return;
+      let anchor=null;
+      for(let j=index+1;j<posts.length;j++){
+        anchor=existing.get(String(posts[j].id));
+        if(anchor&&anchor.isConnected)break;
+        anchor=null;
+      }
+      if(anchor)feed.insertBefore(fresh,anchor);else feed.appendChild(fresh);
+      existing.set(id,fresh);
+      node=fresh;
+      changed=true;
+    }
+    if(node)syncHomePostEngagement(node,post);
+  });
+
+  if(!posts.length){
+    if(!feed.querySelector('.empty')){
+      feed.innerHTML=emptyState(t('No Circle posts yet','لا توجد منشورات بعد'),state.circleQuery?t('No posts match your search.','لا توجد منشورات مطابقة للبحث.'):t('Start the first discussion.','ابدأ أول نقاش.'));
+      changed=true;
+    }
+  }else{
+    feed.querySelectorAll(':scope > .empty').forEach(el=>{el.remove();changed=true});
+  }
+
+  if(changed){
+    try{bindV6(feed)}catch(error){console.error('[NEIS realtime Circle feed bind]',error)}
+  }
+  updateBadges();
+  return true;
+}
+window.NEISPatchCircleHomeRealtime=patchCircleHomeRealtime;
 
 discover=function(){
   let people=state.members.filter(p=>!same(p.id,authUser.id)),q=normalize(state.query);
@@ -1691,6 +1778,12 @@ function openReport(type,id){openModal(`<div class="modal-head"><div><h2>${t('Re
 
 
 const circlePollStore={circleId:'',polls:[],options:[],results:[],loaded:false,loading:false};
+function refreshCirclePollCards(){
+  if(state.view!=='circle-detail'||state.circleTab!=='home'||!same(state.activeCircleId,circlePollStore.circleId))return;
+  const ids=circlePollStore.polls.map(p=>String(p.post_id));
+  if(typeof window.NEISPatchCircleHomeRealtime==='function')window.NEISPatchCircleHomeRealtime({forcePostIds:ids});
+  else render();
+}
 let circlePollRealtime=null;
 
 function circlePollForPost(postId){return circlePollStore.polls.find(p=>same(p.post_id,postId))}
@@ -1716,7 +1809,7 @@ function scheduleCirclePollCloseRefresh(poll){
     circlePollCloseTimers.delete(key);
     if(delay<remaining){scheduleCirclePollCloseRefresh(poll);return}
     if(state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circlePollStore.circleId)){
-      await loadCirclePolls(state.activeCircleId,{force:true});render();
+      await loadCirclePolls(state.activeCircleId,{force:true});refreshCirclePollCards();
     }
   },delay));
 }
@@ -1747,10 +1840,10 @@ async function loadCirclePolls(circleId,{force=false,rerender=false}={}){
         const changedPost=payload.new?.post_id||payload.old?.post_id;
         if(!changedPost||state.posts.some(p=>same(p.id,changedPost)&&same(p.circle_id,circleId))){
           await loadCirclePolls(circleId,{force:true});
-          if(state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circleId))render();
+          refreshCirclePollCards();
         }
       }).subscribe();
-    if(rerender&&state.view==='circle-detail'&&state.circleTab==='home'&&same(state.activeCircleId,circleId))render();
+    if(rerender)refreshCirclePollCards();
   }finally{circlePollStore.loading=false}
 }
 function circlePollMarkup(post){
