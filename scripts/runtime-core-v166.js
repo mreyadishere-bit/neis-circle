@@ -142,7 +142,10 @@
       applyCore(posts,profiles,comments,reactions,bookmarks,articles);
       const criticalOk=!posts.error&&!profiles.error;
       if(criticalOk)lastSuccessAt=Date.now();
-      if(typeof render==='function')render();
+      if(state?.view==='home'&&typeof window.NEISPatchHomeRealtime==='function'){
+        const patched=window.NEISPatchHomeRealtime();
+        if(!patched&&typeof render==='function')render();
+      }else if(typeof render==='function')render();
       return criticalOk;
     })().catch(error=>{
       console.error('[NEIS] recovery hydration failed',error);
