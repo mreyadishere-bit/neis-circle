@@ -389,6 +389,16 @@ if (fs.existsSync(socialPath)) {
   }
 }
 
+const socialBootstrapSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const pattern of [
+  ".from('follows').select('*')",
+  ".from('circles').select('*')",
+  ".from('circle_members').select('*')",
+  ".from('circle_meetings').select('*')"
+]) {
+  if (socialBootstrapSource.includes(pattern)) failures.push("Bootstrap social queries must not request select('*'): " + pattern);
+}
+
 const socialChatActionSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 for (const pattern of [
   ".from('messages').insert",
