@@ -75,7 +75,7 @@
       store.polls=[];store.options=[];store.results=[];store.loaded=false;store.signature=signature;
       if(ids.length){
         var pollRes=await sb.from('circle_polls').select('*').in('post_id',ids).order('created_at',{ascending:false});
-        if(pollRes.error){console.error('[NEIS public polls]',pollRes.error);return}
+        if(pollRes.error){console.error('[NEIS public polls]',pollRes.error);setTimeout(function(){loadPublicPolls(true,state.view==='home')},900);return false}
         store.polls=pollRes.data||[];
         var pollIds=store.polls.map(function(p){return p.id});
         if(pollIds.length){
