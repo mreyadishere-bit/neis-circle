@@ -19,6 +19,31 @@ function clearOnboardingCache(){
   if(!key)return;
   try{localStorage.removeItem(key)}catch(_){}
 }
+async function resolveOnboardingStatus(timeoutMs=2500){
+  if(!authUser)return false;
+  if(state.onboardingComplete===true||cachedOnboardingComplete()){
+    state.onboardingComplete=true;
+    return true;
+  }
+  if(!sb)return false;
+  try{
+    const query=sb.from('profiles').select('onboarding_complete').eq('id',authUser.id).maybeSingle();
+    const result=await Promise.race([
+      query,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('onboarding_status_timeout')),timeoutMs))
+    ]);
+    if(!result.error&&result.data){
+      state.onboardingComplete=result.data.onboarding_complete===true;
+      if(state.onboardingComplete)cacheOnboardingComplete();
+      else clearOnboardingCache();
+      return true;
+    }
+  }catch(error){
+    console.warn('[NEIS] onboarding status bootstrap failed',error);
+  }
+  return false;
+}
+window.NEISResolveOnboardingStatus=resolveOnboardingStatus;
 window.NEISCacheOnboardingComplete=cacheOnboardingComplete;
 window.NEISClearOnboardingComplete=clearOnboardingCache;
 const ar=()=>state.lang==='ar';
@@ -292,7 +317,9 @@ async function v4Init(){
   if(!authUser){if(!window.NEISAuthCallbackPending?.())authScreen();return}
   window.NEISCleanAuthCallbackUrl?.();
   if(state.onboardingComplete!==true&&cachedOnboardingComplete())state.onboardingComplete=true;
+  if(state.onboardingComplete!==true)await resolveOnboardingStatus(2500);
   render();
+  setTimeout(()=>{if(authUser&&typeof loadLiveData==='function')loadLiveData().then(()=>render()).catch(error=>console.error('[NEIS] deferred live data load failed',error))},0);
 }
 v4Init();
 })();
