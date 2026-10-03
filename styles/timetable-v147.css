@@ -739,3 +739,138 @@
   .tt-action-copy small{font-size:10px}
   .tt-action-icon{width:28px;height:28px;font-size:15px}
 }
+
+
+/* v156 — dedicated tablet timetable layout (keeps desktop and phone layouts untouched) */
+@media (min-width:761px) and (max-width:1100px){
+  .tt-head{
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    align-items:start;
+    gap:16px;
+    margin-bottom:16px;
+  }
+  .tt-head h1{font-size:34px}
+  .tt-head>div>p:last-child{max-width:680px;font-size:12px}
+  .tt-head-actions{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:9px;
+  }
+  .tt-head-actions button{
+    width:100%;
+    min-width:0;
+    height:44px;
+  }
+
+  .tt-summary{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+    margin-bottom:16px;
+  }
+  .tt-summary article{
+    padding:15px 16px;
+    border-radius:17px;
+  }
+  .tt-summary b{font-size:20px}
+  .tt-summary .tt-next{grid-column:auto}
+
+  .tt-desktop-only{display:none!important}
+  .tt-mobile-only{display:block!important}
+
+  .tt-mobile-days{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    padding:2px 1px 11px;
+    scrollbar-width:none;
+    scroll-snap-type:x proximity;
+  }
+  .tt-mobile-days::-webkit-scrollbar{display:none}
+  .tt-mobile-days button{
+    min-width:82px;
+    height:50px;
+    display:grid;
+    grid-template-columns:1fr auto;
+    align-items:center;
+    gap:7px;
+    padding:0 11px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:var(--card);
+    color:var(--muted);
+    scroll-snap-align:start;
+  }
+  .tt-mobile-days button.active{
+    border-color:var(--accent);
+    background:var(--accent2);
+    color:var(--accent);
+  }
+  .tt-mobile-days b{font-size:10.5px}
+  .tt-mobile-days span{
+    min-width:19px;
+    height:19px;
+    display:grid;
+    place-items:center;
+    border-radius:99px;
+    background:var(--soft);
+    font-size:8px;
+  }
+
+  .tt-mobile-day{
+    overflow:hidden;
+    border:1px solid var(--line);
+    border-radius:22px;
+    background:var(--card);
+  }
+  .tt-mobile-day>header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:15px 17px;
+    border-bottom:1px solid var(--line);
+  }
+  .tt-mobile-day h2{margin:0;font-size:20px}
+  .tt-mobile-day header p{margin:3px 0 0;color:var(--muted);font-size:10px}
+  .tt-mobile-header-actions{display:flex;align-items:center;gap:8px}
+  .tt-mobile-day header .primary{height:38px;font-size:10px}
+
+  .tt-mobile-list{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start;
+    grid-auto-rows:max-content;
+    gap:11px;
+    min-height:330px;
+    padding:12px;
+  }
+  .tt-mobile-list .tt-event{
+    height:auto;
+    min-height:0;
+    align-self:start;
+    padding:14px;
+    border-radius:18px;
+  }
+  .tt-mobile-list .tt-event-name{font-size:14px}
+  .tt-mobile-list .tt-time-row{
+    grid-template-columns:1fr;
+    gap:6px;
+    padding:9px 10px;
+  }
+  .tt-mobile-list .tt-time-row time{
+    min-width:0;
+    width:100%;
+    overflow:visible;
+  }
+  .tt-mobile-list .tt-time-row time strong{font-size:14px}
+  .tt-mobile-list .tt-time-row em{justify-self:start}
+  .tt-mobile-list .tt-empty-day{
+    min-height:180px;
+    grid-column:1/-1;
+  }
+}
+@media (min-width:761px) and (max-width:900px){
+  .tt-mobile-list{grid-template-columns:1fr}
+}
