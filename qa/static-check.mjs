@@ -511,6 +511,21 @@ else {
   if (!scheduleMeetingSection.includes('handleCircleMeetingRealtime')) failures.push('Circle meeting creation must delegate to handleCircleMeetingRealtime.');
 }
 
+const commentActionSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const adminReplyDeleteStart = commentActionSource.indexOf("root.querySelectorAll('[data-delete-reply]')");
+const adminReplyDeleteEnd = adminReplyDeleteStart >= 0
+  ? commentActionSource.indexOf("root.querySelectorAll('[data-member-role]')", adminReplyDeleteStart)
+  : -1;
+const adminReplyDeleteSection = adminReplyDeleteStart >= 0 && adminReplyDeleteEnd > adminReplyDeleteStart
+  ? commentActionSource.slice(adminReplyDeleteStart, adminReplyDeleteEnd)
+  : '';
+if (!adminReplyDeleteSection) {
+  failures.push('Admin reply delete action section could not be located.');
+} else {
+  if (adminReplyDeleteSection.includes('loadLiveData()')) failures.push('Admin reply delete must remain targeted and must not call loadLiveData().');
+  if (!adminReplyDeleteSection.includes('handleCommentRealtime')) failures.push('Admin reply delete must delegate to handleCommentRealtime.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
