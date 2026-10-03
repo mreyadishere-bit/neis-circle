@@ -240,7 +240,8 @@ async function initSupabase(){
   if(sb)return true;
   if(supabaseInitPromise)return supabaseInitPromise;
   supabaseInitPromise=(async()=>{
-    const u=window.NEIS_CONFIG.supabaseUrl||localStorage.getItem("neis-sb-url"),k=window.NEIS_CONFIG.supabaseAnonKey||localStorage.getItem("neis-sb-key");
+    const config=window.NEIS_CONFIG||{};
+    const u=config.supabaseUrl||localStorage.getItem("neis-sb-url"),k=config.supabaseAnonKey||localStorage.getItem("neis-sb-key");
     if(!u||!k)return false;
     if(!window.supabase?.createClient){
       const loaded=await loadSupabaseLibrary();
