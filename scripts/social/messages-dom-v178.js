@@ -5,7 +5,7 @@
   function createRuntime(deps){
     const {
       state,document,CSS,requestAnimationFrame,
-      conversationIsVisible,dmThreadMarkup,messageBubble,emptyState,t,bindV6,sortConversations
+      conversationIsVisible,dmThreadMarkup,messageBubble,circleMessageBubble,emptyState,t,bindV6,sortConversations
     }=deps||{};
 
     function activeMessages(){
@@ -75,7 +75,38 @@
       return true;
     }
 
-    return {activeMessages,patchThread,patchActiveFlow};
+    function patchCircleFlow({circleId,id,event,newlyInserted=false}={}){
+      if(state?.view!=='circle-detail'||state?.circleTab!=='chat'||!same(state?.activeCircleId,circleId))return false;
+      const flow=document?.querySelector?.('#circleChatFlow');if(!flow)return false;
+      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
+      const active=(state.circleMessages||[])
+        .filter(message=>same(message.circle_id,circleId)&&!message.deleted_at)
+        .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+      const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
+      const existing=id!=null?flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]'):null;
+
+      if(event==='INSERT'&&existing){
+        if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      }else if(inserted&&!existing){
+        const pos=active.findIndex(item=>same(item.id,id));
+        const previousMessage=pos>0?active[pos-1]:null;
+        flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
+        if(flow.lastElementChild)bindV6(flow.lastElementChild);
+      }else{
+        const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
+        flow.innerHTML=active.length
+          ?active.map((message,pos)=>circleMessageBubble(message,active[pos-1])).join('')
+          :emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+        bindV6(flow);
+        if(!wasNearBottom)requestAnimationFrame(()=>{
+          flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset);
+        });
+      }
+      if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      return true;
+    }
+
+    return {activeMessages,patchThread,patchActiveFlow,patchCircleFlow};
   }
 
   window.NEISMessageDom={
