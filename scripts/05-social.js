@@ -890,7 +890,7 @@ async function handleProfileRealtime(payload){
     if(index>=0)members[index]=merged;else members.push(merged);
   }else return;
   state.members=members;
-  try{window.NEISProfileCache?.clear?.(authUser?.id)}catch(_){}
+  try{if(authUser?.id)window.NEISProfileCache?.write?.(authUser.id,state.members)}catch(_){}
 
   if(same(id,authUser?.id)&&event!=='DELETE'){
     state.isAdmin=row.role==='admin'||isMainAdminUser();
