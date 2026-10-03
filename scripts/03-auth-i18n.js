@@ -45,9 +45,45 @@ function syncChrome(){const navNames={home:['Home','الرئيسية'],discover:
 function loadingScreen(){document.body.classList.remove('app-ready');authRoot.innerHTML=`<div class="auth-loading"><i></i><span>${bi('Preparing your account…','جارٍ تجهيز حسابك…')}</span></div>`}
 function authScreen(){document.body.classList.remove('app-ready');const signup=authMode==='signup';authRoot.innerHTML=`<section class="auth-shell"><div class="auth-story"><div class="auth-brand"><i>NC</i><span>NEIS Circle</span></div><div class="auth-story-copy"><h1>${bi('A better student network starts with you.','شبكة طلاب أفضل تبدأ بك.')}</h1><p>${bi('A private space for useful questions, real experiences, student articles and creative work.','مساحة خاصة للأسئلة المفيدة والخبرات الحقيقية ومقالات الطلاب وأعمالهم الإبداعية.')}</p></div><div class="auth-points"><span>${bi('Profiles organized by grade and branch','ملفات شخصية مرتبة حسب الصف والفرع')}</span><span>${bi('Bilingual articles and moderated gallery','مقالات باللغتين ومعرض يخضع للمراجعة')}</span><span>${bi('Private admin controls and protected data','إدارة خاصة وبيانات محمية')}</span></div></div><div class="auth-panel"><div class="auth-tools"><button data-auth-lang>${ar()?'EN':'AR'}</button><button data-auth-theme>${state.theme==='light'?'◐':'☀'}</button></div><h2>${signup?bi('Create your account','أنشئ حسابك'):bi('Welcome back','مرحبًا بعودتك')}</h2><p>${signup?bi('Start with Google, then complete your student profile.','ابدأ بحساب Google ثم أكمل ملفك كطالب.'):bi('Sign in before entering the student network.','سجّل الدخول أولًا قبل دخول شبكة الطلاب.')}</p><div class="auth-choice"><button class="${!signup?'active':''}" data-auth-mode="signin">${bi('Sign in','تسجيل الدخول')}</button><button class="${signup?'active':''}" data-auth-mode="signup">${bi('Create account','إنشاء حساب')}</button></div><button class="google-btn" data-auth-google><span class="google-mark">G</span>${signup?bi('Create account with Google','إنشاء حساب باستخدام Google'):bi('Continue with Google','المتابعة باستخدام Google')}</button><p class="auth-note">${bi('Google is used only for secure authentication. Your profile is completed in the next step.','يُستخدم Google لتسجيل الدخول الآمن فقط، ثم تكمل ملفك في الخطوة التالية.')}</p></div></section>`;authRoot.querySelectorAll('[data-auth-mode]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;authScreen()});authRoot.querySelector('[data-auth-google]').onclick=()=>{if(!sb){toast(bi('Connection is not ready. Please refresh.','الاتصال غير جاهز، حدّث الصفحة.'));return}googleSignIn()};authRoot.querySelector('[data-auth-lang]').onclick=()=>{state.lang=ar()?'en':'ar';state.articleLanguage=state.lang;applyPrefs();authScreen()};authRoot.querySelector('[data-auth-theme]').onclick=()=>{state.theme=state.theme==='light'?'dark':'light';applyPrefs();authScreen()}}
 function onboardingScreen(){document.body.classList.remove('app-ready');const meta=authUser?.user_metadata||{},name=state.profile.name&&state.profile.name!=='Student'?state.profile.name:(meta.full_name||meta.name||'');authRoot.innerHTML=`<section class="onboard-shell"><div class="onboard-head"><div><span class="onboard-step">${bi('STEP 2 OF 2','الخطوة ٢ من ٢')}</span><h1>${bi('Complete your student profile','أكمل ملفك كطالب')}</h1><p>${bi('This information helps students find the right people and keeps the community organized.','تساعد هذه البيانات الطلاب في العثور على الأشخاص المناسبين وتنظيم المجتمع.')}</p></div><div class="auth-tools"><button data-auth-lang>${ar()?'EN':'AR'}</button><button data-onboard-signout>${bi('Sign out','خروج')}</button></div></div><form id="onboardForm"><div class="onboard-grid"><label class="field">${bi('Full name','الاسم الكامل')}<input id="obName" value="${esc(name)}" required maxlength="80"></label><label class="field">${bi('Username','اسم المستخدم')}<input id="obUsername" value="${esc(state.profile.username||'')}" required maxlength="30" placeholder="eyad_ahmed" pattern="[A-Za-z0-9_]{3,30}"></label><label class="field">${bi('Grade','الصف')}<select id="obGrade" required><option value="">${bi('Choose grade','اختر الصف')}</option>${['Grade 10','Grade 11','Grade 12','Graduate'].map(x=>`<option ${state.profile.grade===x?'selected':''}>${x}</option>`).join('')}</select></label><label class="field">${bi('Branch','الفرع')}<select id="obBranch" required>${branchOptions(state.profile.branch)}</select></label><label class="field wide">${bi('Interests','الاهتمامات')}<input id="obInterests" value="${esc(state.profile.interests||'')}" placeholder="Physics, Design, Robotics"></label></div><div id="onboardError" class="form-error hidden"></div><div class="modal-actions"><button id="completeProfile" class="primary">${bi('Enter NEIS Circle','دخول NEIS Circle')}</button></div></form></section>`;authRoot.querySelector('[data-auth-lang]').onclick=()=>{state.lang=ar()?'en':'ar';state.articleLanguage=state.lang;applyPrefs();onboardingScreen()};authRoot.querySelector('[data-onboard-signout]').onclick=signOut;authRoot.querySelector('#onboardForm').onsubmit=saveOnboarding}
-async function saveOnboarding(e){e.preventDefault();const btn=$('#completeProfile'),errorBox=$('#onboardError'),username=$('#obUsername').value.trim().toLowerCase();if(!/^[a-z0-9_]{3,30}$/.test(username)){errorBox.textContent=bi('Username must be 3–30 letters, numbers or underscores.','اسم المستخدم يجب أن يكون من ٣ إلى ٣٠ حرفًا إنجليزيًا أو رقمًا أو شرطة سفلية.');errorBox.classList.remove('hidden');return}btn.classList.add('button-loading');btn.textContent=bi('Saving…','جارٍ الحفظ…');const payload={id:authUser.id,full_name:$('#obName').value.trim(),username,grade:$('#obGrade').value,branch:$('#obBranch').value,campus:$('#obBranch').value,interests:$('#obInterests').value.split(',').map(x=>x.trim()).filter(Boolean),onboarding_complete:true};const {error}=await sb.from('profiles').upsert(payload,{onConflict:'id'});if(error){errorBox.textContent=error.code==='23505'?bi('This username is already taken.','اسم المستخدم مستخدم بالفعل.'):window.neisFriendlyError?.(error,'complete your profile')||bi('We could not complete your profile. Please try again.','تعذر إكمال ملفك. حاول مرة أخرى.');errorBox.classList.remove('hidden');btn.classList.remove('button-loading');btn.textContent=bi('Enter NEIS Circle','دخول NEIS Circle');return}state.onboardingComplete=true;await loadLiveData();render();toast(bi('Profile completed — welcome!','اكتمل ملفك — أهلًا بك!'))}
+async function saveOnboarding(e){
+  e.preventDefault();
+  const btn=$('#completeProfile'),errorBox=$('#onboardError'),username=$('#obUsername').value.trim().toLowerCase();
+  if(!/^[a-z0-9_]{3,30}$/.test(username)){
+    errorBox.textContent=bi('Username must be 3–30 letters, numbers or underscores.','اسم المستخدم يجب أن يكون من ٣ إلى ٣٠ حرفًا إنجليزيًا أو رقمًا أو شرطة سفلية.');
+    errorBox.classList.remove('hidden');return;
+  }
+  btn.classList.add('button-loading');btn.textContent=bi('Saving…','جارٍ الحفظ…');
+  const profilePayload={full_name:$('#obName').value.trim(),username,grade:$('#obGrade').value,branch:$('#obBranch').value,campus:$('#obBranch').value,interests:$('#obInterests').value.split(',').map(x=>x.trim()).filter(Boolean),onboarding_complete:true};
+
+  let result=await sb.from('profiles').update(profilePayload).eq('id',authUser.id).select('id,onboarding_complete');
+  if(!result.error&&(!result.data||result.data.length===0)){
+    result=await sb.from('profiles').insert({id:authUser.id,...profilePayload,role:'student'}).select('id,onboarding_complete');
+  }
+  const error=result.error;
+  if(error){
+    console.error('[NEIS onboarding save]',error);
+    errorBox.textContent=error.code==='23505'?bi('This username is already taken.','اسم المستخدم مستخدم بالفعل.'):window.neisFriendlyError?.(error,'complete your profile')||bi('We could not complete your profile. Please try again.','تعذر إكمال ملفك. حاول مرة أخرى.');
+    errorBox.classList.remove('hidden');btn.classList.remove('button-loading');btn.textContent=bi('Enter NEIS Circle','دخول NEIS Circle');return;
+  }
+  state.onboardingComplete=true;
+  await loadLiveData();
+  render();
+  toast(bi('Profile completed — welcome!','اكتمل ملفك — أهلًا بك!'));
+}
 const v3Load=loadLiveData;
-loadLiveData=async function(){if(!sb||!authUser)return;await v3Load();const {data,error}=await sb.from('profiles').select('onboarding_complete').eq('id',authUser.id).maybeSingle();state.onboardingComplete=!error&&data?.onboarding_complete===true};
+loadLiveData=async function(){
+  if(!sb||!authUser)return;
+  await v3Load();
+  const previous=state.onboardingComplete;
+  const {data,error}=await sb.from('profiles').select('onboarding_complete').eq('id',authUser.id).maybeSingle();
+  if(!error&&data){
+    state.onboardingComplete=data.onboarding_complete===true;
+  }else if(previous===true){
+    state.onboardingComplete=true;
+  }else{
+    state.onboardingComplete=null;
+  }
+};
 const v3Render=render;
 render=function(){if(!authUser){authScreen();return}if(state.onboardingComplete===null){loadingScreen();return}if(state.onboardingComplete!==true){onboardingScreen();return}document.body.classList.add('app-ready');authRoot.innerHTML='';v3Render();syncChrome()};
 setupBanner=()=>'';
@@ -233,10 +269,15 @@ async function v4Init(){
 
   try{
     const profileCheck=await Promise.race([
-      sb.from('profiles').select('onboarding_complete').eq('id',authUser.id).maybeSingle(),
+      sb.from('profiles').select('onboarding_complete,full_name,username,grade,branch,campus,interests,role').eq('id',authUser.id).maybeSingle(),
       new Promise((_,reject)=>setTimeout(()=>reject(new Error('profile_check_timeout')),3500))
     ]);
-    if(!profileCheck.error&&profileCheck.data)state.onboardingComplete=profileCheck.data.onboarding_complete===true;
+    if(!profileCheck.error&&profileCheck.data){
+      const p=profileCheck.data;
+      state.onboardingComplete=p.onboarding_complete===true;
+      state.isAdmin=p.role==='admin'||authUser.id===NEIS_ADMIN_ID;
+      state.profile={...state.profile,name:p.full_name||state.profile.name||authUser.user_metadata?.full_name||'Student',username:p.username||'',grade:p.grade||'',branch:p.branch||'',campus:p.campus||'',interests:Array.isArray(p.interests)?p.interests.join(', '):(p.interests||''),role:state.isAdmin?'admin':'student'};
+    }
   }catch(error){console.warn('[NEIS] quick profile check failed',error)}
 
   if(state.onboardingComplete===false){onboardingScreen();return}
