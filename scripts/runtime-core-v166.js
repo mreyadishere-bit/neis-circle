@@ -188,10 +188,17 @@
   }
 
   setTimeout(async()=>{
-    const ok=await hydrate({force:true,reason:'startup'});
+    if(authUser&&state?.platformReady===true&&window.__neisPrimaryHydratedAt){
+      lastSuccessAt=Number(window.__neisPrimaryHydratedAt)||Date.now();
+      return;
+    }
+    const ok=await hydrate({force:true,reason:'startup-recovery'});
     if(!ok&&!startupRetryUsed){
       startupRetryUsed=true;
-      setTimeout(()=>hydrate({force:true,reason:'startup-retry'}),1800);
+      setTimeout(()=>{
+        if(state?.platformReady===true&&window.__neisPrimaryHydratedAt)return;
+        hydrate({force:true,reason:'startup-recovery-retry'});
+      },1800);
     }
   },650);
 })();
