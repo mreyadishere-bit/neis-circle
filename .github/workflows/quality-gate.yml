@@ -1,0 +1,50 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - "stability-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run qa:static
+
+  browser-smoke:
+    name: Browser boot smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Start local site
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/neis-http.log 2>&1 &
+          echo $! > /tmp/neis-http.pid
+          sleep 2
+      - name: Run browser smoke
+        run: npm run qa:smoke
+      - name: Print server log on failure
+        if: failure()
+        run: cat /tmp/neis-http.log || true
