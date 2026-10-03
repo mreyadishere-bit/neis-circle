@@ -49,7 +49,8 @@ const localScriptSrcs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["'][^>]*
   .map(match => match[1])
   .filter(src => !/^https?:\/\//i.test(src));
 
-const localStyleHrefs = [...html.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi)]
+const runtimeHtml = html.replace(/<noscript[\s\S]*?<\/noscript>/gi, '');
+const localStyleHrefs = [...runtimeHtml.matchAll(/<link[^>]+href=["']([^"']+)["'][^>]*>/gi)]
   .map(match => match[1])
   .filter(href => href.startsWith('styles/'));
 
