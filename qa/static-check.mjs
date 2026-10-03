@@ -126,9 +126,90 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const messageStatePath = path.join(root, 'scripts', 'social', 'messages-state-v177.js');
+if (!fs.existsSync(messageStatePath)) {
+  failures.push('Missing isolated realtime message state module.');
+} else {
+  const messageStateSource = fs.readFileSync(messageStatePath, 'utf8');
+  for (const token of ['applyDirectMessage','applyCircleMessage','applyMessageReaction','applyConversationMember']) {
+    if (!messageStateSource.includes(token)) failures.push('Message state module is missing expected mutation: ' + token);
+  }
+}
+const messageStateScripts = localScriptSrcs.filter(src => /social\/messages-state-v\d+\.js/i.test(src));
+if (messageStateScripts.length !== 1) {
+  failures.push(`Expected exactly one message state module, found ${messageStateScripts.length}: ${messageStateScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageStateScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Message state module must load before 05-social.js.');
+}
+
+const videoEmbedsPath = path.join(root, 'scripts', 'social', 'video-embeds-v176.js');
+if (!fs.existsSync(videoEmbedsPath)) {
+  failures.push('Missing isolated video embed parser.');
+} else {
+  const videoEmbedsSource = fs.readFileSync(videoEmbedsPath, 'utf8');
+  for (const token of ['youtubeVideoId','googleDriveFileId','drive.google.com','youtube-nocookie.com']) {
+    if (!videoEmbedsSource.includes(token)) failures.push('Video embed parser is missing expected support: ' + token);
+  }
+}
+const videoEmbedScripts = localScriptSrcs.filter(src => /social\/video-embeds-v\d+\.js/i.test(src));
+if (videoEmbedScripts.length !== 1) {
+  failures.push(`Expected exactly one video embed parser, found ${videoEmbedScripts.length}: ${videoEmbedScripts.join(', ')}`);
+} else {
+  const parserIndex = localScriptSrcs.indexOf(videoEmbedScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || parserIndex > socialIndex) failures.push('Video embed parser must load before 05-social.js.');
+}
+
+const realtimeRegistryPath = path.join(root, 'scripts', 'social', 'realtime-v175.js');
+if (!fs.existsSync(realtimeRegistryPath)) {
+  failures.push('Missing isolated realtime subscription registry.');
+} else {
+  const realtimeRegistrySource = fs.readFileSync(realtimeRegistryPath, 'utf8');
+  for (const table of ['posts','comments','reactions','messages','conversations','conversation_members','circle_messages','message_reactions','circle_meetings','follows','circle_members','profiles','articles','gallery_items','reports']) {
+    if (!realtimeRegistrySource.includes("'" + table + "'")) failures.push('Realtime registry is missing table: ' + table);
+  }
+}
+const realtimeRegistryScripts = localScriptSrcs.filter(src => /social\/realtime-v\d+\.js/i.test(src));
+if (realtimeRegistryScripts.length !== 1) {
+  failures.push(`Expected exactly one realtime registry module, found ${realtimeRegistryScripts.length}: ${realtimeRegistryScripts.join(', ')}`);
+} else {
+  const registryIndex = localScriptSrcs.indexOf(realtimeRegistryScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || registryIndex > socialIndex) failures.push('Realtime registry must load before 05-social.js.');
+}
+
+const notificationRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
+if (!fs.existsSync(notificationRuntimePath)) {
+  failures.push('Missing isolated notification runtime.');
+} else {
+  const notificationRuntimeSource = fs.readFileSync(notificationRuntimePath, 'utf8');
+  for (const token of ['refreshPromise','lastFullSyncAt','applyRealtime','startFallback']) {
+    if (!notificationRuntimeSource.includes(token)) failures.push('Notification runtime is missing expected behavior: ' + token);
+  }
+}
+const notificationRuntimeScripts = localScriptSrcs.filter(src => /social\/notifications-v\d+\.js/i.test(src));
+if (notificationRuntimeScripts.length !== 1) {
+  failures.push(`Expected exactly one notification runtime module, found ${notificationRuntimeScripts.length}: ${notificationRuntimeScripts.join(', ')}`);
+} else {
+  const runtimeIndex = localScriptSrcs.indexOf(notificationRuntimeScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || runtimeIndex > socialIndex) {
+    failures.push('Notification runtime must load before 05-social.js.');
+  }
+}
+
 const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
+  if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
+  if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
+  if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
+  if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
+  for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
+    if (socialSource.includes(legacyNotificationToken)) failures.push('Notification runtime leaked back into 05-social.js: ' + legacyNotificationToken);
+  }
   const targetedRealtimeTables = ['posts','comments','reactions','comment_likes','comment_creator_hearts','follows','circle_members','circle_meetings'];
   for (const table of targetedRealtimeTables) {
     const legacyPattern = new RegExp("table:'" + table + "'\\},refreshV6");
@@ -138,6 +219,12 @@ if (fs.existsSync(socialPath)) {
   }
   for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime','handleFollowRealtime','handleCircleMemberRealtime','handleCircleMeetingRealtime','handleMessageRealtime','handleConversationRealtime','handleConversationMemberRealtime','handleCircleMessageRealtime','handleMessageReactionRealtime']) {
     if (!socialSource.includes(handler)) failures.push('Missing targeted realtime handler: ' + handler);
+  }
+  for (const legacyRealtimeToken of ['v6ChannelUid','v6RealtimeStatus','sb.channel(\`neis-v7-']) {
+    if (socialSource.includes(legacyRealtimeToken)) failures.push('Realtime subscription lifecycle leaked back into 05-social.js: ' + legacyRealtimeToken);
+  }
+  for (const deadRefresh of ['async function refreshMessagesV6','async function refreshCircleMessagesV96']) {
+    if (socialSource.includes(deadRefresh)) failures.push('Unused full-refresh chat loader must not return: ' + deadRefresh);
   }
   const forbiddenMessageBindings = [
     "table:'messages'},refreshMessagesV6",

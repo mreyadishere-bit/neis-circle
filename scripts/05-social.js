@@ -14,8 +14,8 @@ const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
 Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
-let v6Channel=null,v6ChannelUid='',v6RealtimeStatus='CLOSED',notificationChannel=null,notificationChannelUid='',notificationPollTimer=null,notificationRealtimeStatus='CLOSED',notificationRefreshPromise=null,notificationLastFullSyncAt=0,searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
-let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
+let searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
+let notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
 let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
@@ -221,57 +221,18 @@ function canManageCircle(circleId){const m=membership(circleId);return !!(state.
 function canModerateCircle(circleId){const m=membership(circleId);return !!(state.isAdmin||(m&&m.status==='active'&&['owner','admin','moderator'].includes(m.role)))}
 function unreadMessages(){return state.conversations.reduce((sum,c)=>sum+conversationUnread(c.id),0)}
 function conversationUnread(id){const member=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser?.id)),read=member?.last_read_at||'1970-01-01';return state.liveMessages.filter(m=>same(m.conversation_id,id)&&!same(m.sender_id,authUser?.id)&&new Date(m.created_at)>new Date(read)).length}
-async function unlockNotificationSound(){try{const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)return false;notificationAudioContext=notificationAudioContext||new AudioCtx();if(notificationAudioContext.state!=='running')await notificationAudioContext.resume();notificationSoundUnlocked=notificationAudioContext.state==='running';return notificationSoundUnlocked}catch{return false}}
-async function playNotificationSound(){try{if(!await unlockNotificationSound())return;const ctx=notificationAudioContext,now=ctx.currentTime,master=ctx.createGain();master.gain.setValueAtTime(.0001,now);master.gain.exponentialRampToValueAtTime(.34,now+.012);master.gain.exponentialRampToValueAtTime(.0001,now+.62);master.connect(ctx.destination);[[1046.5,0,.19,'sine'],[1568,.11,.25,'triangle'],[2093,.24,.31,'sine']].forEach(([freq,delay,duration,type])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,now+delay);gain.gain.setValueAtTime(.0001,now+delay);gain.gain.exponentialRampToValueAtTime(.9,now+delay+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+delay+duration);osc.connect(gain);gain.connect(master);osc.start(now+delay);osc.stop(now+delay+duration+.04)})}catch{}}
-function applyNotificationRows(rows,{soundForNew=false}={}){const previousIds=new Set(state.notifications.map(n=>String(n.id))),fresh=(rows||[]).filter(n=>!previousIds.has(String(n.id)));state.notifications=rows||[];updateBadges();if(state.view==='notifications')render();if(soundForNew&&fresh.some(n=>!n.read_at))playNotificationSound()}
-function applyRealtimeNotification(payload){const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};if(event==='INSERT'&&row?.id){if(!state.notifications.some(n=>same(n.id,row.id)))state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();if(!row.read_at)playNotificationSound();return}if(event==='UPDATE'&&row?.id){const index=state.notifications.findIndex(n=>same(n.id,row.id));if(index>=0)state.notifications[index]={...state.notifications[index],...row};else state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();return}if(event==='DELETE'&&oldRow?.id){state.notifications=state.notifications.filter(n=>!same(n.id,oldRow.id));updateBadges();if(state.view==='notifications')render()}}
-async function refreshNotificationsOnly(soundForNew=false,{force=false}={}){
-  if(!sb||!authUser)return;
-  const now=Date.now();
-  if(!force&&notificationLastFullSyncAt&&now-notificationLastFullSyncAt<3000)return;
-  if(notificationRefreshPromise)return notificationRefreshPromise;
-  notificationRefreshPromise=(async()=>{
-    const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100);
-    if(error){console.error('[NEIS notifications refresh]',error);return}
-    notificationLastFullSyncAt=Date.now();
-    applyNotificationRows(data||[],{soundForNew});
-  })().finally(()=>{notificationRefreshPromise=null});
-  return notificationRefreshPromise;
-}
-function startNotificationFallback(){
-  clearInterval(notificationPollTimer);
-  const healthy=notificationRealtimeStatus==='SUBSCRIBED';
-  const interval=healthy?120000:10000;
-  notificationPollTimer=setInterval(()=>refreshNotificationsOnly(true),interval);
-}
-async function setupNotificationRealtime(uid){
-  if(notificationChannel&&same(notificationChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(notificationRealtimeStatus)){
-    if(!state.notifications.length)await refreshNotificationsOnly(false);
-    return;
-  }
-  if(notificationChannel){
-    try{await sb.removeChannel(notificationChannel)}catch(_){}
-    notificationChannel=null;
-  }
-  if(notificationChannelUid&&!same(notificationChannelUid,uid)){
-    state.notifications=[];
-    notificationLastFullSyncAt=0;
-    updateBadges();
-  }
-  notificationChannelUid=uid;
-  notificationRealtimeStatus='CONNECTING';
-  notificationChannel=sb.channel(`neis-notifications-${uid}`)
-    .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`user_id=eq.${uid}`},applyRealtimeNotification)
-    .subscribe(status=>{
-      notificationRealtimeStatus=status;
-      if(status==='SUBSCRIBED'){
-        if(!state.notifications.length||Date.now()-notificationLastFullSyncAt>60000)refreshNotificationsOnly(false);
-        startNotificationFallback();
-      }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
-        startNotificationFallback();
-      }
-    });
-}
+const notificationRuntime=window.NEISNotificationRuntime;
+if(!notificationRuntime)throw new Error('NEIS Notification Runtime failed to load.');
+const realtimeRegistry=window.NEISRealtimeRegistry;
+if(!realtimeRegistry)throw new Error('NEIS Realtime Registry failed to load.');
+const messageState=window.NEISMessageState;
+if(!messageState)throw new Error('NEIS Message State failed to load.');
+const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
+const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
+const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
+const applyRealtimeNotification=(...args)=>notificationRuntime.applyRealtime(...args);
+const refreshNotificationsOnly=(...args)=>notificationRuntime.refresh(...args);
+const setupNotificationRealtime=(...args)=>notificationRuntime.setup(...args);
 function routeTo(path,replace=false){const hash='#/'+String(path||'home').replace(/^\/+/, '');if(location.hash===hash){applyRoute();return}(replace?history.replaceState(null,'',hash):history.pushState(null,'',hash));applyRoute()}
 
 function applyRoute(){
@@ -742,17 +703,10 @@ async function handleConversationMemberRealtime(payload){
   const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
   const conversationId=row.conversation_id,userId=row.user_id;
   if(!conversationId||!userId)return;
-  const list=Array.isArray(state.conversationMembers)?state.conversationMembers:[];
-  const index=list.findIndex(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
-  const previous=index>=0?list[index]:null;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const profile=previous?.profile||await ensureRealtimePostProfile(userId);
-    const merged={...(previous||{}),...row,profile};
-    if(index>=0)list[index]=merged;else list.push(merged);
-  }else return;
-  state.conversationMembers=list;
+  const previous=(state.conversationMembers||[]).find(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
+  const profile=event==='DELETE'?previous?.profile:(previous?.profile||await ensureRealtimePostProfile(userId));
+  const result=messageState.applyConversationMember(state,payload,{profile});
+  if(!result.changed)return;
 
   if(same(userId,authUser?.id)){
     if(event==='DELETE'||row.hidden_at){
@@ -774,22 +728,10 @@ async function handleConversationMemberRealtime(payload){
 async function handleMessageRealtime(payload){
   const event=payload?.eventType||'';
   const incoming=payload?.new||{},oldRow=payload?.old||{};
-  const id=incoming.id||oldRow.id;if(!id)return;
-  const list=Array.isArray(state.liveMessages)?state.liveMessages:[];
-  const index=list.findIndex(message=>same(message.id,id));
-  const previous=index>=0?list[index]:null;
-  const conversationId=incoming.conversation_id||previous?.conversation_id||oldRow.conversation_id;
-  if(!conversationId)return;
-  if(!conversationIsVisible(conversationId))return;
-
-  let newlyInserted=false;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const merged={...(previous||{}),...incoming};
-    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
-  }else return;
-  state.liveMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const candidateConversationId=incoming.conversation_id||oldRow.conversation_id||(state.liveMessages||[]).find(message=>same(message.id,incoming.id||oldRow.id))?.conversation_id;
+  const result=messageState.applyDirectMessage(state,payload,{visible:!!candidateConversationId&&conversationIsVisible(candidateConversationId)});
+  if(!result.changed)return;
+  const {id,conversationId}=result;
 
   if(event==='INSERT'){
     const conversation=(state.conversations||[]).find(item=>same(item.id,conversationId));
@@ -810,24 +752,16 @@ async function handleCircleMessageRealtime(payload){
   const event=payload?.eventType||'';
   const incoming=payload?.new||{},oldRow=payload?.old||{};
   const id=incoming.id||oldRow.id;if(id==null)return;
-  const list=Array.isArray(state.circleMessages)?state.circleMessages:[];
-  const index=list.findIndex(message=>same(message.id,id));
-  const previous=index>=0?list[index]:null;
+  const previous=(state.circleMessages||[]).find(message=>same(message.id,id));
   const circleId=incoming.circle_id||previous?.circle_id||oldRow.circle_id;
   if(!circleId)return;
   const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
   if(!allowed)return;
-
-  let newlyInserted=false;
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const senderId=incoming.sender_id||previous?.sender_id;
-    const profile=previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null);
-    const merged={...(previous||{}),...incoming,profile};
-    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
-  }else return;
-  state.circleMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  const senderId=incoming.sender_id||previous?.sender_id;
+  const profile=event==='DELETE'?previous?.profile:(previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null));
+  const result=messageState.applyCircleMessage(state,payload,{allowed,profile});
+  if(!result.changed)return;
+  const newlyInserted=result.newlyInserted;
 
   if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
     const flow=$('#circleChatFlow');
@@ -854,18 +788,8 @@ async function handleCircleMessageRealtime(payload){
   }
 }
 function handleMessageReactionRealtime(payload){
-  const event=payload?.eventType||'';
-  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
-  const id=row.id;if(id==null)return;
-  const list=Array.isArray(state.messageReactions)?state.messageReactions:[];
-  const index=list.findIndex(item=>same(item.id,id));
-  if(event==='DELETE'){
-    if(index>=0)list.splice(index,1);
-  }else if(event==='INSERT'||event==='UPDATE'){
-    const merged={...(index>=0?list[index]:{}),...row};
-    if(index>=0)list[index]=merged;else list.push(merged);
-  }else return;
-  state.messageReactions=list;
+  const result=messageState.applyMessageReaction(state,payload);
+  if(!result.changed)return;
   syncMessageReactionUi();
 }
 
@@ -975,59 +899,40 @@ async function handleReportRealtime(){
 }
 
 async function setupV6Realtime(uid){
-  syncKnownPostReactionKeys();
-  if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
-  if(v6Channel){
-    try{await sb.removeChannel(v6Channel)}catch(_){}
-    v6Channel=null;
+  return realtimeRegistry.setup(uid,{
+    sb,
+    beforeSetup:syncKnownPostReactionKeys,
+    handlers:{
+    handlePostRealtime,
+    handleCommentRealtime,
+    handleReactionRealtime,
+    handleCommentEngagementRealtime,
+    handleMessageRealtime,
+    handleConversationRealtime,
+    handleConversationMemberRealtime,
+    handleCircleMessageRealtime,
+    handleMessageReactionRealtime,
+    handleCircleMeetingRealtime,
+    handleFollowRealtime,
+    handleCircleMemberRealtime,
+    handleProfileRealtime,
+    handleArticleRealtime,
+    handleGalleryRealtime,
+    handleReportRealtime
   }
-  v6ChannelUid=uid;
-  v6RealtimeStatus='CONNECTING';
-  v6Channel=sb.channel(`neis-v7-${uid}`)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},handlePostRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},handleCommentRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},handleReactionRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},handleCommentEngagementRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},handleCommentEngagementRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},handleMessageRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},handleConversationRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},handleConversationMemberRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},handleCircleMessageRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},handleMessageReactionRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},handleCircleMeetingRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},handleFollowRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},handleCircleMemberRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},handleProfileRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'articles'},handleArticleRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'gallery_items'},handleGalleryRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},handleReportRealtime)
-    .subscribe(status=>{v6RealtimeStatus=status});
+  });
 }
 async function stopRealtimeRuntime(){
-  clearInterval(notificationPollTimer);
-  notificationPollTimer=null;
-  notificationRefreshPromise=null;
-  notificationLastFullSyncAt=0;
-  if(v6Channel){
-    try{await sb?.removeChannel(v6Channel)}catch(_){}
-    v6Channel=null;
-  }
-  if(notificationChannel){
-    try{await sb?.removeChannel(notificationChannel)}catch(_){}
-    notificationChannel=null;
-  }
-  v6ChannelUid='';
-  notificationChannelUid='';
-  v6RealtimeStatus='CLOSED';
-  notificationRealtimeStatus='CLOSED';
+  await Promise.all([
+    notificationRuntime.reset(),
+    realtimeRegistry.reset(sb)
+  ]);
 }
 window.NEISRealtimeRuntime={
   stop:stopRealtimeRuntime,
   snapshot:()=>({
-    v6Status:v6RealtimeStatus,
-    v6User:v6ChannelUid,
-    notificationStatus:notificationRealtimeStatus,
-    notificationUser:notificationChannelUid
+    social:realtimeRegistry.snapshot(),
+    notifications:notificationRuntime.snapshot()
   })
 };
 
@@ -1069,91 +974,6 @@ loadLiveData=async function(){
   await setupNotificationRealtime(uid);
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };
-
-let messageRefreshTimer=null,messageRefreshBusy=false,messageRefreshQueued=false;
-async function refreshMessagesV6(){
-  if(!sb||!authUser)return;
-  if(messageRefreshBusy){messageRefreshQueued=true;return}
-  clearTimeout(messageRefreshTimer);
-  messageRefreshTimer=setTimeout(async()=>{
-    messageRefreshBusy=true;
-    try{
-      do{
-        messageRefreshQueued=false;
-        const memberships=state.conversationMembers.filter(m=>same(m.user_id,authUser.id)&&!m.hidden_at);
-        const ids=memberships.map(m=>m.conversation_id);
-        if(!ids.length){state.liveMessages=[];return}
-        const [conversationRes,memberRes,messageRes]=await Promise.all([
-          sb.from('conversations').select('*').in('id',ids).order('updated_at',{ascending:false}),
-          sb.from('conversation_members').select('*').in('conversation_id',ids),
-          sb.from('messages').select('*').in('conversation_id',ids).order('created_at',{ascending:false}).limit(200)
-        ]);
-        if(!conversationRes.error)state.conversations=conversationRes.data||[];
-        if(!memberRes.error)state.conversationMembers=(memberRes.data||state.conversationMembers).map(member=>({...member,profile:profileData(member.user_id)}));
-        if(!messageRes.error){
-          const mineRows=state.conversationMembers.filter(m=>same(m.user_id,authUser.id));
-          const clearedByConversation=new Map(mineRows.filter(x=>x.cleared_at).map(x=>[String(x.conversation_id),new Date(x.cleared_at).getTime()]));
-          const fetched=(messageRes.data||[]).filter(m=>{const cleared=clearedByConversation.get(String(m.conversation_id));return !cleared||new Date(m.created_at).getTime()>cleared});
-          const freshLocal=state.liveMessages.filter(m=>same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
-          state.liveMessages=[...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-        }
-        if(state.view==='messages'&&state.activeConversationId){
-          const flow=$('#chatFlow'),input=$('#liveChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
-          const inputWasFocused=!!input&&document.activeElement===input;
-          const activeMessages=state.liveMessages.filter(m=>same(m.conversation_id,state.activeConversationId)&&!m.deleted_at);
-          if(flow){
-            flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>messageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
-            bindV6(flow);
-          }
-          // While the composer is focused, realtime updates must never rewrite
-          // its value, refocus it, or touch the caret. This is especially
-          // important for Arabic/IME keyboards on mobile.
-          if(input&&!inputWasFocused)input.value=getDmDraft(state.activeConversationId);
-          requestAnimationFrame(()=>{
-            if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight;
-          });
-          updateBadges();
-        }else{
-          updateBadges();
-        }
-      }while(messageRefreshQueued)
-    }finally{messageRefreshBusy=false}
-  },70);
-}
-
-
-let circleMessageRefreshTimer=null,circleMessageRefreshBusy=false,circleMessageRefreshQueued=false;
-async function refreshCircleMessagesV96(){
-  if(!sb||!authUser)return;
-  if(circleMessageRefreshBusy){circleMessageRefreshQueued=true;return}
-  clearTimeout(circleMessageRefreshTimer);
-  circleMessageRefreshTimer=setTimeout(async()=>{
-    circleMessageRefreshBusy=true;
-    try{
-      do{
-        circleMessageRefreshQueued=false;
-        const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,authUser.id)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
-        if(!joinedCircleIds.length){state.circleMessages=[];return}
-        const res=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);
-        if(!res.error){
-          const fetched=(res.data||[]).map(message=>({...message,profile:profileData(message.sender_id)}));
-          const freshLocal=state.circleMessages.filter(m=>same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
-          state.circleMessages=[...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-        }
-        if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.activeCircleId){loadCircleHistory(state.activeCircleId,true);
-          const flow=$('#circleChatFlow'),input=$('#circleChatInput'),wasNearBottom=flow?flow.scrollHeight-flow.scrollTop-flow.clientHeight<80:true;
-          const inputWasFocused=!!input&&document.activeElement===input;
-          const activeMessages=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
-          if(flow){flow.innerHTML=activeMessages.length?activeMessages.map((m,i)=>circleMessageBubble(m,activeMessages[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
-          // Never rewrite or reposition the focused Circle composer during
-          // realtime updates. Let the browser/keyboard own the caret entirely.
-          if(input&&!inputWasFocused)input.value=getCircleDraft(state.activeCircleId);
-          requestAnimationFrame(()=>{if(flow&&wasNearBottom)flow.scrollTop=flow.scrollHeight});
-        }
-      }while(circleMessageRefreshQueued)
-    }finally{circleMessageRefreshBusy=false}
-  },70);
-}
 
 let refreshBusy=false,refreshQueued=false,deferredGlobalRefreshTimer=null;
 function chatInteractionProtected(){
@@ -1258,28 +1078,20 @@ function storagePathFromPublicUrl(url){
   }catch{return ''}
 }
 function postButtonUrlValid(value){try{const url=new URL(String(value||'').trim());return url.protocol==='https:'&&!!url.hostname&&!/\s/.test(String(value||''))}catch{return false}}
-function youtubeVideoId(value){
-  try{
-    const url=new URL(String(value||'').trim());
-    const host=url.hostname.toLowerCase().replace(/^www\./,'');
-    let id='';
-    if(host==='youtu.be')id=url.pathname.split('/').filter(Boolean)[0]||'';
-    else if(host==='youtube.com'||host==='m.youtube.com'||host==='music.youtube.com'||host==='youtube-nocookie.com'){
-      if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
-      else{
-        const parts=url.pathname.split('/').filter(Boolean);
-        if(['shorts','embed','live'].includes(parts[0]))id=parts[1]||'';
-      }
-    }
-    return /^[A-Za-z0-9_-]{11}$/.test(id)?id:'';
-  }catch{return ''}
-}
-function youtubeUrlValid(value){return !!youtubeVideoId(value)}
+const videoEmbeds=window.NEISVideoEmbeds;
+if(!videoEmbeds)throw new Error('NEIS Video Embeds failed to load.');
+function videoEmbedUrlValid(value){return videoEmbeds.isValid(value)}
+function youtubeUrlValid(value){return !!videoEmbeds.youtubeVideoId(value)}
 window.NEISYouTubeUrlValid=youtubeUrlValid;
-function youtubeEmbedMarkup(post){
-  const id=youtubeVideoId(post?.youtube_url);
-  if(!id)return '';
-  return `<div class="post-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}" title="${esc(post?.title||t('YouTube video','فيديو YouTube'))}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+window.NEISVideoEmbedUrlValid=videoEmbedUrlValid;
+function videoEmbedMarkup(post){
+  const parsed=videoEmbeds.parse(post?.youtube_url);
+  if(!parsed)return '';
+  const title=post?.title||t('Embedded video','فيديو مضمّن');
+  if(parsed.provider==='google-drive'){
+    return `<div class="post-youtube post-drive-video"><iframe src="${esc(parsed.embedUrl)}" title="${esc(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`;
+  }
+  return `<div class="post-youtube"><iframe src="${esc(parsed.embedUrl)}" title="${esc(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
 }
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
@@ -1312,7 +1124,7 @@ async function editOwnPost(postId){
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
       <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="editPostImageDisplayMode" value="fit" ${currentMode==='fit'?'checked':''}><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="editPostImageDisplayMode" value="fill" ${currentMode==='fill'?'checked':''}><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add one short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="editPostLinkLabel" maxlength="36" value="${esc(post.link_button_label||'')}" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="editPostLinkUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.link_button_url||'')}" placeholder="https://…"></label></div></div>
-      <label class="field">${t('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="editPostYoutubeUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.youtube_url||'')}" placeholder="https://youtu.be/…"></label>
+      <label class="field">${t('Video link — YouTube or Google Drive (optional)','رابط فيديو — YouTube أو Google Drive (اختياري)')}<input id="editPostYoutubeUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.youtube_url||'')}" placeholder="https://youtu.be/… or https://drive.google.com/file/d/…/view"><small>${t('Google Drive videos must be shared as “Anyone with the link”.','يجب ضبط فيديو Google Drive على “Anyone with the link”.')}</small></label>
       <label class="field">${t('Replace images (up to 8)','استبدال الصور (حتى 8)')}<input id="editPostImage" type="file" accept="image/*" multiple></label>
       <p class="post-image-edit-hint ${imageItems.length?'':'hidden'}" id="editPostImageHint">${t('Tap any image to open its crop editor again. Each image is edited separately.','اضغط على أي صورة لفتح محرر القص الخاص بها مرة أخرى. كل صورة تُعدّل بشكل منفصل.')}</p>
       <div class="post-edit-image-wrap ${imageItems.length?'':'hidden'}" id="editPostCurrentImage">
@@ -1380,7 +1192,7 @@ async function editOwnPost(postId){
     const linkButtonLabel=$('#editPostLinkLabel').value.trim(),linkButtonUrl=$('#editPostLinkUrl').value.trim(),youtubeUrl=$('#editPostYoutubeUrl')?.value.trim()||'';
     if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
-    if(youtubeUrl&&!youtubeUrlValid(youtubeUrl)){toast(t('Add a valid YouTube video link.','أضف رابط فيديو YouTube صحيحًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
+    if(youtubeUrl&&!videoEmbedUrlValid(youtubeUrl)){toast(t('Add a valid YouTube or Google Drive video link.','أضف رابط فيديو صحيحًا من YouTube أو Google Drive.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     const imageDisplayMode=document.querySelector('input[name="editPostImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
     const payload={kind:$('#editPostKind').value,title:$('#editPostTitle').value.trim(),body:$('#editPostBody').value.trim(),tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),image_url:imageUrls[0]||'',image_urls:imageUrls,image_display_mode:imageDisplayMode,link_button_label:linkButtonLabel,link_button_url:linkButtonUrl,youtube_url:youtubeUrl};
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
@@ -1431,7 +1243,7 @@ postCard=function(p){
       :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
   const hasLinkButton=!!(p.link_button_label&&p.link_button_url&&postButtonUrlValid(p.link_button_url));
   const linkButton=hasLinkButton?`<div class="post-link-button-wrap"><a class="post-link-button" href="${esc(p.link_button_url)}" target="_blank" rel="noopener noreferrer nofollow ugc"><span>${esc(p.link_button_label)}</span><b aria-hidden="true">↗</b></a></div>`:'';
-  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}" data-post-version="${postRealtimeVersion(p)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${youtubeEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
+  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}" data-post-version="${postRealtimeVersion(p)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${videoEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
 };
 
 function homePostsForRealtimePatch(){
@@ -2664,7 +2476,7 @@ function openCirclePost(){
       <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit" checked><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill"><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <p class="post-image-edit-hint hidden" id="cpImageEditHint">${t('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
       <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
-      <label class="field" id="cpYoutubeField">${t('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="cpYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/…"></label>
+      <label class="field" id="cpYoutubeField">${t('Video link — YouTube or Google Drive (optional)','رابط فيديو — YouTube أو Google Drive (اختياري)')}<input id="cpYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/… or https://drive.google.com/file/d/…/view"><small>${t('Google Drive videos must be shared as “Anyone with the link”.','يجب ضبط فيديو Google Drive على “Anyone with the link”.')}</small></label>
       <div class="post-link-fields" id="cpLinkFields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
       <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
     </form>`);
@@ -2712,7 +2524,7 @@ function openCirclePost(){
     const link_button_label=$('#cpLinkLabel').value.trim(),link_button_url=$('#cpLinkUrl').value.trim(),youtube_url=$('#cpYoutubeUrl')?.value.trim()||'';
     if(!isPoll&&((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url))){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
     if(!isPoll&&link_button_url&&!postButtonUrlValid(link_button_url)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
-    if(!isPoll&&youtube_url&&!youtubeUrlValid(youtube_url)){toast(t('Add a valid YouTube video link.','أضف رابط فيديو YouTube صحيحًا.'));return}
+    if(!isPoll&&youtube_url&&!videoEmbedUrlValid(youtube_url)){toast(t('Add a valid YouTube or Google Drive video link.','أضف رابط فيديو صحيحًا من YouTube أو Google Drive.'));return}
 
     let cleanOptions=[];
     if(isPoll){
