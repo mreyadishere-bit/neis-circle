@@ -183,7 +183,7 @@
     const query=id?sb.from('articles').update(payload).eq('id',id).select('id').single():sb.from('articles').insert(payload).select('id').single();
     const {data,error}=await query;
     if(error){if(uploadedPath)await sb.storage.from('community-media').remove([uploadedPath]);toast(window.neisFriendlyError?.(error,'save this article')||error.message);if(button)button.disabled=false;return}
-    clearCurrentDraft();stopArticleAutosave();originalCloseModal();await loadLiveData();nav('articles');
+    clearCurrentDraft();stopArticleAutosave();originalCloseModal();if(window.NEISSecondaryData)await window.NEISSecondaryData.loadArticles({force:true,useCache:false});nav('articles');
     toast(status==='published'?tr('Article published.','تم نشر المقال.'):tr('Draft saved to your account.','تم حفظ المسودة في حسابك.'));
   };
 
