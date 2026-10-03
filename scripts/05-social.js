@@ -423,18 +423,23 @@ async function ensureRealtimePostProfile(authorId){
   return profile;
 }
 function realtimePostFromRow(row,previous={},author=null){
-  const profile=author||realtimePostProfile(row.author_id||previous.author_id);
+  const has=key=>Object.prototype.hasOwnProperty.call(row||{},key);
+  const pick=(key,fallback)=>has(key)?row[key]:fallback;
+  const authorId=pick('author_id',previous.author_id);
+  const profile=author||realtimePostProfile(authorId);
   const name=profile?.full_name||previous.user||'NEIS Student';
-  const createdAt=row.created_at||previous.created_at||new Date().toISOString();
-  const id=row.id||previous.id;
+  const createdAt=pick('created_at',previous.created_at)||new Date().toISOString();
+  const id=pick('id',previous.id);
   const commentCount=(state.allComments||[]).filter(comment=>same(comment.post_id,id)&&!comment.deleted_at).length;
+  const imageUrls=pick('image_urls',previous.image_urls||[]);
+  const tags=pick('tags',previous.tags||[]);
   return {
     ...previous,
     id,
-    author_id:row.author_id??previous.author_id,
-    circle_id:row.circle_id??previous.circle_id??null,
-    pinned:row.pinned??previous.pinned??false,
-    post_type:row.post_type||previous.post_type||'post',
+    author_id:authorId,
+    circle_id:pick('circle_id',previous.circle_id??null),
+    pinned:!!pick('pinned',previous.pinned??false),
+    post_type:pick('post_type',previous.post_type)||'post',
     is_live:true,
     created_at:createdAt,
     user:name,
@@ -442,16 +447,16 @@ function realtimePostFromRow(row,previous={},author=null){
     color:previous.color||'#006f5b',
     meta:[...new Set([profile?.grade,profile?.branch,profile?.campus].filter(Boolean).map(value=>String(value).trim()))].join(' · ')||previous.meta||'NEIS Circle',
     time:typeof formatDate==='function'?formatDate(createdAt):(previous.time||''),
-    kind:row.kind||previous.kind||'Discussion',
-    title:row.title??previous.title??'',
-    body:row.body??previous.body??'',
-    tags:Array.isArray(row.tags)?row.tags:(previous.tags||[]),
-    image_url:row.image_url??previous.image_url??'',
-    image_urls:Array.isArray(row.image_urls)?row.image_urls:(previous.image_urls||[]),
-    image_display_mode:(row.image_display_mode||previous.image_display_mode)==='fill'?'fill':'fit',
-    link_button_label:row.link_button_label??previous.link_button_label??'',
-    link_button_url:row.link_button_url??previous.link_button_url??'',
-    youtube_url:row.youtube_url??previous.youtube_url??'',
+    kind:pick('kind',previous.kind)||'Discussion',
+    title:pick('title',previous.title)||'',
+    body:pick('body',previous.body)||'',
+    tags:Array.isArray(tags)?tags:[],
+    image_url:pick('image_url',previous.image_url)||'',
+    image_urls:Array.isArray(imageUrls)?imageUrls.filter(Boolean):[],
+    image_display_mode:pick('image_display_mode',previous.image_display_mode)==='fill'?'fill':'fit',
+    link_button_label:pick('link_button_label',previous.link_button_label)||'',
+    link_button_url:pick('link_button_url',previous.link_button_url)||'',
+    youtube_url:pick('youtube_url',previous.youtube_url)||'',
     likes:previous.likes??postReactionCount(id),
     comments:previous.comments??commentCount
   };
