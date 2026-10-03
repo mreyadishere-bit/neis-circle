@@ -146,8 +146,9 @@ else {
   const fieldsIndex = localScriptSrcs.indexOf(chatFieldScripts[0]);
   const conversationIndex = localScriptSrcs.findIndex(src => /social\/conversation-data-v\d+\.js/i.test(src));
   const bootstrapIndex = localScriptSrcs.findIndex(src => /social\/chat-bootstrap-v\d+\.js/i.test(src));
-  if (conversationIndex < 0 || bootstrapIndex < 0 || fieldsIndex > conversationIndex || fieldsIndex > bootstrapIndex) {
-    failures.push('Chat field contract must load before chat data modules.');
+  const realtimeIndex = localScriptSrcs.findIndex(src => /social\/realtime-v\d+\.js/i.test(src));
+  if (conversationIndex < 0 || bootstrapIndex < 0 || realtimeIndex < 0 || fieldsIndex > conversationIndex || fieldsIndex > bootstrapIndex || fieldsIndex > realtimeIndex) {
+    failures.push('Chat field contract must load before chat data and realtime modules.');
   }
 }
 
@@ -269,11 +270,20 @@ if (videoEmbedScripts.length !== 1) {
   if (socialIndex < 0 || parserIndex > socialIndex) failures.push('Video embed parser must load before 05-social.js.');
 }
 
+const pinnedSupabaseVersion='2.117.2';
+if (!html.includes('@supabase/supabase-js@'+pinnedSupabaseVersion)) failures.push('index.html must pin Supabase JS to '+pinnedSupabaseVersion+'.');
+const coreSupabaseSource=fs.readFileSync(path.join(root,'scripts','01-core.js'),'utf8');
+if ((coreSupabaseSource.match(/@supabase\/supabase-js@2\.117\.2/g)||[]).length < 2) failures.push('Both Supabase fallback CDNs must pin v2.117.2.');
+
 const realtimeRegistryPath = path.join(root, 'scripts', 'social', 'realtime-v175.js');
 if (!fs.existsSync(realtimeRegistryPath)) {
   failures.push('Missing isolated realtime subscription registry.');
 } else {
   const realtimeRegistrySource = fs.readFileSync(realtimeRegistryPath, 'utf8');
+  for (const table of ['messages','conversations','conversation_members','circle_messages','message_reactions']) {
+    const row = realtimeRegistrySource.split('\n').find(line => line.includes("['"+table+"'"));
+    if (!row || !row.includes('columns(')) failures.push('Realtime chat binding must select minimal columns: '+table);
+  }
   for (const table of ['posts','comments','reactions','messages','conversations','conversation_members','circle_messages','message_reactions','circle_meetings','follows','circle_members','profiles','articles','gallery_items','reports']) {
     if (!realtimeRegistrySource.includes("'" + table + "'")) failures.push('Realtime registry is missing table: ' + table);
   }
