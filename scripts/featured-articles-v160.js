@@ -185,7 +185,7 @@
           return;
         }
 
-        await loadLiveData();
+        if(window.NEISSecondaryData)await window.NEISSecondaryData.loadArticles({force:true,useCache:false});
         render();
         toast(makeFeatured?'Article added to Best Articles.':'Article removed from Best Articles.');
       };
