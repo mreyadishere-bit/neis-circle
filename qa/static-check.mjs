@@ -104,6 +104,19 @@ if (dataCoordinators.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const socialPath = path.join(root, 'scripts', '05-social.js');
+if (fs.existsSync(socialPath)) {
+  const socialSource = fs.readFileSync(socialPath, 'utf8');
+  const globalLoadStart = socialSource.indexOf('const coreLoad=loadLiveData;');
+  const globalLoadEnd = socialSource.indexOf('let messageRefreshTimer=', globalLoadStart);
+  if (globalLoadStart >= 0 && globalLoadEnd > globalLoadStart) {
+    const globalLoadSource = socialSource.slice(globalLoadStart, globalLoadEnd);
+    if (/from\(['"]notifications['"]\)/.test(globalLoadSource)) {
+      failures.push('Global loadLiveData must not fetch notifications; use the targeted notification loader.');
+    }
+  }
+}
+
 const largeFiles = [
   ...jsFiles,
   ...walk(path.join(root, 'styles'), '.css')

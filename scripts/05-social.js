@@ -14,7 +14,7 @@ const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
 Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
-let v6Channel=null,notificationChannel=null,notificationPollTimer=null,notificationRealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
+let v6Channel=null,notificationChannel=null,notificationChannelUid='',notificationPollTimer=null,notificationRealtimeStatus='CLOSED',notificationRefreshPromise=null,notificationLastFullSyncAt=0,searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
@@ -225,9 +225,53 @@ async function unlockNotificationSound(){try{const AudioCtx=window.AudioContext|
 async function playNotificationSound(){try{if(!await unlockNotificationSound())return;const ctx=notificationAudioContext,now=ctx.currentTime,master=ctx.createGain();master.gain.setValueAtTime(.0001,now);master.gain.exponentialRampToValueAtTime(.34,now+.012);master.gain.exponentialRampToValueAtTime(.0001,now+.62);master.connect(ctx.destination);[[1046.5,0,.19,'sine'],[1568,.11,.25,'triangle'],[2093,.24,.31,'sine']].forEach(([freq,delay,duration,type])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,now+delay);gain.gain.setValueAtTime(.0001,now+delay);gain.gain.exponentialRampToValueAtTime(.9,now+delay+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+delay+duration);osc.connect(gain);gain.connect(master);osc.start(now+delay);osc.stop(now+delay+duration+.04)})}catch{}}
 function applyNotificationRows(rows,{soundForNew=false}={}){const previousIds=new Set(state.notifications.map(n=>String(n.id))),fresh=(rows||[]).filter(n=>!previousIds.has(String(n.id)));state.notifications=rows||[];updateBadges();if(state.view==='notifications')render();if(soundForNew&&fresh.some(n=>!n.read_at))playNotificationSound()}
 function applyRealtimeNotification(payload){const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};if(event==='INSERT'&&row?.id){if(!state.notifications.some(n=>same(n.id,row.id)))state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();if(!row.read_at)playNotificationSound();return}if(event==='UPDATE'&&row?.id){const index=state.notifications.findIndex(n=>same(n.id,row.id));if(index>=0)state.notifications[index]={...state.notifications[index],...row};else state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();return}if(event==='DELETE'&&oldRow?.id){state.notifications=state.notifications.filter(n=>!same(n.id,oldRow.id));updateBadges();if(state.view==='notifications')render()}}
-async function refreshNotificationsOnly(soundForNew=false){if(!sb||!authUser)return;const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100);if(error){console.error('[NEIS notifications refresh]',error);return}applyNotificationRows(data||[],{soundForNew})}
-function startNotificationFallback(){clearInterval(notificationPollTimer);notificationPollTimer=setInterval(()=>refreshNotificationsOnly(true),notificationRealtimeStatus==='SUBSCRIBED'?20000:6000)}
-async function setupNotificationRealtime(uid){if(notificationChannel)await sb.removeChannel(notificationChannel);notificationRealtimeStatus='CONNECTING';notificationChannel=sb.channel(`neis-notifications-${uid}`).on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`user_id=eq.${uid}`},applyRealtimeNotification).subscribe(status=>{notificationRealtimeStatus=status;if(status==='SUBSCRIBED')refreshNotificationsOnly(false);if(['SUBSCRIBED','CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status))startNotificationFallback()})}
+async function refreshNotificationsOnly(soundForNew=false,{force=false}={}){
+  if(!sb||!authUser)return;
+  const now=Date.now();
+  if(!force&&notificationLastFullSyncAt&&now-notificationLastFullSyncAt<3000)return;
+  if(notificationRefreshPromise)return notificationRefreshPromise;
+  notificationRefreshPromise=(async()=>{
+    const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100);
+    if(error){console.error('[NEIS notifications refresh]',error);return}
+    notificationLastFullSyncAt=Date.now();
+    applyNotificationRows(data||[],{soundForNew});
+  })().finally(()=>{notificationRefreshPromise=null});
+  return notificationRefreshPromise;
+}
+function startNotificationFallback(){
+  clearInterval(notificationPollTimer);
+  const healthy=notificationRealtimeStatus==='SUBSCRIBED';
+  const interval=healthy?120000:10000;
+  notificationPollTimer=setInterval(()=>refreshNotificationsOnly(true),interval);
+}
+async function setupNotificationRealtime(uid){
+  if(notificationChannel&&same(notificationChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(notificationRealtimeStatus)){
+    if(!state.notifications.length)await refreshNotificationsOnly(false);
+    return;
+  }
+  if(notificationChannel){
+    try{await sb.removeChannel(notificationChannel)}catch(_){}
+    notificationChannel=null;
+  }
+  if(notificationChannelUid&&!same(notificationChannelUid,uid)){
+    state.notifications=[];
+    notificationLastFullSyncAt=0;
+    updateBadges();
+  }
+  notificationChannelUid=uid;
+  notificationRealtimeStatus='CONNECTING';
+  notificationChannel=sb.channel(`neis-notifications-${uid}`)
+    .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`user_id=eq.${uid}`},applyRealtimeNotification)
+    .subscribe(status=>{
+      notificationRealtimeStatus=status;
+      if(status==='SUBSCRIBED'){
+        if(!state.notifications.length||Date.now()-notificationLastFullSyncAt>60000)refreshNotificationsOnly(false);
+        startNotificationFallback();
+      }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
+        startNotificationFallback();
+      }
+    });
+}
 function routeTo(path,replace=false){const hash='#/'+String(path||'home').replace(/^\/+/, '');if(location.hash===hash){applyRoute();return}(replace?history.replaceState(null,'',hash):history.pushState(null,'',hash));applyRoute()}
 
 function applyRoute(){
@@ -291,13 +335,12 @@ loadLiveData=async function(){
   await coreLoad();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const uid=authUser.id;
-  const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,notificationRes,commentRes,reportRes,badgeRes]=await Promise.all([
+  const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,commentRes,reportRes,badgeRes]=await Promise.all([
     sb.from('follows').select('*').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
     sb.from('conversation_members').select('*').eq('user_id',uid),
     sb.from('circles').select('*').order('created_at',{ascending:false}),
     sb.from('circle_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').order('joined_at'),
     sb.from('circle_meetings').select('*,creator:profiles(id,full_name,username,avatar_url)').order('starts_at'),
-    sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100),
     sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles!comments_author_id_fkey(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at'),
     state.isAdmin?sb.rpc('admin_report_details'):Promise.resolve({data:[],error:null}),
     sb.from('profile_badges').select('user_id,badge_key,awarded_at')
@@ -317,7 +360,6 @@ loadLiveData=async function(){
   if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=circleMemberRes.data||[];
   if(!meetingRes.error){state.circleMeetings=meetingRes.data||[];state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
-  if(!notificationRes.error)state.notifications=notificationRes.data||[];
   if(!commentRes.error){state.allComments=commentRes.data||[];state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
   if(!reportRes.error)state.reports=reportRes.data||[];
   if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
