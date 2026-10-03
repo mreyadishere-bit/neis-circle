@@ -329,7 +329,211 @@ function applyRoute(){
 const priorNav=nav;
 nav=function(view){if(view!=='search'){searchRequestId++;state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null}routeTo(view)};
 
+const knownPostReactionKeys=new Set();
+let discussionRealtimeTimer=null;
+
+function reactionKey(row){
+  if(!row?.post_id||!row?.user_id)return '';
+  return [row.post_id,row.user_id,row.reaction||'like'].map(String).join('|');
+}
+function syncKnownPostReactionKeys(){
+  knownPostReactionKeys.clear();
+  for(const key of (Array.isArray(state.postReactionKeys)?state.postReactionKeys:[]))if(key)knownPostReactionKeys.add(String(key));
+}
+function saveKnownPostReactionKeys(){state.postReactionKeys=[...knownPostReactionKeys]}
+function userHasKnownReaction(postId,userId){
+  const post=String(postId),user=String(userId);
+  for(const key of knownPostReactionKeys){
+    const parts=String(key).split('|');
+    if(parts[0]===post&&parts[1]===user)return true;
+  }
+  return false;
+}
+function syncLikedForPost(postId){
+  const id=String(postId);
+  const has=userHasKnownReaction(id,authUser?.id);
+  const liked=new Set((state.liked||[]).map(String));
+  if(has)liked.add(id);else liked.delete(id);
+  state.liked=[...liked];
+}
+function postReactionCount(postId){
+  const id=String(postId);let count=0;
+  for(const key of knownPostReactionKeys)if(String(key).split('|')[0]===id)count++;
+  return count;
+}
+function patchVisiblePostState(postId,{force=false}={}){
+  const id=String(postId||'');if(!id)return false;
+  const options=force?{forcePostIds:[id]}:{};
+  let patched=false;
+  if(state.view==='home'&&typeof window.NEISPatchHomeRealtime==='function')patched=!!window.NEISPatchHomeRealtime(options);
+  else if(state.view==='circle-detail'&&state.circleTab==='home'&&typeof window.NEISPatchCircleHomeRealtime==='function')patched=!!window.NEISPatchCircleHomeRealtime(options);
+  const post=state.posts.find(item=>same(item.id,id));
+  if(post){
+    document.querySelectorAll('.post[data-post="'+CSS.escape(id)+'"]').forEach(node=>syncHomePostEngagement(node,post));
+  }
+  return patched;
+}
+async function refreshPostReactionCount(postId){
+  if(!sb||!authUser||!postId)return;
+  const {data,error}=await sb.from('reactions').select('post_id,user_id,reaction').eq('post_id',postId);
+  if(error){console.warn('[NEIS targeted reactions]',error);return}
+  const prefix=String(postId)+'|';
+  for(const key of [...knownPostReactionKeys])if(String(key).startsWith(prefix))knownPostReactionKeys.delete(key);
+  for(const row of (data||[])){const key=reactionKey(row);if(key)knownPostReactionKeys.add(key)}
+  saveKnownPostReactionKeys();
+  syncLikedForPost(postId);
+  const post=state.posts.find(item=>same(item.id,postId));
+  if(post)post.likes=(data||[]).length;
+  patchVisiblePostState(postId);
+}
+async function handleReactionRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const postId=row?.post_id||payload?.new?.post_id||payload?.old?.post_id;
+  if(!postId)return;
+  if(event==='UPDATE'){await refreshPostReactionCount(postId);return}
+  const key=reactionKey(row);
+  if(!key){await refreshPostReactionCount(postId);return}
+  const existed=knownPostReactionKeys.has(key);
+  if(event==='INSERT'){
+    if(!existed)knownPostReactionKeys.add(key);
+  }else if(event==='DELETE'){
+    if(existed)knownPostReactionKeys.delete(key);
+    else{await refreshPostReactionCount(postId);return}
+  }else return;
+  saveKnownPostReactionKeys();
+  syncLikedForPost(postId);
+  const post=state.posts.find(item=>same(item.id,postId));
+  if(post)post.likes=Math.max(0,postReactionCount(postId));
+  patchVisiblePostState(postId);
+}
+function realtimePostProfile(authorId){
+  return (state.members||[]).find(profile=>same(profile.id,authorId))||profileData(authorId);
+}
+async function ensureRealtimePostProfile(authorId){
+  let profile=realtimePostProfile(authorId);
+  if(profile?.full_name&&profile.username!=='student')return profile;
+  if(!sb||!authorId)return profile;
+  const {data,error}=await sb.from('profiles').select('id,full_name,username,grade,branch,campus,avatar_url').eq('id',authorId).maybeSingle();
+  if(!error&&data){
+    const index=(state.members||[]).findIndex(item=>same(item.id,data.id));
+    if(index>=0)state.members[index]={...state.members[index],...data};else state.members=[...(state.members||[]),data];
+    profile=data;
+  }
+  return profile;
+}
+function realtimePostFromRow(row,previous={},author=null){
+  const has=key=>Object.prototype.hasOwnProperty.call(row||{},key);
+  const pick=(key,fallback)=>has(key)?row[key]:fallback;
+  const authorId=pick('author_id',previous.author_id);
+  const profile=author||realtimePostProfile(authorId);
+  const name=profile?.full_name||previous.user||'NEIS Student';
+  const createdAt=pick('created_at',previous.created_at)||new Date().toISOString();
+  const id=pick('id',previous.id);
+  const commentCount=(state.allComments||[]).filter(comment=>same(comment.post_id,id)&&!comment.deleted_at).length;
+  const imageUrls=pick('image_urls',previous.image_urls||[]);
+  const tags=pick('tags',previous.tags||[]);
+  return {
+    ...previous,
+    id,
+    author_id:authorId,
+    circle_id:pick('circle_id',previous.circle_id??null),
+    pinned:!!pick('pinned',previous.pinned??false),
+    post_type:pick('post_type',previous.post_type)||'post',
+    is_live:true,
+    created_at:createdAt,
+    user:name,
+    initials:typeof initials==='function'?initials(name):String(name).slice(0,2).toUpperCase(),
+    color:previous.color||'#006f5b',
+    meta:[...new Set([profile?.grade,profile?.branch,profile?.campus].filter(Boolean).map(value=>String(value).trim()))].join(' · ')||previous.meta||'NEIS Circle',
+    time:typeof formatDate==='function'?formatDate(createdAt):(previous.time||''),
+    kind:pick('kind',previous.kind)||'Discussion',
+    title:pick('title',previous.title)||'',
+    body:pick('body',previous.body)||'',
+    tags:Array.isArray(tags)?tags:[],
+    image_url:pick('image_url',previous.image_url)||'',
+    image_urls:Array.isArray(imageUrls)?imageUrls.filter(Boolean):[],
+    image_display_mode:pick('image_display_mode',previous.image_display_mode)==='fill'?'fill':'fit',
+    link_button_label:pick('link_button_label',previous.link_button_label)||'',
+    link_button_url:pick('link_button_url',previous.link_button_url)||'',
+    youtube_url:pick('youtube_url',previous.youtube_url)||'',
+    likes:previous.likes??postReactionCount(id),
+    comments:previous.comments??commentCount
+  };
+}
+async function handlePostRealtime(payload){
+  const event=payload?.eventType||'';
+  const incoming=payload?.new||{};
+  const oldRow=payload?.old||{};
+  const id=incoming.id||oldRow.id;
+  if(!id)return;
+  const index=(state.posts||[]).findIndex(item=>same(item.id,id));
+  const previous=index>=0?state.posts[index]:null;
+  if(event==='DELETE'){
+    state.posts=(state.posts||[]).filter(item=>!same(item.id,id));
+    state.allComments=(state.allComments||[]).filter(comment=>!same(comment.post_id,id));
+    state.liked=(state.liked||[]).filter(postId=>!same(postId,id));
+    state.saved=(state.saved||[]).filter(postId=>!same(postId,id));
+    const prefix=String(id)+'|';for(const key of [...knownPostReactionKeys])if(String(key).startsWith(prefix))knownPostReactionKeys.delete(key);
+    saveKnownPostReactionKeys();
+    patchVisiblePostState(id,{force:true});
+    return;
+  }
+  if(event!=='INSERT'&&event!=='UPDATE')return;
+  const author=await ensureRealtimePostProfile(incoming.author_id||previous?.author_id);
+  const next=realtimePostFromRow(incoming,previous||{},author);
+  if(index>=0)state.posts[index]=next;
+  else state.posts=[next,...(state.posts||[])];
+  patchVisiblePostState(id,{force:event==='UPDATE'});
+}
+function commentIsActive(row){return !!row&&!row.deleted_at}
+function scheduleOpenDiscussionRefresh(postId){
+  const host=document.querySelector('#replyContent[data-discussion-post-id]');
+  if(!host||!same(host.dataset.discussionPostId,postId))return;
+  if(host.contains(document.activeElement)||host.querySelector('.reply-inline-edit'))return;
+  clearTimeout(discussionRealtimeTimer);
+  discussionRealtimeTimer=setTimeout(()=>{
+    const current=document.querySelector('#replyContent[data-discussion-post-id]');
+    if(!current||!same(current.dataset.discussionPostId,postId)||current.contains(document.activeElement))return;
+    comments(postId).catch(error=>console.warn('[NEIS discussion realtime refresh]',error));
+  },180);
+}
+function handleCommentRealtime(payload){
+  const event=payload?.eventType||'';
+  const nextRow=payload?.new||{};
+  const oldRow=payload?.old||{};
+  const id=nextRow.id||oldRow.id;
+  if(!id)return;
+  const list=Array.isArray(state.allComments)?state.allComments:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  const previous=index>=0?list[index]:null;
+  const postId=nextRow.post_id||previous?.post_id||oldRow.post_id;
+  if(!postId)return;
+  const beforeActive=commentIsActive(previous)?1:0;
+  const afterActive=(event!=='DELETE'&&commentIsActive(nextRow))?1:0;
+  if(afterActive){
+    const profile=(state.members||[]).find(item=>same(item.id,nextRow.author_id||previous?.author_id))||previous?.profile||profileData(nextRow.author_id||previous?.author_id);
+    const merged={...(previous||{}),...nextRow,profile};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else if(index>=0){
+    list.splice(index,1);
+  }
+  state.allComments=list;
+  const post=(state.posts||[]).find(item=>same(item.id,postId));
+  if(post)post.comments=Math.max(0,Number(post.comments||0)+(afterActive-beforeActive));
+  patchVisiblePostState(postId);
+  scheduleOpenDiscussionRefresh(postId);
+}
+function handleCommentEngagementRealtime(payload){
+  const row=payload?.new||payload?.old||{};
+  const commentId=row.comment_id;
+  if(!commentId)return;
+  const comment=(state.allComments||[]).find(item=>same(item.id,commentId));
+  if(comment?.post_id)scheduleOpenDiscussionRefresh(comment.post_id);
+}
+
 async function setupV6Realtime(uid){
+  syncKnownPostReactionKeys();
   if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
   if(v6Channel){
     try{await sb.removeChannel(v6Channel)}catch(_){}
@@ -338,11 +542,11 @@ async function setupV6Realtime(uid){
   v6ChannelUid=uid;
   v6RealtimeStatus='CONNECTING';
   v6Channel=sb.channel(`neis-v7-${uid}`)
-    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'posts'},handlePostRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comments'},handleCommentRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},handleReactionRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},handleCommentEngagementRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},handleCommentEngagementRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
@@ -1656,7 +1860,7 @@ async function deleteResolvedReport(id){
 }
 
 comments=async function(postId,targetCommentId=''){
-  const p=state.posts.find(x=>same(x.id,postId));if(!p)return;openModal(`<div class="modal-head"><div><h2>${t('Discussion','النقاش')}</h2><p>${esc(p.title)}</p></div><button class="close" data-close>×</button></div><div id="replyContent"><div class="loading-card"></div></div>`,true);
+  const p=state.posts.find(x=>same(x.id,postId));if(!p)return;openModal(`<div class="modal-head"><div><h2>${t('Discussion','النقاش')}</h2><p>${esc(p.title)}</p></div><button class="close" data-close>×</button></div><div id="replyContent" data-discussion-post-id="${esc(postId)}"><div class="loading-card"></div></div>`,true);
   const {data,error}=await sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').eq('post_id',postId).is('deleted_at',null).order('created_at');
   if(error){console.error('Discussion comments load failed',error);$('#replyContent').innerHTML=`<div class="error-state">${t('Replies could not load. Try again.','تعذر تحميل الردود. حاول مرة أخرى.')}</div>`;return}
   const authorIds=[...new Set((data||[]).map(r=>r.author_id).filter(Boolean))];
@@ -1738,9 +1942,9 @@ comments=async function(postId,targetCommentId=''){
           const body=textarea.value.trim();
           if(!body){toast(t('Comment cannot be empty.','لا يمكن أن يكون التعليق فارغًا.'));return}
           save.disabled=true;
-          const {data:updated,error:updateError}=await sb.from('comments').update({body,updated_at:new Date().toISOString()}).eq('id',item.id).eq('author_id',authUser.id).select('id');
-          if(updateError||!updated?.length){toast(updateError?safeError(updateError,'edit your reply'):t('This reply could not be updated.','تعذر تعديل هذا الرد.'));save.disabled=false;return}
-          await loadLiveData();await comments(postId);toast(t('Reply updated.','تم تعديل الرد.'));
+          const {data:updated,error:updateError}=await sb.from('comments').update({body,updated_at:new Date().toISOString()}).eq('id',item.id).eq('author_id',authUser.id).select('*').maybeSingle();
+          if(updateError||!updated){toast(updateError?safeError(updateError,'edit your reply'):t('This reply could not be updated.','تعذر تعديل هذا الرد.'));save.disabled=false;return}
+          handleCommentRealtime({eventType:'UPDATE',new:updated,old:{id:item.id}});await comments(postId);toast(t('Reply updated.','تم تعديل الرد.'));
         };
         return;
       }
@@ -1761,7 +1965,7 @@ comments=async function(postId,targetCommentId=''){
         deleteButton.disabled=true;
         const {data:deleted,error:deleteError}=await sb.from('comments').delete().eq('id',item.id).select('id');
         if(deleteError||!deleted?.length){toast(deleteError?safeError(deleteError,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));deleteButton.disabled=false;deleteButton.dataset.confirmDelete='';deleteButton.textContent=deleteButton.dataset.originalText||t('Delete','حذف');return}
-        await loadLiveData();await comments(postId);toast(t('Reply deleted.','تم حذف الرد.'));
+        handleCommentRealtime({eventType:'DELETE',old:item});await comments(postId);toast(t('Reply deleted.','تم حذف الرد.'));
       }
     };
   };
@@ -1850,7 +2054,7 @@ comments=async function(postId,targetCommentId=''){
   $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.creatorHeart,hearted=heartsByComment.has(String(commentId));const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}await comments(postId)});
   $('#replyContent').querySelectorAll('[data-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.commentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('comment_likes').delete().match({comment_id:commentId,user_id:authUser.id}):await sb.from('comment_likes').insert({comment_id:commentId,user_id:authUser.id});if(error){toast(safeError(error,mine?'unlike this comment':'like this comment'));button.disabled=false;return}await comments(postId)});
   bindComposerKeyboard($('#replyInput'),$('#replyForm'));
-  $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm [type="submit"]'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{error}=await sb.from('comments').insert(payload);if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}await loadLiveData();comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
+  $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm [type="submit"]'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{data:created,error}=await sb.from('comments').insert(payload).select('*').single();if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}handleCommentRealtime({eventType:'INSERT',new:created});await comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
 };
 
 function openReport(type,id){openModal(`<div class="modal-head"><div><h2>${t('Report content','الإبلاغ عن محتوى')}</h2><p>${t('Reports go to the private admin queue.','تصل البلاغات إلى قائمة الأدمن الخاصة.')}</p></div><button class="close" data-close>×</button></div><form id="reportForm"><label class="field">${t('Reason','السبب')}<select id="reportReason"><option>${t('Spam','محتوى مزعج')}</option><option>${t('Harassment','إساءة أو مضايقة')}</option><option>${t('Unsafe content','محتوى غير آمن')}</option><option>${t('Other','سبب آخر')}</option></select></label><label class="field">${t('Details','التفاصيل')}<textarea id="reportDetails" rows="4" maxlength="1000"></textarea></label><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Submit report','إرسال البلاغ')}</button></div></form>`);$('#reportForm').onsubmit=async e=>{e.preventDefault();const {error}=await sb.from('reports').insert({reporter_id:authUser.id,target_type:type,target_id:String(id),reason:$('#reportReason').value,details:$('#reportDetails').value.trim()});if(error){toast(safeError(error,'submit this report'));return}closeModal();toast(t('Report sent to the administrator.','تم إرسال البلاغ إلى الأدمن.'))}}
