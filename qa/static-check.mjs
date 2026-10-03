@@ -389,6 +389,19 @@ if (fs.existsSync(socialPath)) {
   }
 }
 
+const socialChatActionSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const pattern of [
+  ".from('messages').insert",
+  ".from('circle_messages').insert",
+  ".from('circle_messages').update"
+]) {
+  const index = socialChatActionSource.indexOf(pattern);
+  if (index >= 0) {
+    const section = socialChatActionSource.slice(index, index + 900);
+    if (section.includes(".select('*')")) failures.push("Chat send/delete actions must not request select('*'): " + pattern);
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
