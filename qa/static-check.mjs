@@ -126,6 +126,24 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const videoEmbedsPath = path.join(root, 'scripts', 'social', 'video-embeds-v176.js');
+if (!fs.existsSync(videoEmbedsPath)) {
+  failures.push('Missing isolated video embed parser.');
+} else {
+  const videoEmbedsSource = fs.readFileSync(videoEmbedsPath, 'utf8');
+  for (const token of ['youtubeVideoId','googleDriveFileId','drive.google.com','youtube-nocookie.com']) {
+    if (!videoEmbedsSource.includes(token)) failures.push('Video embed parser is missing expected support: ' + token);
+  }
+}
+const videoEmbedScripts = localScriptSrcs.filter(src => /social\/video-embeds-v\d+\.js/i.test(src));
+if (videoEmbedScripts.length !== 1) {
+  failures.push(`Expected exactly one video embed parser, found ${videoEmbedScripts.length}: ${videoEmbedScripts.join(', ')}`);
+} else {
+  const parserIndex = localScriptSrcs.indexOf(videoEmbedScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || parserIndex > socialIndex) failures.push('Video embed parser must load before 05-social.js.');
+}
+
 const realtimeRegistryPath = path.join(root, 'scripts', 'social', 'realtime-v175.js');
 if (!fs.existsSync(realtimeRegistryPath)) {
   failures.push('Missing isolated realtime subscription registry.');
@@ -167,6 +185,9 @@ if (notificationRuntimeScripts.length !== 1) {
 const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
+  if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
+  if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
+  if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
   for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
     if (socialSource.includes(legacyNotificationToken)) failures.push('Notification runtime leaked back into 05-social.js: ' + legacyNotificationToken);
   }
