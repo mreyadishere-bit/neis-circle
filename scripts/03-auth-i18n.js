@@ -14,6 +14,13 @@ function cacheOnboardingComplete(){
   if(!key)return;
   try{localStorage.setItem(key,'1')}catch(_){}
 }
+function clearOnboardingCache(){
+  const key=onboardingCacheKey();
+  if(!key)return;
+  try{localStorage.removeItem(key)}catch(_){}
+}
+window.NEISCacheOnboardingComplete=cacheOnboardingComplete;
+window.NEISClearOnboardingComplete=clearOnboardingCache;
 const ar=()=>state.lang==='ar';
 const bi=(en,arabic)=>ar()?arabic:en;
 const NEIS_BRANCHES=Object.freeze([
@@ -66,6 +73,7 @@ loadLiveData=async function(){
   if(!error&&data){
     state.onboardingComplete=data.onboarding_complete===true;
     if(state.onboardingComplete)cacheOnboardingComplete();
+    else clearOnboardingCache();
   }else if(previous===true||cachedOnboardingComplete()){
     state.onboardingComplete=true;
   }else{
