@@ -2258,3 +2258,28 @@ html,body{max-width:100%;overflow-x:clip}.stage{width:100%;min-width:0;padding:1
     margin-bottom:0!important;
   }
 }
+
+
+/* v65 — mobile bottom-nav reserve.
+   Keep feed/content fully scrollable above the floating navigation and prevent
+   cards from visually bleeding through the dock area. */
+@media(max-width:760px){
+  body:not(:has(.messages.mobile-thread-open)) .stage{
+    padding-bottom:calc(124px + env(safe-area-inset-bottom))!important;
+    scroll-padding-bottom:calc(124px + env(safe-area-inset-bottom));
+  }
+  .bottom-nav{
+    isolation:isolate;
+  }
+  .bottom-nav::before{
+    content:"";
+    position:absolute;
+    z-index:-1;
+    left:-10px;
+    right:-10px;
+    top:-10px;
+    bottom:calc(-10px - env(safe-area-inset-bottom));
+    background:var(--paper);
+    pointer-events:none;
+  }
+}
