@@ -54,6 +54,25 @@ const localStyleHrefs = [...runtimeHtml.matchAll(/<link[^>]+href=["']([^"']+)["'
   .map(match => match[1])
   .filter(href => href.startsWith('styles/'));
 
+const mobileCssPath = path.join(root, 'styles', 'mobile-v30.css');
+if (fs.existsSync(mobileCssPath)) {
+  const mobileCss = fs.readFileSync(mobileCssPath, 'utf8');
+  const contractStart = mobileCss.indexOf('v64 — final mobile DM viewport contract');
+  const contract = contractStart >= 0 ? mobileCss.slice(contractStart) : '';
+  if (!contract) failures.push('Missing final mobile DM viewport contract.');
+  else {
+    for (const token of [
+      'height:calc(100dvh - 58px)!important',
+      'padding:0 0 calc(74px + env(safe-area-inset-bottom))!important',
+      '.messages.mobile-thread-open',
+      'margin:0!important',
+      'overflow:hidden!important'
+    ]) {
+      if (!contract.includes(token)) failures.push('Mobile DM viewport contract is missing: ' + token);
+    }
+  }
+}
+
 function duplicateValues(values) {
   const counts = new Map();
   for (const value of values) counts.set(value, (counts.get(value) || 0) + 1);
