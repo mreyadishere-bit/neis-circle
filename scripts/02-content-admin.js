@@ -82,4 +82,3 @@ window.NEISPrimaryContentLoad=loadLiveData;
 document.addEventListener('click',async e=>{const a=e.target.closest('[data-action]');if(a){const x=a.dataset.action;if(x==='signout')await signOut();if(x==='new-article')openArticleEditor();if(x==='new-gallery')newGallery();if(x==='admin-connection')setup()}},true);
 
 async function neisEnhanceInit(){if(sb){const {data}=await sb.auth.getSession();authUser=data.session?.user||null;if(authUser)await loadLiveData()}render()}
-neisEnhanceInit();
