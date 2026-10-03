@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - "stability-*"
+      - "phase*"
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,7 @@ jobs:
         with:
           node-version: 22
       - run: npm run qa:static
+      - run: npm run qa:unit
 
   browser-smoke:
     name: Browser boot smoke
