@@ -113,6 +113,7 @@
     const tasks=[];
     if(current==='articles'||current==='home'||current==='messages')tasks.push('articles');
     if(current==='gallery'||current==='admin')tasks.push('gallery');
+    if(current==='admin'&&!tasks.includes('articles'))tasks.push('articles');
     if(current==='profile-detail')tasks.push('badges');
     if(current==='admin')tasks.push('reports');
     if(!tasks.length)return;
