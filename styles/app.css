@@ -3976,3 +3976,51 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     border-radius:15px;
   }
 }
+
+
+/* v159.49 — readable message unread badges on desktop and mobile */
+[data-nav="messages"]{
+  position:relative;
+}
+.nav-btn[data-nav="messages"] i.message-count-badge,
+.bottom-nav [data-nav="messages"] i.message-count-badge{
+  position:absolute;
+  z-index:3;
+  display:grid;
+  place-items:center;
+  width:auto!important;
+  min-width:18px!important;
+  height:18px!important;
+  min-height:18px!important;
+  padding:0 5px!important;
+  margin:0!important;
+  border:2px solid var(--card)!important;
+  border-radius:999px!important;
+  background:var(--coral)!important;
+  color:#fff!important;
+  font-size:9px!important;
+  font-weight:800!important;
+  font-style:normal!important;
+  line-height:1!important;
+  letter-spacing:0!important;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+  white-space:nowrap;
+}
+.nav-btn[data-nav="messages"] i.message-count-badge{
+  top:3px!important;
+  right:2px!important;
+  left:auto!important;
+  transform:none!important;
+}
+.bottom-nav [data-nav="messages"] i.message-count-badge{
+  top:1px!important;
+  left:50%!important;
+  right:auto!important;
+  transform:translateX(7px)!important;
+}
+html.neis-native-app .bottom-nav [data-nav="messages"] i.message-count-badge{
+  top:1px!important;
+  left:50%!important;
+  right:auto!important;
+  transform:translateX(8px)!important;
+}
