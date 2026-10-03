@@ -160,6 +160,16 @@ if (fs.existsSync(socialPath)) {
   }
 }
 
+const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
+if (fs.existsSync(hotfixPath)) {
+  const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
+  const deleteStart = hotfixSource.indexOf('deleteDirectMessage=async function');
+  if (deleteStart >= 0) {
+    const section = hotfixSource.slice(deleteStart, deleteStart + 2200);
+    if (section.includes('await loadLiveData()')) failures.push('Direct-message delete hotfix must not call global loadLiveData().');
+  }
+}
+
 const contentAdminPath = path.join(root, 'scripts', '02-content-admin.js');
 if (fs.existsSync(contentAdminPath)) {
   const contentAdminSource = fs.readFileSync(contentAdminPath, 'utf8');
