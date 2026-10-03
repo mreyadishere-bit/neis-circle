@@ -296,6 +296,7 @@ function applyRoute(){
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','timetable','admin','notifications'].includes(head)?head:'home'}
   render();
+  Promise.resolve(window.NEISSecondaryData?.ensureForView?.(state.view)).catch(error=>console.warn('[NEIS secondary route]',error));
   if(head==='post'&&parts[1]&&!new URLSearchParams(queryPart).get('comment')){
     const targetId=String(parts[1]);
     let tries=0;
@@ -876,6 +877,103 @@ window.NEISTargetedRealtime={
   hydrateConversation
 };
 
+async function handleProfileRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(!id)return;
+  const members=Array.isArray(state.members)?state.members:[];
+  const index=members.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)members.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?members[index]:{}),...row};
+    if(index>=0)members[index]=merged;else members.push(merged);
+  }else return;
+  state.members=members;
+  try{window.NEISProfileCache?.clear?.(authUser?.id)}catch(_){}
+
+  if(same(id,authUser?.id)&&event!=='DELETE'){
+    state.isAdmin=row.role==='admin'||isMainAdminUser();
+    if(row.onboarding_complete===true)state.onboardingComplete=true;
+    state.profile={
+      ...state.profile,
+      name:row.full_name||state.profile?.name||'Student',
+      username:row.username||'',
+      grade:row.grade||'',
+      branch:row.branch||'',
+      campus:row.campus||row.branch||'',
+      bio:row.bio||'',
+      interests:Array.isArray(row.interests)?row.interests.join(', '):(row.interests||''),
+      role:state.isAdmin?'admin':'student'
+    };
+    document.body.classList.toggle('is-admin',state.isAdmin);
+    try{syncChrome()}catch(_){}
+  }
+
+  const profile=members.find(item=>same(item.id,id))||row;
+  for(const post of (state.posts||[])){
+    if(!same(post.author_id,id))continue;
+    post.user=profile?.full_name||post.user||'NEIS Student';
+    post.initials=typeof initials==='function'?initials(post.user):post.initials;
+    post.meta=[...new Set([profile?.grade,profile?.branch,profile?.campus].filter(Boolean).map(value=>String(value).trim()))].join(' · ')||post.meta;
+    const node=document.querySelector('.post[data-post="'+CSS.escape(String(post.id))+'"]');
+    if(node){
+      const name=node.querySelector('.post-person b');if(name)name.textContent=post.user;
+      const meta=node.querySelector('.post-person small');if(meta)meta.textContent=[post.meta,post.time].filter(Boolean).join(' · ');
+    }
+  }
+  (state.conversationMembers||[]).forEach(member=>{if(same(member.user_id,id)&&member.profile)member.profile={...member.profile,...profile}});
+  (state.circleMembers||[]).forEach(member=>{if(same(member.user_id,id)&&member.profile)member.profile={...member.profile,...profile}});
+
+  if(['discover','connections','profile-detail','admin'].includes(state.view))render();
+}
+async function handleArticleRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(id==null)return;
+  const list=Array.isArray(state.articles)?state.articles:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const previous=index>=0?list[index]:null;
+    const authorId=row.author_id||previous?.author_id;
+    const author=previous?.author||(authorId?await ensureRealtimePostProfile(authorId):null);
+    const merged={...(previous||{}),...row,author};
+    if(index>=0)list[index]=merged;else list.unshift(merged);
+  }else return;
+  state.articles=list;
+  window.NEISSecondaryData?.invalidate?.('articles');
+  window.NEISSecondaryData?.seed?.('articles',list);
+  if(state.view==='articles'||state.view==='admin')render();
+}
+async function handleGalleryRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(id==null)return;
+  const list=Array.isArray(state.gallery)?state.gallery:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const previous=index>=0?list[index]:null;
+    const authorId=row.author_id||previous?.author_id;
+    const author=previous?.author||(authorId?await ensureRealtimePostProfile(authorId):null);
+    const merged={...(previous||{}),...row,author};
+    if(index>=0)list[index]=merged;else list.unshift(merged);
+  }else return;
+  state.gallery=list;
+  window.NEISSecondaryData?.invalidate?.('gallery');
+  window.NEISSecondaryData?.seed?.('gallery',list);
+  if(state.view==='gallery'||state.view==='admin')render();
+}
+async function handleReportRealtime(){
+  window.NEISSecondaryData?.invalidate?.('reports');
+  if(state.isAdmin&&state.view==='admin'){
+    try{await window.NEISSecondaryData?.loadReports?.({force:true,useCache:false});render()}catch(error){console.warn('[NEIS reports realtime]',error)}
+  }
+}
+
 async function setupV6Realtime(uid){
   syncKnownPostReactionKeys();
   if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
@@ -899,7 +997,10 @@ async function setupV6Realtime(uid){
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},handleCircleMeetingRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},handleFollowRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},handleCircleMemberRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'profiles'},handleProfileRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'articles'},handleArticleRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'gallery_items'},handleGalleryRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'reports'},handleReportRealtime)
     .subscribe(status=>{v6RealtimeStatus=status});
 }
 async function stopRealtimeRuntime(){
@@ -936,15 +1037,13 @@ loadLiveData=async function(){
   await coreLoad();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const uid=authUser.id;
-  const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,commentRes,reportRes,badgeRes]=await Promise.all([
+  const [followRes,myMembershipRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
     sb.from('follows').select('*').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
     sb.from('conversation_members').select('*').eq('user_id',uid),
     sb.from('circles').select('*').order('created_at',{ascending:false}),
     sb.from('circle_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').order('joined_at'),
     sb.from('circle_meetings').select('*,creator:profiles(id,full_name,username,avatar_url)').order('starts_at'),
-    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles!comments_author_id_fkey(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at'),
-    state.isAdmin?sb.rpc('admin_report_details'):Promise.resolve({data:[],error:null}),
-    sb.from('profile_badges').select('user_id,badge_key,awarded_at')
+    sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at,profile:profiles!comments_author_id_fkey(id,full_name,username,grade,branch,avatar_url)').is('deleted_at',null).order('created_at')
   ]);
   if(!followRes.error)state.follows=followRes.data||[];else state.dataErrors.connections=followRes.error;
   const ownConversationMemberships=myMembershipRes.data||[];
@@ -962,8 +1061,6 @@ loadLiveData=async function(){
   if(!circleMemberRes.error)state.circleMembers=circleMemberRes.data||[];
   if(!meetingRes.error){state.circleMeetings=meetingRes.data||[];state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
   if(!commentRes.error){state.allComments=commentRes.data||[];state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
-  if(!reportRes.error)state.reports=reportRes.data||[];
-  if(!badgeRes.error)state.profileBadges=badgeRes.data||[];
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*,profile:profiles(id,full_name,username,avatar_url)').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
@@ -1875,8 +1972,8 @@ function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id
 function confirmAction(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-confirm-no>×</button></div><p class="confirm-copy">${t('This action is saved to the database and cannot be undone.','سيُحفظ هذا الإجراء في قاعدة البيانات ولا يمكن التراجع عنه.')}</p><div class="modal-actions"><button class="secondary" data-confirm-no>${t('Cancel','إلغاء')}</button><button class="primary danger" data-confirm-yes>${t('Delete','حذف')}</button></div>`);$$('[data-confirm-no]').forEach(b=>b.onclick=()=>{closeModal();resolve(false)});$('[data-confirm-yes]').onclick=()=>{closeModal();resolve(true)}})}
 async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
 async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}handlePostRealtime({eventType:'DELETE',old:{id:p.id}});for(const url of postImages(p))await removeMediaUrl(url);toast(t('Post deleted.','تم حذف المنشور.'))}
-async function deleteGalleryItem(id){const g=byId(state.gallery,id);if(!g||!await confirmAction(t('Delete gallery item?','حذف عنصر المعرض؟'),(g.caption_en||g.caption_ar||t('This image','هذه الصورة'))))return;const {error}=await sb.from('gallery_items').delete().eq('id',id);if(error){toast(safeError(error,'delete this gallery item'));return}await removeMediaUrl(g.image_url);await loadLiveData();render();toast(t('Gallery item deleted.','تم حذف عنصر المعرض.'))}
-async function deleteArticle(id){const a=byId(state.articles,id);if(!a||!await confirmAction(t('Delete article?','حذف المقال؟'),a.title_en||a.title_ar))return;const {error}=await sb.from('articles').delete().eq('id',id);if(error){toast(safeError(error,'delete this article'));return}await removeMediaUrl(a.cover_url);await loadLiveData();render();toast(t('Article deleted.','تم حذف المقال.'))}
+async function deleteGalleryItem(id){const g=byId(state.gallery,id);if(!g||!await confirmAction(t('Delete gallery item?','حذف عنصر المعرض؟'),(g.caption_en||g.caption_ar||t('This image','هذه الصورة'))))return;const {error}=await sb.from('gallery_items').delete().eq('id',id);if(error){toast(safeError(error,'delete this gallery item'));return}state.gallery=state.gallery.filter(item=>!same(item.id,id));window.NEISSecondaryData?.invalidate?.('gallery');window.NEISSecondaryData?.seed?.('gallery',state.gallery);await removeMediaUrl(g.image_url);render();toast(t('Gallery item deleted.','تم حذف عنصر المعرض.'))}
+async function deleteArticle(id){const a=byId(state.articles,id);if(!a||!await confirmAction(t('Delete article?','حذف المقال؟'),a.title_en||a.title_ar))return;const {error}=await sb.from('articles').delete().eq('id',id);if(error){toast(safeError(error,'delete this article'));return}state.articles=state.articles.filter(item=>!same(item.id,id));window.NEISSecondaryData?.invalidate?.('articles');window.NEISSecondaryData?.seed?.('articles',state.articles);await removeMediaUrl(a.cover_url);render();toast(t('Article deleted.','تم حذف المقال.'))}
 async function deleteCircleMessage(id){const m=byId(state.circleMessages,id);if(!m||!await confirmAction(t('Delete message?','حذف الرسالة؟'),t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.')))return;const {data,error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',id).select('*').maybeSingle();if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}await handleCircleMessageRealtime({eventType:'UPDATE',new:data,old:m})}
 async function deleteDirectMessage(id){const m=byId(state.liveMessages,id);if(!m||(!same(m.sender_id,authUser.id)&&!state.isAdmin)||!await confirmAction(t('Permanently delete message?','حذف الرسالة نهائيًا؟'),t('The message will disappear for everyone and cannot be restored.','ستختفي الرسالة لدى الجميع ولا يمكن استعادتها.')))return;const messageId=String(id||'').trim();if(!messageId){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));return}const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));render();toast(t('Message permanently deleted.','تم حذف الرسالة نهائيًا.'))}
 async function deleteConversation(id){if(!id||!await confirmAction(t('Permanently delete this chat?','حذف هذه المحادثة نهائيًا؟'),t('The complete conversation and all of its messages will be removed for both people. This cannot be undone.','ستُحذف المحادثة كاملةً بكل رسائلها لدى الطرفين، ولا يمكن التراجع عن ذلك.')))return;const {data,error}=await sb.rpc('delete_direct_conversation',{conversation_id_input:id});if(error||!data){toast(error?safeError(error,'delete this chat'):t('This chat could not be deleted.','تعذر حذف هذه المحادثة.'));return}state.activeConversationId='';state.conversations=state.conversations.filter(item=>!same(item.id,id));state.conversationMembers=state.conversationMembers.filter(item=>!same(item.conversation_id,id));state.liveMessages=state.liveMessages.filter(item=>!same(item.conversation_id,id));routeTo('messages',true);toast(t('Chat permanently deleted.','تم حذف المحادثة نهائيًا.'))}
