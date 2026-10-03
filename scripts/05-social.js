@@ -14,8 +14,8 @@ const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
 Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
-let v6Channel=null,v6ChannelUid='',v6RealtimeStatus='CLOSED',notificationChannel=null,notificationChannelUid='',notificationPollTimer=null,notificationRealtimeStatus='CLOSED',notificationRefreshPromise=null,notificationLastFullSyncAt=0,searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
-let notificationAudioContext=null,notificationSoundUnlocked=false,notificationVisibilityBound=false;
+let v6Channel=null,v6ChannelUid='',v6RealtimeStatus='CLOSED',searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
+let notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
 let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
@@ -221,57 +221,14 @@ function canManageCircle(circleId){const m=membership(circleId);return !!(state.
 function canModerateCircle(circleId){const m=membership(circleId);return !!(state.isAdmin||(m&&m.status==='active'&&['owner','admin','moderator'].includes(m.role)))}
 function unreadMessages(){return state.conversations.reduce((sum,c)=>sum+conversationUnread(c.id),0)}
 function conversationUnread(id){const member=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser?.id)),read=member?.last_read_at||'1970-01-01';return state.liveMessages.filter(m=>same(m.conversation_id,id)&&!same(m.sender_id,authUser?.id)&&new Date(m.created_at)>new Date(read)).length}
-async function unlockNotificationSound(){try{const AudioCtx=window.AudioContext||window.webkitAudioContext;if(!AudioCtx)return false;notificationAudioContext=notificationAudioContext||new AudioCtx();if(notificationAudioContext.state!=='running')await notificationAudioContext.resume();notificationSoundUnlocked=notificationAudioContext.state==='running';return notificationSoundUnlocked}catch{return false}}
-async function playNotificationSound(){try{if(!await unlockNotificationSound())return;const ctx=notificationAudioContext,now=ctx.currentTime,master=ctx.createGain();master.gain.setValueAtTime(.0001,now);master.gain.exponentialRampToValueAtTime(.34,now+.012);master.gain.exponentialRampToValueAtTime(.0001,now+.62);master.connect(ctx.destination);[[1046.5,0,.19,'sine'],[1568,.11,.25,'triangle'],[2093,.24,.31,'sine']].forEach(([freq,delay,duration,type])=>{const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=type;osc.frequency.setValueAtTime(freq,now+delay);gain.gain.setValueAtTime(.0001,now+delay);gain.gain.exponentialRampToValueAtTime(.9,now+delay+.008);gain.gain.exponentialRampToValueAtTime(.0001,now+delay+duration);osc.connect(gain);gain.connect(master);osc.start(now+delay);osc.stop(now+delay+duration+.04)})}catch{}}
-function applyNotificationRows(rows,{soundForNew=false}={}){const previousIds=new Set(state.notifications.map(n=>String(n.id))),fresh=(rows||[]).filter(n=>!previousIds.has(String(n.id)));state.notifications=rows||[];updateBadges();if(state.view==='notifications')render();if(soundForNew&&fresh.some(n=>!n.read_at))playNotificationSound()}
-function applyRealtimeNotification(payload){const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};if(event==='INSERT'&&row?.id){if(!state.notifications.some(n=>same(n.id,row.id)))state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();if(!row.read_at)playNotificationSound();return}if(event==='UPDATE'&&row?.id){const index=state.notifications.findIndex(n=>same(n.id,row.id));if(index>=0)state.notifications[index]={...state.notifications[index],...row};else state.notifications=[row,...state.notifications].slice(0,100);updateBadges();if(state.view==='notifications')render();return}if(event==='DELETE'&&oldRow?.id){state.notifications=state.notifications.filter(n=>!same(n.id,oldRow.id));updateBadges();if(state.view==='notifications')render()}}
-async function refreshNotificationsOnly(soundForNew=false,{force=false}={}){
-  if(!sb||!authUser)return;
-  const now=Date.now();
-  if(!force&&notificationLastFullSyncAt&&now-notificationLastFullSyncAt<3000)return;
-  if(notificationRefreshPromise)return notificationRefreshPromise;
-  notificationRefreshPromise=(async()=>{
-    const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100);
-    if(error){console.error('[NEIS notifications refresh]',error);return}
-    notificationLastFullSyncAt=Date.now();
-    applyNotificationRows(data||[],{soundForNew});
-  })().finally(()=>{notificationRefreshPromise=null});
-  return notificationRefreshPromise;
-}
-function startNotificationFallback(){
-  clearInterval(notificationPollTimer);
-  const healthy=notificationRealtimeStatus==='SUBSCRIBED';
-  const interval=healthy?120000:10000;
-  notificationPollTimer=setInterval(()=>refreshNotificationsOnly(true),interval);
-}
-async function setupNotificationRealtime(uid){
-  if(notificationChannel&&same(notificationChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(notificationRealtimeStatus)){
-    if(!state.notifications.length)await refreshNotificationsOnly(false);
-    return;
-  }
-  if(notificationChannel){
-    try{await sb.removeChannel(notificationChannel)}catch(_){}
-    notificationChannel=null;
-  }
-  if(notificationChannelUid&&!same(notificationChannelUid,uid)){
-    state.notifications=[];
-    notificationLastFullSyncAt=0;
-    updateBadges();
-  }
-  notificationChannelUid=uid;
-  notificationRealtimeStatus='CONNECTING';
-  notificationChannel=sb.channel(`neis-notifications-${uid}`)
-    .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`user_id=eq.${uid}`},applyRealtimeNotification)
-    .subscribe(status=>{
-      notificationRealtimeStatus=status;
-      if(status==='SUBSCRIBED'){
-        if(!state.notifications.length||Date.now()-notificationLastFullSyncAt>60000)refreshNotificationsOnly(false);
-        startNotificationFallback();
-      }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
-        startNotificationFallback();
-      }
-    });
-}
+const notificationRuntime=window.NEISNotificationRuntime;
+if(!notificationRuntime)throw new Error('NEIS Notification Runtime failed to load.');
+const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
+const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
+const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
+const applyRealtimeNotification=(...args)=>notificationRuntime.applyRealtime(...args);
+const refreshNotificationsOnly=(...args)=>notificationRuntime.refresh(...args);
+const setupNotificationRealtime=(...args)=>notificationRuntime.setup(...args);
 function routeTo(path,replace=false){const hash='#/'+String(path||'home').replace(/^\/+/, '');if(location.hash===hash){applyRoute();return}(replace?history.replaceState(null,'',hash):history.pushState(null,'',hash));applyRoute()}
 
 function applyRoute(){
