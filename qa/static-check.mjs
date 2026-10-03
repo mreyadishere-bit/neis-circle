@@ -163,6 +163,28 @@ if (messageReactionDataScripts.length !== 1) {
   if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Message reaction data module must load before 05-social.js.');
 }
 
+const chatFieldsPath = path.join(root, 'scripts', 'social', 'chat-fields-v182.js');
+if (!fs.existsSync(chatFieldsPath)) {
+  failures.push('Missing shared chat field definitions.');
+} else {
+  const chatFieldsSource = fs.readFileSync(chatFieldsPath, 'utf8');
+  for (const token of ['conversation:','member:','message:','circleMessage:']) {
+    if (!chatFieldsSource.includes(token)) failures.push('Chat field definitions are missing: ' + token);
+  }
+  if (chatFieldsSource.includes(":'*'") || chatFieldsSource.includes(':"*"')) failures.push('Chat field definitions must not use wildcard selects.');
+}
+const chatFieldScripts = localScriptSrcs.filter(src => /social\/chat-fields-v\d+\.js/i.test(src));
+if (chatFieldScripts.length !== 1) {
+  failures.push(`Expected exactly one chat fields module, found ${chatFieldScripts.length}: ${chatFieldScripts.join(', ')}`);
+} else {
+  const fieldsIndex = localScriptSrcs.indexOf(chatFieldScripts[0]);
+  const conversationIndex = localScriptSrcs.findIndex(src => /social\/conversation-data-v\d+\.js/i.test(src));
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (conversationIndex < 0 || fieldsIndex > conversationIndex || socialIndex < 0 || fieldsIndex > socialIndex) {
+    failures.push('Chat fields module must load before conversation/chat data consumers.');
+  }
+}
+
 const conversationDataPath = path.join(root, 'scripts', 'social', 'conversation-data-v179.js');
 if (!fs.existsSync(conversationDataPath)) {
   failures.push('Missing isolated conversation data module.');
@@ -284,6 +306,7 @@ if (fs.existsSync(socialPath)) {
   if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
   if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
   if (!socialSource.includes('NEISChatBootstrapData')) failures.push('Startup chat loading must remain delegated to the chat bootstrap module.');
+  if (!socialSource.includes('NEISChatFields')) failures.push('Chat queries must use shared explicit field lists.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
