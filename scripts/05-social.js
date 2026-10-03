@@ -236,6 +236,8 @@ const messageReactionData=window.NEISMessageReactionData;
 if(!messageReactionData)throw new Error('NEIS Message Reaction Data failed to load.');
 const chatBootstrapData=window.NEISChatBootstrapData;
 if(!chatBootstrapData)throw new Error('NEIS Chat Bootstrap Data failed to load.');
+const chatFields=window.NEISChatFields;
+if(!chatFields)throw new Error('NEIS Chat Fields failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -893,7 +895,7 @@ loadLiveData=async function(){
   if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));const commentCounts=new Map();for(const comment of state.allComments){const key=String(comment.post_id||'');if(key)commentCounts.set(key,(commentCounts.get(key)||0)+1)}state.posts.forEach(p=>{p.comments=commentCounts.get(String(p.id))||0})}
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
-  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
+  if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select(chatFields.circleMessage).in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
   const messageReactionRes=await messageReactionData.load({sb,...messageReactionData.idsFromState(state)});if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   await setupV6Realtime(uid);
   await setupNotificationRealtime(uid);
