@@ -124,8 +124,8 @@
       var result=await sb.auth.getSession();
       if(result.error&&!window.NEISAuthCallbackPending?.())throw result.error;
       authUser=result.data?.session?.user||null;
-      if(!authUser&&window.NEISAuthCallbackPending?.()){
-        var session=await window.NEISWaitForSession?.(7000);
+      if(!authUser&&(window.NEISAuthCallbackPending?.()||window.NEISHasStoredAuthSession?.())){
+        var session=await window.NEISWaitForSession?.(window.NEISAuthCallbackPending?.()?7000:4500);
         authUser=session?.user||null;
       }
       identityAuthSettled=true;
