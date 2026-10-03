@@ -134,8 +134,10 @@ if (!fs.existsSync(chatFieldsPath)) {
   for (const token of ['conversation:','member:','message:','circleMessage:']) {
     if (!chatFieldsSource.includes(token)) failures.push('Chat field contract is missing: ' + token);
   }
+  const chatFieldValues = [...chatFieldsSource.matchAll(/(?:conversation|member|message|circleMessage):'([^']+)'/g)]
+    .flatMap(match => match[1].split(','));
   for (const forbidden of ['attachment_url','read_at','direct_key','created_by']) {
-    if (chatFieldsSource.includes(forbidden)) failures.push('Chat field contract includes unused payload field: ' + forbidden);
+    if (chatFieldValues.includes(forbidden)) failures.push('Chat field contract includes unused payload field: ' + forbidden);
   }
 }
 const chatFieldScripts = localScriptSrcs.filter(src => /social\/chat-fields-v\d+\.js/i.test(src));
