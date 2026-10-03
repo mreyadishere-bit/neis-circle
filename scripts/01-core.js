@@ -98,8 +98,8 @@ function loadSupabaseLibrary(){
   if(window.supabase?.createClient)return Promise.resolve(true);
   if(window.__neisSupabaseLoader)return window.__neisSupabaseLoader;
   const sources=[
-    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2",
-    "https://unpkg.com/@supabase/supabase-js@2"
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2",
+    "https://unpkg.com/@supabase/supabase-js@2.117.2"
   ];
   window.__neisSupabaseLoader=(async()=>{
     for(const src of sources){
