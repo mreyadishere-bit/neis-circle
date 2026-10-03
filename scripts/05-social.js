@@ -555,12 +555,28 @@ async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
   const canEditPost=same(post?.author_id,authUser?.id)||isMainAdminUser();
   if(!post||!canEditPost){toast(t('You can only edit posts you are allowed to manage.','يمكنك تعديل المنشورات المسموح لك بإدارتها فقط.'));return}
+  const isPollPost=post.kind==='Poll'||post.post_type==='poll';
+  if(isPollPost){
+    if(post.circle_id){
+      await loadCirclePolls(post.circle_id,{force:true});
+      const poll=circlePollForPost(post.id);
+      if(poll){await openCirclePollSettings(poll.id);return}
+      toast(t('Poll data could not be loaded. Please refresh and try again.','تعذر تحميل بيانات التصويت. حدّث الصفحة وحاول مرة أخرى.'));
+      return;
+    }
+    if(window.NEISPublicPolls?.openSettingsForPost){
+      await window.NEISPublicPolls.openSettingsForPost(post.id);
+      return;
+    }
+    toast(t('Poll settings are still loading. Please refresh and try again.','إعدادات التصويت ما زالت قيد التحميل. حدّث الصفحة وحاول مرة أخرى.'));
+    return;
+  }
   let removeImages=false;
   const existingImages=postImages(post),currentMode=post.image_display_mode==='fill'?'fill':'fit';
   let imageItems=existingImages.map((url,index)=>({url,originalUrl:url,file:null,previewUrl:'',name:`post-image-${index+1}`}));
   openModal(`<div class="modal-head"><div><p class="kicker"><i></i>${t('Edit post','تعديل المنشور')}</p><h2>${t('Update your post','تحديث منشورك')}</h2><p>${t('Change the text, tags, type, links, image display, or images without creating a new post.','عدّل النص أو الوسوم أو النوع أو الروابط أو طريقة عرض الصور بدون إنشاء منشور جديد.')}</p></div><button class="close" data-close>×</button></div>
     <form id="editPostForm">
-      <label class="field">${t('Type','النوع')}<select id="editPostKind">${['Discussion','Question','Resource','Experience'].map(value=>`<option value="${value}" ${post.kind===value?'selected':''}>${value}</option>`).join('')}</select></label>
+      <label class="field">${t('Type','النوع')}<select id="editPostKind">${['Discussion','Question','Resource','Experience','Announcement'].map(value=>`<option value="${value}" ${post.kind===value?'selected':''}>${value}</option>`).join('')}</select></label>
       <label class="field">${t('Title','العنوان')}<input id="editPostTitle" required maxlength="140" value="${esc(post.title||'')}"></label>
       <label class="field">${t('Details','التفاصيل')}<textarea id="editPostBody" required rows="7">${esc(post.body||'')}</textarea></label>
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
