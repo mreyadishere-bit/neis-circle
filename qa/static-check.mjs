@@ -118,14 +118,14 @@ if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
-  const targetedRealtimeTables = ['posts','comments','reactions','comment_likes','comment_creator_hearts'];
+  const targetedRealtimeTables = ['posts','comments','reactions','comment_likes','comment_creator_hearts','follows','circle_members','circle_meetings'];
   for (const table of targetedRealtimeTables) {
     const legacyPattern = new RegExp("table:'" + table + "'\\},refreshV6");
     if (legacyPattern.test(socialSource)) {
       failures.push('High-frequency realtime table ' + table + ' must not use refreshV6.');
     }
   }
-  for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime']) {
+  for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime','handleFollowRealtime','handleCircleMemberRealtime','handleCircleMeetingRealtime']) {
     if (!socialSource.includes(handler)) failures.push('Missing targeted realtime handler: ' + handler);
   }
   const globalLoadStart = socialSource.indexOf('const coreLoad=loadLiveData;');
