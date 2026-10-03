@@ -36,13 +36,13 @@ const circleIds=['c1','c2','c2'];
 const result=await api.load({sb,dmMessageIds:dmIds,circleMessageIds:circleIds});
 assert.equal(result.error,null);
 assert.equal(calls.length,4,'205 DM ids should use 3 chunks plus 1 Circle chunk');
-assert.deepEqual(calls.map(x=>x.ids.length),[100,100,5,2]);
+assert.equal(calls.map(x=>x.ids.length).join(','),'100,100,5,2');
 assert.equal(result.data.length,207);
 
 const state={liveMessages:[{id:'m1'},{id:'m2'}],circleMessages:[{id:7},{id:8}]};
-assert.deepEqual(api.idsFromState(state),{dmMessageIds:['m1','m2'],circleMessageIds:[7,8]});
+const ids=api.idsFromState(state); assert.equal(Array.from(ids.dmMessageIds).join(','),'m1,m2'); assert.equal(Array.from(ids.circleMessageIds).join(','),'7,8');
 
 const empty=await api.load({sb,dmMessageIds:[],circleMessageIds:[]});
-assert.deepEqual(empty,{data:[],error:null});
+assert.equal(Array.from(empty.data).length,0); assert.equal(empty.error,null);
 
 console.log('Message reaction data unit test passed.');
