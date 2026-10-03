@@ -131,7 +131,7 @@ if (!fs.existsSync(messageDomPath)) {
   failures.push('Missing isolated DM DOM patch module.');
 } else {
   const messageDomSource = fs.readFileSync(messageDomPath, 'utf8');
-  for (const token of ['patchThread','patchActiveFlow','activeMessages']) {
+  for (const token of ['patchThread','patchActiveFlow','patchCircleFlow','activeMessages']) {
     if (!messageDomSource.includes(token)) failures.push('DM DOM module is missing expected capability: ' + token);
   }
   if (messageDomSource.includes('render()')) failures.push('DM DOM patch module must never call full render().');
@@ -225,6 +225,7 @@ if (fs.existsSync(socialPath)) {
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
   if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
   if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
+  if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
   for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
