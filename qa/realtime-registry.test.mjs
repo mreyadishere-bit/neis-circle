@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
+const fieldsSource=fs.readFileSync(new URL('../scripts/social/chat-fields-v182.js',import.meta.url),'utf8');
 const source=fs.readFileSync(new URL('../scripts/social/realtime-v175.js',import.meta.url),'utf8');
 
 const bindings=[];
@@ -46,10 +47,11 @@ let beforeSetupCalls=0;
 const context={console};
 context.window=context;
 vm.createContext(context);
+vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'realtime-v175.js'});
 
 const api=context.NEISRealtimeRegistry;
-assert.equal(api.version,'175.0');
+assert.equal(api.version,'175.1');
 
 await api.setup('u1',{sb,handlers,beforeSetup:()=>{beforeSetupCalls+=1}});
 assert.equal(channelCreates,1);
@@ -60,6 +62,12 @@ assert.deepEqual(bindings.map(item=>item.filter.table),[
   'conversations','conversation_members','circle_messages','message_reactions',
   'circle_meetings','follows','circle_members','profiles','articles','gallery_items','reports'
 ]);
+const selected=Object.fromEntries(bindings.filter(item=>item.filter.select).map(item=>[item.filter.table,item.filter.select]));
+assert.equal(selected.messages.join(','),context.NEISChatFields.message);
+assert.equal(selected.conversations.join(','),context.NEISChatFields.conversation);
+assert.equal(selected.conversation_members.join(','),context.NEISChatFields.member);
+assert.equal(selected.circle_messages.join(','),context.NEISChatFields.circleMessage);
+assert.equal(selected.message_reactions.join(','),'id,dm_message_id,circle_message_id,user_id,emoji,created_at');
 
 subscribedStatusCallback('SUBSCRIBED');
 assert.equal(api.snapshot().status,'SUBSCRIBED');
