@@ -230,6 +230,7 @@ async function initSupabase(){
       const loaded=await loadSupabaseLibrary();
       if(!loaded)return false;
     }
+
     try{
       sb=window.supabase.createClient(u,k,{
         auth:{
@@ -239,35 +240,79 @@ async function initSupabase(){
           storage:neisAuthStorage
         }
       });
-      const {data,error}=await sb.auth.getSession();
-      if(error)throw error;
-      authUser=data.session?.user||null;
-      if(authUser)neisCleanAuthCallbackUrl();
-      if(!supabaseAuthSubscription){
-        const listener=sb.auth.onAuthStateChange((event,session)=>{
-          authUser=session?.user||null;
-          if(session)neisCleanAuthCallbackUrl();
-          setTimeout(async()=>{
-            if(session){
-              try{await loadLiveData()}catch(error){console.error('[NEIS] auth refresh load failed',error)}
-              render();
-              return;
-            }
-            if(event==='SIGNED_OUT'||(event==='INITIAL_SESSION'&&!neisAuthCallbackPending()))render();
-          },0);
-        });
-        supabaseAuthSubscription=listener?.data?.subscription||true;
-      }
-      if(authUser)await loadLiveData();
-      return true;
-    }catch(e){
-      console.error("[NEIS] Supabase initialization failed",e);
+    }catch(error){
+      console.error("[NEIS] Supabase client creation failed",error);
       sb=null;authUser=null;
       return false;
     }
+
+    let session=null;
+    try{
+      const result=await sb.auth.getSession();
+      if(result.error)console.warn("[NEIS] Initial session read failed",result.error);
+      session=result.data?.session||null;
+    }catch(error){
+      console.warn("[NEIS] Initial session read failed",error);
+    }
+
+    if(!session&&neisAuthCallbackPending()){
+      session=await neisWaitForSession(7000);
+    }
+    authUser=session?.user||null;
+    if(authUser){
+      window.__neisOAuthStarting=false;
+      try{sessionStorage.removeItem("neis-oauth-started-at")}catch(_){}
+      neisCleanAuthCallbackUrl();
+    }
+
+    if(!supabaseAuthSubscription){
+      let authEventBusy=false,authEventQueued=null;
+      const processAuthEvent=async(event,eventSession)=>{
+        if(eventSession){
+          authUser=eventSession.user||authUser;
+          window.__neisOAuthStarting=false;
+          try{sessionStorage.removeItem("neis-oauth-started-at")}catch(_){}
+          neisCleanAuthCallbackUrl();
+        }else if(event==="SIGNED_OUT"||event==="USER_DELETED"||(event==="INITIAL_SESSION"&&!neisAuthCallbackPending())){
+          authUser=null;
+        }else{
+          return;
+        }
+
+        if(authEventBusy){
+          authEventQueued={event,session:eventSession};
+          return;
+        }
+        authEventBusy=true;
+        try{
+          if(eventSession&&event!=="TOKEN_REFRESHED"){
+            try{await loadLiveData()}catch(error){console.error("[NEIS] auth event data refresh failed",error)}
+          }
+          render();
+        }finally{
+          authEventBusy=false;
+          if(authEventQueued){
+            const queued=authEventQueued;
+            authEventQueued=null;
+            setTimeout(()=>processAuthEvent(queued.event,queued.session),0);
+          }
+        }
+      };
+
+      const listener=sb.auth.onAuthStateChange((event,eventSession)=>{
+        setTimeout(()=>processAuthEvent(event,eventSession),0);
+      });
+      supabaseAuthSubscription=listener?.data?.subscription||true;
+    }
+
+    if(authUser){
+      try{await loadLiveData()}catch(error){console.error("[NEIS] initial live-data load failed",error)}
+    }
+    return true;
   })();
   try{return await supabaseInitPromise}finally{supabaseInitPromise=null}
 }
+
 async function loadLiveData(){
   if(!sb||!authUser)return;
   const [postRes,commentRes,reactionRes,bookmarkRes,profileRes]=await Promise.all([
@@ -284,9 +329,24 @@ async function loadLiveData(){
   if(realtimeChannel)await sb.removeChannel(realtimeChannel);realtimeChannel=sb.channel("neis-live").on("postgres_changes",{event:"*",schema:"public",table:"posts"},async()=>{await loadLiveData();render()}).on("postgres_changes",{event:"*",schema:"public",table:"comments"},async()=>{await loadLiveData();render()}).subscribe();
 }
 async function googleSignIn(){
-  if(!sb){setup();return}
-  const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname}});
-  if(error)toast(error.message)
+  if(window.__neisOAuthStarting)return;
+  if(!sb){
+    const ready=await initSupabase();
+    if(!ready||!sb){toast("Connection is not ready. Please refresh and try again.");return}
+  }
+  try{
+    const recent=Number(sessionStorage.getItem("neis-oauth-started-at")||0);
+    if(recent&&Date.now()-recent<10000)return;
+    window.__neisOAuthStarting=true;
+    sessionStorage.setItem("neis-oauth-started-at",String(Date.now()));
+  }catch(_){window.__neisOAuthStarting=true}
+  const redirectTo=location.origin+location.pathname;
+  const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo}});
+  if(error){
+    window.__neisOAuthStarting=false;
+    try{sessionStorage.removeItem("neis-oauth-started-at")}catch(_){}
+    toast(error.message);
+  }
 }
 document.addEventListener("click",async e=>{
   const n=e.target.closest("[data-nav]");if(n){nav(n.dataset.nav);return}
