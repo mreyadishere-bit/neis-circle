@@ -215,7 +215,7 @@ compose=function(kind='Discussion'){
       if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
       toast(error.message);btn.classList.remove('button-loading');btn.disabled=false;return;
     }
-    closeModal();await loadLiveData();nav('home');toast(isPoll?bi('Poll published.','تم نشر التصويت.'):bi('Published successfully.','تم النشر بنجاح.'));
+    closeModal();await loadLiveData();if(isPoll&&window.NEISPublicPolls?.load)await window.NEISPublicPolls.load(true,false);nav('home');toast(isPoll?bi('Poll published.','تم نشر التصويت.'):bi('Published successfully.','تم النشر بنجاح.'));
   };
 };
 
