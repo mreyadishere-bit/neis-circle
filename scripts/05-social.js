@@ -961,30 +961,20 @@ async function setupV6Realtime(uid){
     .subscribe(status=>{v6RealtimeStatus=status});
 }
 async function stopRealtimeRuntime(){
-  clearInterval(notificationPollTimer);
-  notificationPollTimer=null;
-  notificationRefreshPromise=null;
-  notificationLastFullSyncAt=0;
+  await notificationRuntime.reset();
   if(v6Channel){
     try{await sb?.removeChannel(v6Channel)}catch(_){}
     v6Channel=null;
   }
-  if(notificationChannel){
-    try{await sb?.removeChannel(notificationChannel)}catch(_){}
-    notificationChannel=null;
-  }
   v6ChannelUid='';
-  notificationChannelUid='';
   v6RealtimeStatus='CLOSED';
-  notificationRealtimeStatus='CLOSED';
 }
 window.NEISRealtimeRuntime={
   stop:stopRealtimeRuntime,
   snapshot:()=>({
     v6Status:v6RealtimeStatus,
     v6User:v6ChannelUid,
-    notificationStatus:notificationRealtimeStatus,
-    notificationUser:notificationChannelUid
+    notifications:notificationRuntime.snapshot()
   })
 };
 
