@@ -126,6 +126,31 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const chatFieldsPath = path.join(root, 'scripts', 'social', 'chat-fields-v182.js');
+if (!fs.existsSync(chatFieldsPath)) {
+  failures.push('Missing minimal chat field contract.');
+} else {
+  const chatFieldsSource = fs.readFileSync(chatFieldsPath, 'utf8');
+  for (const token of ['conversation:','member:','message:','circleMessage:']) {
+    if (!chatFieldsSource.includes(token)) failures.push('Chat field contract is missing: ' + token);
+  }
+  const chatFieldValues = [...chatFieldsSource.matchAll(/(?:conversation|member|message|circleMessage):'([^']+)'/g)]
+    .flatMap(match => match[1].split(','));
+  for (const forbidden of ['attachment_url','read_at','direct_key','created_by']) {
+    if (chatFieldValues.includes(forbidden)) failures.push('Chat field contract includes unused payload field: ' + forbidden);
+  }
+}
+const chatFieldScripts = localScriptSrcs.filter(src => /social\/chat-fields-v\d+\.js/i.test(src));
+if (chatFieldScripts.length !== 1) failures.push('Expected exactly one chat field contract module.');
+else {
+  const fieldsIndex = localScriptSrcs.indexOf(chatFieldScripts[0]);
+  const conversationIndex = localScriptSrcs.findIndex(src => /social\/conversation-data-v\d+\.js/i.test(src));
+  const bootstrapIndex = localScriptSrcs.findIndex(src => /social\/chat-bootstrap-v\d+\.js/i.test(src));
+  if (conversationIndex < 0 || bootstrapIndex < 0 || fieldsIndex > conversationIndex || fieldsIndex > bootstrapIndex) {
+    failures.push('Chat field contract must load before chat data modules.');
+  }
+}
+
 const chatBootstrapPath = path.join(root, 'scripts', 'social', 'chat-bootstrap-v181.js');
 if (!fs.existsSync(chatBootstrapPath)) {
   failures.push('Missing isolated chat bootstrap data module.');
@@ -143,6 +168,13 @@ if (chatBootstrapScripts.length !== 1) {
   const moduleIndex = localScriptSrcs.indexOf(chatBootstrapScripts[0]);
   const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
   if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Chat bootstrap module must load before 05-social.js.');
+}
+
+for (const chatDataFile of ['scripts/social/conversation-data-v179.js','scripts/social/chat-bootstrap-v181.js']) {
+  if (fs.existsSync(path.join(root, chatDataFile))) {
+    const source = fs.readFileSync(path.join(root, chatDataFile), 'utf8');
+    if (/\.select\(['"]\*['"]\)/.test(source)) failures.push('Chat data modules must not use select(*) anymore: ' + chatDataFile);
+  }
 }
 
 const messageReactionDataPath = path.join(root, 'scripts', 'social', 'message-reactions-data-v180.js');

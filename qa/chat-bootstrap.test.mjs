@@ -2,10 +2,12 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 
+const fieldsSource=fs.readFileSync(new URL('../scripts/social/chat-fields-v182.js',import.meta.url),'utf8');
 const source=fs.readFileSync(new URL('../scripts/social/chat-bootstrap-v181.js',import.meta.url),'utf8');
 const context={console};
 context.window=context;
 vm.createContext(context);
+vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'chat-bootstrap-v181.js'});
 
 const api=context.NEISChatBootstrapData;
