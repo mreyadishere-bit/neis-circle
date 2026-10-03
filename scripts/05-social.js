@@ -532,6 +532,79 @@ function handleCommentEngagementRealtime(payload){
   if(comment?.post_id)scheduleOpenDiscussionRefresh(comment.post_id);
 }
 
+function handleFollowRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const followerId=row.follower_id;
+  const followingId=row.following_id;
+  if(!followerId||!followingId)return;
+  const list=Array.isArray(state.follows)?state.follows:[];
+  const index=list.findIndex(item=>same(item.follower_id,followerId)&&same(item.following_id,followingId));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?list[index]:{}),...row};
+    if(index>=0)list[index]=merged;else list.unshift(merged);
+  }else return;
+  state.follows=list;
+  if(['connections','profile-detail','discover'].includes(state.view))render();
+}
+async function handleCircleMemberRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const circleId=row.circle_id;
+  const userId=row.user_id;
+  if(!circleId||!userId)return;
+  const list=Array.isArray(state.circleMembers)?state.circleMembers:[];
+  const index=list.findIndex(item=>same(item.circle_id,circleId)&&same(item.user_id,userId));
+  const previous=index>=0?list[index]:null;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const profile=previous?.profile||await ensureRealtimePostProfile(userId);
+    const merged={...(previous||{}),...row,profile};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.circleMembers=list;
+
+  const ownChange=same(userId,authUser?.id);
+  const activeCircle=state.view==='circle-detail'&&same(state.activeCircleId,circleId);
+  if(ownChange&&activeCircle){
+    render();
+    return;
+  }
+  if(state.view==='circles'){
+    render();
+    return;
+  }
+  if(activeCircle&&state.circleTab==='members')render();
+}
+async function handleCircleMeetingRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;
+  if(!id)return;
+  const list=Array.isArray(state.circleMeetings)?state.circleMeetings:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  const previous=index>=0?list[index]:null;
+  const circleId=row.circle_id||previous?.circle_id||'';
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const creatorId=row.creator_id||previous?.creator_id;
+    const creator=previous?.creator||(creatorId?await ensureRealtimePostProfile(creatorId):null);
+    const merged={...(previous||{}),...row,creator};
+    if(index>=0)list[index]=merged;else list.unshift(merged);
+  }else return;
+  state.circleMeetings=list;
+  if(
+    state.view==='circle-detail' &&
+    state.circleTab==='meetings' &&
+    same(state.activeCircleId,circleId) &&
+    !activeMeetingRuntime
+  )render();
+}
+
 async function setupV6Realtime(uid){
   syncKnownPostReactionKeys();
   if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
@@ -552,9 +625,9 @@ async function setupV6Realtime(uid){
     .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
     .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},refreshV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},refreshV6)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},handleCircleMeetingRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'follows'},handleFollowRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},handleCircleMemberRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'reports'},refreshV6)
     .subscribe(status=>{v6RealtimeStatus=status});
 }
