@@ -423,6 +423,34 @@ for (const pattern of [
   if (bootstrapSection.includes(pattern)) failures.push("Bootstrap social queries must not request select('*'): " + pattern);
 }
 
+const followActionSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const followActionStart = followActionSource.indexOf("root.querySelectorAll('[data-v6-follow]')");
+const followActionEnd = followActionStart >= 0
+  ? followActionSource.indexOf("root.querySelectorAll('[data-message-user]')", followActionStart)
+  : -1;
+const followActionSection = followActionStart >= 0 && followActionEnd > followActionStart
+  ? followActionSource.slice(followActionStart, followActionEnd)
+  : '';
+if (!followActionSection) {
+  failures.push('Follow action section could not be located.');
+} else {
+  if (followActionSection.includes('loadLiveData()')) failures.push('Follow/unfollow actions must remain targeted and must not call loadLiveData().');
+  if (!followActionSection.includes('handleFollowRealtime')) failures.push('Follow/unfollow actions must delegate to handleFollowRealtime.');
+}
+const followRequestStart = followActionSource.indexOf("root.querySelectorAll('[data-follow-request]')");
+const followRequestEnd = followRequestStart >= 0
+  ? followActionSource.indexOf("root.querySelectorAll('[data-open-circle]')", followRequestStart)
+  : -1;
+const followRequestSection = followRequestStart >= 0 && followRequestEnd > followRequestStart
+  ? followActionSource.slice(followRequestStart, followRequestEnd)
+  : '';
+if (!followRequestSection) {
+  failures.push('Follow request action section could not be located.');
+} else {
+  if (followRequestSection.includes('loadLiveData()')) failures.push('Follow request actions must remain targeted and must not call loadLiveData().');
+  if (!followRequestSection.includes('handleFollowRealtime')) failures.push('Follow request actions must delegate to handleFollowRealtime.');
+}
+
 const circleMembershipSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 const circleMembershipActionStart = circleMembershipSource.indexOf("root.querySelectorAll('[data-v6-circle-join]')");
 const circleMembershipActionEnd = circleMembershipActionStart >= 0
