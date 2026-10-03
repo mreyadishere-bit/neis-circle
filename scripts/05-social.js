@@ -229,6 +229,8 @@ const messageState=window.NEISMessageState;
 if(!messageState)throw new Error('NEIS Message State failed to load.');
 const messageDomFactory=window.NEISMessageDom;
 if(!messageDomFactory)throw new Error('NEIS Message DOM failed to load.');
+const conversationData=window.NEISConversationData;
+if(!conversationData)throw new Error('NEIS Conversation Data failed to load.');
 const unlockNotificationSound=(...args)=>notificationRuntime.unlockSound(...args);
 const playNotificationSound=(...args)=>notificationRuntime.playSound(...args);
 const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
@@ -610,37 +612,17 @@ const patchActiveDmFlow=(options)=>messageDom.patchActiveFlow(options);
 
 async function hydrateConversation(conversationId){
   if(!sb||!authUser||!conversationId)return false;
-  const [conversationRes,membersRes,messagesRes]=await Promise.all([
-    sb.from('conversations').select('*').eq('id',conversationId).maybeSingle(),
-    sb.from('conversation_members').select('*').eq('conversation_id',conversationId),
-    sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
-  ]);
-  if(conversationRes.error||!conversationRes.data)return false;
-  const members=membersRes.error?[]:(membersRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
-  const mine=members.find(member=>same(member.user_id,authUser.id));
-  state.conversationMembers=[
-    ...(state.conversationMembers||[]).filter(member=>!same(member.conversation_id,conversationId)),
-    ...members
-  ];
-  if(!mine||mine.hidden_at){
-    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
-    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
-    patchDmThread(conversationId);
-    updateBadges();
-    return true;
-  }
-  state.conversations=upsertById(state.conversations,conversationRes.data);
+  const result=await conversationData.hydrate(conversationId,{
+    sb,
+    userId:authUser.id,
+    state,
+    profileData
+  });
+  if(!result?.ok)return false;
+  if(result.hidden&&same(state.activeConversationId,conversationId))state.activeConversationId='';
   sortConversations();
-  if(!messagesRes.error){
-    const cleared=mine.cleared_at?new Date(mine.cleared_at).getTime():0;
-    const rows=(messagesRes.data||[]).filter(message=>!cleared||new Date(message.created_at).getTime()>cleared);
-    state.liveMessages=[
-      ...(state.liveMessages||[]).filter(message=>!same(message.conversation_id,conversationId)),
-      ...rows
-    ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-  }
   patchDmThread(conversationId);
-  if(same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
+  if(!result.hidden&&same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
   updateBadges();
   return true;
 }
