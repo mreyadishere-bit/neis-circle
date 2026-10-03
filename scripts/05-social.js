@@ -874,7 +874,7 @@ loadLiveData=async function(){
   const uid=authUser.id;
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
   const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
-    sb.from('follows').select('*').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
+    sb.from('follows').select('follower_id,following_id,status,created_at').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
     sb.from('circles').select('*').order('created_at',{ascending:false}),
     sb.from('circle_members').select('*').order('joined_at'),
     sb.from('circle_meetings').select('*').order('starts_at'),
