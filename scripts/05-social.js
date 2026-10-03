@@ -605,6 +605,277 @@ async function handleCircleMeetingRealtime(payload){
   )render();
 }
 
+function upsertById(list,row){
+  const rows=Array.isArray(list)?list:[];
+  const index=rows.findIndex(item=>same(item.id,row?.id));
+  if(index>=0)rows[index]={...rows[index],...row};
+  else if(row?.id!=null)rows.push(row);
+  return rows;
+}
+function ownConversationMembership(conversationId){
+  return (state.conversationMembers||[]).find(member=>same(member.conversation_id,conversationId)&&same(member.user_id,authUser?.id));
+}
+function conversationIsVisible(conversationId){
+  const mine=ownConversationMembership(conversationId);
+  return !!mine&&!mine.hidden_at;
+}
+function sortConversations(){
+  state.conversations=[...(state.conversations||[])].sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0));
+}
+function dmThreadMarkup(conversation){
+  const p=conversationName(conversation.id),last=conversationLast(conversation.id),unread=conversationUnread(conversation.id);
+  return `<button class="thread ${same(conversation.id,state.activeConversationId)?'active':''}" data-open-conversation="${conversation.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`;
+}
+function patchDmThread(conversationId){
+  if(state.view!=='messages')return;
+  const id=String(conversationId||'');if(!id)return;
+  const container=document.querySelector('.thread-list-scroll');
+  if(!container)return;
+  const conversation=(state.conversations||[]).find(item=>same(item.id,id));
+  let node=container.querySelector('[data-open-conversation="'+CSS.escape(id)+'"]');
+  if(!conversation||!conversationIsVisible(id)){
+    node?.remove();
+    return;
+  }
+  const template=document.createElement('template');
+  template.innerHTML=dmThreadMarkup(conversation).trim();
+  const replacement=template.content.firstElementChild;
+  if(!replacement)return;
+  if(node)node.replaceWith(replacement);else{container.querySelector('.empty')?.remove();container.prepend(replacement)}
+  bindV6(container);
+  sortConversations();
+  const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
+  [...container.querySelectorAll('[data-open-conversation]')]
+    .sort((a,b)=>(order.get(String(a.dataset.openConversation))??9999)-(order.get(String(b.dataset.openConversation))??9999))
+    .forEach(item=>container.appendChild(item));
+}
+function activeDmMessages(){
+  return (state.liveMessages||[])
+    .filter(message=>same(message.conversation_id,state.activeConversationId)&&!message.deleted_at)
+    .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+}
+function patchActiveDmFlow({insertedId='',force=false}={}){
+  if(state.view!=='messages'||!state.activeConversationId)return;
+  const flow=$('#chatFlow');if(!flow)return;
+  const input=$('#liveChatInput');
+  const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
+  const messages=activeDmMessages();
+  const inserted=insertedId?messages.find(item=>same(item.id,insertedId)):null;
+  const existing=insertedId?flow.querySelector('[data-message-id="'+CSS.escape(String(insertedId))+'"]'):null;
+  if(inserted&&existing&&!force){
+    if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+    return;
+  }
+  if(inserted&&!existing&&!force){
+    const index=messages.findIndex(item=>same(item.id,inserted.id));
+    const previous=index>0?messages[index-1]:null;
+    flow.insertAdjacentHTML('beforeend',messageBubble(inserted,previous));
+    const added=flow.lastElementChild;if(added)bindV6(added);
+  }else{
+    const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
+    flow.innerHTML=messages.length?messages.map((message,index)=>messageBubble(message,messages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+    bindV6(flow);
+    if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
+  }
+  if(input&&document.activeElement===input){
+    // Intentionally never touch value/focus/caret.
+  }
+  if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+}
+async function hydrateConversation(conversationId){
+  if(!sb||!authUser||!conversationId)return false;
+  const [conversationRes,membersRes,messagesRes]=await Promise.all([
+    sb.from('conversations').select('*').eq('id',conversationId).maybeSingle(),
+    sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').eq('conversation_id',conversationId),
+    sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
+  ]);
+  if(conversationRes.error||!conversationRes.data)return false;
+  const members=membersRes.error?[]:(membersRes.data||[]);
+  const mine=members.find(member=>same(member.user_id,authUser.id));
+  state.conversationMembers=[
+    ...(state.conversationMembers||[]).filter(member=>!same(member.conversation_id,conversationId)),
+    ...members
+  ];
+  if(!mine||mine.hidden_at){
+    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
+    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
+    patchDmThread(conversationId);
+    updateBadges();
+    return true;
+  }
+  state.conversations=upsertById(state.conversations,conversationRes.data);
+  sortConversations();
+  if(!messagesRes.error){
+    const cleared=mine.cleared_at?new Date(mine.cleared_at).getTime():0;
+    const rows=(messagesRes.data||[]).filter(message=>!cleared||new Date(message.created_at).getTime()>cleared);
+    state.liveMessages=[
+      ...(state.liveMessages||[]).filter(message=>!same(message.conversation_id,conversationId)),
+      ...rows
+    ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  }
+  patchDmThread(conversationId);
+  if(same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
+  updateBadges();
+  return true;
+}
+async function handleConversationRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(!id)return;
+  if(event==='DELETE'){
+    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,id));
+    state.conversationMembers=(state.conversationMembers||[]).filter(item=>!same(item.conversation_id,id));
+    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,id));
+    if(same(state.activeConversationId,id))state.activeConversationId='';
+    patchDmThread(id);
+    updateBadges();
+    return;
+  }
+  if(event!=='INSERT'&&event!=='UPDATE')return;
+  state.conversations=upsertById(state.conversations,row);
+  sortConversations();
+  patchDmThread(id);
+}
+async function handleConversationMemberRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const conversationId=row.conversation_id,userId=row.user_id;
+  if(!conversationId||!userId)return;
+  const list=Array.isArray(state.conversationMembers)?state.conversationMembers:[];
+  const index=list.findIndex(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
+  const previous=index>=0?list[index]:null;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const profile=previous?.profile||await ensureRealtimePostProfile(userId);
+    const merged={...(previous||{}),...row,profile};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.conversationMembers=list;
+
+  if(same(userId,authUser?.id)){
+    if(event==='DELETE'||row.hidden_at){
+      state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
+      state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
+      if(same(state.activeConversationId,conversationId))state.activeConversationId='';
+      patchDmThread(conversationId);
+      updateBadges();
+      return;
+    }
+    if(!(state.conversations||[]).some(item=>same(item.id,conversationId))){
+      await hydrateConversation(conversationId);
+      return;
+    }
+  }
+  patchDmThread(conversationId);
+  updateBadges();
+}
+async function handleMessageRealtime(payload){
+  const event=payload?.eventType||'';
+  const incoming=payload?.new||{},oldRow=payload?.old||{};
+  const id=incoming.id||oldRow.id;if(!id)return;
+  const list=Array.isArray(state.liveMessages)?state.liveMessages:[];
+  const index=list.findIndex(message=>same(message.id,id));
+  const previous=index>=0?list[index]:null;
+  const conversationId=incoming.conversation_id||previous?.conversation_id||oldRow.conversation_id;
+  if(!conversationId)return;
+  if(!conversationIsVisible(conversationId))return;
+
+  let newlyInserted=false;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(previous||{}),...incoming};
+    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
+  }else return;
+  state.liveMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  if(event==='INSERT'){
+    const conversation=(state.conversations||[]).find(item=>same(item.id,conversationId));
+    if(conversation&&(!conversation.updated_at||new Date(incoming.created_at)>new Date(conversation.updated_at)))conversation.updated_at=incoming.created_at;
+    sortConversations();
+  }
+  patchDmThread(conversationId);
+  if(same(state.activeConversationId,conversationId)){
+    patchActiveDmFlow({insertedId:event==='INSERT'?id:'',force:event!=='INSERT'});
+    if(event==='INSERT'&&!same(incoming.sender_id,authUser.id)&&document.visibilityState==='visible'){
+      Promise.resolve(markConversationRead(conversationId)).catch(()=>{});
+    }
+    Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
+  }
+  updateBadges();
+}
+async function handleCircleMessageRealtime(payload){
+  const event=payload?.eventType||'';
+  const incoming=payload?.new||{},oldRow=payload?.old||{};
+  const id=incoming.id||oldRow.id;if(id==null)return;
+  const list=Array.isArray(state.circleMessages)?state.circleMessages:[];
+  const index=list.findIndex(message=>same(message.id,id));
+  const previous=index>=0?list[index]:null;
+  const circleId=incoming.circle_id||previous?.circle_id||oldRow.circle_id;
+  if(!circleId)return;
+  const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
+  if(!allowed)return;
+
+  let newlyInserted=false;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const senderId=incoming.sender_id||previous?.sender_id;
+    const profile=previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null);
+    const merged={...(previous||{}),...incoming,profile};
+    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
+  }else return;
+  state.circleMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
+    const flow=$('#circleChatFlow');
+    if(flow){
+      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
+      const active=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
+      const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
+      const existing=flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]');
+      if(event==='INSERT'&&existing){
+        if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      }else if(inserted&&!existing){
+        const pos=active.findIndex(item=>same(item.id,id)),previousMessage=pos>0?active[pos-1]:null;
+        flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
+        if(flow.lastElementChild)bindV6(flow.lastElementChild);
+      }else{
+        const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
+        flow.innerHTML=active.length?active.map((message,pos)=>circleMessageBubble(message,active[pos-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+        bindV6(flow);
+        if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
+      }
+      if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
+    }
+  }
+}
+function handleMessageReactionRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(id==null)return;
+  const list=Array.isArray(state.messageReactions)?state.messageReactions:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?list[index]:{}),...row};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.messageReactions=list;
+  syncMessageReactionUi();
+}
+
+window.NEISTargetedRealtime={
+  applyDirectMessage:handleMessageRealtime,
+  applyCircleMessage:handleCircleMessageRealtime,
+  applyPost:handlePostRealtime,
+  applyMeeting:handleCircleMeetingRealtime,
+  hydrateConversation
+};
+
 async function setupV6Realtime(uid){
   syncKnownPostReactionKeys();
   if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
@@ -620,11 +891,11 @@ async function setupV6Realtime(uid){
     .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},handleReactionRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},handleCommentEngagementRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},handleCommentEngagementRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
-    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},handleMessageRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},handleConversationRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},handleConversationMemberRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},handleCircleMessageRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},handleMessageReactionRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},handleCircleMeetingRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},handleFollowRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},handleCircleMemberRealtime)
@@ -1571,7 +1842,7 @@ window.openNewConversation=function(){
   const people=state.members.filter(p=>!same(p.id,authUser.id));openModal(`<div class="modal-head"><div><h2>${t('New conversation','محادثة جديدة')}</h2><p>${t('Search and message a student directly. Following is not required.','ابحث عن طالب وراسله مباشرة دون اشتراط المتابعة.')}</p></div><button class="close" data-close>×</button></div><label class="field"><input id="newChatSearch" placeholder="${t('Search students…','ابحث عن الطلاب…')}"></label><div id="newChatPeople" class="result-list">${people.slice(0,20).map(newChatRow).join('')}</div>`);const input=$('#newChatSearch');input.oninput=()=>{const q=normalize(input.value);$('#newChatPeople').innerHTML=people.filter(p=>match(q,p.full_name,p.username,p.grade,p.branch)).slice(0,30).map(newChatRow).join('')||blank(t('No students found','لا يوجد طلاب'),t('Try another name.','جرّب اسمًا آخر.'));bindV6($('#modalRoot'))};bindV6($('#modalRoot'))
 };
 function newChatRow(p){return `<button class="result-row new-chat-row" data-message-user="${p.id}">${profileAvatar(p)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} · ${esc(p.branch||'')}</p></div><span class="new-chat-arrow" aria-hidden="true">→</span></button>`}
-async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await loadLiveData();state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
+async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await hydrateConversation(id);state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
 async function markConversationRead(id){await sb.from('conversation_members').update({last_read_at:new Date().toISOString()}).match({conversation_id:id,user_id:authUser.id});const mine=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser.id));if(mine)mine.last_read_at=new Date().toISOString();updateBadges()}
 
 circles=function(){
@@ -1603,13 +1874,13 @@ function meetingCard(m){const d=new Date(m.starts_at),day=new Intl.DateTimeForma
 function circleMessageBubble(m,previous){const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000),quoted=m.reply_to_id?state.circleMessages.find(x=>same(x.id,m.reply_to_id)):null,sender={...profileData(m.sender_id),...(m.profile||{})},quote=quoted?(()=>{const qp={...profileData(quoted.sender_id),...(quoted.profile||{})};return `<div class="message-reply-quote" role="button" tabindex="0" data-circle-reply-jump="${esc(quoted.id)}" aria-label="${t('Go to original message','الانتقال إلى الرسالة الأصلية')}"><b>${esc(qp?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.deleted_at?t('Message deleted','تم حذف الرسالة'):quoted.body||t('Message','رسالة'))}</span></div>`})():'';return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}">${circleChatAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span><time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${m.deleted_at?'':messageReactionChips('circle',m.id)}</div>${!m.deleted_at?`<button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>`:''}</span></div></div>`}
 function confirmAction(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-confirm-no>×</button></div><p class="confirm-copy">${t('This action is saved to the database and cannot be undone.','سيُحفظ هذا الإجراء في قاعدة البيانات ولا يمكن التراجع عنه.')}</p><div class="modal-actions"><button class="secondary" data-confirm-no>${t('Cancel','إلغاء')}</button><button class="primary danger" data-confirm-yes>${t('Delete','حذف')}</button></div>`);$$('[data-confirm-no]').forEach(b=>b.onclick=()=>{closeModal();resolve(false)});$('[data-confirm-yes]').onclick=()=>{closeModal();resolve(true)}})}
 async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
-async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}for(const url of postImages(p))await removeMediaUrl(url);await loadLiveData();render();toast(t('Post deleted.','تم حذف المنشور.'))}
+async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}handlePostRealtime({eventType:'DELETE',old:{id:p.id}});for(const url of postImages(p))await removeMediaUrl(url);toast(t('Post deleted.','تم حذف المنشور.'))}
 async function deleteGalleryItem(id){const g=byId(state.gallery,id);if(!g||!await confirmAction(t('Delete gallery item?','حذف عنصر المعرض؟'),(g.caption_en||g.caption_ar||t('This image','هذه الصورة'))))return;const {error}=await sb.from('gallery_items').delete().eq('id',id);if(error){toast(safeError(error,'delete this gallery item'));return}await removeMediaUrl(g.image_url);await loadLiveData();render();toast(t('Gallery item deleted.','تم حذف عنصر المعرض.'))}
 async function deleteArticle(id){const a=byId(state.articles,id);if(!a||!await confirmAction(t('Delete article?','حذف المقال؟'),a.title_en||a.title_ar))return;const {error}=await sb.from('articles').delete().eq('id',id);if(error){toast(safeError(error,'delete this article'));return}await removeMediaUrl(a.cover_url);await loadLiveData();render();toast(t('Article deleted.','تم حذف المقال.'))}
-async function deleteCircleMessage(id){const m=byId(state.circleMessages,id);if(!m||!await confirmAction(t('Delete message?','حذف الرسالة؟'),t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.')))return;const {error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',id);if(error){toast(safeError(error,'delete this message'));return}await loadLiveData();render()}
+async function deleteCircleMessage(id){const m=byId(state.circleMessages,id);if(!m||!await confirmAction(t('Delete message?','حذف الرسالة؟'),t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.')))return;const {data,error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',id).select('*').maybeSingle();if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}await handleCircleMessageRealtime({eventType:'UPDATE',new:data,old:m})}
 async function deleteDirectMessage(id){const m=byId(state.liveMessages,id);if(!m||(!same(m.sender_id,authUser.id)&&!state.isAdmin)||!await confirmAction(t('Permanently delete message?','حذف الرسالة نهائيًا؟'),t('The message will disappear for everyone and cannot be restored.','ستختفي الرسالة لدى الجميع ولا يمكن استعادتها.')))return;const messageId=String(id||'').trim();if(!messageId){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));return}const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));render();toast(t('Message permanently deleted.','تم حذف الرسالة نهائيًا.'))}
 async function deleteConversation(id){if(!id||!await confirmAction(t('Permanently delete this chat?','حذف هذه المحادثة نهائيًا؟'),t('The complete conversation and all of its messages will be removed for both people. This cannot be undone.','ستُحذف المحادثة كاملةً بكل رسائلها لدى الطرفين، ولا يمكن التراجع عن ذلك.')))return;const {data,error}=await sb.rpc('delete_direct_conversation',{conversation_id_input:id});if(error||!data){toast(error?safeError(error,'delete this chat'):t('This chat could not be deleted.','تعذر حذف هذه المحادثة.'));return}state.activeConversationId='';state.conversations=state.conversations.filter(item=>!same(item.id,id));state.conversationMembers=state.conversationMembers.filter(item=>!same(item.conversation_id,id));state.liveMessages=state.liveMessages.filter(item=>!same(item.conversation_id,id));routeTo('messages',true);toast(t('Chat permanently deleted.','تم حذف المحادثة نهائيًا.'))}
-async function deleteMeeting(id){const m=byId(state.circleMeetings,id);if(!m||!await confirmAction(t('Delete meeting?','حذف الاجتماع؟'),t('The scheduled meeting will be removed permanently.','سيتم حذف الاجتماع المجدول نهائيًا.')))return;const {error}=await sb.from('circle_meetings').delete().eq('id',id);if(error){toast(safeError(error,'delete this meeting'));return}await loadLiveData();render();toast(t('Meeting deleted.','تم حذف الاجتماع.'))}
+async function deleteMeeting(id){const m=byId(state.circleMeetings,id);if(!m||!await confirmAction(t('Delete meeting?','حذف الاجتماع؟'),t('The scheduled meeting will be removed permanently.','سيتم حذف الاجتماع المجدول نهائيًا.')))return;const {error}=await sb.from('circle_meetings').delete().eq('id',id);if(error){toast(safeError(error,'delete this meeting'));return}await handleCircleMeetingRealtime({eventType:'DELETE',old:m});toast(t('Meeting deleted.','تم حذف الاجتماع.'))}
 async function endMeeting(id){const m=byId(state.circleMeetings,id);if(!m||!await confirmAction(t('End meeting for everyone?','إنهاء الاجتماع للجميع؟'),t('Participants will be disconnected and nobody can rejoin.','سيتم فصل المشاركين ولن يتمكن أحد من الدخول مرة أخرى.')))return;const {data,error}=await sb.rpc('end_circle_meeting',{meeting_id_input:id});if(error||!data){toast(error?safeError(error,'end this meeting'):t('Meeting could not be ended.','تعذر إنهاء الاجتماع.'));return}await loadLiveData();render();toast(t('Meeting ended.','تم إنهاء الاجتماع.'))}
 async function deleteCircle(id){const c=byId(state.circleRows,id);if(!c||!canManageCircle(id)||!await confirmAction(t('Delete Circle?','حذف المجتمع؟'),t('Its chat, memberships and meetings will be removed. Circle posts will remain in the main community.','ستُحذف الدردشة والعضويات والاجتماعات، وستبقى منشورات المجتمع في المنصة الرئيسية.')))return;const button=document.querySelector(`[data-delete-circle="${CSS.escape(String(id))}"]`);if(button)button.disabled=true;let {data,error}=await sb.rpc('delete_circle',{target_circle:id});if(error&&String(error.message||'').includes('Could not find the function')){const direct=await sb.from('circles').delete().eq('id',id).select('id');error=direct.error;data=direct.data?.length>0}if(error||data!==true){if(button)button.disabled=false;toast(safeError(error||new Error('circle_delete_failed'),'delete this Circle'));return}state.circleRows=state.circleRows.filter(x=>!same(x.id,id));state.circleMembers=state.circleMembers.filter(x=>!same(x.circle_id,id));state.circleMessages=state.circleMessages.filter(x=>!same(x.circle_id,id));state.circleMeetings=state.circleMeetings.filter(x=>!same(x.circle_id,id));state.posts=state.posts.map(p=>same(p.circle_id,id)?{...p,circle_id:null}:p);state.activeCircleId=null;routeTo('circles');await loadLiveData();toast(t('Circle deleted.','تم حذف المجتمع.'))}
 function scheduleMeeting(){const c=byId(state.circleRows,state.activeCircleId);if(!c||!canModerateCircle(c.id)){toast(t('Only Circle moderators can schedule meetings.','يمكن لمشرفي المجتمع فقط جدولة الاجتماعات.'));return}openModal(`<div class="modal-head"><div><h2>${t('Schedule a meeting','جدولة اجتماع')}</h2><p>${esc(c.name)} · LiveKit Cloud</p></div><button class="close" data-close>×</button></div><form id="meetingForm"><label class="field">${t('Title','العنوان')}<input id="meetingTitle" required minlength="3" maxlength="120"></label><label class="field">${t('Description','الوصف')}<textarea id="meetingDescription" rows="3" maxlength="1000"></textarea></label><div class="row"><label class="field">${t('Date and time','التاريخ والوقت')}<input id="meetingStart" type="datetime-local" required></label><label class="field">${t('Duration','المدة')}<select id="meetingDuration"><option value="30">30 ${t('minutes','دقيقة')}</option><option value="60" selected>60 ${t('minutes','دقيقة')}</option><option value="90">90 ${t('minutes','دقيقة')}</option><option value="120">120 ${t('minutes','دقيقة')}</option></select></label></div><div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Create meeting','إنشاء الاجتماع')}</button></div></form>`);const input=$('#meetingStart'),minimum=new Date(Date.now()+5*60000);minimum.setMinutes(minimum.getMinutes()-minimum.getTimezoneOffset());input.min=minimum.toISOString().slice(0,16);input.value=minimum.toISOString().slice(0,16);$('#meetingForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;const starts=new Date(input.value);if(starts.getTime()<Date.now()){toast(t('Choose a future time.','اختر وقتًا في المستقبل.'));button.disabled=false;return}const {data,error}=await sb.rpc('create_circle_meeting',{circle_id_input:c.id,title_input:$('#meetingTitle').value.trim(),description_input:$('#meetingDescription').value.trim(),starts_at_input:starts.toISOString(),duration_minutes_input:Number($('#meetingDuration').value)});if(error||!data){toast(error?safeError(error,'create this meeting'):t('Meeting could not be created.','تعذر إنشاء الاجتماع.'));button.disabled=false;return}const {data:created,error:verifyError}=await sb.from('circle_meetings').select('*,creator:profiles(id,full_name,username,avatar_url)').eq('id',data).maybeSingle();if(verifyError||!created){console.error('[NEIS meeting create verification]',verifyError||new Error('meeting_row_missing'));closeModal();await loadLiveData();render();toast(t('The meeting was created but could not be verified. Refresh before trying again.','تم إنشاء الاجتماع لكن تعذر التحقق منه. حدّث الصفحة قبل المحاولة مرة أخرى.'));return}state.circleMeetings=[created,...state.circleMeetings.filter(m=>!same(m.id,created.id))];state.dataErrors.meetings=null;closeModal();render();toast(t('Meeting scheduled.','تمت جدولة الاجتماع.'));await loadLiveData();render()}}

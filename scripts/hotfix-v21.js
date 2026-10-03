@@ -13,6 +13,10 @@ deleteDirectMessage=async function(id){
     toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));
     return;
   }
-  await loadLiveData();
-  render();
+  const target=window.NEISTargetedRealtime?.applyDirectMessage;
+  if(typeof target==='function')await target({eventType:'DELETE',old:message});
+  else{
+    state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));
+    if(state.view==='messages')render();
+  }
 };

@@ -125,8 +125,24 @@ if (fs.existsSync(socialPath)) {
       failures.push('High-frequency realtime table ' + table + ' must not use refreshV6.');
     }
   }
-  for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime','handleFollowRealtime','handleCircleMemberRealtime','handleCircleMeetingRealtime']) {
+  for (const handler of ['handlePostRealtime','handleCommentRealtime','handleReactionRealtime','handleCommentEngagementRealtime','handleFollowRealtime','handleCircleMemberRealtime','handleCircleMeetingRealtime','handleMessageRealtime','handleConversationRealtime','handleConversationMemberRealtime','handleCircleMessageRealtime','handleMessageReactionRealtime']) {
     if (!socialSource.includes(handler)) failures.push('Missing targeted realtime handler: ' + handler);
+  }
+  const forbiddenMessageBindings = [
+    "table:'messages'},refreshMessagesV6",
+    "table:'conversations'},refreshMessagesV6",
+    "table:'conversation_members'},refreshMessagesV6",
+    "table:'circle_messages'},refreshCircleMessagesV96",
+    "table:'message_reactions'},refreshMessageReactionsV1"
+  ];
+  for (const binding of forbiddenMessageBindings) {
+    if (socialSource.includes(binding)) failures.push('Legacy message realtime binding must not return: ' + binding);
+  }
+  const startConversationIndex = socialSource.indexOf('async function startConversation');
+  if (startConversationIndex >= 0) {
+    const end = socialSource.indexOf('async function markConversationRead', startConversationIndex);
+    const section = socialSource.slice(startConversationIndex, end > startConversationIndex ? end : startConversationIndex + 1800);
+    if (section.includes('await loadLiveData()')) failures.push('startConversation must hydrate only the target conversation, not call loadLiveData().');
   }
   const globalLoadStart = socialSource.indexOf('const coreLoad=loadLiveData;');
   const globalLoadEnd = socialSource.indexOf('let messageRefreshTimer=', globalLoadStart);
@@ -141,6 +157,16 @@ if (fs.existsSync(socialPath)) {
     if (!/setupV6Realtime\(uid\)/.test(globalLoadSource)) {
       failures.push('Global loadLiveData must use setupV6Realtime(uid).');
     }
+  }
+}
+
+const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
+if (fs.existsSync(hotfixPath)) {
+  const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
+  const deleteStart = hotfixSource.indexOf('deleteDirectMessage=async function');
+  if (deleteStart >= 0) {
+    const section = hotfixSource.slice(deleteStart, deleteStart + 2200);
+    if (section.includes('await loadLiveData()')) failures.push('Direct-message delete hotfix must not call global loadLiveData().');
   }
 }
 
