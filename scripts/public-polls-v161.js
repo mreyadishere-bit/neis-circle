@@ -273,6 +273,22 @@
     };
   }
 
+  async function openSettingsForPost(postId){
+    var post=(Array.isArray(state.posts)?state.posts:[]).find(function(item){return same(item.id,postId)});
+    if(!post||!isPublicPollPost(post))return false;
+    var poll=pollForPost(postId);
+    if(!poll){
+      await loadPublicPolls(true,false);
+      poll=pollForPost(postId);
+    }
+    if(!poll){
+      toast(t('Poll data could not be loaded. Please refresh and try again.','تعذر تحميل بيانات التصويت. حدّث الصفحة وحاول مرة أخرى.'));
+      return false;
+    }
+    await openSettings(poll.id);
+    return true;
+  }
+
   function fallbackPublicPollPostCard(post){
     var own=same(post&&post.author_id,authUser&&authUser.id),mainAdmin=isMainAdminUser();
     var canDelete=own||mainAdmin||state.isAdmin;
@@ -302,6 +318,19 @@
     html=html.replace('data-edit-post="'+esc(post.id)+'"','data-public-poll-settings-post="'+esc(post.id)+'"');
     return html;
   }
+
+  var previousLoadLiveDataForPublicPolls=loadLiveData;
+  loadLiveData=async function(){
+    var result=await previousLoadLiveDataForPublicPolls.apply(this,arguments);
+    if(sb&&authUser){
+      var signature=currentSignature();
+      if(signature&&(!store.loaded||store.signature!==signature))await loadPublicPolls(true,false);
+      else if(!signature&&store.signature){
+        store.polls=[];store.options=[];store.results=[];store.signature='';store.loaded=true;
+      }
+    }
+    return result;
+  };
 
   var basePostCard=postCard;
   postCard=function(post){
@@ -380,15 +409,9 @@
     root.querySelectorAll('[data-public-poll-settings]').forEach(function(button){button.onclick=function(){openSettings(button.dataset.publicPollSettings)}});
     root.querySelectorAll('[data-public-poll-settings-post]').forEach(function(button){button.onclick=async function(event){
       event.stopPropagation();
-      var poll=pollForPost(button.dataset.publicPollSettingsPost);
-      if(!poll){
-        await loadPublicPolls(true,false);
-        poll=pollForPost(button.dataset.publicPollSettingsPost);
-      }
-      if(poll)openSettings(poll.id);
-      else toast(t('Poll data is still loading. Please try again.','بيانات التصويت ما زالت قيد التحميل. حاول مرة أخرى.'));
+      await openSettingsForPost(button.dataset.publicPollSettingsPost);
     }});
   };
 
-  window.NEISPublicPolls={load:loadPublicPolls,openComposer:openPublicPollComposer,decoratePostCard:decoratePostCard,isPublicPollPost:isPublicPollPost,store:store};
+  window.NEISPublicPolls={load:loadPublicPolls,openComposer:function(){return compose('Poll')},openSettingsForPost:openSettingsForPost,decoratePostCard:decoratePostCard,isPublicPollPost:isPublicPollPost,store:store};
 })();
