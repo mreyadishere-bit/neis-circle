@@ -1818,7 +1818,11 @@ home=function(){
     catch(error){
       console.error('[NEIS home post render]',error,post);
       const id=esc(post?.id||''),title=esc(post?.title||t('Post','منشور')),body=esc(post?.body||''),name=esc(post?.user||t('NEIS Student','طالب NEIS'));
-      return `<article class="post" id="post-${id}" data-post="${id}"><div class="post-top"><div class="post-person"><b>${name}</b><small>${esc(post?.meta||'NEIS Circle')}</small></div></div><h3>${title}</h3><p dir="auto">${body}</p></article>`;
+      const own=same(post?.author_id,authUser?.id),mainAdmin=isMainAdminUser(),canDelete=own||mainAdmin||state.isAdmin;
+      const menu=(own||mainAdmin)
+        ?`<button class="post-owner-menu" data-edit-post="${id}" aria-label="${t('Edit post','تعديل المنشور')}">•••</button>${canDelete?`<button class="danger" data-delete-post="${id}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`:''}`
+        :(canDelete?`<button class="danger" data-delete-post="${id}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`:'');
+      return `<article class="post" id="post-${id}" data-post="${id}"><div class="post-top"><div class="post-person"><b>${name}</b><small>${esc(post?.meta||'NEIS Circle')}</small></div><div class="post-meta-actions"><span class="post-kind">${esc(post?.kind||'Post')}</span><div class="post-menu">${menu}</div></div></div><h3>${title}</h3><p dir="auto">${body}</p></article>`;
     }
   };
   const renderArticleSafe=article=>{
