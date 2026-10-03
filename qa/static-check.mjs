@@ -126,6 +126,25 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const chatBootstrapPath = path.join(root, 'scripts', 'social', 'chat-bootstrap-v181.js');
+if (!fs.existsSync(chatBootstrapPath)) {
+  failures.push('Missing startup chat bootstrap data module.');
+} else {
+  const chatBootstrapSource = fs.readFileSync(chatBootstrapPath, 'utf8');
+  for (const token of ['conversation_members','conversations','messages','limit(200)','cleared_at','inflight']) {
+    if (!chatBootstrapSource.includes(token)) failures.push('Chat bootstrap data module is missing expected behavior: ' + token);
+  }
+  if (chatBootstrapSource.includes('render()')) failures.push('Chat bootstrap data module must never call full render().');
+}
+const chatBootstrapScripts = localScriptSrcs.filter(src => /social\/chat-bootstrap-v\d+\.js/i.test(src));
+if (chatBootstrapScripts.length !== 1) {
+  failures.push(`Expected exactly one chat bootstrap module, found ${chatBootstrapScripts.length}: ${chatBootstrapScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(chatBootstrapScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Chat bootstrap module must load before 05-social.js.');
+}
+
 const messageReactionDataPath = path.join(root, 'scripts', 'social', 'message-reactions-data-v180.js');
 if (!fs.existsSync(messageReactionDataPath)) {
   failures.push('Missing scoped message reaction data module.');
@@ -264,6 +283,7 @@ if (fs.existsSync(socialPath)) {
   if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
   if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
+  if (!socialSource.includes('NEISChatBootstrapData')) failures.push('Startup chat loading must remain delegated to the chat bootstrap module.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
