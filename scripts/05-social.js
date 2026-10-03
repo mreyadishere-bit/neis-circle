@@ -890,7 +890,7 @@ loadLiveData=async function(){
   if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=(circleMemberRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
   if(!meetingRes.error){state.circleMeetings=(meetingRes.data||[]).map(meeting=>({...meeting,creator:profileData(meeting.creator_id)}));state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
-  if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));state.posts.forEach(p=>p.comments=state.allComments.filter(c=>same(c.post_id,p.id)).length)}
+  if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));const commentCounts=new Map();for(const comment of state.allComments){const key=String(comment.post_id||'');if(key)commentCounts.set(key,(commentCounts.get(key)||0)+1)}state.posts.forEach(p=>{p.comments=commentCounts.get(String(p.id))||0})}
   const joinedCircleIds=state.isAdmin?state.circleRows.map(c=>c.id):state.circleMembers.filter(m=>same(m.user_id,uid)&&['active','muted'].includes(m.status)).map(m=>m.circle_id);
   state.circleMessages=[];
   if(joinedCircleIds.length){const cm=await sb.from('circle_messages').select('*').in('circle_id',joinedCircleIds).order('created_at',{ascending:false}).limit(200);if(!cm.error)state.circleMessages=(cm.data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))};
