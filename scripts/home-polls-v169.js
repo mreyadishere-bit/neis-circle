@@ -5,6 +5,35 @@
   if(window.__neisHomePollsFinalV169)return;
   window.__neisHomePollsFinalV169=true;
 
+  /* Standalone helpers: do not depend on private helpers inside 05-social.js. */
+  var t=function(en,arText){return state&&state.lang==='ar'?arText:en};
+  var same=function(a,b){return String(a??'')===String(b??'')};
+  function safeError(error,fallback){
+    console.error('[NEIS Home Polls]',error);
+    if(window.neisFriendlyError)try{return window.neisFriendlyError(error,fallback)}catch(_){}
+    return t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.');
+  }
+  function localPostImages(post){
+    var urls=Array.isArray(post&&post.image_urls)?post.image_urls.filter(Boolean):[];
+    if(post&&post.image_url&&!urls.includes(post.image_url))urls.unshift(post.image_url);
+    return Array.from(new Set(urls)).slice(0,8);
+  }
+  async function localRemoveMediaUrl(url){
+    if(!url||!sb)return;
+    var marker='/storage/v1/object/public/community-media/',i=String(url).indexOf(marker);
+    if(i<0)return;
+    var path=decodeURIComponent(String(url).slice(i+marker.length));
+    if(path)await sb.storage.from('community-media').remove([path]).catch(function(){});
+  }
+  function voterAvatar(v){
+    var name=String(v&&v.full_name||v&&v.username||'Student').trim();
+    var letters=name.split(/\s+/).filter(Boolean).map(function(x){return x[0]}).join('').slice(0,2).toUpperCase()||'ST';
+    return '<span class="avatar">'+esc(letters)+'</span>';
+  }
+  async function localConfirm(title,body){
+    return window.confirm(String(title||'')+(body?'\n\n'+String(body):''));
+  }
+
   var store={polls:[],options:[],results:[],loaded:false,loading:false,signature:''};
   var realtime=null,realtimeRefreshTimer=null;
   var closeTimers=new Map();
@@ -153,7 +182,7 @@
     var result=await sb.rpc('get_circle_poll_option_voters',{p_poll_id:pollId,p_option_id:optionId});
     if(result.error){toast(safeError(result.error,'view these voters'));return}
     var voters=result.data||[];
-    openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+t('Poll voters','المصوتون')+'</p><h2>'+esc(option.option_text)+'</h2><p>'+voters.length+' '+t(voters.length===1?'voter':'voters','مشارك')+'</p></div><button class="close" data-close>×</button></div><div class="circle-poll-voter-list">'+(voters.length?voters.map(function(v){return '<div class="circle-poll-voter-row">'+profileAvatar(v)+'<div><b>'+esc(v.full_name||v.username||t('Student','طالب'))+'</b><span>'+(v.username?'@'+esc(v.username):'')+'</span><small>'+[v.grade,v.branch,v.campus].filter(function(value,index,array){return value&&array.indexOf(value)===index}).map(esc).join(' · ')+'</small></div></div>'}).join(''):'<p class="circle-poll-voter-empty">'+t('No voters yet.','لا يوجد مصوتون بعد.')+'</p>')+'</div>',true);
+    openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+t('Poll voters','المصوتون')+'</p><h2>'+esc(option.option_text)+'</h2><p>'+voters.length+' '+t(voters.length===1?'voter':'voters','مشارك')+'</p></div><button class="close" data-close>×</button></div><div class="circle-poll-voter-list">'+(voters.length?voters.map(function(v){return '<div class="circle-poll-voter-row">'+voterAvatar(v)+'<div><b>'+esc(v.full_name||v.username||t('Student','طالب'))+'</b><span>'+(v.username?'@'+esc(v.username):'')+'</span><small>'+[v.grade,v.branch,v.campus].filter(function(value,index,array){return value&&array.indexOf(value)===index}).map(esc).join(' · ')+'</small></div></div>'}).join(''):'<p class="circle-poll-voter-empty">'+t('No voters yet.','لا يوجد مصوتون بعد.')+'</p>')+'</div>',true);
   }
 
   function addTypeOption(select,value){
@@ -217,7 +246,7 @@
       var imageUrls=[];
       for(var file of selectedFiles){
         var url=await uploadMedia(file,'posts');
-        if(!url){for(var oldUrl of imageUrls)await removeMediaUrl(oldUrl);button.disabled=false;return}
+        if(!url){for(var oldUrl of imageUrls)await localRemoveMediaUrl(oldUrl);button.disabled=false;return}
         imageUrls.push(url);
       }
       var selection=$('#ppSelection').value,rawMax=$('#ppMax').value.trim();
@@ -238,7 +267,7 @@
         p_results_visibility:$('#ppResults').value,
         p_closes_at:closeValue?new Date(closeValue).toISOString():null
       });
-      if(result.error){for(var failedUrl of imageUrls)await removeMediaUrl(failedUrl);toast(safeError(result.error,'create this poll'));button.disabled=false;return}
+      if(result.error){for(var failedUrl of imageUrls)await localRemoveMediaUrl(failedUrl);toast(safeError(result.error,'create this poll'));button.disabled=false;return}
       closeModal();await loadLiveData();await loadPublicPolls(true,false);nav('home');toast(t('Poll published.','تم نشر التصويت.'));
     };
   }
@@ -282,7 +311,7 @@
       var closeValue=$('#ppsClosing').value==='custom'?$('#ppsCloseAt').value:'';
       var result=await sb.rpc('update_circle_poll_post',{
         p_poll_id:poll.id,p_title:$('#ppsTitle').value.trim(),p_body:$('#ppsBody').value.trim(),p_tags:$('#ppsTags').value.split(',').map(function(v){return v.trim()}).filter(Boolean).slice(0,8),
-        p_image_url:post.image_url||'',p_image_urls:postImages(post),p_image_display_mode:(document.querySelector('input[name="ppsImageMode"]:checked')&&document.querySelector('input[name="ppsImageMode"]:checked').value==='fill')?'fill':'fit',p_options:clean,
+        p_image_url:post.image_url||'',p_image_urls:localPostImages(post),p_image_display_mode:(document.querySelector('input[name="ppsImageMode"]:checked')&&document.querySelector('input[name="ppsImageMode"]:checked').value==='fill')?'fill':'fit',p_options:clean,
         p_selection_type:selection,p_max_selections:max,p_allow_vote_change:$('#ppsAllowChange').checked,p_anonymous:$('#ppsAnonymous').checked,p_results_visibility:$('#ppsResults').value,
         p_closes_at:closeValue?new Date(closeValue).toISOString():null
       });
@@ -382,9 +411,7 @@
     };
   }
 
-  var baseBindV6=bindV6;
-  bindV6=function(){
-    baseBindV6();
+  function bindHomePollControls(){
     var root=$('#view');
     if(!root)return;
     root.querySelectorAll('[data-public-poll-card] input').forEach(function(input){
@@ -414,7 +441,7 @@
       button.onclick=async function(){
         var poll=store.polls.find(function(p){return same(p.id,button.dataset.closePublicPoll)});
         if(!poll||button.disabled)return;
-        if(!await confirmAction(t('Close this poll?','إغلاق هذا التصويت؟'),t('People will no longer be able to vote.','لن يتمكن المستخدمون من التصويت بعد ذلك.')))return;
+        if(!await localConfirm(t('Close this poll?','إغلاق هذا التصويت؟'),t('People will no longer be able to vote.','لن يتمكن المستخدمون من التصويت بعد ذلك.')))return;
         button.disabled=true;
         var result=await sb.rpc('close_circle_poll',{p_poll_id:poll.id});
         if(result.error){toast(safeError(result.error,'close this poll'));button.disabled=false;return}
@@ -429,9 +456,17 @@
       event.stopPropagation();
       await openSettingsForPost(button.dataset.publicPollSettingsPost);
     }});
+  }
+
+  var baseRenderForHomePolls=render;
+  render=function(){
+    var result=baseRenderForHomePolls.apply(this,arguments);
+    try{bindHomePollControls()}catch(error){console.error('[NEIS Home Polls bind]',error)}
+    return result;
   };
 
   function bootstrapPublicPolls(){
+    try{bindHomePollControls()}catch(error){console.error('[NEIS Home Polls initial bind]',error)}
     if(!authUser||!sb)return;
     if(currentPublicPollIds().length)loadPublicPolls(true,state.view==='home');
   }
