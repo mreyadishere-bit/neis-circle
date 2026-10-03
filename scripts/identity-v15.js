@@ -131,7 +131,10 @@
       identityAuthSettled=true;
       if(authUser){
         window.NEISCleanAuthCallbackUrl?.();
-        await loadLiveData();
+        if(window.NEISResolveOnboardingStatus)await window.NEISResolveOnboardingStatus(2500);
+        render();
+        setTimeout(()=>{if(authUser&&typeof loadLiveData==='function')loadLiveData().then(()=>render()).catch(error=>console.error('[NEIS identity] deferred live data load failed',error))},0);
+        return;
       }
       render();
     }catch(error){
