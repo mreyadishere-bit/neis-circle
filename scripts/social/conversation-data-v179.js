@@ -11,8 +11,8 @@
     return items;
   }
 
-  async function hydrate(conversationId,{sb,userId,state,profileData}={}){
-    if(!sb||!userId||!conversationId||!state)return {ok:false,reason:'missing-input'};
+  function hydrate(conversationId,{sb,userId,state,profileData}={}){
+    if(!sb||!userId||!conversationId||!state)return Promise.resolve({ok:false,reason:'missing-input'});
     const key=String(conversationId);
     if(inflight.has(key))return inflight.get(key);
 
