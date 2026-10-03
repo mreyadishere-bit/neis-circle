@@ -538,6 +538,28 @@ else {
 }
 
 
+const literalScriptNewlines = (runtimeHtml.match(/<\/script>\\n/g) || []).length;
+if (literalScriptNewlines) failures.push('index.html must not contain literal \\n text between script tags.');
+
+const appCssPath = path.join(root, 'styles', 'app.css');
+if (fs.existsSync(appCssPath)) {
+  const appCss = fs.readFileSync(appCssPath, 'utf8');
+  const driveVideoStart = appCss.indexOf('v159.50 — Google Drive video embeds');
+  const driveVideoSection = driveVideoStart >= 0 ? appCss.slice(driveVideoStart) : '';
+  if (!driveVideoSection) failures.push('Missing Google Drive mobile video sizing contract.');
+  else {
+    for (const token of [
+      '.post-drive-video iframe',
+      'position:absolute',
+      'aspect-ratio:16/9!important',
+      'width:100%!important',
+      'height:100%!important'
+    ]) {
+      if (!driveVideoSection.includes(token)) failures.push('Google Drive video sizing contract is missing: ' + token);
+    }
+  }
+}
+
 const mobileNavCssPath = path.join(root, 'styles', 'mobile-v30.css');
 if (fs.existsSync(mobileNavCssPath)) {
   const mobileNavCss = fs.readFileSync(mobileNavCssPath, 'utf8');
