@@ -992,7 +992,7 @@ function messageBubble(m,previous){
 window.openNewConversation=function(){
   const people=state.members.filter(p=>!same(p.id,authUser.id));openModal(`<div class="modal-head"><div><h2>${t('New conversation','محادثة جديدة')}</h2><p>${t('Search and message a student directly. Following is not required.','ابحث عن طالب وراسله مباشرة دون اشتراط المتابعة.')}</p></div><button class="close" data-close>×</button></div><label class="field"><input id="newChatSearch" placeholder="${t('Search students…','ابحث عن الطلاب…')}"></label><div id="newChatPeople" class="result-list">${people.slice(0,20).map(newChatRow).join('')}</div>`);const input=$('#newChatSearch');input.oninput=()=>{const q=normalize(input.value);$('#newChatPeople').innerHTML=people.filter(p=>match(q,p.full_name,p.username,p.grade,p.branch)).slice(0,30).map(newChatRow).join('')||blank(t('No students found','لا يوجد طلاب'),t('Try another name.','جرّب اسمًا آخر.'));bindV6($('#modalRoot'))};bindV6($('#modalRoot'))
 };
-function newChatRow(p){return `<button class="result-row" data-message-user="${p.id}">${profileAvatar(p)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} · ${esc(p.branch||'')}</p></div><span>→</span></button>`}
+function newChatRow(p){return `<button class="result-row new-chat-row" data-message-user="${p.id}">${profileAvatar(p)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} · ${esc(p.branch||'')}</p></div><span class="new-chat-arrow" aria-hidden="true">→</span></button>`}
 async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await loadLiveData();state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
 async function markConversationRead(id){await sb.from('conversation_members').update({last_read_at:new Date().toISOString()}).match({conversation_id:id,user_id:authUser.id});const mine=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser.id));if(mine)mine.last_read_at=new Date().toISOString();updateBadges()}
 
@@ -2149,7 +2149,29 @@ function fitMobileConversationList(){
   if(available>180)messages.style.height=available+'px';
 }
 
-function updateBadges(){const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;$$('[data-nav="messages"] i').forEach(i=>{i.className=msg?'count-badge':'';i.textContent=msg||''});const bell=$('[data-action="notifications"]');if(bell){let badge=bell.querySelector('.count-badge');if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}if(badge){badge.textContent=not||'';badge.classList.toggle('hidden',!not)}}}
+function updateBadges(){
+  const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;
+  $$('[data-nav="messages"]').forEach(button=>{
+    let badge=button.querySelector('.count-badge');
+    if(msg&&!badge){
+      badge=document.createElement('i');
+      badge.className='count-badge';
+      badge.setAttribute('aria-hidden','true');
+      button.append(badge);
+    }
+    if(badge){
+      badge.textContent=msg>99?'99+':String(msg||'');
+      badge.classList.toggle('hidden',!msg);
+    }
+    button.setAttribute('aria-label',msg?(t('Messages','الرسائل')+' ('+msg+' '+t('unread','غير مقروء')+')'):t('Messages','الرسائل'));
+  });
+  const bell=$('[data-action="notifications"]');
+  if(bell){
+    let badge=bell.querySelector('.count-badge');
+    if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}
+    if(badge){badge.textContent=not>99?'99+':String(not||'');badge.classList.toggle('hidden',!not)}
+  }
+}
 
 const searchForm=$('#globalSearchForm'),searchInput6=$('#globalSearch');
 const globalSearchClear=$('[data-global-search-clear]');
