@@ -126,6 +126,25 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const messageDomPath = path.join(root, 'scripts', 'social', 'messages-dom-v178.js');
+if (!fs.existsSync(messageDomPath)) {
+  failures.push('Missing isolated DM DOM patch module.');
+} else {
+  const messageDomSource = fs.readFileSync(messageDomPath, 'utf8');
+  for (const token of ['patchThread','patchActiveFlow','activeMessages']) {
+    if (!messageDomSource.includes(token)) failures.push('DM DOM module is missing expected capability: ' + token);
+  }
+  if (messageDomSource.includes('render()')) failures.push('DM DOM patch module must never call full render().');
+}
+const messageDomScripts = localScriptSrcs.filter(src => /social\/messages-dom-v\d+\.js/i.test(src));
+if (messageDomScripts.length !== 1) {
+  failures.push(`Expected exactly one DM DOM module, found ${messageDomScripts.length}: ${messageDomScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(messageDomScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('DM DOM module must load before 05-social.js.');
+}
+
 const messageStatePath = path.join(root, 'scripts', 'social', 'messages-state-v177.js');
 if (!fs.existsSync(messageStatePath)) {
   failures.push('Missing isolated realtime message state module.');
@@ -204,7 +223,7 @@ const socialPath = path.join(root, 'scripts', '05-social.js');
 if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
-  if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
+  if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');\n  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
   for (const legacyNotificationToken of ['notificationChannelUid','notificationRefreshPromise','notificationLastFullSyncAt','async function unlockNotificationSound','async function setupNotificationRealtime']) {
