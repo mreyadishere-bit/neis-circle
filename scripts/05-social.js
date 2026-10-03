@@ -1113,28 +1113,20 @@ function storagePathFromPublicUrl(url){
   }catch{return ''}
 }
 function postButtonUrlValid(value){try{const url=new URL(String(value||'').trim());return url.protocol==='https:'&&!!url.hostname&&!/\s/.test(String(value||''))}catch{return false}}
-function youtubeVideoId(value){
-  try{
-    const url=new URL(String(value||'').trim());
-    const host=url.hostname.toLowerCase().replace(/^www\./,'');
-    let id='';
-    if(host==='youtu.be')id=url.pathname.split('/').filter(Boolean)[0]||'';
-    else if(host==='youtube.com'||host==='m.youtube.com'||host==='music.youtube.com'||host==='youtube-nocookie.com'){
-      if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
-      else{
-        const parts=url.pathname.split('/').filter(Boolean);
-        if(['shorts','embed','live'].includes(parts[0]))id=parts[1]||'';
-      }
-    }
-    return /^[A-Za-z0-9_-]{11}$/.test(id)?id:'';
-  }catch{return ''}
-}
-function youtubeUrlValid(value){return !!youtubeVideoId(value)}
+const videoEmbeds=window.NEISVideoEmbeds;
+if(!videoEmbeds)throw new Error('NEIS Video Embeds failed to load.');
+function videoEmbedUrlValid(value){return videoEmbeds.isValid(value)}
+function youtubeUrlValid(value){return !!videoEmbeds.youtubeVideoId(value)}
 window.NEISYouTubeUrlValid=youtubeUrlValid;
-function youtubeEmbedMarkup(post){
-  const id=youtubeVideoId(post?.youtube_url);
-  if(!id)return '';
-  return `<div class="post-youtube"><iframe src="https://www.youtube-nocookie.com/embed/${esc(id)}" title="${esc(post?.title||t('YouTube video','فيديو YouTube'))}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
+window.NEISVideoEmbedUrlValid=videoEmbedUrlValid;
+function videoEmbedMarkup(post){
+  const parsed=videoEmbeds.parse(post?.youtube_url);
+  if(!parsed)return '';
+  const title=post?.title||t('Embedded video','فيديو مضمّن');
+  if(parsed.provider==='google-drive'){
+    return `<div class="post-youtube post-drive-video"><iframe src="${esc(parsed.embedUrl)}" title="${esc(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; fullscreen" allowfullscreen></iframe></div>`;
+  }
+  return `<div class="post-youtube"><iframe src="${esc(parsed.embedUrl)}" title="${esc(title)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`;
 }
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
@@ -1167,7 +1159,7 @@ async function editOwnPost(postId){
       <label class="field">${t('Tags','الوسوم')}<input id="editPostTags" value="${esc((post.tags||[]).join(', '))}" placeholder="Physics, Grade11, Practical"></label>
       <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="editPostImageDisplayMode" value="fit" ${currentMode==='fit'?'checked':''}><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="editPostImageDisplayMode" value="fill" ${currentMode==='fill'?'checked':''}><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <div class="post-link-fields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add one short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="editPostLinkLabel" maxlength="36" value="${esc(post.link_button_label||'')}" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="editPostLinkUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.link_button_url||'')}" placeholder="https://…"></label></div></div>
-      <label class="field">${t('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="editPostYoutubeUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.youtube_url||'')}" placeholder="https://youtu.be/…"></label>
+      <label class="field">${t('Video link — YouTube or Google Drive (optional)','رابط فيديو — YouTube أو Google Drive (اختياري)')}<input id="editPostYoutubeUrl" type="url" inputmode="url" maxlength="2048" value="${esc(post.youtube_url||'')}" placeholder="https://youtu.be/… or https://drive.google.com/file/d/…/view"><small>${t('Google Drive videos must be shared as “Anyone with the link”.','يجب ضبط فيديو Google Drive على “Anyone with the link”.')}</small></label>
       <label class="field">${t('Replace images (up to 8)','استبدال الصور (حتى 8)')}<input id="editPostImage" type="file" accept="image/*" multiple></label>
       <p class="post-image-edit-hint ${imageItems.length?'':'hidden'}" id="editPostImageHint">${t('Tap any image to open its crop editor again. Each image is edited separately.','اضغط على أي صورة لفتح محرر القص الخاص بها مرة أخرى. كل صورة تُعدّل بشكل منفصل.')}</p>
       <div class="post-edit-image-wrap ${imageItems.length?'':'hidden'}" id="editPostCurrentImage">
@@ -1235,7 +1227,7 @@ async function editOwnPost(postId){
     const linkButtonLabel=$('#editPostLinkLabel').value.trim(),linkButtonUrl=$('#editPostLinkUrl').value.trim(),youtubeUrl=$('#editPostYoutubeUrl')?.value.trim()||'';
     if((linkButtonLabel&&!linkButtonUrl)||(!linkButtonLabel&&linkButtonUrl)){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     if(linkButtonUrl&&!postButtonUrlValid(linkButtonUrl)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
-    if(youtubeUrl&&!youtubeUrlValid(youtubeUrl)){toast(t('Add a valid YouTube video link.','أضف رابط فيديو YouTube صحيحًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
+    if(youtubeUrl&&!videoEmbedUrlValid(youtubeUrl)){toast(t('Add a valid YouTube or Google Drive video link.','أضف رابط فيديو صحيحًا من YouTube أو Google Drive.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     const imageDisplayMode=document.querySelector('input[name="editPostImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
     const payload={kind:$('#editPostKind').value,title:$('#editPostTitle').value.trim(),body:$('#editPostBody').value.trim(),tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),image_url:imageUrls[0]||'',image_urls:imageUrls,image_display_mode:imageDisplayMode,link_button_label:linkButtonLabel,link_button_url:linkButtonUrl,youtube_url:youtubeUrl};
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
@@ -1286,7 +1278,7 @@ postCard=function(p){
       :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
   const hasLinkButton=!!(p.link_button_label&&p.link_button_url&&postButtonUrlValid(p.link_button_url));
   const linkButton=hasLinkButton?`<div class="post-link-button-wrap"><a class="post-link-button" href="${esc(p.link_button_url)}" target="_blank" rel="noopener noreferrer nofollow ugc"><span>${esc(p.link_button_label)}</span><b aria-hidden="true">↗</b></a></div>`:'';
-  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}" data-post-version="${postRealtimeVersion(p)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${youtubeEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
+  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}" data-post-version="${postRealtimeVersion(p)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${videoEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
 };
 
 function homePostsForRealtimePatch(){
@@ -2519,7 +2511,7 @@ function openCirclePost(){
       <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit" checked><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill"><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <p class="post-image-edit-hint hidden" id="cpImageEditHint">${t('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
       <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
-      <label class="field" id="cpYoutubeField">${t('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="cpYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/…"></label>
+      <label class="field" id="cpYoutubeField">${t('Video link — YouTube or Google Drive (optional)','رابط فيديو — YouTube أو Google Drive (اختياري)')}<input id="cpYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/… or https://drive.google.com/file/d/…/view"><small>${t('Google Drive videos must be shared as “Anyone with the link”.','يجب ضبط فيديو Google Drive على “Anyone with the link”.')}</small></label>
       <div class="post-link-fields" id="cpLinkFields"><p><b>${t('Optional link button','زر رابط اختياري')}</b><small>${t('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${t('Button name','اسم الزر')}<input id="cpLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${t('HTTPS link','رابط HTTPS')}<input id="cpLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
       <div class="modal-actions"><button type="button" class="secondary" data-close>${t('Cancel','إلغاء')}</button><button class="primary">${t('Publish','نشر')}</button></div>
     </form>`);
@@ -2567,7 +2559,7 @@ function openCirclePost(){
     const link_button_label=$('#cpLinkLabel').value.trim(),link_button_url=$('#cpLinkUrl').value.trim(),youtube_url=$('#cpYoutubeUrl')?.value.trim()||'';
     if(!isPoll&&((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url))){toast(t('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
     if(!isPoll&&link_button_url&&!postButtonUrlValid(link_button_url)){toast(t('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
-    if(!isPoll&&youtube_url&&!youtubeUrlValid(youtube_url)){toast(t('Add a valid YouTube video link.','أضف رابط فيديو YouTube صحيحًا.'));return}
+    if(!isPoll&&youtube_url&&!videoEmbedUrlValid(youtube_url)){toast(t('Add a valid YouTube or Google Drive video link.','أضف رابط فيديو صحيحًا من YouTube أو Google Drive.'));return}
 
     let cleanOptions=[];
     if(isPoll){
