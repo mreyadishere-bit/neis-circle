@@ -185,6 +185,41 @@ const neisAuthStorage={
   }
 };
 
+function neisAuthCallbackPending(){
+  try{
+    const search=new URLSearchParams(location.search);
+    if(search.has('code')||search.has('error')||search.has('error_description'))return true;
+    const hash=String(location.hash||'');
+    return /(?:^|[&#])(access_token|refresh_token|error|error_description)=/.test(hash);
+  }catch(_){return false}
+}
+function neisCleanAuthCallbackUrl(){
+  try{
+    const url=new URL(location.href);
+    ['code','error','error_code','error_description','provider_token','provider_refresh_token'].forEach(key=>url.searchParams.delete(key));
+    if(/(?:^|[&#])(access_token|refresh_token|expires_in|token_type|type|error|error_description)=/.test(url.hash)){
+      url.hash='';
+    }
+    const next=url.pathname+(url.searchParams.toString()?'?'+url.searchParams.toString():'')+url.hash;
+    history.replaceState(null,'',next||location.pathname);
+  }catch(_){}
+}
+async function neisWaitForSession(timeoutMs=6000){
+  if(!sb)return null;
+  const started=Date.now();
+  do{
+    try{
+      const result=await sb.auth.getSession();
+      if(result?.data?.session)return result.data.session;
+    }catch(_){}
+    await new Promise(resolve=>setTimeout(resolve,120));
+  }while(Date.now()-started<timeoutMs);
+  return null;
+}
+window.NEISAuthCallbackPending=neisAuthCallbackPending;
+window.NEISCleanAuthCallbackUrl=neisCleanAuthCallbackUrl;
+window.NEISWaitForSession=neisWaitForSession;
+
 async function initSupabase(){
   if(sb)return true;
   if(supabaseInitPromise)return supabaseInitPromise;
@@ -207,11 +242,19 @@ async function initSupabase(){
       const {data,error}=await sb.auth.getSession();
       if(error)throw error;
       authUser=data.session?.user||null;
+      if(authUser)neisCleanAuthCallbackUrl();
       if(!supabaseAuthSubscription){
-        const listener=sb.auth.onAuthStateChange(async(_event,session)=>{
+        const listener=sb.auth.onAuthStateChange((event,session)=>{
           authUser=session?.user||null;
-          if(authUser)await loadLiveData();
-          render();
+          if(session)neisCleanAuthCallbackUrl();
+          setTimeout(async()=>{
+            if(session){
+              try{await loadLiveData()}catch(error){console.error('[NEIS] auth refresh load failed',error)}
+              render();
+              return;
+            }
+            if(event==='SIGNED_OUT'||(event==='INITIAL_SESSION'&&!neisAuthCallbackPending()))render();
+          },0);
         });
         supabaseAuthSubscription=listener?.data?.subscription||true;
       }
