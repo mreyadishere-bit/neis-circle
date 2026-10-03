@@ -2151,15 +2151,15 @@ function fitMobileConversationList(){
 
 function updateBadges(){
   const msg=unreadMessages(),not=state.notifications.filter(n=>!n.read_at).length;
-  $$('[data-nav="messages"]').forEach(button=>{
-    let badge=button.querySelector('.count-badge');
-    if(msg&&!badge){
+  $('[data-nav="messages"]').forEach(button=>{
+    let badge=button.querySelector('.count-badge')||button.querySelector('i');
+    if(!badge&&msg){
       badge=document.createElement('i');
-      badge.className='count-badge';
-      badge.setAttribute('aria-hidden','true');
       button.append(badge);
     }
     if(badge){
+      badge.className='count-badge';
+      badge.setAttribute('aria-hidden','true');
       badge.textContent=msg>99?'99+':String(msg||'');
       badge.classList.toggle('hidden',!msg);
     }
