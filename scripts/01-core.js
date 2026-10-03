@@ -154,6 +154,21 @@ function neisSetStaySignedIn(enabled){
   }catch(_){}
 }
 window.NEISSetStaySignedIn=neisSetStaySignedIn;
+function neisHasStoredAuthSession(){
+  for(const store of [localStorage,sessionStorage]){
+    try{
+      for(let i=0;i<store.length;i++){
+        const key=store.key(i);
+        if(key&&key.startsWith('sb-')&&key.includes('-auth-token')){
+          const value=store.getItem(key);
+          if(value&&value!=='null'&&value!=='{}')return true;
+        }
+      }
+    }catch(_){}
+  }
+  return false;
+}
+window.NEISHasStoredAuthSession=neisHasStoredAuthSession;
 function neisClearAuthStorage(){
   for(const store of [localStorage,sessionStorage]){
     try{
@@ -272,8 +287,8 @@ async function initSupabase(){
       console.warn("[NEIS] Initial session read failed",error);
     }
 
-    if(!session&&neisAuthCallbackPending()){
-      session=await neisWaitForSession(7000);
+    if(!session&&(neisAuthCallbackPending()||neisHasStoredAuthSession())){
+      session=await neisWaitForSession(neisAuthCallbackPending()?7000:4500);
     }
     authUser=session?.user||null;
     if(authUser){
