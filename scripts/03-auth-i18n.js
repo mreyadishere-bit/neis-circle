@@ -261,27 +261,67 @@ document.addEventListener('click',e=>{const a=e.target.closest('[data-action="la
 async function v4Init(){
   loadingScreen();
   if(!sb)await initSupabase();
-  if(!sb){authScreen();toast(bi('Could not connect. Please refresh the page.','تعذر الاتصال. حدّث الصفحة وحاول مرة أخرى.'));return}
-  const {data,error}=await sb.auth.getSession();
-  if(error){authScreen();toast(error.message);return}
-  authUser=data.session?.user||null;
-  if(!authUser){authScreen();return}
+  if(!sb){
+    authScreen();
+    toast(bi('Could not connect. Please refresh the page.','تعذر الاتصال. حدّث الصفحة وحاول مرة أخرى.'));
+    return;
+  }
 
+  const {data,error}=await sb.auth.getSession();
+  if(error){
+    authScreen();
+    toast(error.message);
+    return;
+  }
+
+  authUser=data.session?.user||null;
+  if(!authUser){
+    authScreen();
+    return;
+  }
+
+  const profileLooksComplete=()=>!!(
+    state.profile?.username?.trim() &&
+    state.profile?.grade?.trim() &&
+    state.profile?.branch?.trim()
+  );
+
+  let profileCheckFinished=false;
   try{
     const profileCheck=await Promise.race([
-      sb.from('profiles').select('onboarding_complete,full_name,username,grade,branch,campus,interests,role').eq('id',authUser.id).maybeSingle(),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('profile_check_timeout')),3500))
+      sb.from('profiles')
+        .select('onboarding_complete,full_name,username,grade,branch,campus,interests,role')
+        .eq('id',authUser.id)
+        .maybeSingle(),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('profile_check_timeout')),4500))
     ]);
+
+    profileCheckFinished=true;
     if(!profileCheck.error&&profileCheck.data){
       const p=profileCheck.data;
       state.onboardingComplete=p.onboarding_complete===true;
       state.isAdmin=p.role==='admin'||authUser.id===NEIS_ADMIN_ID;
-      state.profile={...state.profile,name:p.full_name||state.profile.name||authUser.user_metadata?.full_name||'Student',username:p.username||'',grade:p.grade||'',branch:p.branch||'',campus:p.campus||'',interests:Array.isArray(p.interests)?p.interests.join(', '):(p.interests||''),role:state.isAdmin?'admin':'student'};
+      state.profile={
+        ...state.profile,
+        name:p.full_name||state.profile.name||authUser.user_metadata?.full_name||'Student',
+        username:p.username||'',
+        grade:p.grade||'',
+        branch:p.branch||'',
+        campus:p.campus||'',
+        interests:Array.isArray(p.interests)?p.interests.join(', '):(p.interests||''),
+        role:state.isAdmin?'admin':'student'
+      };
     }
-  }catch(error){console.warn('[NEIS] quick profile check failed',error)}
+  }catch(error){
+    console.warn('[NEIS] quick profile check failed',error);
+  }
 
-  if(state.onboardingComplete===false){onboardingScreen();return}
+  // Existing completed accounts should enter immediately.
+  if(state.onboardingComplete===true){
+    render();
+  }
 
+  // Load the essential shared data, but never let it trap the user on the loader.
   try{
     const primaryLoader=window.NEISPrimaryContentLoad||loadLiveData;
     await Promise.race([
@@ -292,18 +332,58 @@ async function v4Init(){
     console.error('[NEIS] primary data startup failed',error);
   }
 
-  if(state.onboardingComplete===true)render();
+  // Fallback for old accounts: a populated saved profile is enough evidence that
+  // onboarding was already completed, even if the tiny flag read had a transient failure.
+  if(state.onboardingComplete!==true && profileLooksComplete()){
+    state.onboardingComplete=true;
+  }
 
+  if(state.onboardingComplete===false){
+    onboardingScreen();
+    return;
+  }
+
+  if(state.onboardingComplete===true){
+    render();
+  }else if(profileCheckFinished){
+    onboardingScreen();
+    return;
+  }else{
+    // Final retry instead of an infinite "Preparing your account…" screen.
+    try{
+      const retry=await Promise.race([
+        sb.from('profiles')
+          .select('onboarding_complete,username,grade,branch')
+          .eq('id',authUser.id)
+          .maybeSingle(),
+        new Promise((_,reject)=>setTimeout(()=>reject(new Error('profile_retry_timeout')),3500))
+      ]);
+      if(!retry.error&&retry.data){
+        const p=retry.data;
+        state.onboardingComplete=p.onboarding_complete===true ||
+          !!(p.username?.trim()&&p.grade?.trim()&&p.branch?.trim());
+      }
+    }catch(error){
+      console.error('[NEIS] profile retry failed',error);
+    }
+
+    if(state.onboardingComplete===true)render();
+    else if(state.onboardingComplete===false)onboardingScreen();
+    else{
+      authRoot.innerHTML=`<section class="auth-shell" style="max-width:720px"><div class="auth-card"><h2>${bi('Could not finish loading your account','تعذر إكمال تحميل حسابك')}</h2><p>${bi('Your account is safe. Refresh the page to retry the connection.','حسابك محفوظ. حدّث الصفحة لإعادة محاولة الاتصال.')}</p><div class="modal-actions"><button class="primary" type="button" onclick="location.reload()">${bi('Refresh','تحديث')}</button></div></div></section>`;
+    }
+  }
+
+  // Heavier feature data continues after the app is already usable.
   setTimeout(async()=>{
     try{
       await Promise.race([
         loadLiveData(),
         new Promise((_,reject)=>setTimeout(()=>reject(new Error('extended_data_timeout')),15000))
       ]);
-      render();
+      if(state.onboardingComplete===true)render();
     }catch(error){
       console.error('[NEIS] extended data startup failed',error);
-      if(state.onboardingComplete===true)render();
     }
   },0);
 }
