@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm run qa:static
+      - run: npm run qa:static\n      - run: npm run qa:unit
 
   browser-smoke:
     name: Browser boot smoke
