@@ -126,6 +126,25 @@ if (secondaryLoaders.length !== 1) {
 const serviceWorker = path.join(root, 'neis-pwa-sw.js');
 if (!fs.existsSync(serviceWorker)) failures.push('neis-pwa-sw.js is missing');
 
+const conversationDataPath = path.join(root, 'scripts', 'social', 'conversation-data-v179.js');
+if (!fs.existsSync(conversationDataPath)) {
+  failures.push('Missing isolated conversation data module.');
+} else {
+  const conversationDataSource = fs.readFileSync(conversationDataPath, 'utf8');
+  for (const token of ['hydrate','inflight','limit(200)','conversation_members']) {
+    if (!conversationDataSource.includes(token)) failures.push('Conversation data module is missing expected behavior: ' + token);
+  }
+  if (conversationDataSource.includes('render()')) failures.push('Conversation data module must never call full render().');
+}
+const conversationDataScripts = localScriptSrcs.filter(src => /social\/conversation-data-v\d+\.js/i.test(src));
+if (conversationDataScripts.length !== 1) {
+  failures.push(`Expected exactly one conversation data module, found ${conversationDataScripts.length}: ${conversationDataScripts.join(', ')}`);
+} else {
+  const moduleIndex = localScriptSrcs.indexOf(conversationDataScripts[0]);
+  const socialIndex = localScriptSrcs.findIndex(src => /scripts\/05-social\.js/i.test(src));
+  if (socialIndex < 0 || moduleIndex > socialIndex) failures.push('Conversation data module must load before 05-social.js.');
+}
+
 const messageDomPath = path.join(root, 'scripts', 'social', 'messages-dom-v178.js');
 if (!fs.existsSync(messageDomPath)) {
   failures.push('Missing isolated DM DOM patch module.');
@@ -224,7 +243,7 @@ if (fs.existsSync(socialPath)) {
   const socialSource = fs.readFileSync(socialPath, 'utf8');
   if (!socialSource.includes('NEISVideoEmbeds')) failures.push('Google Drive video embed support must remain wired into 05-social.js.');
   if (!socialSource.includes('NEISMessageState')) failures.push('Realtime message handlers must remain delegated to the message state module.');
-  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');
+  if (!socialSource.includes('NEISMessageDom')) failures.push('DM DOM patching must remain delegated to the message DOM module.');\n  if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
