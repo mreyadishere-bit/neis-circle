@@ -4036,9 +4036,11 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 }
 
 
-/* v159.50 — Google Drive video embeds: keep a real 16:9 responsive box on phones.
-   Google Drive iframes have an intrinsic size; absolutely pinning the iframe to
-   the aspect-ratio wrapper prevents that intrinsic box from stretching mobile cards. */
+/* v159.51 — Google Drive mobile player viewport.
+   Keep the visible post media box at 16:9, but render Drive's internal player
+   at a larger virtual viewport on phones and scale it back down. This avoids
+   Drive's oversized mobile controls and the zoomed-in look without affecting
+   YouTube or desktop embeds. */
 .post-drive-video{
   aspect-ratio:16/9;
 }
@@ -4049,8 +4051,7 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   height:100%!important;
   min-width:0!important;
   min-height:0!important;
-  max-width:100%!important;
-  max-height:100%!important;
+  border:0;
 }
 @media(max-width:760px){
   .post-drive-video{
@@ -4060,5 +4061,13 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     max-height:none!important;
     aspect-ratio:16/9!important;
     margin-inline:0!important;
+  }
+  .post-drive-video iframe{
+    width:160%!important;
+    height:160%!important;
+    max-width:none!important;
+    max-height:none!important;
+    transform:scale(.625);
+    transform-origin:top left;
   }
 }

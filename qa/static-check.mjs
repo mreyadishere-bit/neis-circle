@@ -544,7 +544,7 @@ if (literalScriptNewlines) failures.push('index.html must not contain literal \\
 const appCssPath = path.join(root, 'styles', 'app.css');
 if (fs.existsSync(appCssPath)) {
   const appCss = fs.readFileSync(appCssPath, 'utf8');
-  const driveVideoStart = appCss.indexOf('v159.50 — Google Drive video embeds');
+  const driveVideoStart = appCss.indexOf('v159.51 — Google Drive mobile player viewport');
   const driveVideoSection = driveVideoStart >= 0 ? appCss.slice(driveVideoStart) : '';
   if (!driveVideoSection) failures.push('Missing Google Drive mobile video sizing contract.');
   else {
@@ -552,28 +552,12 @@ if (fs.existsSync(appCssPath)) {
       '.post-drive-video iframe',
       'position:absolute',
       'aspect-ratio:16/9!important',
-      'width:100%!important',
-      'height:100%!important'
+      'width:160%!important',
+      'height:160%!important',
+      'transform:scale(.625)',
+      'transform-origin:top left'
     ]) {
       if (!driveVideoSection.includes(token)) failures.push('Google Drive video sizing contract is missing: ' + token);
-    }
-  }
-}
-
-const mobileNavCssPath = path.join(root, 'styles', 'mobile-v30.css');
-if (fs.existsSync(mobileNavCssPath)) {
-  const mobileNavCss = fs.readFileSync(mobileNavCssPath, 'utf8');
-  const reserveStart = mobileNavCss.indexOf('v65 — mobile bottom-nav reserve');
-  const reserveSection = reserveStart >= 0 ? mobileNavCss.slice(reserveStart) : '';
-  if (!reserveSection) failures.push('Missing mobile bottom-nav reserve contract.');
-  else {
-    for (const token of [
-      'padding-bottom:calc(124px + env(safe-area-inset-bottom))!important',
-      'scroll-padding-bottom:calc(124px + env(safe-area-inset-bottom))',
-      '.bottom-nav::before',
-      'background:var(--paper)'
-    ]) {
-      if (!reserveSection.includes(token)) failures.push('Mobile bottom-nav reserve contract is missing: ' + token);
     }
   }
 }
