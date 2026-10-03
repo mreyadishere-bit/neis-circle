@@ -40,5 +40,6 @@ const runtime=api.createRuntime({
 assert.deepEqual(runtime.activeMessages().map(x=>x.id),['m1','m2']);
 assert.equal(runtime.patchActiveFlow(),false,'missing flow must not trigger unrelated rendering');
 assert.equal(runtime.patchThread('c1'),false,'missing thread container must be a no-op');
+assert.equal(runtime.patchCircleFlow({circleId:'circle1',id:'cm1',event:'INSERT',newlyInserted:true}),false,'missing Circle flow must be a no-op');
 
 console.log('Message DOM unit test passed.');
