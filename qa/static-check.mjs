@@ -544,7 +544,7 @@ if (literalScriptNewlines) failures.push('index.html must not contain literal \\
 const appCssPath = path.join(root, 'styles', 'app.css');
 if (fs.existsSync(appCssPath)) {
   const appCss = fs.readFileSync(appCssPath, 'utf8');
-  const driveVideoStart = appCss.indexOf('v159.51 — Google Drive mobile player viewport');
+  const driveVideoStart = appCss.indexOf('v159.52 — Google Drive mobile player viewport');
   const driveVideoSection = driveVideoStart >= 0 ? appCss.slice(driveVideoStart) : '';
   if (!driveVideoSection) failures.push('Missing Google Drive mobile video sizing contract.');
   else {
@@ -552,9 +552,9 @@ if (fs.existsSync(appCssPath)) {
       '.post-drive-video iframe',
       'position:absolute',
       'aspect-ratio:16/9!important',
-      'width:160%!important',
-      'height:160%!important',
-      'transform:scale(.625)',
+      'width:250%!important',
+      'height:250%!important',
+      'transform:scale(.4)',
       'transform-origin:top left'
     ]) {
       if (!driveVideoSection.includes(token)) failures.push('Google Drive video sizing contract is missing: ' + token);
