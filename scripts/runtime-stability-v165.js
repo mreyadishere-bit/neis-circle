@@ -51,6 +51,8 @@
     const p=profileRes.data||{};
     state.isAdmin=p.role==='admin'||same(uid,MAIN_ADMIN_ID);
     state.onboardingComplete=p.onboarding_complete===true;
+    if(state.onboardingComplete)window.NEISCacheOnboardingComplete?.();
+    else window.NEISClearOnboardingComplete?.();
     state.profile={
       name:p.full_name||authUser.user_metadata?.full_name||'Student',
       username:p.username||'',
