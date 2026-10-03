@@ -605,6 +605,263 @@ async function handleCircleMeetingRealtime(payload){
   )render();
 }
 
+function upsertById(list,row){
+  const rows=Array.isArray(list)?list:[];
+  const index=rows.findIndex(item=>same(item.id,row?.id));
+  if(index>=0)rows[index]={...rows[index],...row};
+  else if(row?.id!=null)rows.push(row);
+  return rows;
+}
+function ownConversationMembership(conversationId){
+  return (state.conversationMembers||[]).find(member=>same(member.conversation_id,conversationId)&&same(member.user_id,authUser?.id));
+}
+function conversationIsVisible(conversationId){
+  const mine=ownConversationMembership(conversationId);
+  return !!mine&&!mine.hidden_at;
+}
+function sortConversations(){
+  state.conversations=[...(state.conversations||[])].sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0));
+}
+function dmThreadMarkup(conversation){
+  const p=conversationName(conversation.id),last=conversationLast(conversation.id),unread=conversationUnread(conversation.id);
+  return `<button class="thread ${same(conversation.id,state.activeConversationId)?'active':''}" data-open-conversation="${conversation.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`;
+}
+function patchDmThread(conversationId){
+  if(state.view!=='messages')return;
+  const id=String(conversationId||'');if(!id)return;
+  const container=document.querySelector('.thread-list-scroll');
+  if(!container)return;
+  const conversation=(state.conversations||[]).find(item=>same(item.id,id));
+  let node=container.querySelector('[data-open-conversation="'+CSS.escape(id)+'"]');
+  if(!conversation||!conversationIsVisible(id)){
+    node?.remove();
+    return;
+  }
+  const template=document.createElement('template');
+  template.innerHTML=dmThreadMarkup(conversation).trim();
+  const replacement=template.content.firstElementChild;
+  if(!replacement)return;
+  if(node)node.replaceWith(replacement);else container.prepend(replacement);
+  bindV6(replacement);
+  sortConversations();
+  const order=new Map((state.conversations||[]).map((item,index)=>[String(item.id),index]));
+  [...container.querySelectorAll('[data-open-conversation]')]
+    .sort((a,b)=>(order.get(String(a.dataset.openConversation))??9999)-(order.get(String(b.dataset.openConversation))??9999))
+    .forEach(item=>container.appendChild(item));
+}
+function activeDmMessages(){
+  return (state.liveMessages||[])
+    .filter(message=>same(message.conversation_id,state.activeConversationId)&&!message.deleted_at)
+    .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+}
+function patchActiveDmFlow({insertedId='',force=false}={}){
+  if(state.view!=='messages'||!state.activeConversationId)return;
+  const flow=$('#chatFlow');if(!flow)return;
+  const input=$('#liveChatInput');
+  const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
+  const messages=activeDmMessages();
+  const inserted=insertedId?messages.find(item=>same(item.id,insertedId)):null;
+  const existing=insertedId?flow.querySelector('[data-message-id="'+CSS.escape(String(insertedId))+'"]'):null;
+  if(inserted&&!existing&&!force){
+    const index=messages.findIndex(item=>same(item.id,inserted.id));
+    const previous=index>0?messages[index-1]:null;
+    flow.insertAdjacentHTML('beforeend',messageBubble(inserted,previous));
+    const added=flow.lastElementChild;if(added)bindV6(added);
+  }else{
+    const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
+    flow.innerHTML=messages.length?messages.map((message,index)=>messageBubble(message,messages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+    bindV6(flow);
+    if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
+  }
+  if(input&&document.activeElement===input){
+    // Intentionally never touch value/focus/caret.
+  }
+  if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+}
+async function hydrateConversation(conversationId){
+  if(!sb||!authUser||!conversationId)return false;
+  const [conversationRes,membersRes,messagesRes]=await Promise.all([
+    sb.from('conversations').select('*').eq('id',conversationId).maybeSingle(),
+    sb.from('conversation_members').select('*,profile:profiles(id,full_name,username,grade,branch,avatar_url)').eq('conversation_id',conversationId),
+    sb.from('messages').select('*').eq('conversation_id',conversationId).order('created_at',{ascending:false}).limit(200)
+  ]);
+  if(conversationRes.error||!conversationRes.data)return false;
+  const members=membersRes.error?[]:(membersRes.data||[]);
+  const mine=members.find(member=>same(member.user_id,authUser.id));
+  state.conversationMembers=[
+    ...(state.conversationMembers||[]).filter(member=>!same(member.conversation_id,conversationId)),
+    ...members
+  ];
+  if(!mine||mine.hidden_at){
+    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
+    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
+    patchDmThread(conversationId);
+    updateBadges();
+    return true;
+  }
+  state.conversations=upsertById(state.conversations,conversationRes.data);
+  sortConversations();
+  if(!messagesRes.error){
+    const cleared=mine.cleared_at?new Date(mine.cleared_at).getTime():0;
+    const rows=(messagesRes.data||[]).filter(message=>!cleared||new Date(message.created_at).getTime()>cleared);
+    state.liveMessages=[
+      ...(state.liveMessages||[]).filter(message=>!same(message.conversation_id,conversationId)),
+      ...rows
+    ].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  }
+  patchDmThread(conversationId);
+  if(same(state.activeConversationId,conversationId))patchActiveDmFlow({force:true});
+  updateBadges();
+  return true;
+}
+async function handleConversationRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(!id)return;
+  if(event==='DELETE'){
+    state.conversations=(state.conversations||[]).filter(item=>!same(item.id,id));
+    state.conversationMembers=(state.conversationMembers||[]).filter(item=>!same(item.conversation_id,id));
+    state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,id));
+    if(same(state.activeConversationId,id))state.activeConversationId='';
+    patchDmThread(id);
+    updateBadges();
+    return;
+  }
+  if(event!=='INSERT'&&event!=='UPDATE')return;
+  state.conversations=upsertById(state.conversations,row);
+  sortConversations();
+  patchDmThread(id);
+}
+async function handleConversationMemberRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const conversationId=row.conversation_id,userId=row.user_id;
+  if(!conversationId||!userId)return;
+  const list=Array.isArray(state.conversationMembers)?state.conversationMembers:[];
+  const index=list.findIndex(member=>same(member.conversation_id,conversationId)&&same(member.user_id,userId));
+  const previous=index>=0?list[index]:null;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const profile=previous?.profile||await ensureRealtimePostProfile(userId);
+    const merged={...(previous||{}),...row,profile};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.conversationMembers=list;
+
+  if(same(userId,authUser?.id)){
+    if(event==='DELETE'||row.hidden_at){
+      state.conversations=(state.conversations||[]).filter(item=>!same(item.id,conversationId));
+      state.liveMessages=(state.liveMessages||[]).filter(item=>!same(item.conversation_id,conversationId));
+      if(same(state.activeConversationId,conversationId))state.activeConversationId='';
+      patchDmThread(conversationId);
+      updateBadges();
+      return;
+    }
+    if(!(state.conversations||[]).some(item=>same(item.id,conversationId))){
+      await hydrateConversation(conversationId);
+      return;
+    }
+  }
+  patchDmThread(conversationId);
+  updateBadges();
+}
+async function handleMessageRealtime(payload){
+  const event=payload?.eventType||'';
+  const incoming=payload?.new||{},oldRow=payload?.old||{};
+  const id=incoming.id||oldRow.id;if(!id)return;
+  const list=Array.isArray(state.liveMessages)?state.liveMessages:[];
+  const index=list.findIndex(message=>same(message.id,id));
+  const previous=index>=0?list[index]:null;
+  const conversationId=incoming.conversation_id||previous?.conversation_id||oldRow.conversation_id;
+  if(!conversationId)return;
+  if(!conversationIsVisible(conversationId))return;
+
+  let newlyInserted=false;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(previous||{}),...incoming};
+    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
+  }else return;
+  state.liveMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  if(event==='INSERT'){
+    const conversation=(state.conversations||[]).find(item=>same(item.id,conversationId));
+    if(conversation&&(!conversation.updated_at||new Date(incoming.created_at)>new Date(conversation.updated_at)))conversation.updated_at=incoming.created_at;
+    sortConversations();
+  }
+  patchDmThread(conversationId);
+  if(same(state.activeConversationId,conversationId)){
+    patchActiveDmFlow({insertedId:newlyInserted?id:'',force:event!=='INSERT'});
+    if(event==='INSERT'&&!same(incoming.sender_id,authUser.id)&&document.visibilityState==='visible'){
+      Promise.resolve(markConversationRead(conversationId)).catch(()=>{});
+    }
+    Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
+  }
+  updateBadges();
+}
+async function handleCircleMessageRealtime(payload){
+  const event=payload?.eventType||'';
+  const incoming=payload?.new||{},oldRow=payload?.old||{};
+  const id=incoming.id||oldRow.id;if(id==null)return;
+  const list=Array.isArray(state.circleMessages)?state.circleMessages:[];
+  const index=list.findIndex(message=>same(message.id,id));
+  const previous=index>=0?list[index]:null;
+  const circleId=incoming.circle_id||previous?.circle_id||oldRow.circle_id;
+  if(!circleId)return;
+  const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
+  if(!allowed)return;
+
+  let newlyInserted=false;
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const senderId=incoming.sender_id||previous?.sender_id;
+    const profile=previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null);
+    const merged={...(previous||{}),...incoming,profile};
+    if(index>=0)list[index]=merged;else{list.push(merged);newlyInserted=event==='INSERT'}
+  }else return;
+  state.circleMessages=list.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+  if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
+    const flow=$('#circleChatFlow');
+    if(flow){
+      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<90;
+      const active=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
+      const inserted=newlyInserted?active.find(item=>same(item.id,id)):null;
+      const existing=flow.querySelector('[data-message-id="'+CSS.escape(String(id))+'"]');
+      if(inserted&&!existing){
+        const pos=active.findIndex(item=>same(item.id,id)),previousMessage=pos>0?active[pos-1]:null;
+        flow.insertAdjacentHTML('beforeend',circleMessageBubble(inserted,previousMessage));
+        if(flow.lastElementChild)bindV6(flow.lastElementChild);
+      }else{
+        const bottomOffset=flow.scrollHeight-flow.scrollTop-flow.clientHeight;
+        flow.innerHTML=active.length?active.map((message,pos)=>circleMessageBubble(message,active[pos-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+        bindV6(flow);
+        if(!wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=Math.max(0,flow.scrollHeight-flow.clientHeight-bottomOffset)});
+      }
+      if(wasNearBottom)requestAnimationFrame(()=>{flow.scrollTop=flow.scrollHeight});
+      Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
+    }
+  }
+}
+function handleMessageReactionRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(id==null)return;
+  const list=Array.isArray(state.messageReactions)?state.messageReactions:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?list[index]:{}),...row};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.messageReactions=list;
+  syncMessageReactionUi();
+}
+
 async function setupV6Realtime(uid){
   syncKnownPostReactionKeys();
   if(v6Channel&&same(v6ChannelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(v6RealtimeStatus))return;
@@ -620,11 +877,11 @@ async function setupV6Realtime(uid){
     .on('postgres_changes',{event:'*',schema:'public',table:'reactions'},handleReactionRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_likes'},handleCommentEngagementRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'comment_creator_hearts'},handleCommentEngagementRealtime)
-    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},refreshMessagesV6)
-    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},refreshCircleMessagesV96)
-    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},refreshMessageReactionsV1)
+    .on('postgres_changes',{event:'*',schema:'public',table:'messages'},handleMessageRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversations'},handleConversationRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'conversation_members'},handleConversationMemberRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'circle_messages'},handleCircleMessageRealtime)
+    .on('postgres_changes',{event:'*',schema:'public',table:'message_reactions'},handleMessageReactionRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_meetings'},handleCircleMeetingRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'follows'},handleFollowRealtime)
     .on('postgres_changes',{event:'*',schema:'public',table:'circle_members'},handleCircleMemberRealtime)
@@ -1571,7 +1828,7 @@ window.openNewConversation=function(){
   const people=state.members.filter(p=>!same(p.id,authUser.id));openModal(`<div class="modal-head"><div><h2>${t('New conversation','محادثة جديدة')}</h2><p>${t('Search and message a student directly. Following is not required.','ابحث عن طالب وراسله مباشرة دون اشتراط المتابعة.')}</p></div><button class="close" data-close>×</button></div><label class="field"><input id="newChatSearch" placeholder="${t('Search students…','ابحث عن الطلاب…')}"></label><div id="newChatPeople" class="result-list">${people.slice(0,20).map(newChatRow).join('')}</div>`);const input=$('#newChatSearch');input.oninput=()=>{const q=normalize(input.value);$('#newChatPeople').innerHTML=people.filter(p=>match(q,p.full_name,p.username,p.grade,p.branch)).slice(0,30).map(newChatRow).join('')||blank(t('No students found','لا يوجد طلاب'),t('Try another name.','جرّب اسمًا آخر.'));bindV6($('#modalRoot'))};bindV6($('#modalRoot'))
 };
 function newChatRow(p){return `<button class="result-row new-chat-row" data-message-user="${p.id}">${profileAvatar(p)}<div><h3>${esc(p.full_name||'Student')}</h3><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} · ${esc(p.branch||'')}</p></div><span class="new-chat-arrow" aria-hidden="true">→</span></button>`}
-async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await loadLiveData();state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
+async function startConversation(userId){const existing=state.conversations.find(c=>state.conversationMembers.some(m=>same(m.conversation_id,c.id)&&same(m.user_id,userId)));let id=existing?.id;if(!id){const {data,error}=await sb.rpc('start_direct_conversation',{target_user:userId});if(error){toast(safeError(error,'start this conversation'));return}id=data}await sb.rpc('restore_own_conversation',{conversation_id_input:id});closeModal();await hydrateConversation(id);state.activeConversationId=id;routeTo(`messages/${id}`);await loadConversationHistory(id,true);await markConversationRead(id)}
 async function markConversationRead(id){await sb.from('conversation_members').update({last_read_at:new Date().toISOString()}).match({conversation_id:id,user_id:authUser.id});const mine=state.conversationMembers.find(m=>same(m.conversation_id,id)&&same(m.user_id,authUser.id));if(mine)mine.last_read_at=new Date().toISOString();updateBadges()}
 
 circles=function(){
