@@ -491,7 +491,8 @@ async function refreshV6(){
       if(liveInput&&liveDraft!==null)setDmDraft(state.activeConversationId,liveDraft);
       if(circleInput&&circleDraft!==null)setCircleDraft(state.activeCircleId,circleDraft);
 
-      render();
+      const homePatched=state.view==='home'&&typeof window.NEISPatchHomeRealtime==='function'&&window.NEISPatchHomeRealtime();
+      if(!homePatched)render();
       requestAnimationFrame(()=>{
         const nextLive=$('#liveChatInput'),nextCircle=$('#circleChatInput');
         if(nextLive&&liveDraft!==null){
@@ -675,6 +676,17 @@ function postImageGallery(p){
   const visible=images.slice(0,5),remaining=Math.max(0,images.length-visible.length),mode=p.image_display_mode==='fill'?'fill':'fit';
   return `<div class="post-image-gallery count-${Math.min(images.length,5)} display-${mode}" data-post-image-count="${images.length}">${visible.map((url,index)=>`<button type="button" class="post-image-tile tile-${index+1}" data-post-gallery-id="${esc(p.id)}" data-post-gallery-index="${index}" aria-label="${t('Open image','فتح الصورة')} ${index+1}"><img src="${esc(url)}" alt="${esc(p.title||t('Post image','صورة المنشور'))}" loading="lazy" decoding="async" onerror="this.closest('.post-image-tile')?.remove()">${remaining&&index===visible.length-1?`<span class="post-image-more">+${remaining}</span>`:''}</button>`).join('')}</div>`;
 }
+function postRealtimeVersion(p){
+  const value=JSON.stringify([
+    p?.author_id||'',p?.user||'',p?.meta||'',p?.kind||'',p?.title||'',p?.body||'',
+    Array.isArray(p?.tags)?p.tags:[],p?.image_url||'',Array.isArray(p?.image_urls)?p.image_urls:[],
+    p?.image_display_mode||'',p?.link_button_label||'',p?.link_button_url||'',p?.youtube_url||'',
+    p?.created_at||'',p?.post_type||'',!!p?.pinned,!!p?.is_live
+  ]);
+  let hash=2166136261;
+  for(let i=0;i<value.length;i++){hash^=value.charCodeAt(i);hash=Math.imul(hash,16777619)}
+  return (hash>>>0).toString(36);
+}
 postCard=function(p){
   const liked=state.liked.map(String).includes(String(p.id)),saved=state.saved.map(String).includes(String(p.id));
   const own=p.is_live&&same(p.author_id,authUser?.id);
@@ -690,8 +702,131 @@ postCard=function(p){
       :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
   const hasLinkButton=!!(p.link_button_label&&p.link_button_url&&postButtonUrlValid(p.link_button_url));
   const linkButton=hasLinkButton?`<div class="post-link-button-wrap"><a class="post-link-button" href="${esc(p.link_button_url)}" target="_blank" rel="noopener noreferrer nofollow ugc"><span>${esc(p.link_button_label)}</span><b aria-hidden="true">↗</b></a></div>`:'';
-  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${youtubeEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
+  return `<article class="post" id="post-${esc(p.id)}" data-post="${esc(p.id)}" data-post-version="${postRealtimeVersion(p)}"><div class="post-top"><button class="author-link post-author" data-open-profile="${esc(p.author_id||'')}">${avatar(p)}<span class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></span></button><div class="post-meta-actions"><span class="post-kind">${esc(p.kind)}</span><div class="post-menu">${menu}</div></div></div><h3 dir="${titleDirection}">${esc(p.title)}</h3><p class="post-body ${longBody&&!expanded?'collapsed':''}" dir="${bodyDirection}">${esc(p.body)}</p>${longBody?`<button type="button" class="post-read-more" data-post-read-more="${esc(p.id)}" aria-expanded="${expanded}">${expanded?t('Show less','عرض أقل'):t('Read more','اقرأ المزيد')}</button>`:''}${postImageGallery(p)}${youtubeEmbedMarkup(p)}${linkButton}<div class="tag-row">${(p.tags||[]).map(tag=>`<button class="chip" data-topic="${esc(tag)}">#${esc(tag)}</button>`).join('')}</div><div class="post-actions"><button class="action ${liked?'active':''}" data-action="like" data-id="${esc(p.id)}">${icon('heart')}<span>${t('Helpful','مفيد')}</span><b>${p.likes}</b></button><button class="action" data-action="comments" data-id="${esc(p.id)}">${icon('chat')}<span>${t('Replies','الردود')}</span><b>${p.comments||0}</b></button><button class="action save ${saved?'active':''}" data-action="save" data-id="${esc(p.id)}">${icon('save')}<span>${saved?t('Saved','محفوظ'):t('Save','حفظ')}</span></button><button class="action" data-action="share" data-id="${esc(p.id)}">${icon('share')}<span>${t('Share','مشاركة')}</span></button></div></article>`
 };
+
+function homePostsForRealtimePatch(){
+  const source=Array.isArray(state.posts)?state.posts:[];
+  let posts=source.filter(p=>{
+    try{return !p?.circle_id&&(!state.query||match(normalize(state.query),p?.title,p?.body,p?.tags,p?.user))}
+    catch(_){return false}
+  });
+  if(state.filter==='Questions')posts=posts.filter(p=>p?.kind==='Question');
+  if(state.filter==='Resources')posts=posts.filter(p=>p?.kind==='Resource');
+  if(state.filter==='Latest')posts=[...posts].sort((a,b)=>new Date(b?.created_at||0)-new Date(a?.created_at||0));
+  if(state.filter==='For you'){
+    const follows=Array.isArray(state.follows)?state.follows:[];
+    const memberships=Array.isArray(state.circleMembers)?state.circleMembers:[];
+    const following=follows.filter(f=>same(f?.follower_id,authUser?.id)&&f?.status==='accepted').map(f=>f.following_id);
+    const joined=memberships.filter(m=>same(m?.user_id,authUser?.id)&&m?.status==='active').map(m=>m.circle_id);
+    posts=[...posts].sort((a,b)=>
+      Number(same(b?.author_id,authUser?.id)||following.some(id=>same(id,b?.author_id))||joined.some(id=>same(id,b?.circle_id)))-
+      Number(same(a?.author_id,authUser?.id)||following.some(id=>same(id,a?.author_id))||joined.some(id=>same(id,a?.circle_id)))||
+      new Date(b?.created_at||0)-new Date(a?.created_at||0)
+    );
+  }
+  return posts;
+}
+function renderHomePostNode(post){
+  let html='';
+  try{
+    html=postCard(post);
+    if(window.NEISPublicPolls?.isPublicPollPost?.(post)&&window.NEISPublicPolls?.decoratePostCard){
+      html=window.NEISPublicPolls.decoratePostCard(post,html);
+    }
+  }catch(error){
+    console.error('[NEIS realtime post patch]',error,post);
+    return null;
+  }
+  const template=document.createElement('template');
+  template.innerHTML=String(html).trim();
+  return template.content.firstElementChild;
+}
+function syncHomePostEngagement(node,post){
+  if(!node||!post)return;
+  const liked=state.liked.map(String).includes(String(post.id));
+  const saved=state.saved.map(String).includes(String(post.id));
+  const like=node.querySelector('[data-action="like"]');
+  if(like){
+    like.classList.toggle('active',liked);
+    const count=like.querySelector('b');if(count)count.textContent=String(Number(post.likes||0));
+  }
+  const comments=node.querySelector('[data-action="comments"]');
+  if(comments){
+    const count=comments.querySelector('b');if(count)count.textContent=String(Number(post.comments||0));
+  }
+  const saveButton=node.querySelector('[data-action="save"]');
+  if(saveButton){
+    saveButton.classList.toggle('active',saved);
+    const label=saveButton.querySelector('span');if(label)label.textContent=saved?t('Saved','محفوظ'):t('Save','حفظ');
+  }
+}
+function patchHomeRealtime(options={}){
+  if(state.view!=='home')return false;
+  const feed=document.querySelector('#view .feed');
+  if(!feed)return false;
+  const forceIds=new Set((options.forcePostIds||[]).map(String));
+  const posts=homePostsForRealtimePatch();
+  const wanted=new Set(posts.map(p=>String(p.id)));
+  const existing=new Map();
+  Array.from(feed.children).forEach(node=>{
+    if(node?.classList?.contains('post')&&node.dataset?.post)existing.set(String(node.dataset.post),node);
+  });
+
+  let changed=false;
+  for(const [id,node] of existing){
+    if(!wanted.has(id)){node.remove();existing.delete(id);changed=true}
+  }
+
+  posts.forEach((post,index)=>{
+    const id=String(post.id),version=postRealtimeVersion(post);
+    let node=existing.get(id)||null;
+    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)){
+      const replacement=renderHomePostNode(post);
+      if(replacement){
+        node.replaceWith(replacement);
+        node=replacement;
+        existing.set(id,node);
+        changed=true;
+      }
+    }else if(node){
+      syncHomePostEngagement(node,post);
+    }
+
+    if(!node){
+      const fresh=renderHomePostNode(post);
+      if(!fresh)return;
+      let anchor=null;
+      for(let j=index+1;j<posts.length;j++){
+        anchor=existing.get(String(posts[j].id));
+        if(anchor&&anchor.isConnected)break;
+        anchor=null;
+      }
+      if(anchor)feed.insertBefore(fresh,anchor);else feed.appendChild(fresh);
+      existing.set(id,fresh);
+      node=fresh;
+      changed=true;
+    }
+    if(node)syncHomePostEngagement(node,post);
+  });
+
+  if(!posts.length){
+    if(!feed.querySelector('.empty')){
+      feed.innerHTML=emptyState(t('No posts yet','لا توجد منشورات بعد'),t('Create the first meaningful post.','أنشئ أول منشور مفيد.'));
+      changed=true;
+    }
+  }else{
+    feed.querySelectorAll(':scope > .empty').forEach(el=>{el.remove();changed=true});
+  }
+
+  if(changed){
+    try{bindV6(feed)}catch(error){console.error('[NEIS realtime feed bind]',error)}
+    try{window.NEISPublicPolls?.bind?.()}catch(error){console.error('[NEIS realtime poll bind]',error)}
+  }
+  updateBadges();
+  return true;
+}
+window.NEISPatchHomeRealtime=patchHomeRealtime;
 
 discover=function(){
   let people=state.members.filter(p=>!same(p.id,authUser.id)),q=normalize(state.query);
