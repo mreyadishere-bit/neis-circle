@@ -2,6 +2,8 @@
 (function(){
 const t=(en,arabic)=>state.lang==='ar'?arabic:en;
 const same=(a,b)=>String(a)===String(b);
+const MAIN_ADMIN_FALLBACK_ID='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
+const isMainAdminUser=()=>same(authUser?.id,(typeof NEIS_ADMIN_ID!=='undefined'?NEIS_ADMIN_ID:MAIN_ADMIN_FALLBACK_ID));
 const byId=(arr,id)=>arr.find(x=>same(x.id,id));
 const normalize=value=>String(value||'').toLocaleLowerCase(state.lang==='ar'?'ar':'en').normalize('NFKD').replace(/[\u0640\u064b-\u065f\u0670]/g,'').trim();
 const articleTextDirection=(...values)=>{const text=values.join(' ').replace(/<[^>]*>/g,' '),arabic=(text.match(/[\u0600-\u06ff]/g)||[]).length,latin=(text.match(/[A-Za-z]/g)||[]).length;return arabic>latin?'rtl':'ltr'};
@@ -551,7 +553,8 @@ function youtubeEmbedMarkup(post){
 }
 async function editOwnPost(postId){
   const post=state.posts.find(item=>same(item.id,postId));
-  if(!post||!same(post.author_id,authUser?.id)){toast(t('You can only edit your own posts.','يمكنك تعديل منشوراتك فقط.'));return}
+  const canEditPost=same(post?.author_id,authUser?.id)||isMainAdminUser();
+  if(!post||!canEditPost){toast(t('You can only edit posts you are allowed to manage.','يمكنك تعديل المنشورات المسموح لك بإدارتها فقط.'));return}
   let removeImages=false;
   const existingImages=postImages(post),currentMode=post.image_display_mode==='fill'?'fill':'fit';
   let imageItems=existingImages.map((url,index)=>({url,originalUrl:url,file:null,previewUrl:'',name:`post-image-${index+1}`}));
@@ -635,7 +638,9 @@ async function editOwnPost(postId){
     const imageDisplayMode=document.querySelector('input[name="editPostImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
     const payload={kind:$('#editPostKind').value,title:$('#editPostTitle').value.trim(),body:$('#editPostBody').value.trim(),tags:$('#editPostTags').value.split(',').map(value=>value.trim()).filter(Boolean).slice(0,6),image_url:imageUrls[0]||'',image_urls:imageUrls,image_display_mode:imageDisplayMode,link_button_label:linkButtonLabel,link_button_url:linkButtonUrl,youtube_url:youtubeUrl};
     if(!payload.title||!payload.body){toast(t('Add a title and details first.','أضف العنوان والتفاصيل أولًا.'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
-    const {error}=await sb.from('posts').update(payload).eq('id',post.id).eq('author_id',authUser.id);
+    let updateRequest=sb.from('posts').update(payload).eq('id',post.id);
+    if(!isMainAdminUser())updateRequest=updateRequest.eq('author_id',authUser.id);
+    const {error}=await updateRequest;
     if(error){toast(safeError(error,'update this post'));for(const url of newlyUploaded)await removeMediaUrl(url);saveButton.disabled=false;return}
     for(const oldUrl of existingImages)if(!imageUrls.includes(oldUrl))await removeMediaUrl(oldUrl);
     imageItems.forEach(revokePreview);
@@ -656,13 +661,15 @@ function postImageGallery(p){
 }
 postCard=function(p){
   const liked=state.liked.map(String).includes(String(p.id)),saved=state.saved.map(String).includes(String(p.id));
-  const own=p.is_live&&same(p.author_id,authUser.id);
-  const moderatorDelete=p.is_live&&!own&&(state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id)));
+  const own=p.is_live&&same(p.author_id,authUser?.id);
+  const mainAdmin=p.is_live&&isMainAdminUser();
+  const canEditManagedPost=own||mainAdmin;
+  const canDeleteManagedPost=p.is_live&&(own||mainAdmin||state.isAdmin||(p.circle_id&&canModerateCircle(p.circle_id)));
   const titleDirection=articleTextDirection(p.title||''),bodyDirection=articleTextDirection(p.body||'');
   const longBody=String(p.body||'').length>420||String(p.body||'').split(/\n/).length>6,expanded=expandedPostIds.has(String(p.id));
-  const menu=own
-    ?`<button class="post-owner-menu" data-edit-post="${esc(p.id)}" aria-label="${t('Edit post','تعديل المنشور')}">•••</button>`
-    :moderatorDelete
+  const menu=canEditManagedPost
+    ?`<button class="post-owner-menu" data-edit-post="${esc(p.id)}" aria-label="${t('Edit post','تعديل المنشور')}">•••</button>${canDeleteManagedPost?`<button class="danger" data-delete-post="${esc(p.id)}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`:''}`
+    :canDeleteManagedPost
       ?`<button class="danger" data-delete-post="${esc(p.id)}" aria-label="${t('Delete post','حذف المنشور')}">×</button>`
       :`<button class="post-report-menu" data-report-target="post" data-report-id="${esc(p.id)}" aria-label="${t('Report post','الإبلاغ عن المنشور')}">⚑</button>`;
   const hasLinkButton=!!(p.link_button_label&&p.link_button_url&&postButtonUrlValid(p.link_button_url));
