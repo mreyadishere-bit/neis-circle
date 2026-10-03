@@ -4036,7 +4036,7 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 }
 
 
-/* v159.51 — Google Drive mobile player viewport.
+/* v159.52 — Google Drive mobile player viewport.
    Keep the visible post media box at 16:9, but render Drive's internal player
    at a larger virtual viewport on phones and scale it back down. This avoids
    Drive's oversized mobile controls and the zoomed-in look without affecting
@@ -4063,11 +4063,11 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     margin-inline:0!important;
   }
   .post-drive-video iframe{
-    width:160%!important;
-    height:160%!important;
+    width:250%!important;
+    height:250%!important;
     max-width:none!important;
     max-height:none!important;
-    transform:scale(.625);
+    transform:scale(.4);
     transform-origin:top left;
   }
 }
