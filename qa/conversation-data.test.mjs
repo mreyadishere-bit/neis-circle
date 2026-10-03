@@ -43,8 +43,8 @@ assert.equal(result.ok,true);
 assert.equal(result.hidden,false);
 assert.equal(state.conversations.length,1);
 assert.equal(state.conversationMembers.length,1);
-assert.deepEqual(state.liveMessages.map(x=>x.id),['m1','m2']);
+assert.equal(state.liveMessages.map(x=>x.id).join(','),'m1,m2');
 assert.equal(calls,3,'one hydration should issue exactly three Supabase queries');
-assert.deepEqual(api.snapshot().inflight,[]);
+assert.equal(Array.from(api.snapshot().inflight).length,0);
 
 console.log('Conversation data unit test passed.');
