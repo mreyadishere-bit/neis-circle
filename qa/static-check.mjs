@@ -464,6 +464,25 @@ for (const pattern of [
   }
 }
 
+const socialMeetingSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+if (!socialMeetingSource.includes("const chatFields=window.NEISChatFields;")) failures.push('05-social.js must bind NEISChatFields before using chatFields.*.');
+const endMeetingStart = socialMeetingSource.indexOf('async function endMeeting');
+const endMeetingEnd = endMeetingStart >= 0 ? socialMeetingSource.indexOf('async function deleteCircle', endMeetingStart) : -1;
+const endMeetingSection = endMeetingStart >= 0 && endMeetingEnd > endMeetingStart ? socialMeetingSource.slice(endMeetingStart,endMeetingEnd) : '';
+if (!endMeetingSection) failures.push('endMeeting section could not be located.');
+else {
+  if (endMeetingSection.includes('loadLiveData()')) failures.push('Circle meeting end action must remain targeted and must not call loadLiveData().');
+  if (!endMeetingSection.includes('handleCircleMeetingRealtime')) failures.push('Circle meeting end action must delegate to handleCircleMeetingRealtime.');
+}
+const scheduleMeetingStart = socialMeetingSource.indexOf('function scheduleMeeting');
+const scheduleMeetingEnd = scheduleMeetingStart >= 0 ? socialMeetingSource.indexOf('\nfunction loadLiveKit', scheduleMeetingStart) : -1;
+const scheduleMeetingSection = scheduleMeetingStart >= 0 && scheduleMeetingEnd > scheduleMeetingStart ? socialMeetingSource.slice(scheduleMeetingStart,scheduleMeetingEnd) : '';
+if (!scheduleMeetingSection) failures.push('scheduleMeeting section could not be located.');
+else {
+  if (scheduleMeetingSection.includes("select('*')")) failures.push('Circle meeting creation must not request wildcard fields.');
+  if (!scheduleMeetingSection.includes('handleCircleMeetingRealtime')) failures.push('Circle meeting creation must delegate to handleCircleMeetingRealtime.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
