@@ -1666,7 +1666,7 @@ messages=function(){
 function messageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
   const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
-  const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
+  const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote" role="button" tabindex="0" data-dm-reply-jump="${esc(quoted.id)}" aria-label="${t('Go to original message','الانتقال إلى الرسالة الأصلية')}"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
   const sharedArticle=m.shared_article_id?state.articles.find(a=>same(a.id,m.shared_article_id)):null;
   const sharedArticleCard=sharedArticle?(()=>{const title=(state.lang==='ar'?sharedArticle.title_ar:sharedArticle.title_en)||sharedArticle.title_en||sharedArticle.title_ar||t('Article','مقال'),excerpt=(state.lang==='ar'?sharedArticle.excerpt_ar:sharedArticle.excerpt_en)||sharedArticle.excerpt_en||sharedArticle.excerpt_ar||'',author=sharedArticle.author?.full_name||sharedArticle.author?.name||t('NEIS Circle','NEIS Circle');return `<button type="button" class="shared-article-message" data-shared-article="${esc(sharedArticle.id)}"><span class="shared-article-kicker">${t('Shared article','مقال مُشارك')}</span><b>${esc(title)}</b>${excerpt?`<small>${esc(excerpt)}</small>`:''}<em>${esc(author)} · ${t('Open article','فتح المقال')} →</em></button>`})():'';
   return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span>${sharedArticleCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${messageReactionChips('dm',m.id)}</div><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
@@ -2814,6 +2814,20 @@ function bindV6(root=document){
     scrollActiveDmToBottom();
   };}
   const circleInput=root.querySelector('#circleChatInput');if(circleInput){bindDmKeyboardBottom();bindComposerKeyboard(circleInput,root.querySelector('#circleChatForm'));circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
+  root.querySelectorAll('[data-dm-reply-jump]').forEach(el=>{
+    const jump=event=>{
+      event.preventDefault();event.stopPropagation();
+      const id=el.dataset.dmReplyJump;
+      const row=root.querySelector(`#chatFlow > .chat-message[data-message-id="${CSS.escape(String(id))}"]`);
+      if(!row){toast(t('The original message is not currently loaded.','الرسالة الأصلية غير محملة حاليًا.'));return}
+      root.querySelectorAll('#chatFlow > .chat-message.reply-jump-highlight').forEach(node=>node.classList.remove('reply-jump-highlight'));
+      row.classList.add('reply-jump-highlight');
+      row.scrollIntoView({behavior:'smooth',block:'center'});
+      setTimeout(()=>row.classList.remove('reply-jump-highlight'),1800);
+    };
+    el.onclick=jump;
+    el.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){jump(event)}};
+  });
   root.querySelectorAll('[data-cancel-circle-reply]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();clearCircleReplyTarget()});
   root.querySelectorAll('[data-circle-reply-jump]').forEach(el=>{
     const jump=event=>{
