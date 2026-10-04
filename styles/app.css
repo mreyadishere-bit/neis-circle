@@ -2071,19 +2071,23 @@ html,body{
 
 
 /* v159.10 — Circle reply jump affordance */
-.message-reply-quote[data-circle-reply-jump]{
+.message-reply-quote[data-circle-reply-jump],
+.message-reply-quote[data-dm-reply-jump]{
   cursor:pointer;
   transition:background .16s ease,border-color .16s ease,opacity .16s ease;
 }
-.message-reply-quote[data-circle-reply-jump]:hover{
+.message-reply-quote[data-circle-reply-jump]:hover,
+.message-reply-quote[data-dm-reply-jump]:hover{
   background:color-mix(in srgb,var(--card) 34%,transparent);
   opacity:1;
 }
-.message-reply-quote[data-circle-reply-jump]:focus-visible{
+.message-reply-quote[data-circle-reply-jump]:focus-visible,
+.message-reply-quote[data-dm-reply-jump]:focus-visible{
   outline:2px solid color-mix(in srgb,var(--accent2) 55%,transparent);
   outline-offset:2px;
 }
-#circleChatFlow>.chat-message.reply-jump-highlight .bubble{
+#circleChatFlow>.chat-message.reply-jump-highlight .bubble,
+#chatFlow>.chat-message.reply-jump-highlight .bubble{
   box-shadow:0 0 0 3px color-mix(in srgb,var(--accent2) 32%,transparent);
   transition:box-shadow .18s ease;
 }
