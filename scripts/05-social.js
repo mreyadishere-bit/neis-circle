@@ -2881,6 +2881,7 @@ function updateBadges(){
     if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}
     if(badge){badge.textContent=not>99?'99+':String(not||'');badge.classList.toggle('hidden',!not)}
   }
+  notificationRuntime?.updateTabBadge?.();
 }
 
 const searchForm=$('#globalSearchForm'),searchInput6=$('#globalSearch');
