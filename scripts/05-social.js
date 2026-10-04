@@ -2034,7 +2034,8 @@ async function deleteResolvedReport(id){
   }
   state.reports=state.reports.filter(item=>!same(item.id,id));
   render();
-  await loadLiveData();render();toast(t('Resolved report deleted.','تم حذف البلاغ المحسوم.'));
+  await handleReportRealtime();
+  toast(t('Resolved report deleted.','تم حذف البلاغ المحسوم.'));
 }
 
 comments=async function(postId,targetCommentId=''){
@@ -2738,7 +2739,7 @@ function bindV6(root=document){
   setTimeout(()=>markVisibleLocationNotificationsRead(),120);
   root.querySelectorAll('[data-mark-all-read]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString();state.notifications.forEach(n=>{if(!n.read_at)n.read_at=readAt});updateBadges();render();const {error}=await sb.from('notifications').update({read_at:readAt}).is('read_at',null);if(error){console.error('[NEIS notifications mark all]',error);refreshNotificationsOnly()}});
   root.querySelectorAll('[data-report-target]').forEach(el=>el.onclick=e=>{e.stopPropagation();openReport(el.dataset.reportTarget,el.dataset.reportId)});
-  root.querySelectorAll('[data-report-status]').forEach(el=>el.onchange=async()=>{const report=state.reports.find(r=>same(r.id,el.dataset.reportStatus)),previous=report?.status||'open',next=normalizedReportStatus(el.value);el.disabled=true;const {data,error}=await sb.rpc('admin_update_report_status',{report_id_input:el.dataset.reportStatus,status_input:next});if(error||!data){el.value=previous;el.disabled=false;toast(error?safeError(error,'update this report'):t('This report could not be updated.','تعذر تحديث هذا البلاغ.'));return}if(report)report.status=next;render();await loadLiveData();render();toast(t('Report status updated.','تم تحديث حالة البلاغ.'))});
+  root.querySelectorAll('[data-report-status]').forEach(el=>el.onchange=async()=>{const report=state.reports.find(r=>same(r.id,el.dataset.reportStatus)),previous=report?.status||'open',next=normalizedReportStatus(el.value);el.disabled=true;const {data,error}=await sb.rpc('admin_update_report_status',{report_id_input:el.dataset.reportStatus,status_input:next});if(error||!data){el.value=previous;el.disabled=false;toast(error?safeError(error,'update this report'):t('This report could not be updated.','تعذر تحديث هذا البلاغ.'));return}if(report)report.status=next;render();await handleReportRealtime();toast(t('Report status updated.','تم تحديث حالة البلاغ.'))});
   root.querySelectorAll('[data-delete-report]').forEach(el=>el.onclick=()=>deleteResolvedReport(el.dataset.deleteReport));
   root.querySelectorAll('[data-reply-to]').forEach(el=>el.onclick=()=>{const r=byId(state.allComments,el.dataset.replyTo),input=$('#replyInput');$('#replyParent').value=el.dataset.replyTo;input.placeholder=`${t('Reply to','رد على')} ${r?.profile?.full_name||'Student'}…`;input.focus()});
   root.querySelectorAll('[data-delete-reply]').forEach(el=>{if(el.closest('#replyContent'))return;el.onclick=async()=>{const r=byId(state.allComments,el.dataset.deleteReply);if(!r||el.disabled)return;if(el.dataset.confirmDelete!=='1'){el.dataset.confirmDelete='1';el.dataset.originalText=el.textContent;el.textContent=t('Confirm delete','تأكيد الحذف');setTimeout(()=>{if(el.isConnected&&el.dataset.confirmDelete==='1'){el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف')}},5000);return}el.disabled=true;const {data,error}=await sb.from('comments').delete().eq('id',r.id).select('id');if(error||!data?.length){toast(error?safeError(error,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));el.disabled=false;el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف');return}handleCommentRealtime({eventType:'DELETE',old:r});render();toast(t('Reply deleted.','تم حذف الرد.'))}});
