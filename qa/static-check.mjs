@@ -665,9 +665,9 @@ else {
   }
 }
 
-const notificationRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
-if (fs.existsSync(notificationRuntimePath)) {
-  const notificationRuntimeSource = fs.readFileSync(notificationRuntimePath, 'utf8');
+const notificationFaviconRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
+if (fs.existsSync(notificationFaviconRuntimePath)) {
+  const notificationRuntimeSource = fs.readFileSync(notificationFaviconRuntimePath, 'utf8');
   for (const token of [
     "const BASE_FAVICON='/assets/email-logo.png'",
     "canvas.toDataURL('image/png')",
