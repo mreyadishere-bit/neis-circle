@@ -633,6 +633,38 @@ else {
   if (!circlePollUpdateSection.includes('loadCirclePolls')) failures.push('Circle poll updates must refresh only the Circle poll store.');
 }
 
+const opportunityCssPath = path.join(root, 'styles', 'opportunities-v22.css');
+if (fs.existsSync(opportunityCssPath)) {
+  const opportunityCss = fs.readFileSync(opportunityCssPath, 'utf8');
+  const singleDetailStart = opportunityCss.indexOf('.opportunity-detail-gallery.single{display:flex');
+  const singleDetailSection = singleDetailStart >= 0 ? opportunityCss.slice(singleDetailStart, singleDetailStart + 520) : '';
+  if (!singleDetailSection) failures.push('Opportunity single-image detail contract could not be located.');
+  else {
+    for (const token of ['object-fit:contain','aspect-ratio:auto','max-height:min(68dvh,680px)']) {
+      if (!singleDetailSection.includes(token)) failures.push('Opportunity detail image contract is missing: ' + token);
+    }
+  }
+}
+
+const dmReplySource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const dmBubbleStart = dmReplySource.indexOf('function messageBubble(m,previous)');
+const dmBubbleEnd = dmBubbleStart >= 0 ? dmReplySource.indexOf('\n\nwindow.openNewConversation', dmBubbleStart) : -1;
+const dmBubbleSection = dmBubbleStart >= 0 && dmBubbleEnd > dmBubbleStart ? dmReplySource.slice(dmBubbleStart, dmBubbleEnd) : '';
+if (!dmBubbleSection) failures.push('DM message bubble section could not be located.');
+else {
+  if (!dmBubbleSection.includes('data-dm-reply-jump')) failures.push('DM reply quotes must expose a jump target.');
+  if (!dmBubbleSection.includes("role=\"button\"")) failures.push('DM reply quotes must remain keyboard-accessible.');
+}
+const dmJumpBindStart = dmReplySource.indexOf("root.querySelectorAll('[data-dm-reply-jump]')");
+const dmJumpBindEnd = dmJumpBindStart >= 0 ? dmReplySource.indexOf("root.querySelectorAll('[data-cancel-circle-reply]')", dmJumpBindStart) : -1;
+const dmJumpBindSection = dmJumpBindStart >= 0 && dmJumpBindEnd > dmJumpBindStart ? dmReplySource.slice(dmJumpBindStart, dmJumpBindEnd) : '';
+if (!dmJumpBindSection) failures.push('DM reply jump binding could not be located.');
+else {
+  for (const token of ['#chatFlow > .chat-message[data-message-id=', 'scrollIntoView', 'reply-jump-highlight']) {
+    if (!dmJumpBindSection.includes(token)) failures.push('DM reply jump binding is missing: ' + token);
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
