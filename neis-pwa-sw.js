@@ -162,9 +162,11 @@ self.addEventListener("push", (event) => {
   const title = data.title || "NEIS Circle";
   const options = {
     body: data.body || "You have a new notification.",
+    icon: "/assets/email-logo.png",
     badge: "/assets/notification-badge.png?v=2",
     data: { route: normalizeRoute(data.route || "") },
     tag: data.notification_id ? "neis-" + data.notification_id : undefined,
+    timestamp: Date.now(),
     renotify: false,
     silent: data.silent === true
   };
