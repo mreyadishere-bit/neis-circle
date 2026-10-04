@@ -67,7 +67,6 @@
   const same=(a,b)=>String(a)===String(b);
   const renderNotificationsIfVisible=()=>{
     updateBadges();
-    updateTabBadge();
     if(state.view==='notifications')render();
   };
 
@@ -210,7 +209,7 @@
 
   function snapshot(){
     return {
-      version:'174.0',
+      version:'174.1',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
