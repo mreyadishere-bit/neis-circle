@@ -2370,7 +2370,13 @@ async function openCirclePollSettings(pollId){
     save.disabled=true;
     const {error}=await sb.rpc('update_circle_poll_post',{p_poll_id:poll.id,p_title:$('#cpsTitle').value.trim(),p_body:$('#cpsBody').value.trim(),p_tags:$('#cpsTags').value.split(',').map(v=>v.trim()).filter(Boolean).slice(0,8),p_image_url:post.image_url||'',p_image_urls:postImages(post),p_image_display_mode:document.querySelector('input[name="cpsImageMode"]:checked')?.value==='fill'?'fill':'fit',p_options:opts,p_selection_type:selection,p_max_selections:max,p_allow_vote_change:$('#cpsAllowChange').checked,p_anonymous:$('#cpsAnonymous').checked,p_results_visibility:$('#cpsResults').value,p_closes_at:closeValue?new Date(closeValue).toISOString():null});
     if(error){toast(safeError(error,'update this poll'));save.disabled=false;return}
-    closeModal();await loadLiveData();await loadCirclePolls(post.circle_id,{force:true});refreshCirclePollCards();toast(t('Poll updated.','تم تحديث التصويت.'));
+    const {data:updatedPost,error:postReadError}=await sb.from('posts').select(postRealtimeFields).eq('id',post.id).maybeSingle();
+    closeModal();
+    if(updatedPost&&!postReadError)await handlePostRealtime({eventType:'UPDATE',new:updatedPost,old:post});
+    else console.warn('[NEIS Circle poll post refresh]',postReadError||new Error('updated_poll_post_missing'));
+    await loadCirclePolls(post.circle_id,{force:true});
+    refreshCirclePollCards();
+    toast(postReadError||!updatedPost?t('Poll updated. Refresh if the post text looks stale.','تم تحديث التصويت. حدّث الصفحة إذا بدا نص المنشور قديمًا.'):t('Poll updated.','تم تحديث التصويت.'));
   };
 }
 
