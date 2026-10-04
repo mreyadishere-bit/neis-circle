@@ -2473,9 +2473,9 @@ function openCirclePost(){
       closeModal();await loadLiveData();await loadCirclePolls(c.id,{force:true});refreshCirclePollCards();toast(t('Poll published.','تم نشر التصويت.'));return;
     }
 
-    const {error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url});
-    if(error){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(safeError(error,'publish this post'));button.disabled=false;return}
-    closeModal();await loadLiveData();if(!window.NEISPatchCircleHomeRealtime?.())render();toast(t('Published in the Circle.','تم النشر في المجتمع.'));
+    const {data:createdPost,error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url}).select(postRealtimeFields).single();
+    if(error||!createdPost){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(error?safeError(error,'publish this post'):t('The post was created but could not be loaded.','تم إنشاء المنشور لكن تعذر تحميله.'));button.disabled=false;return}
+    closeModal();await handlePostRealtime({eventType:'INSERT',new:createdPost});if(!window.NEISPatchCircleHomeRealtime?.())render();toast(t('Published in the Circle.','تم النشر في المجتمع.'));
   };
 }
 

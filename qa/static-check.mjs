@@ -586,6 +586,22 @@ else {
   if (!reportStatusSection.includes('handleReportRealtime')) failures.push('Report status updates must delegate to handleReportRealtime.');
 }
 
+const circlePostCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const circlePostCreateStart = circlePostCreateSource.indexOf("const {data:createdPost,error}=await sb.from('posts').insert");
+const circlePostCreateEnd = circlePostCreateStart >= 0
+  ? circlePostCreateSource.indexOf('\n  };\n}\n\nfunction suggestedPersonItem', circlePostCreateStart)
+  : -1;
+const circlePostCreateSection = circlePostCreateStart >= 0 && circlePostCreateEnd > circlePostCreateStart
+  ? circlePostCreateSource.slice(circlePostCreateStart, circlePostCreateEnd)
+  : '';
+if (!circlePostCreateSection) failures.push('Circle post creation action section could not be located.');
+else {
+  if (circlePostCreateSection.includes('loadLiveData()')) failures.push('Circle post creation must remain targeted and must not call loadLiveData().');
+  if (!circlePostCreateSection.includes('handlePostRealtime')) failures.push('Circle post creation must delegate to handlePostRealtime.');
+  if (circlePostCreateSection.includes("select('*')")) failures.push('Circle post creation must not request wildcard fields.');
+  if (!circlePostCreateSection.includes('select(postRealtimeFields)')) failures.push('Circle post creation must select postRealtimeFields.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
