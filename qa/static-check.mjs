@@ -617,6 +617,22 @@ else {
   if (!circleCreateSection.includes('handleCircleMemberRealtime')) failures.push('Circle creation must delegate owner membership to handleCircleMemberRealtime.');
 }
 
+const circlePollUpdateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const circlePollUpdateStart = circlePollUpdateSource.indexOf("const {error}=await sb.rpc('update_circle_poll_post'");
+const circlePollUpdateEnd = circlePollUpdateStart >= 0
+  ? circlePollUpdateSource.indexOf('\n  };\n}\n\nfunction openCirclePost', circlePollUpdateStart)
+  : -1;
+const circlePollUpdateSection = circlePollUpdateStart >= 0 && circlePollUpdateEnd > circlePollUpdateStart
+  ? circlePollUpdateSource.slice(circlePollUpdateStart, circlePollUpdateEnd)
+  : '';
+if (!circlePollUpdateSection) failures.push('Circle poll update action section could not be located.');
+else {
+  if (circlePollUpdateSection.includes('loadLiveData()')) failures.push('Circle poll updates must remain targeted and must not call loadLiveData().');
+  if (!circlePollUpdateSection.includes('select(postRealtimeFields)')) failures.push('Circle poll updates must reload only postRealtimeFields.');
+  if (!circlePollUpdateSection.includes('handlePostRealtime')) failures.push('Circle poll updates must delegate post state to handlePostRealtime.');
+  if (!circlePollUpdateSection.includes('loadCirclePolls')) failures.push('Circle poll updates must refresh only the Circle poll store.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
