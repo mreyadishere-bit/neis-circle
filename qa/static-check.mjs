@@ -665,6 +665,56 @@ else {
   }
 }
 
+const notificationRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
+if (fs.existsSync(notificationRuntimePath)) {
+  const notificationRuntimeSource = fs.readFileSync(notificationRuntimePath, 'utf8');
+  for (const token of [
+    "const BASE_FAVICON='/assets/email-logo.png'",
+    "canvas.toDataURL('image/png')",
+    "ctx.fillStyle='#e5484d'",
+    "updateTabBadge"
+  ]) {
+    if (!notificationRuntimeSource.includes(token)) failures.push('Notification favicon badge contract is missing: ' + token);
+  }
+}
+
+const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+for (const token of [
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=9'",
+  "rememberSubscriptionInWorker",
+  "ensurePushHealth",
+  "window.addEventListener('focus'",
+  "window.addEventListener('pageshow'",
+  "window.addEventListener('online'",
+  "NEIS_PUSH_ROTATED"
+]) {
+  if (!pwaPushSource.includes(token)) failures.push('PWA push health contract is missing: ' + token);
+}
+
+const pwaSwPath = path.join(root, 'neis-pwa-sw.js');
+if (fs.existsSync(pwaSwPath)) {
+  const pwaSwSource = fs.readFileSync(pwaSwPath, 'utf8');
+  for (const token of [
+    'const VERSION = "neis-pwa-v9"',
+    'pushsubscriptionchange',
+    'refresh-web-push-subscription',
+    'NEIS_PUSH_SUBSCRIPTION',
+    'pending_rotation',
+    'neis-push-rotation'
+  ]) {
+    if (!pwaSwSource.includes(token)) failures.push('PWA service worker push-rotation contract is missing: ' + token);
+  }
+}
+
+const pushRefreshFunctionPath = path.join(root, 'supabase', 'functions', 'refresh-web-push-subscription', 'index.ts');
+if (!fs.existsSync(pushRefreshFunctionPath)) failures.push('Missing refresh-web-push-subscription Edge Function source.');
+else {
+  const pushRefreshFunctionSource = fs.readFileSync(pushRefreshFunctionPath, 'utf8');
+  for (const token of ['old_subscription','new_subscription','web_push_subscriptions','old_subscription_not_found']) {
+    if (!pushRefreshFunctionSource.includes(token)) failures.push('Push rotation Edge Function is missing: ' + token);
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
