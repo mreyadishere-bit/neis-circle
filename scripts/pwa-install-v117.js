@@ -6,6 +6,8 @@
   let deferredInstallPrompt=null;
   let serviceWorkerRegistration=null;
   let signOutHookInstalled=false;
+  let pushHealthPromise=null;
+  let lastPushHealthAt=0;
 
   const lang=(en,arText)=>{
     try{return typeof state!=='undefined'&&state.lang==='ar'?arText:en}catch(_){return en}
@@ -60,7 +62,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=8',{scope:'/'});
+      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=9',{scope:'/'});
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
@@ -122,6 +124,15 @@
     return registration.pushManager.getSubscription();
   }
 
+  async function rememberSubscriptionInWorker(subscription){
+    if(!subscription)return;
+    try{
+      const registration=serviceWorkerRegistration||await navigator.serviceWorker.ready;
+      const target=registration?.active||navigator.serviceWorker.controller;
+      target?.postMessage?.({type:'NEIS_PUSH_SUBSCRIPTION',subscription:subscription.toJSON()});
+    }catch(_){}
+  }
+
   async function registerSubscriptionWithServer(subscription){
     if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return false;
     const json=subscription.toJSON();
@@ -135,6 +146,8 @@
       console.error('[NEIS web push registration]',error);
       return false;
     }
+    await rememberSubscriptionInWorker(subscription);
+    lastPushHealthAt=Date.now();
     return true;
   }
 
@@ -183,6 +196,24 @@
       toast(lang('Notifications enabled.','تم تفعيل الإشعارات.'));
     }
     return registered;
+  }
+
+  async function ensurePushHealth(force=false){
+    if(!force&&lastPushHealthAt&&Date.now()-lastPushHealthAt<15000)return true;
+    if(pushHealthPromise)return pushHealthPromise;
+    pushHealthPromise=Promise.resolve().then(()=>ensureWebPush(false)).finally(()=>{pushHealthPromise=null});
+    return pushHealthPromise;
+  }
+
+  function refreshNotificationsNow(){
+    try{
+      window.NEISNotificationRuntime?.refresh?.(false,{force:true});
+    }catch(_){}
+  }
+
+  function recoverNotificationDelivery(force=false){
+    if(('Notification' in window)&&Notification.permission==='granted')ensurePushHealth(force).catch(()=>{});
+    refreshNotificationsNow();
   }
 
   async function disableWebPush(){
@@ -372,7 +403,7 @@
     if(!(typeof authUser!=='undefined'?authUser:null))return;
     if(!('Notification' in window))return;
     if(Notification.permission==='granted'){
-      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+      ensurePushHealth().catch(()=>{});
       return;
     }
     if(localStorage.getItem(NOTIFICATION_PROMPT_DISABLED_KEY)==='1')return;
@@ -435,7 +466,7 @@
       const result=await previous.apply(this,arguments);
       installSignOutHook();
       if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
-        Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+        ensurePushHealth().catch(()=>{});
       }
       scheduleNotificationOnboarding();
       return result;
@@ -484,7 +515,7 @@
     installSettingsHook();
     installSignOutHook();
     if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
-      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+      ensurePushHealth().catch(()=>{});
     }
     scheduleNotificationOnboarding();
   });
@@ -509,15 +540,22 @@
        notificationHiddenAt&&Date.now()-notificationHiddenAt>4000){
       notificationOnboardingShown=false;
       scheduleNotificationOnboarding();
-    }else if(('Notification' in window)&&Notification.permission==='granted'){
-      Promise.resolve().then(()=>ensureWebPush(false)).catch(()=>{});
+    }else{
+      recoverNotificationDelivery(true);
     }
+  });
+  window.addEventListener('focus',()=>recoverNotificationDelivery(false),{passive:true});
+  window.addEventListener('pageshow',()=>recoverNotificationDelivery(true),{passive:true});
+  window.addEventListener('online',()=>recoverNotificationDelivery(true),{passive:true});
+  navigator.serviceWorker?.addEventListener?.('message',event=>{
+    if(event.data?.type==='NEIS_PUSH_ROTATED')recoverNotificationDelivery(true);
   });
 
   window.NEISPWA={
     install:installPwa,
     enableNotifications:()=>ensureWebPush(true),
     openNotificationSettings:openPwaNotificationSettings,
+    ensurePushHealth:()=>ensurePushHealth(true),
     syncTheme:syncThemeChrome
   };
 })();

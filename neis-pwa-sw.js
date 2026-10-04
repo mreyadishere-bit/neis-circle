@@ -1,5 +1,115 @@
-const VERSION = "neis-pwa-v8";
-const STATIC_CACHE = "neis-static-v8";
+const VERSION = "neis-pwa-v9";
+const STATIC_CACHE = "neis-static-v9";
+
+
+const VAPID_PUBLIC_KEY = "BKPTZrkpcjMsJHXVOCnZHW-ht94oEPCIvZ8HMu65tQEnfjhoi5-HdBODDt1iNVBFIgsZoyMwXQxQJLJ62ZQoWYw";
+const PUSH_REFRESH_URL = "https://ydieijgynqlckaczalju.supabase.co/functions/v1/refresh-web-push-subscription";
+const PUSH_DB = "neis-push-meta";
+const PUSH_STORE = "kv";
+
+function base64UrlToUint8Array(value) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(ch => ch.charCodeAt(0)));
+}
+
+function openPushDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(PUSH_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PUSH_STORE)) db.createObjectStore(PUSH_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function pushMetaGet(key) {
+  const db = await openPushDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PUSH_STORE, "readonly");
+    const request = tx.objectStore(PUSH_STORE).get(key);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function pushMetaSet(key, value) {
+  const db = await openPushDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PUSH_STORE, "readwrite");
+    tx.objectStore(PUSH_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function subscriptionJson(subscription) {
+  if (!subscription) return null;
+  const json = subscription.toJSON ? subscription.toJSON() : subscription;
+  return {
+    endpoint: subscription.endpoint || json.endpoint || "",
+    keys: {
+      p256dh: json.keys?.p256dh || "",
+      auth: json.keys?.auth || ""
+    }
+  };
+}
+
+async function refreshRotatedSubscription(oldSubscription, newSubscription) {
+  const oldProof = subscriptionJson(oldSubscription) || await pushMetaGet("subscription");
+  const next = subscriptionJson(newSubscription);
+  if (!oldProof?.endpoint || !oldProof?.keys?.p256dh || !oldProof?.keys?.auth || !next?.endpoint) {
+    if (next) await pushMetaSet("subscription", next);
+    return false;
+  }
+  const payload = { old_subscription: oldProof, new_subscription: next };
+  await pushMetaSet("pending_rotation", payload);
+  try {
+    const response = await fetch(PUSH_REFRESH_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error("push_rotation_failed");
+    await pushMetaSet("subscription", next);
+    await pushMetaSet("pending_rotation", null);
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    windows.forEach(client => client.postMessage({ type: "NEIS_PUSH_ROTATED" }));
+    return true;
+  } catch (_) {
+    try { await self.registration.sync?.register?.("neis-push-rotation"); } catch (_) {}
+    return false;
+  }
+}
+
+async function retryPendingPushRotation() {
+  const pending = await pushMetaGet("pending_rotation");
+  if (!pending?.old_subscription || !pending?.new_subscription) return;
+  await refreshRotatedSubscription(pending.old_subscription, pending.new_subscription);
+}
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "NEIS_PUSH_SUBSCRIPTION") return;
+  const subscription = event.data.subscription;
+  if (subscription?.endpoint) event.waitUntil(pushMetaSet("subscription", subscription));
+});
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil((async () => {
+    const next = await self.registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64UrlToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    await refreshRotatedSubscription(event.oldSubscription || null, next);
+  })());
+});
+
+self.addEventListener("sync", (event) => {
+  if (event.tag === "neis-push-rotation") event.waitUntil(retryPendingPushRotation());
+});
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -52,9 +162,11 @@ self.addEventListener("push", (event) => {
   const title = data.title || "NEIS Circle";
   const options = {
     body: data.body || "You have a new notification.",
+    icon: "/assets/email-logo.png",
     badge: "/assets/notification-badge.png?v=2",
     data: { route: normalizeRoute(data.route || "") },
     tag: data.notification_id ? "neis-" + data.notification_id : undefined,
+    timestamp: Date.now(),
     renotify: false,
     silent: data.silent === true
   };
