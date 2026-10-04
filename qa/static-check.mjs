@@ -602,6 +602,21 @@ else {
   if (!circlePostCreateSection.includes('select(postRealtimeFields)')) failures.push('Circle post creation must select postRealtimeFields.');
 }
 
+const circleCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const circleCreateStart = circleCreateSource.indexOf("$('#createCircleForm').onsubmit=async");
+const circleCreateEnd = circleCreateStart >= 0 ? circleCreateSource.indexOf('\n\nfunction localSearchFallback', circleCreateStart) : -1;
+const circleCreateSection = circleCreateStart >= 0 && circleCreateEnd > circleCreateStart
+  ? circleCreateSource.slice(circleCreateStart, circleCreateEnd)
+  : '';
+if (!circleCreateSection) failures.push('Circle creation action section could not be located.');
+else {
+  if (circleCreateSection.includes('loadLiveData()')) failures.push('Circle creation must remain targeted and must not call loadLiveData().');
+  if (circleCreateSection.includes("select('*')")) failures.push('Circle creation must not request wildcard fields.');
+  if (!circleCreateSection.includes("select('id,owner_id,name,description,category,privacy,created_at')")) failures.push('Circle creation must select scoped Circle fields.');
+  if (!circleCreateSection.includes("select('circle_id,user_id,role,status,joined_at')")) failures.push('Circle creation must load only the new owner membership.');
+  if (!circleCreateSection.includes('handleCircleMemberRealtime')) failures.push('Circle creation must delegate owner membership to handleCircleMemberRealtime.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
