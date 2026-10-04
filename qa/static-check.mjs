@@ -562,6 +562,30 @@ if (fs.existsSync(appCssPath)) {
   }
 }
 
+const reportActionSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const reportDeleteStart = reportActionSource.indexOf('async function deleteResolvedReport');
+const reportDeleteEnd = reportDeleteStart >= 0 ? reportActionSource.indexOf('\ncomments=async function', reportDeleteStart) : -1;
+const reportDeleteSection = reportDeleteStart >= 0 && reportDeleteEnd > reportDeleteStart
+  ? reportActionSource.slice(reportDeleteStart, reportDeleteEnd)
+  : '';
+if (!reportDeleteSection) failures.push('Resolved report delete action section could not be located.');
+else {
+  if (reportDeleteSection.includes('loadLiveData()')) failures.push('Resolved report delete must remain targeted and must not call loadLiveData().');
+  if (!reportDeleteSection.includes('handleReportRealtime')) failures.push('Resolved report delete must delegate to handleReportRealtime.');
+}
+const reportStatusStart = reportActionSource.indexOf("root.querySelectorAll('[data-report-status]')");
+const reportStatusEnd = reportStatusStart >= 0
+  ? reportActionSource.indexOf("root.querySelectorAll('[data-delete-report]')", reportStatusStart)
+  : -1;
+const reportStatusSection = reportStatusStart >= 0 && reportStatusEnd > reportStatusStart
+  ? reportActionSource.slice(reportStatusStart, reportStatusEnd)
+  : '';
+if (!reportStatusSection) failures.push('Report status action section could not be located.');
+else {
+  if (reportStatusSection.includes('loadLiveData()')) failures.push('Report status updates must remain targeted and must not call loadLiveData().');
+  if (!reportStatusSection.includes('handleReportRealtime')) failures.push('Report status updates must delegate to handleReportRealtime.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
