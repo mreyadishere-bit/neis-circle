@@ -16,6 +16,9 @@ const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.n
 Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],profileStats:{},connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
 let searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationVisibilityBound=false;
+let socialRealtimeSubscribedOnce=false;
+let chatRealtimeRecoveryPromise=null;
+let lastChatRealtimeRecoveryAt=0;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
 let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
@@ -692,7 +695,11 @@ async function handleMessageRealtime(payload){
   const event=payload?.eventType||'';
   const incoming=payload?.new||{},oldRow=payload?.old||{};
   const candidateConversationId=incoming.conversation_id||oldRow.conversation_id||(state.liveMessages||[]).find(message=>same(message.id,incoming.id||oldRow.id))?.conversation_id;
-  const result=messageState.applyDirectMessage(state,payload,{visible:!!candidateConversationId&&conversationIsVisible(candidateConversationId)});
+  let visible=!!candidateConversationId&&conversationIsVisible(candidateConversationId);
+  if(!visible&&candidateConversationId&&event!=='DELETE'){
+    visible=await hydrateConversation(candidateConversationId);
+  }
+  const result=messageState.applyDirectMessage(state,payload,{visible});
   if(!result.changed)return;
   const {id,conversationId}=result;
 
@@ -721,13 +728,23 @@ async function handleCircleMessageRealtime(payload){
   const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
   if(!allowed)return;
   const senderId=incoming.sender_id||previous?.sender_id;
-  const profile=event==='DELETE'?previous?.profile:(previous?.profile||(senderId?await ensureRealtimePostProfile(senderId):null));
+  const profile=event==='DELETE'?previous?.profile:(previous?.profile||(senderId?profileData(senderId):null));
   const result=messageState.applyCircleMessage(state,payload,{allowed,profile});
   if(!result.changed)return;
   const newlyInserted=result.newlyInserted;
 
   const patched=messageDom.patchCircleFlow({circleId,id,event,newlyInserted});
   if(patched)Promise.resolve(markVisibleLocationNotificationsRead()).catch(()=>{});
+
+  if(event!=='DELETE'&&senderId&&(!profile?.full_name||profile?.username==='student')){
+    Promise.resolve(ensureRealtimePostProfile(senderId)).then(fullProfile=>{
+      if(!fullProfile)return;
+      const message=(state.circleMessages||[]).find(item=>same(item.id,id));
+      if(!message)return;
+      message.profile=fullProfile;
+      messageDom.patchCircleFlow({circleId,id,event:'UPDATE',newlyInserted:false});
+    }).catch(error=>console.warn('[NEIS Circle message profile enrichment]',error));
+  }
 }
 function handleMessageReactionRealtime(payload){
   const result=messageState.applyMessageReaction(state,payload);
@@ -840,10 +857,47 @@ async function handleReportRealtime(){
   }
 }
 
+async function recoverChatRealtimeGap(){
+  if(!sb||!authUser)return false;
+  const now=Date.now();
+  if(chatRealtimeRecoveryPromise)return chatRealtimeRecoveryPromise;
+  if(now-lastChatRealtimeRecoveryAt<1200)return false;
+  lastChatRealtimeRecoveryAt=now;
+
+  chatRealtimeRecoveryPromise=(async()=>{
+    const [direct,circle]=await Promise.all([
+      chatBootstrapData.catchUpDirect({sb,userId:authUser.id,state,profileData}),
+      chatBootstrapData.catchUpCircle({sb,userId:authUser.id,state,profileData,isAdmin:state.isAdmin})
+    ]);
+    sortConversations();
+    if(state.view==='messages'){
+      for(const conversation of (state.conversations||[]))patchDmThread(conversation.id);
+      if(state.activeConversationId)patchActiveDmFlow({force:true});
+    }
+    if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.activeCircleId){
+      messageDom.patchCircleFlow({circleId:state.activeCircleId,id:null,event:'RECOVER',newlyInserted:false});
+    }
+    await refreshMessageReactionsV1();
+    updateBadges();
+    return !!(direct?.ok||circle?.ok);
+  })().catch(error=>{
+    console.warn('[NEIS chat realtime recovery]',error);
+    return false;
+  }).finally(()=>{chatRealtimeRecoveryPromise=null});
+  return chatRealtimeRecoveryPromise;
+}
+function handleSocialRealtimeStatus(nextStatus,previousStatus){
+  if(nextStatus!=='SUBSCRIBED')return;
+  const reconnect=socialRealtimeSubscribedOnce&&previousStatus!=='SUBSCRIBED';
+  socialRealtimeSubscribedOnce=true;
+  if(reconnect)setTimeout(()=>recoverChatRealtimeGap(),40);
+}
+
 async function setupV6Realtime(uid){
   return realtimeRegistry.setup(uid,{
     sb,
     beforeSetup:syncKnownPostReactionKeys,
+    onStatus:handleSocialRealtimeStatus,
     handlers:{
     handlePostRealtime,
     handleCommentRealtime,
@@ -865,6 +919,9 @@ async function setupV6Realtime(uid){
   });
 }
 async function stopRealtimeRuntime(){
+  socialRealtimeSubscribedOnce=false;
+  chatRealtimeRecoveryPromise=null;
+  lastChatRealtimeRecoveryAt=0;
   await Promise.all([
     notificationRuntime.reset(),
     realtimeRegistry.reset(sb)
