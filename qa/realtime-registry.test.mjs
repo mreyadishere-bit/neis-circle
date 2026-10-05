@@ -39,7 +39,7 @@ const handlerNames=[
   'handleMessageRealtime','handleConversationRealtime','handleConversationMemberRealtime',
   'handleCircleMessageRealtime','handleMessageReactionRealtime','handleCircleMeetingRealtime',
   'handleFollowRealtime','handleCircleMemberRealtime','handleCircleRealtime','handleProfileRealtime',
-  'handleProfileBadgeRealtime','handleArticleRealtime','handleGalleryRealtime','handleReportRealtime'
+  'handleProfileBadgeRealtime','handleBookmarkRealtime','handleArticleRealtime','handleGalleryRealtime','handleReportRealtime'
 ];
 const handlers=Object.fromEntries(handlerNames.map(name=>[name,()=>name]));
 let beforeSetupCalls=0;
@@ -51,17 +51,17 @@ vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'realtime-v175.js'});
 
 const api=context.NEISRealtimeRegistry;
-assert.equal(api.version,'175.3');
+assert.equal(api.version,'175.4');
 
 const statusEvents=[];
 await api.setup('u1',{sb,handlers,beforeSetup:()=>{beforeSetupCalls+=1},onStatus:(next,previous)=>statusEvents.push([next,previous])});
 assert.equal(channelCreates,1);
-assert.equal(bindings.length,19,'all expected realtime tables must be registered');
+assert.equal(bindings.length,20,'all expected realtime tables must be registered');
 assert.equal(beforeSetupCalls,1);
 assert.deepEqual(bindings.map(item=>item.filter.table),[
   'posts','comments','reactions','comment_likes','comment_creator_hearts','messages',
   'conversations','conversation_members','circle_messages','message_reactions',
-  'circle_meetings','follows','circle_members','circles','profiles','profile_badges','articles','gallery_items','reports'
+  'circle_meetings','follows','circle_members','circles','profiles','profile_badges','bookmarks','articles','gallery_items','reports'
 ]);
 const selected=Object.fromEntries(bindings.filter(item=>item.filter.select).map(item=>[item.filter.table,item.filter.select]));
 assert.equal(selected.messages.join(','),context.NEISChatFields.message);

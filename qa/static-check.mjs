@@ -956,7 +956,7 @@ for (const token of [
   "['circles','handleCircleRealtime']",
   "['profiles','handleProfileRealtime']",
   "['profile_badges','handleProfileBadgeRealtime']",
-  "version:'175.3'"
+  "version:'175.4'"
 ]) {
   if (!expandedRealtimeRegistry.includes(token)) failures.push('Realtime registry core binding is missing: ' + token);
 }
@@ -968,6 +968,48 @@ else {
   for (const token of ['public.circles','public.profiles','public.profile_badges','supabase_realtime']) {
     if (!migrationSource.includes(token)) failures.push('Core realtime migration is missing: ' + token);
   }
+}
+
+const userScopedRealtimeSocial = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'function handleBookmarkRealtime(payload)',
+  "['bookmarks','handleBookmarkRealtime']",
+  'patchVisiblePostState(postId)'
+]) {
+  const source = token.includes("['bookmarks'") ? fs.readFileSync(path.join(root, 'scripts', 'social', 'realtime-v175.js'), 'utf8') : userScopedRealtimeSocial;
+  if (!source.includes(token)) failures.push('Bookmark realtime contract is missing: ' + token);
+}
+
+const studyRealtimeSource = fs.readFileSync(path.join(root, 'scripts', 'study-v42.js'), 'utf8');
+for (const token of [
+  'function renderStudyResultsOnly()',
+  'async function loadResources({silent=false}={})',
+  'function queueStudyRealtimeRefresh',
+  'async function setupStudyRealtime()',
+  "table:'study_resources'",
+  "table:'study_resource_actions'",
+  "filter:'user_id=eq.'+uid"
+]) {
+  if (!studyRealtimeSource.includes(token)) failures.push('Study realtime contract is missing: ' + token);
+}
+
+const timetableRealtimeSource = fs.readFileSync(path.join(root, 'scripts', 'timetable-v147.js'), 'utf8');
+for (const token of [
+  'function applyTimetableRealtime(payload)',
+  'async function setupTimetableRealtime()',
+  "table:'user_timetable_entries'",
+  "filter:'user_id=eq.'+uid",
+  'tt.rows=sortRows(tt.rows)'
+]) {
+  if (!timetableRealtimeSource.includes(token)) failures.push('Timetable realtime contract is missing: ' + token);
+}
+
+for (const migrationName of [
+  '20261006005500_expand_user_scoped_realtime.sql',
+  '20261006005700_timetable_realtime_delete_identity.sql'
+]) {
+  const migrationPath = path.join(root, 'supabase', 'migrations', migrationName);
+  if (!fs.existsSync(migrationPath)) failures.push('Missing user-scoped realtime migration: ' + migrationName);
 }
 
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');

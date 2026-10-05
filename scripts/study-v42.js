@@ -10,6 +10,7 @@
     subjects:[],units:[],resources:[],actions:new Map(),total:0,page:0,loading:false,error:'',ready:false,request:0
   };
   let searchTimer=null;
+  let studyRealtimeChannel=null,studyRealtimeUser='',studyRealtimeTimer=null,studyRealtimeNeedsFilters=false;
 
   function friendly(error,action='load Study resources'){console.error('[NEIS Study]',error);return window.neisFriendlyError?.(error,action)||tr('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')}
   function clean(value){return String(value||'').trim()}
@@ -56,17 +57,33 @@
   function shouldLoadResources(){
     return true;
   }
-  async function loadResources(){
+  function renderStudyResultsOnly(){
+    if(state.view!=='study'||!authUser||state.onboardingComplete!==true)return;
+    const root=$('#studyResults');
+    if(!root){renderStudyPage();return}
+    root.innerHTML=results();
+    bindStudy();
+  }
+  async function loadResources({silent=false}={}){
     const request=++study.request;
-    if(!shouldLoadResources()){study.resources=[];study.actions=new Map();study.total=0;study.loading=false;study.error='';renderStudyPage();return}
-    study.loading=true;study.error='';renderStudyPage();
+    if(!shouldLoadResources()){
+      study.resources=[];study.actions=new Map();study.total=0;study.loading=false;study.error='';
+      silent?renderStudyResultsOnly():renderStudyPage();
+      return;
+    }
+    study.loading=true;study.error='';
+    if(!silent)renderStudyPage();
     const {data,error}=await sb.rpc('study_resource_page',{
       mode_input:study.tab,subject_input:study.subject||null,unit_input:study.unit||null,
       search_input:clean(study.search)||null,type_input:study.type||null,language_input:study.language||null,
       oldest_input:study.sort==='oldest',page_size_input:PAGE_SIZE,offset_input:study.page*PAGE_SIZE
     });
     if(request!==study.request)return;
-    if(error){study.loading=false;study.error=friendly(error);study.resources=[];study.total=0;renderStudyPage();return}
+    if(error){
+      study.loading=false;study.error=friendly(error);study.resources=[];study.total=0;
+      silent?renderStudyResultsOnly():renderStudyPage();
+      return;
+    }
     const rows=data||[],authorIds=[...new Set(rows.map(row=>row.author_id).filter(Boolean))],resourceIds=rows.map(row=>row.id);
     const [authorsResult,actionsResult]=await Promise.all([
       authorIds.length?sb.from('profiles').select('id,full_name,username,grade,branch,avatar_url').in('id',authorIds):Promise.resolve({data:[],error:null}),
@@ -77,7 +94,7 @@
     study.actions=new Map((actionsResult.data||[]).map(action=>[String(action.resource_id),action]));
     study.resources=rows.map(row=>({...row,author:authors.get(String(row.author_id))||null}));
     study.total=Number(rows[0]?.total_count||0);study.loading=false;
-    renderStudyPage();
+    silent?renderStudyResultsOnly():renderStudyPage();
   }
 
   function activeFilterCount(){
@@ -282,6 +299,32 @@
     $('#studyReportForm').onsubmit=async event=>{event.preventDefault();const button=event.submitter;if(button.disabled)return;button.disabled=true;const {error}=await sb.from('reports').insert({reporter_id:authUser.id,target_type:'study_resource',target_id:String(id),reason:$('#studyReportReason').value,details:clean($('#studyReportDetails').value)});if(error){button.disabled=false;toast(friendly(error));return}closeModal();toast(tr('Report sent to the administrator.','تم إرسال البلاغ إلى الأدمن.'))};
   }
 
+  function queueStudyRealtimeRefresh({filters=false}={}){
+    studyRealtimeNeedsFilters=studyRealtimeNeedsFilters||filters;
+    clearTimeout(studyRealtimeTimer);
+    studyRealtimeTimer=setTimeout(async()=>{
+      if(state.view!=='study'||!authUser||!study.ready)return;
+      const refreshFilters=studyRealtimeNeedsFilters;
+      studyRealtimeNeedsFilters=false;
+      if(refreshFilters){
+        study.subjects=await loadValues('subject');
+        study.units=study.subject?await loadUnitsForSubject(study.subject):study.units;
+      }
+      await loadResources({silent:true});
+    },90);
+  }
+  async function setupStudyRealtime(){
+    if(!sb||!authUser)return;
+    const uid=String(authUser.id);
+    if(studyRealtimeChannel&&studyRealtimeUser===uid)return;
+    if(studyRealtimeChannel){try{await sb.removeChannel(studyRealtimeChannel)}catch(_){}}
+    studyRealtimeUser=uid;
+    studyRealtimeChannel=sb.channel('study-live-'+uid)
+      .on('postgres_changes',{event:'*',schema:'public',table:'study_resources'},()=>queueStudyRealtimeRefresh({filters:true}))
+      .on('postgres_changes',{event:'*',schema:'public',table:'study_resource_actions',filter:'user_id=eq.'+uid},()=>queueStudyRealtimeRefresh())
+      .subscribe();
+  }
+
   function bindStudy(){
     $$('[data-study-new]').forEach(button=>button.onclick=()=>editor());
     $$('[data-study-tab]').forEach(button=>button.onclick=()=>{study.tab=button.dataset.studyTab;study.page=0;loadResources()});
@@ -361,6 +404,7 @@
     if(state.view!=='study'){previousRender();return}
     if(!authUser||state.onboardingComplete!==true){previousRender();return}
     document.body.classList.add('app-ready');renderStudyPage();
+    setupStudyRealtime().catch(error=>console.warn('[NEIS Study realtime]',error));
     if(!study.ready)loadSubjects();
   };
 })();

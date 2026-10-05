@@ -5,6 +5,7 @@
   const tt=state.timetable={
     rows:[],loading:false,error:'',ready:false,dayFilter:'all',request:0
   };
+  let timetableRealtimeChannel=null,timetableRealtimeUser='';
   const tr=(en,ar)=>state.lang==='ar'?ar:en;
   const same=(a,b)=>String(a)===String(b);
   const days=[
@@ -86,6 +87,36 @@
     tt.loading=false;tt.ready=true;
     if(error){tt.error=friendly(error);tt.rows=[]}else tt.rows=sortRows(data||[]);
     renderTimetable();
+  }
+
+  function applyTimetableRealtime(payload){
+    const event=payload?.eventType||'';
+    const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+    const id=row.id;if(!id)return;
+    const index=tt.rows.findIndex(item=>same(item.id,id));
+    const previous=index>=0?tt.rows[index]:null;
+    if(event==='DELETE'){
+      if(!previous&&!same(row.user_id,authUser?.id))return;
+      if(index>=0)tt.rows.splice(index,1);
+    }else if(event==='INSERT'||event==='UPDATE'){
+      if(!same(row.user_id,authUser?.id))return;
+      const merged={...(previous||{}),...row};
+      if(index>=0)tt.rows[index]=merged;else tt.rows.push(merged);
+      if(Number(merged.day_of_week)===5||Number(merged.day_of_week)===6)rememberExtraDay(merged.day_of_week);
+    }else return;
+    tt.rows=sortRows(tt.rows);
+    tt.ready=true;tt.error='';
+    if(state.view==='timetable')renderTimetable();
+  }
+  async function setupTimetableRealtime(){
+    if(!sb||!authUser)return;
+    const uid=String(authUser.id);
+    if(timetableRealtimeChannel&&timetableRealtimeUser===uid)return;
+    if(timetableRealtimeChannel){try{await sb.removeChannel(timetableRealtimeChannel)}catch(_){}}
+    timetableRealtimeUser=uid;
+    timetableRealtimeChannel=sb.channel('timetable-live-'+uid)
+      .on('postgres_changes',{event:'*',schema:'public',table:'user_timetable_entries',filter:'user_id=eq.'+uid},applyTimetableRealtime)
+      .subscribe();
   }
 
   function eventCard(row){
@@ -298,6 +329,7 @@
     if(state.view!=='timetable'){previousRender();return}
     if(!authUser||state.onboardingComplete!==true){previousRender();return}
     renderTimetable();
+    setupTimetableRealtime().catch(error=>console.warn('[NEIS Timetable realtime]',error));
     if(!tt.ready&&!tt.loading)load();
   };
 })();
