@@ -48,7 +48,7 @@ vm.createContext(context);
 vm.runInContext(source,context,{filename:'notifications-v174.js'});
 
 const api=context.NEISNotificationRuntime;
-assert.equal(api.version,'174.0');
+assert.equal(api.version,'174.5');
 
 // Concurrent refreshes must share one backend request.
 const first=api.refresh(false,{force:true});
