@@ -8,6 +8,8 @@
   let lastFullSyncAt=0;
   let audioContext=null;
   let soundUnlocked=false;
+  const announcedIds=new Map();
+  const fallbackTimers=new Map();
   const DEFAULT_TAB_TITLE='NEIS Circle';
 
   function updateTabBadge(){
@@ -18,6 +20,37 @@
   }
 
   const same=(a,b)=>String(a)===String(b);
+  const ANNOUNCE_TTL_MS=15000;
+  function pruneAnnounced(now=Date.now()){
+    for(const [id,at] of announcedIds)if(now-at>ANNOUNCE_TTL_MS)announcedIds.delete(id);
+  }
+  function wasAnnounced(id){
+    if(!id)return false;
+    pruneAnnounced();
+    return announcedIds.has(String(id));
+  }
+  function markAnnounced(id){
+    if(!id)return;
+    pruneAnnounced();
+    announcedIds.set(String(id),Date.now());
+    const timer=fallbackTimers.get(String(id));
+    if(timer){
+      clearTimeout(timer);
+      fallbackTimers.delete(String(id));
+    }
+  }
+  function scheduleSystemFallback(row){
+    if(!row?.id||typeof setTimeout==='undefined')return;
+    const id=String(row.id);
+    if(wasAnnounced(id)||fallbackTimers.has(id))return;
+    const timer=setTimeout(()=>{
+      fallbackTimers.delete(id);
+      if(wasAnnounced(id))return;
+      markAnnounced(id);
+      showSystemNotification(row);
+    },1400);
+    fallbackTimers.set(id,timer);
+  }
   const renderNotificationsIfVisible=()=>{
     updateTabBadge();
     updateBadges();
@@ -93,34 +126,39 @@
   function ingestPush(payload){
     const row=payload&&typeof payload==='object'?payload:null;
     if(!row?.id)return;
-    if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
-      state.notifications=[{
-        id:row.id,
-        type:row.type||'',
-        title:row.title||'NEIS Circle',
-        body:row.body||'',
-        route:row.route||'',
-        created_at:row.created_at||new Date().toISOString(),
-        read_at:null
-      },...(state.notifications||[])].slice(0,100);
-      updateTabBadge();
-      renderNotificationsIfVisible();
+    const id=String(row.id);
+    const index=(state.notifications||[]).findIndex(n=>same(n.id,id));
+    const lightweight={
+      id,
+      type:row.type||'',
+      title:row.title||'NEIS Circle',
+      body:row.body||'',
+      route:row.route||'',
+      created_at:row.created_at||new Date().toISOString(),
+      read_at:null
+    };
+    if(index>=0)state.notifications[index]={...lightweight,...state.notifications[index]};
+    else state.notifications=[lightweight,...(state.notifications||[])].slice(0,100);
+    updateTabBadge();
+    renderNotificationsIfVisible();
+    if(!wasAnnounced(id)&&row.silent!==true){
+      markAnnounced(id);
+      playSound();
     }else{
-      updateTabBadge();
+      markAnnounced(id);
     }
-    if(row.silent!==true)playSound();
   }
 
   function applyRealtime(payload){
     const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};
     if(event==='INSERT'&&row?.id){
-      if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
-        state.notifications=[row,...(state.notifications||[])].slice(0,100);
-      }
+      const index=(state.notifications||[]).findIndex(n=>same(n.id,row.id));
+      if(index>=0)state.notifications[index]={...state.notifications[index],...row};
+      else state.notifications=[row,...(state.notifications||[])].slice(0,100);
       renderNotificationsIfVisible();
-      if(!row.read_at){
+      if(!row.read_at&&!wasAnnounced(row.id)){
         playSound();
-        showSystemNotification(row);
+        scheduleSystemFallback(row);
       }
       return;
     }
@@ -132,7 +170,11 @@
       return;
     }
     if(event==='DELETE'&&oldRow?.id){
-      state.notifications=(state.notifications||[]).filter(n=>!same(n.id,oldRow.id));
+      const id=String(oldRow.id);
+      const timer=fallbackTimers.get(id);
+      if(timer){clearTimeout(timer);fallbackTimers.delete(id)}
+      announcedIds.delete(id);
+      state.notifications=(state.notifications||[]).filter(n=>!same(n.id,id));
       renderNotificationsIfVisible();
     }
   }
@@ -201,12 +243,16 @@
       try{await sb.removeChannel(channel)}catch(_){}
     }
     channel=null;
-    updateTabBadge();
+    for(const timer of fallbackTimers.values())clearTimeout(timer);
+    fallbackTimers.clear();
+    announcedIds.clear();
+    state.notifications=[];
+    renderNotificationsIfVisible();
   }
 
   function snapshot(){
     return {
-      version:'174.5',
+      version:'174.6',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -224,7 +270,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.5',
+    version:'174.6',
     unlockSound,
     playSound,
     applyRows,

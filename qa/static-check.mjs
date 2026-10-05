@@ -840,6 +840,21 @@ const ingestPushSection = ingestPushStart >= 0 && ingestPushEnd > ingestPushStar
 if (!ingestPushSection) failures.push('Push ingestion section could not be located.');
 else if (!ingestPushSection.includes('updateTabBadge()')) failures.push('Push ingestion must update the tab title immediately.');
 
+const notificationDedupSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'notifications-v174.js'), 'utf8');
+for (const token of [
+  'const announcedIds=new Map()',
+  'const fallbackTimers=new Map()',
+  'function markAnnounced(id)',
+  'function scheduleSystemFallback(row)',
+  'state.notifications[index]={...state.notifications[index],...row}',
+  'if(!row.read_at&&!wasAnnounced(row.id))'
+]) {
+  if (!notificationDedupSource.includes(token)) failures.push('Notification dedup/merge contract is missing: ' + token);
+}
+if (notificationDedupSource.includes('playSound();\n        showSystemNotification(row);')) {
+  failures.push('Realtime notifications must not immediately duplicate the Web Push system alert.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
