@@ -133,6 +133,16 @@
     }catch(_){}
   }
 
+  async function serverSubscriptionStatus(subscription){
+    if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return 'unknown';
+    const {data,error}=await sb.rpc('get_web_push_subscription_status',{endpoint_input:subscription.endpoint});
+    if(error){
+      console.warn('[NEIS web push status]',error);
+      return 'unknown';
+    }
+    return String(data||'missing');
+  }
+
   async function registerSubscriptionWithServer(subscription){
     if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return false;
     const json=subscription.toJSON();
@@ -178,6 +188,13 @@
     if(!registration?.pushManager)return false;
 
     let subscription=await registration.pushManager.getSubscription();
+    if(subscription){
+      const serverStatus=await serverSubscriptionStatus(subscription);
+      if(serverStatus==='disabled'){
+        try{await subscription.unsubscribe()}catch(_){}
+        subscription=null;
+      }
+    }
     if(!subscription){
       try{
         subscription=await registration.pushManager.subscribe({
