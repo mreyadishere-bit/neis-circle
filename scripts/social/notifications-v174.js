@@ -198,8 +198,10 @@
   const primeNotificationSound=()=>{
     unlockSound().catch(()=>{});
   };
-  document.addEventListener('pointerdown',primeNotificationSound,{capture:true,once:true});
-  document.addEventListener('keydown',primeNotificationSound,{capture:true,once:true});
+  if(typeof document!=='undefined'){
+    document.addEventListener('pointerdown',primeNotificationSound,{capture:true,once:true});
+    document.addEventListener('keydown',primeNotificationSound,{capture:true,once:true});
+  }
 
   window.NEISNotificationRuntime={
     version:'174.0',
