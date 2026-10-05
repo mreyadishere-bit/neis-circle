@@ -840,6 +840,25 @@ const ingestPushSection = ingestPushStart >= 0 && ingestPushEnd > ingestPushStar
 if (!ingestPushSection) failures.push('Push ingestion section could not be located.');
 else if (!ingestPushSection.includes('updateTabBadge()')) failures.push('Push ingestion must update the tab title immediately.');
 
+const targetedPollCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  "data:createdPollPostId",
+  ".eq('id',createdPollPostId).maybeSingle()",
+  "handlePostRealtime({eventType:'INSERT',new:createdPollPost})",
+  "loadCirclePolls(c.id,{force:true})",
+  "NEISPatchCircleHomeRealtime"
+]) {
+  if (!targetedPollCreateSource.includes(token)) failures.push('Targeted Circle poll creation contract is missing: ' + token);
+}
+const pollCreateStart = targetedPollCreateSource.indexOf("sb.rpc('create_circle_poll_post'");
+const pollCreateEnd = pollCreateStart >= 0 ? targetedPollCreateSource.indexOf("const {data:createdPost,error}", pollCreateStart) : -1;
+const pollCreateSection = pollCreateStart >= 0 && pollCreateEnd > pollCreateStart ? targetedPollCreateSource.slice(pollCreateStart, pollCreateEnd) : '';
+if (!pollCreateSection) failures.push('Circle poll creation section could not be located.');
+else {
+  const globalReloadCount = (pollCreateSection.match(/loadLiveData\(\)/g)||[]).length;
+  if (globalReloadCount > 1) failures.push('Circle poll creation must use global loadLiveData only as a recovery fallback.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
