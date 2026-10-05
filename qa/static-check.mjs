@@ -665,16 +665,18 @@ else {
   }
 }
 
-const notificationFaviconRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
-if (fs.existsSync(notificationFaviconRuntimePath)) {
-  const notificationRuntimeSource = fs.readFileSync(notificationFaviconRuntimePath, 'utf8');
+const notificationTabCountRuntimePath = path.join(root, 'scripts', 'social', 'notifications-v174.js');
+if (fs.existsSync(notificationTabCountRuntimePath)) {
+  const notificationRuntimeSource = fs.readFileSync(notificationTabCountRuntimePath, 'utf8');
   for (const token of [
-    "const BASE_FAVICON='/assets/email-logo.png'",
-    "canvas.toDataURL('image/png')",
-    "ctx.fillStyle='#e5484d'",
+    "const DEFAULT_TAB_TITLE='NEIS Circle'",
+    "document.title=unread?'('+label+') '+DEFAULT_TAB_TITLE:DEFAULT_TAB_TITLE",
     "updateTabBadge"
   ]) {
-    if (!notificationRuntimeSource.includes(token)) failures.push('Notification favicon badge contract is missing: ' + token);
+    if (!notificationRuntimeSource.includes(token)) failures.push('Notification tab-title count contract is missing: ' + token);
+  }
+  for (const forbidden of ["canvas.toDataURL('image/png')","ctx.fillStyle='#e5484d'"]) {
+    if (notificationRuntimeSource.includes(forbidden)) failures.push('Notification tab count must not redraw the favicon: ' + forbidden);
   }
 }
 
