@@ -956,7 +956,7 @@ for (const token of [
   "['circles','handleCircleRealtime']",
   "['profiles','handleProfileRealtime']",
   "['profile_badges','handleProfileBadgeRealtime']",
-  "version:'175.3'"
+  "version:'175.4'"
 ]) {
   if (!expandedRealtimeRegistry.includes(token)) failures.push('Realtime registry core binding is missing: ' + token);
 }
