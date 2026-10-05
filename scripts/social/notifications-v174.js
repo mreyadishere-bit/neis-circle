@@ -8,60 +8,13 @@
   let lastFullSyncAt=0;
   let audioContext=null;
   let soundUnlocked=false;
-  const BASE_FAVICON='/assets/email-logo.png';
-  let faviconImagePromise=null;
-  let faviconRenderToken=0;
+  const DEFAULT_TAB_TITLE='NEIS Circle';
 
-  function faviconLink(){
-    let link=document.querySelector('link[rel~="icon"]');
-    if(!link){
-      link=document.createElement('link');
-      link.rel='icon';
-      link.type='image/png';
-      document.head.appendChild(link);
-    }
-    return link;
-  }
-
-  function loadFaviconImage(){
-    if(faviconImagePromise)return faviconImagePromise;
-    faviconImagePromise=new Promise((resolve,reject)=>{
-      const image=new Image();
-      image.onload=()=>resolve(image);
-      image.onerror=reject;
-      image.src=BASE_FAVICON;
-    });
-    return faviconImagePromise;
-  }
-
-  async function updateTabBadge(){
+  function updateTabBadge(){
     if(typeof document==='undefined')return;
     const unread=(state.notifications||[]).filter(n=>!n.read_at).length;
-    const link=faviconLink();
-    const token=++faviconRenderToken;
-    if(!unread){
-      link.href=BASE_FAVICON;
-      return;
-    }
-    try{
-      const image=await loadFaviconImage();
-      if(token!==faviconRenderToken)return;
-      const size=64,canvas=document.createElement('canvas');
-      canvas.width=size;canvas.height=size;
-      const ctx=canvas.getContext('2d');
-      if(!ctx)return;
-      ctx.clearRect(0,0,size,size);
-      ctx.drawImage(image,0,0,size,size);
-      const x=49,y=15,r=15;
-      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle='#e5484d';ctx.fill();
-      ctx.lineWidth=3;ctx.strokeStyle='#ffffff';ctx.stroke();
-      const label=unread>9?'9+':String(unread);
-      ctx.fillStyle='#ffffff';ctx.font=unread>9?'700 16px Arial':'700 20px Arial';
-      ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x,y+1);
-      link.href=canvas.toDataURL('image/png');
-    }catch{
-      link.href=BASE_FAVICON;
-    }
+    const label=unread>99?'99+':String(unread);
+    document.title=unread?'('+label+') '+DEFAULT_TAB_TITLE:DEFAULT_TAB_TITLE;
   }
 
   const same=(a,b)=>String(a)===String(b);
