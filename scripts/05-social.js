@@ -532,6 +532,69 @@ function handleFollowRealtime(payload){
   }
   if(['connections','profile-detail','discover'].includes(state.view))render();
 }
+function patchActiveCircleIdentity(circle){
+  if(state.view!=='circle-detail'||!same(state.activeCircleId,circle?.id))return false;
+  const hero=document.querySelector('.circle-hero');
+  if(hero){
+    const mark=hero.querySelector('.circle-logo');
+    const title=hero.querySelector('.circle-hero-copy h1');
+    const description=hero.querySelector('.circle-hero-copy > p');
+    const stats=hero.querySelectorAll('.circle-hero-copy .profile-stats > span');
+    if(mark)mark.textContent=String(circle.name||'NC').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase();
+    if(title)title.textContent=circle.name||'';
+    if(description)description.textContent=circle.description||'';
+    if(stats[1])stats[1].textContent=circle.category||'';
+    if(stats[2])stats[2].textContent=circle.privacy==='private'?t('Private','خاص'):t('Public','عام');
+  }
+  const chatMark=document.querySelector('.circle-chat-mark');
+  const chatTitle=document.querySelector('.circle-chat-title b');
+  if(chatMark)chatMark.textContent=initials(circle.name)||'C';
+  if(chatTitle)chatTitle.textContent=circle.name||'';
+  return true;
+}
+function handleCircleRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const id=row.id;if(!id)return;
+  const list=Array.isArray(state.circleRows)?state.circleRows:[];
+  const index=list.findIndex(item=>same(item.id,id));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+    state.circleMembers=(state.circleMembers||[]).filter(item=>!same(item.circle_id,id));
+    state.circleMessages=(state.circleMessages||[]).filter(item=>!same(item.circle_id,id));
+    state.circleMeetings=(state.circleMeetings||[]).filter(item=>!same(item.circle_id,id));
+    state.posts=(state.posts||[]).filter(item=>!same(item.circle_id,id));
+    if(same(state.activeCircleId,id)){
+      state.activeCircleId='';
+      routeTo('circles');
+      return;
+    }
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?list[index]:{}),...row};
+    if(index>=0)list[index]=merged;else list.unshift(merged);
+    if(same(state.activeCircleId,id))patchActiveCircleIdentity(merged);
+  }else return;
+  state.circleRows=list;
+  if(state.view==='circles')render();
+}
+function handleProfileBadgeRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const userId=row.user_id,badgeKey=row.badge_key;
+  if(!userId||!badgeKey)return;
+  const list=Array.isArray(state.profileBadges)?state.profileBadges:[];
+  const index=list.findIndex(item=>same(item.user_id,userId)&&same(item.badge_key,badgeKey));
+  if(event==='DELETE'){
+    if(index>=0)list.splice(index,1);
+  }else if(event==='INSERT'||event==='UPDATE'){
+    const merged={...(index>=0?list[index]:{}),...row};
+    if(index>=0)list[index]=merged;else list.push(merged);
+  }else return;
+  state.profileBadges=list;
+  window.NEISSecondaryData?.seed?.('badges',list);
+  if(state.view==='profile-detail'&&same(state.activeProfileId,userId))render();
+}
+
 async function handleCircleMemberRealtime(payload){
   const event=payload?.eventType||'';
   const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
@@ -911,7 +974,9 @@ async function setupV6Realtime(uid){
     handleCircleMeetingRealtime,
     handleFollowRealtime,
     handleCircleMemberRealtime,
+    handleCircleRealtime,
     handleProfileRealtime,
+    handleProfileBadgeRealtime,
     handleArticleRealtime,
     handleGalleryRealtime,
     handleReportRealtime
@@ -2363,7 +2428,15 @@ function refreshCirclePollCards(){
   if(typeof window.NEISPatchCircleHomeRealtime==='function')window.NEISPatchCircleHomeRealtime({forcePostIds:ids});
   else render();
 }
-let circlePollRealtime=null;
+let circlePollRealtime=null,circlePollRealtimeTimer=null;
+function queueCirclePollRealtimeRefresh(circleId){
+  clearTimeout(circlePollRealtimeTimer);
+  circlePollRealtimeTimer=setTimeout(async()=>{
+    if(!same(circlePollStore.circleId,circleId))return;
+    await loadCirclePolls(circleId,{force:true});
+    refreshCirclePollCards();
+  },70);
+}
 
 function circlePollForPost(postId){return circlePollStore.polls.find(p=>same(p.post_id,postId))}
 function circlePollOptions(pollId){return circlePollStore.options.filter(o=>same(o.poll_id,pollId)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0))}
@@ -2415,13 +2488,21 @@ async function loadCirclePolls(circleId,{force=false,rerender=false}={}){
     }
     if(circlePollRealtime){try{await sb.removeChannel(circlePollRealtime)}catch(_){}}
     circlePollRealtime=sb.channel('circle-polls-'+circleId)
-      .on('postgres_changes',{event:'*',schema:'public',table:'circle_polls'},async payload=>{
+      .on('postgres_changes',{event:'*',schema:'public',table:'circle_polls'},payload=>{
         const changedPost=payload.new?.post_id||payload.old?.post_id;
         if(!changedPost||state.posts.some(p=>same(p.id,changedPost)&&same(p.circle_id,circleId))){
-          await loadCirclePolls(circleId,{force:true});
-          refreshCirclePollCards();
+          queueCirclePollRealtimeRefresh(circleId);
         }
-      }).subscribe();
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'circle_poll_options'},payload=>{
+        const pollId=payload.new?.poll_id||payload.old?.poll_id;
+        if(!pollId||circlePollStore.polls.some(p=>same(p.id,pollId)))queueCirclePollRealtimeRefresh(circleId);
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'circle_poll_votes'},payload=>{
+        const pollId=payload.new?.poll_id||payload.old?.poll_id;
+        if(!pollId||circlePollStore.polls.some(p=>same(p.id,pollId)))queueCirclePollRealtimeRefresh(circleId);
+      })
+      .subscribe();
     if(rerender)refreshCirclePollCards();
   }finally{circlePollStore.loading=false}
 }
