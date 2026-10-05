@@ -595,6 +595,19 @@ function handleProfileBadgeRealtime(payload){
   if(state.view==='profile-detail'&&same(state.activeProfileId,userId))render();
 }
 
+function handleBookmarkRealtime(payload){
+  const event=payload?.eventType||'';
+  const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
+  const postId=row.post_id,userId=row.user_id;
+  if(!postId||!userId||!same(userId,authUser?.id))return;
+  const saved=new Set((state.saved||[]).map(String));
+  if(event==='DELETE')saved.delete(String(postId));
+  else if(event==='INSERT'||event==='UPDATE')saved.add(String(postId));
+  else return;
+  state.saved=[...saved];
+  patchVisiblePostState(postId);
+}
+
 async function handleCircleMemberRealtime(payload){
   const event=payload?.eventType||'';
   const row=event==='DELETE'?(payload?.old||{}):(payload?.new||{});
@@ -977,6 +990,7 @@ async function setupV6Realtime(uid){
     handleCircleRealtime,
     handleProfileRealtime,
     handleProfileBadgeRealtime,
+    handleBookmarkRealtime,
     handleArticleRealtime,
     handleGalleryRealtime,
     handleReportRealtime
