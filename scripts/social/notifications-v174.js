@@ -270,7 +270,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.5',
+    version:'174.6',
     unlockSound,
     playSound,
     applyRows,
