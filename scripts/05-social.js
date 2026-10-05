@@ -1017,9 +1017,14 @@ window.NEISRealtimeRuntime={
 const coreLoad=loadLiveData;
 loadLiveData=async function(){
   if(!sb||!authUser)return;
+  const uid=authUser.id;
+  // Notifications are latency-sensitive: start cache hydration, realtime, and
+  // the fresh sync before the heavier social/bootstrap data finishes loading.
+  const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{
+    console.warn('[NEIS notifications startup]',error);
+  });
   await coreLoad();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
-  const uid=authUser.id;
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
   const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
     sb.from('follows').select('follower_id,following_id,status,created_at').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
@@ -1037,7 +1042,7 @@ loadLiveData=async function(){
   await chatBootstrapData.loadCircle({sb,userId:uid,state,profileData,isAdmin:state.isAdmin});
   const messageReactionRes=await messageReactionData.load({sb,...messageReactionData.idsFromState(state)});if(!messageReactionRes.error)state.messageReactions=messageReactionRes.data||[]
   await setupV6Realtime(uid);
-  await setupNotificationRealtime(uid);
+  await notificationSetupPromise;
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };
 
