@@ -13,7 +13,7 @@ const normalizeSearch=normalize,matchesSearch=match,emptyState=blank;
 const when=value=>new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value||Date.now()));
 const relative=value=>{const sec=Math.max(0,(Date.now()-new Date(value).getTime())/1000);if(sec<60)return t('now','الآن');if(sec<3600)return `${Math.floor(sec/60)}${t('m','د')}`;if(sec<86400)return `${Math.floor(sec/3600)}${t('h','س')}`;return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short'}).format(new Date(value))};
 const safeError=(error,fallback)=>{console.error('[NEIS]',error);return window.neisFriendlyError?.(error,fallback)||t('Something went wrong. Please try again.','حدث خطأ. حاول مرة أخرى.')};
-Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
+Object.assign(state,{follows:[],conversations:[],conversationMembers:[],liveMessages:[],circleRows:[],circleMembers:[],circleMessages:[],messageReactions:[],circleMeetings:[],notifications:[],reports:[],allComments:[],profileBadges:[],profileStats:{},connectionTab:'following',searchTab:'all',searchResults:[],searchLoading:false,activeProfileId:'',activeConversationId:'',activeCircleId:'',circleTab:'home',meetingInviteId:'',circleFilter:'all',circleQuery:'',connectionsQuery:'',conversationQuery:'',discoverGrade:'all',discoverBranch:'all',dataErrors:{},dmDrafts:{},dmReplyTo:null,circleDrafts:{},circleReplyTo:null});
 let searchTimer=null,circleSearchTimer=null,searchIndex=-1,searchRequestId=0;
 let notificationVisibilityBound=false;
 let activeMeetingRuntime=null,liveKitModulePromise=null;
@@ -522,6 +522,11 @@ function handleFollowRealtime(payload){
     if(index>=0)list[index]=merged;else list.unshift(merged);
   }else return;
   state.follows=list;
+  if(state.view==='profile-detail'&&(
+    same(state.activeProfileId,followerId)||same(state.activeProfileId,followingId)
+  )){
+    refreshProfileStats(state.activeProfileId,{force:true}).catch(()=>{});
+  }
   if(['connections','profile-detail','discover'].includes(state.view))render();
 }
 async function handleCircleMemberRealtime(payload){
@@ -1407,9 +1412,47 @@ discover=function(){
 };
 function personCard(p){return `<article class="module-card profile-card student-card" data-open-profile="${p.id}" tabindex="0"><div class="person-card-head">${profileAvatar(p,true)}<div><h3>${esc(p.full_name||'Student')}</h3><p class="person-handle">@${esc(p.username||'student')}</p></div></div><div class="person-tags"><span class="post-kind ${String(p.grade||'').toLowerCase()==='graduate'?'graduate-badge':''}">${esc(p.grade||'Student')}</span><span class="branch-tag">${esc(p.branch||'NEIS')}</span></div><p class="person-interests">${esc((p.interests||[]).join(' · ')||p.bio||t('Learning and community','التعلم والمجتمع'))}</p><div class="profile-actions"><button class="secondary" data-v6-follow="${p.id}">${isFollowing(p.id)?t('Following ✓','تتم المتابعة ✓'):t('Follow','متابعة')}</button><button class="primary" data-message-user="${p.id}">${t('Message','مراسلة')}</button></div></article>`}
 
+const profileStatsRequests=new Map();
+async function refreshProfileStats(profileId,{force=false}={}){
+  const id=String(profileId||'');
+  if(!id||!sb)return null;
+  if(!force&&state.profileStats?.[id])return state.profileStats[id];
+  if(profileStatsRequests.has(id))return profileStatsRequests.get(id);
+  const request=(async()=>{
+    const [followersRes,followingRes,postsRes]=await Promise.all([
+      sb.from('follows').select('*',{count:'exact',head:true}).eq('following_id',id).eq('status','accepted'),
+      sb.from('follows').select('*',{count:'exact',head:true}).eq('follower_id',id).eq('status','accepted'),
+      sb.from('posts').select('*',{count:'exact',head:true}).eq('author_id',id).is('circle_id',null)
+    ]);
+    const error=followersRes.error||followingRes.error||postsRes.error;
+    if(error){
+      console.warn('[NEIS profile stats]',error);
+      return null;
+    }
+    const stats={
+      followers:Number(followersRes.count||0),
+      following:Number(followingRes.count||0),
+      posts:Number(postsRes.count||0),
+      loadedAt:Date.now()
+    };
+    state.profileStats={...(state.profileStats||{}),[id]:stats};
+    if(state.view==='profile-detail'&&same(state.activeProfileId,id))render();
+    return stats;
+  })().finally(()=>profileStatsRequests.delete(id));
+  profileStatsRequests.set(id,request);
+  return request;
+}
+function ensureProfileStats(profileId){
+  const id=String(profileId||'');
+  if(!id||state.profileStats?.[id]||profileStatsRequests.has(id))return;
+  Promise.resolve().then(()=>refreshProfileStats(id)).catch(()=>{});
+}
+
 function profileView(){
-  const p=profileData(state.activeProfileId),own=same(p.id,authUser.id),followers=state.follows.filter(f=>same(f.following_id,p.id)&&f.status==='accepted').length,following=state.follows.filter(f=>same(f.follower_id,p.id)&&f.status==='accepted').length,posts=state.posts.filter(x=>same(x.author_id,p.id)&&!x.circle_id),interests=Array.isArray(p.interests)?p.interests:String(p.interests||'').split(/[·,]/).map(x=>x.trim()).filter(Boolean);
-  return `<section class="profile-hero">${profileAvatar(p,true).replace('large','large xl')}<div><div class="identity-line"><h1>${esc(p.full_name||'Student')}</h1>${p.role==='admin'?'<span class="badge-admin">Admin</span>':''}${hasCommunityBuilder(p.id)?`<span class="badge-community" title="${t('Awarded after 2 successful referrals','تُمنح بعد دعوتين ناجحتين')}">🌟 ${t('Community Builder','باني المجتمع')}</span>`:''}</div><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} ${p.branch?`· ${esc(p.branch)}`:''}</p><p>${esc(p.bio||t('No bio yet.','لا توجد نبذة بعد.'))}</p>${interests.length?`<div class="profile-interest-block"><small>${t('Interests','الاهتمامات')}</small><div class="tag-row">${interests.map(item=>`<span>${esc(item)}</span>`).join('')}</div></div>`:''}<div class="profile-stats"><span><b>${followers}</b> ${t('followers','متابع')}</span><span><b>${following}</b> ${t('following','يتابع')}</span><span><b>${posts.length}</b> ${t('posts','منشور')}</span></div></div><div class="profile-hero-actions">${own?`<button class="primary" data-action="profile">${t('Edit profile','تعديل الملف')}</button>`:`<button class="secondary" data-v6-follow="${p.id}">${isFollowing(p.id)?t('Unfollow','إلغاء المتابعة'):t('Follow','متابعة')}</button><button class="primary" data-message-user="${p.id}">${t('Message','مراسلة')}</button><button class="secondary" data-report-target="profile" data-report-id="${p.id}">${t('Report','إبلاغ')}</button>`}</div></section><div class="page-title profile-posts-title" style="margin-top:24px"><div><h2>${t('Posts','المنشورات')}</h2><p>${t('Public activity from this student.','النشاط العام لهذا الطالب.')}</p></div></div><div class="feed standalone-post-feed">${posts.length?posts.map(postCard).join(''):blank(t('No posts yet','لا توجد منشورات بعد'),t('Published posts will appear here.','ستظهر المنشورات هنا.'))}</div>`
+  const p=profileData(state.activeProfileId),own=same(p.id,authUser.id),stats=state.profileStats?.[String(p.id)]||null,posts=state.posts.filter(x=>same(x.author_id,p.id)&&!x.circle_id),interests=Array.isArray(p.interests)?p.interests:String(p.interests||'').split(/[·,]/).map(x=>x.trim()).filter(Boolean);
+  ensureProfileStats(p.id);
+  const followers=stats?stats.followers:'…',following=stats?stats.following:'…',postCount=stats?stats.posts:'…';
+  return `<section class="profile-hero">${profileAvatar(p,true).replace('large','large xl')}<div><div class="identity-line"><h1>${esc(p.full_name||'Student')}</h1>${p.role==='admin'?'<span class="badge-admin">Admin</span>':''}${hasCommunityBuilder(p.id)?`<span class="badge-community" title="${t('Awarded after 2 successful referrals','تُمنح بعد دعوتين ناجحتين')}">🌟 ${t('Community Builder','باني المجتمع')}</span>`:''}</div><p>@${esc(p.username||'student')} · ${esc(p.grade||'')} ${p.branch?`· ${esc(p.branch)}`:''}</p><p>${esc(p.bio||t('No bio yet.','لا توجد نبذة بعد.'))}</p>${interests.length?`<div class="profile-interest-block"><small>${t('Interests','الاهتمامات')}</small><div class="tag-row">${interests.map(item=>`<span>${esc(item)}</span>`).join('')}</div></div>`:''}<div class="profile-stats"><span><b>${followers}</b> ${t('followers','متابع')}</span><span><b>${following}</b> ${t('following','يتابع')}</span><span><b>${postCount}</b> ${t('posts','منشور')}</span></div></div><div class="profile-hero-actions">${own?`<button class="primary" data-action="profile">${t('Edit profile','تعديل الملف')}</button>`:`<button class="secondary" data-v6-follow="${p.id}">${isFollowing(p.id)?t('Unfollow','إلغاء المتابعة'):t('Follow','متابعة')}</button><button class="primary" data-message-user="${p.id}">${t('Message','مراسلة')}</button><button class="secondary" data-report-target="profile" data-report-id="${p.id}">${t('Report','إبلاغ')}</button>`}</div></section><div class="page-title profile-posts-title" style="margin-top:24px"><div><h2>${t('Posts','المنشورات')}</h2><p>${t('Public activity from this student.','النشاط العام لهذا الطالب.')}</p></div></div><div class="feed standalone-post-feed">${posts.length?posts.map(postCard).join(''):blank(t('No posts yet','لا توجد منشورات بعد'),t('Published posts will appear here.','ستظهر المنشورات هنا.'))}</div>`
 }
 
 function connectionsView(){
