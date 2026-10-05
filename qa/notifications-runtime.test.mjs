@@ -87,7 +87,7 @@ assert.equal(context.state.notifications.filter(n=>n.id==='n3').length,1,'Push a
 context.state.view='notifications';
 api.applyRealtime({eventType:'UPDATE',new:{id:'n2',read_at:'2026-10-03T12:02:00Z'}});
 assert.equal(renderCount,1,'notifications view may rerender itself');
-assert.equal(context.state.notifications[0].read_at,'2026-10-03T12:02:00Z');
+assert.equal(context.state.notifications.find(n=>n.id==='n2')?.read_at,'2026-10-03T12:02:00Z');
 
 api.applyRealtime({eventType:'DELETE',old:{id:'n2'}});
 assert.equal(context.state.notifications.some(n=>n.id==='n2'),false);
