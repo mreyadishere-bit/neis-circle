@@ -89,6 +89,24 @@
     if(soundForNew&&fresh.some(n=>!n.read_at))playSound();
   }
 
+  function ingestPush(payload){
+    const row=payload&&typeof payload==='object'?payload:null;
+    if(!row?.id)return;
+    if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
+      state.notifications=[{
+        id:row.id,
+        type:row.type||'',
+        title:row.title||'NEIS Circle',
+        body:row.body||'',
+        route:row.route||'',
+        created_at:row.created_at||new Date().toISOString(),
+        read_at:null
+      },...(state.notifications||[])].slice(0,100);
+      renderNotificationsIfVisible();
+    }
+    if(row.silent!==true)playSound();
+  }
+
   function applyRealtime(payload){
     const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};
     if(event==='INSERT'&&row?.id){
@@ -184,7 +202,7 @@
 
   function snapshot(){
     return {
-      version:'174.3',
+      version:'174.4',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -211,6 +229,7 @@
     setup,
     reset,
     snapshot,
-    updateTabBadge
+    updateTabBadge,
+    ingestPush
   };
 })();

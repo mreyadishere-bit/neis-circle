@@ -258,6 +258,36 @@ function openStyleThemePicker(){
 settings=function(){openModal(`<div class="modal-head"><div><h2>${bi('Settings','الإعدادات')}</h2><p>${bi('Account, appearance, language and privacy.','الحساب والمظهر واللغة والخصوصية.')}</p></div><button class="close" data-close>×</button></div><div class="account-menu"><div class="account-row"><div><b>${esc(state.profile.name)}</b><small>${esc(state.profile.grade)} · ${esc(state.profile.branch)}</small></div>${state.isAdmin?`<span class="badge-admin">${bi('Admin','أدمن')}</span>`:`<span class="status-pill">${bi('Student','طالب')}</span>`}</div><button class="account-row" data-setting-plus="theme"><span>${bi('Light / Dark mode','الوضع الفاتح / الداكن')}</span><b>${state.theme==='light'?bi('Light','فاتح'):bi('Dark','داكن')}</b></button><button class="account-row" data-setting-plus="style-theme"><span>${bi('Style theme','نمط التصميم')}</span><b>${styleThemeLabel(state.styleTheme||'classic')}</b></button><button class="account-row" data-setting-plus="lang"><span>${bi('Language','اللغة')}</span><b>${ar()?'العربية':'English'}</b></button><button class="account-row" data-setting-plus="notifications"><span>${bi('Notifications','الإشعارات')}</span><b>${bi('Push & preferences','التنبيهات والإعدادات')}</b></button>${state.isAdmin?`<button class="account-row" data-nav="admin"><span>${bi('Private admin workspace','مساحة الأدمن الخاصة')}</span><b>${bi('Open →','فتح ←')}</b></button>`:''}${authUser?.id===NEIS_ADMIN_ID?`<button class="account-row" data-action="admin-connection"><span>${bi('Technical connection','الاتصال التقني')}</span><b>${bi('Main admin only','للأدمن الأساسي فقط')}</b></button>`:''}</div><button class="secondary signout" data-action="signout">${bi('Sign out of this account','تسجيل الخروج من الحساب')}</button>`);$('[data-setting-plus=theme]').onclick=()=>{state.theme=state.theme==='light'?'dark':'light';applyPrefs();settings()};$('[data-setting-plus=style-theme]').onclick=openStyleThemePicker;$('[data-setting-plus=lang]').onclick=()=>{state.lang=ar()?'en':'ar';state.articleLanguage=state.lang;applyPrefs();closeModal();render()};const notificationSettings=$('[data-setting-plus=notifications]');if(notificationSettings)notificationSettings.onclick=()=>{if(window.NEISPWA?.openNotificationSettings)window.NEISPWA.openNotificationSettings();else toast(bi('Notification settings are loading. Try again in a moment.','إعدادات الإشعارات ما زالت تُحمّل. حاول بعد لحظة.'))};$$('.modal [data-nav]').forEach(b=>b.onclick=()=>{closeModal();nav(b.dataset.nav)});translateTree($('#modalRoot'))};
 signOut=async function(){const signingOutUserId=authUser?.id||'';try{await window.NEISRealtimeRuntime?.stop?.()}catch(_){}try{window.NEISSecondaryData?.clearUser?.()}catch(_){}if(sb)await sb.auth.signOut();try{window.NEISProfileCache?.clear?.(signingOutUserId)}catch(_){}authUser=null;state.isAdmin=false;state.onboardingComplete=null;state.profile={name:'Student',username:'',grade:'',branch:'',campus:'',bio:'',interests:'',role:'student'};state.articles=[];state.gallery=[];state.members=[];save();closeModal();authScreen();toast(bi('Signed out safely.','تم تسجيل الخروج بأمان.'))};
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action="language"]');if(a)setTimeout(()=>{state.articleLanguage=state.lang;syncChrome();render()},0)},false);
+function hasPersistedSupabaseSession(){
+  try{
+    return Object.keys(localStorage).some(key=>
+      key.startsWith('sb-')&&key.endsWith('-auth-token')&&!!localStorage.getItem(key)
+    );
+  }catch(_){
+    return false;
+  }
+}
+async function resolveInitialSession(){
+  const first=await sb.auth.getSession();
+  if(first.error||first.data?.session||!hasPersistedSupabaseSession())return first;
+  let subscription=null;
+  const restored=await new Promise(resolve=>{
+    let finished=false;
+    const finish=session=>{
+      if(finished)return;
+      finished=true;
+      try{subscription?.unsubscribe?.()}catch(_){}
+      resolve(session||null);
+    };
+    const authListener=sb.auth.onAuthStateChange((event,session)=>{
+      if(session?.user&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(event))finish(session);
+    });
+    subscription=authListener?.data?.subscription||null;
+    setTimeout(()=>finish(null),1800);
+  });
+  return {data:{session:restored},error:null};
+}
+
 async function v4Init(){
   loadingScreen();
   if(!sb)await initSupabase();
@@ -267,7 +297,7 @@ async function v4Init(){
     return;
   }
 
-  const {data,error}=await sb.auth.getSession();
+  const {data,error}=await resolveInitialSession();
   if(error){
     authScreen();
     toast(error.message);

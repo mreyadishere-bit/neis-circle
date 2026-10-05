@@ -682,7 +682,7 @@ if (fs.existsSync(notificationTabCountRuntimePath)) {
 
 const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=9'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=10'",
   "rememberSubscriptionInWorker",
   "ensurePushHealth",
   "window.addEventListener('focus'",
@@ -697,7 +697,7 @@ const pwaSwPath = path.join(root, 'neis-pwa-sw.js');
 if (fs.existsSync(pwaSwPath)) {
   const pwaSwSource = fs.readFileSync(pwaSwPath, 'utf8');
   for (const token of [
-    'const VERSION = "neis-pwa-v9"',
+    'const VERSION = "neis-pwa-v10"',
     'pushsubscriptionchange',
     'refresh-web-push-subscription',
     'NEIS_PUSH_SUBSCRIPTION',
@@ -794,6 +794,40 @@ else {
   if (notificationResetSection.includes('soundUnlocked=false')) failures.push('Notification reset must preserve sound unlock state.');
 }
 if (!notificationSoundSource.includes('async function playSound()')) failures.push('Notification sound function is missing.');
+
+const pushTabSyncSwSource = fs.readFileSync(path.join(root, 'neis-pwa-sw.js'), 'utf8');
+for (const token of [
+  'const VERSION = "neis-pwa-v10"',
+  'NEIS_PUSH_NOTIFICATION',
+  'self.clients.matchAll({ type: "window", includeUncontrolled: true })',
+  'client.postMessage(payload)'
+]) {
+  if (!pushTabSyncSwSource.includes(token)) failures.push('Background push tab-sync contract is missing: ' + token);
+}
+
+const pushTabRuntimeSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'notifications-v174.js'), 'utf8');
+for (const token of ['function ingestPush(payload)','renderNotificationsIfVisible()','playSound()','ingestPush']) {
+  if (!pushTabRuntimeSource.includes(token)) failures.push('Push ingestion runtime contract is missing: ' + token);
+}
+
+const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+for (const token of [
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=10'",
+  "event.data?.type==='NEIS_PUSH_NOTIFICATION'",
+  "NEISNotificationRuntime?.ingestPush"
+]) {
+  if (!pushClientSource.includes(token)) failures.push('Push client tab-sync contract is missing: ' + token);
+}
+
+const authRestoreSource = fs.readFileSync(path.join(root, 'scripts', '03-auth-i18n.js'), 'utf8');
+for (const token of [
+  'function hasPersistedSupabaseSession()',
+  'async function resolveInitialSession()',
+  "key.startsWith('sb-')&&key.endsWith('-auth-token')",
+  'await resolveInitialSession()'
+]) {
+  if (!authRestoreSource.includes(token)) failures.push('Saved-session auth restore contract is missing: ' + token);
+}
 
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {

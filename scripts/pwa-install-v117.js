@@ -63,7 +63,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=9',{scope:'/'});
+      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=10',{scope:'/'});
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
@@ -603,7 +603,13 @@
   window.addEventListener('pageshow',()=>recoverNotificationDelivery(true),{passive:true});
   window.addEventListener('online',()=>recoverNotificationDelivery(true),{passive:true});
   navigator.serviceWorker?.addEventListener?.('message',event=>{
-    if(event.data?.type==='NEIS_PUSH_ROTATED')recoverNotificationDelivery(true);
+    if(event.data?.type==='NEIS_PUSH_ROTATED'){
+      recoverNotificationDelivery(true);
+      return;
+    }
+    if(event.data?.type==='NEIS_PUSH_NOTIFICATION'){
+      window.NEISNotificationRuntime?.ingestPush?.(event.data.notification||{});
+    }
   });
 
   window.NEISPWA={
