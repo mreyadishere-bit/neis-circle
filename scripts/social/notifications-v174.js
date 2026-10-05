@@ -19,6 +19,7 @@
 
   const same=(a,b)=>String(a)===String(b);
   const renderNotificationsIfVisible=()=>{
+    updateTabBadge();
     updateBadges();
     if(state.view==='notifications')render();
   };
@@ -102,7 +103,10 @@
         created_at:row.created_at||new Date().toISOString(),
         read_at:null
       },...(state.notifications||[])].slice(0,100);
+      updateTabBadge();
       renderNotificationsIfVisible();
+    }else{
+      updateTabBadge();
     }
     if(row.silent!==true)playSound();
   }
@@ -202,7 +206,7 @@
 
   function snapshot(){
     return {
-      version:'174.4',
+      version:'174.5',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -220,7 +224,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.0',
+    version:'174.5',
     unlockSound,
     playSound,
     applyRows,

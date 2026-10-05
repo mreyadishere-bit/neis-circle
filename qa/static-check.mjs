@@ -829,6 +829,17 @@ for (const token of [
   if (!authRestoreSource.includes(token)) failures.push('Saved-session auth restore contract is missing: ' + token);
 }
 
+const immediateTabTitleSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'notifications-v174.js'), 'utf8');
+const renderNotifStart = immediateTabTitleSource.indexOf('const renderNotificationsIfVisible=()=>');
+const renderNotifEnd = renderNotifStart >= 0 ? immediateTabTitleSource.indexOf('\n  };', renderNotifStart) + 5 : -1;
+const renderNotifSection = renderNotifStart >= 0 && renderNotifEnd > renderNotifStart ? immediateTabTitleSource.slice(renderNotifStart, renderNotifEnd) : '';
+if (!renderNotifSection || !renderNotifSection.includes('updateTabBadge()')) failures.push('Notification rendering must update the tab title directly.');
+const ingestPushStart = immediateTabTitleSource.indexOf('function ingestPush(payload)');
+const ingestPushEnd = ingestPushStart >= 0 ? immediateTabTitleSource.indexOf('\n  function applyRealtime', ingestPushStart) : -1;
+const ingestPushSection = ingestPushStart >= 0 && ingestPushEnd > ingestPushStart ? immediateTabTitleSource.slice(ingestPushStart, ingestPushEnd) : '';
+if (!ingestPushSection) failures.push('Push ingestion section could not be located.');
+else if (!ingestPushSection.includes('updateTabBadge()')) failures.push('Push ingestion must update the tab title immediately.');
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
