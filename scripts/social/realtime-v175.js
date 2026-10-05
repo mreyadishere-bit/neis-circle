@@ -24,7 +24,9 @@
     ['circle_meetings','handleCircleMeetingRealtime'],
     ['follows','handleFollowRealtime'],
     ['circle_members','handleCircleMemberRealtime'],
+    ['circles','handleCircleRealtime'],
     ['profiles','handleProfileRealtime'],
+    ['profile_badges','handleProfileBadgeRealtime'],
     ['articles','handleArticleRealtime'],
     ['gallery_items','handleGalleryRealtime'],
     ['reports','handleReportRealtime']
@@ -83,7 +85,7 @@
 
   function snapshot(){
     return {
-      version:'175.2',
+      version:'175.3',
       status,
       user:channelUid,
       active:!!channel,
@@ -92,7 +94,7 @@
   }
 
   window.NEISRealtimeRegistry={
-    version:'175.2',
+    version:'175.3',
     setup,
     reset,
     snapshot

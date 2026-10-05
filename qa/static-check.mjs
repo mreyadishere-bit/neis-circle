@@ -937,6 +937,39 @@ const recoverSection = recoverStart >= 0 && recoverEnd > recoverStart ? socialCh
 if (!recoverSection) failures.push('Chat realtime recovery section could not be located.');
 else if (recoverSection.includes('loadLiveData()')) failures.push('Chat realtime recovery must not trigger a global live-data refresh.');
 
+const expandedCoreRealtimeSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'function handleCircleRealtime(payload)',
+  'function handleProfileBadgeRealtime(payload)',
+  'function patchActiveCircleIdentity(circle)',
+  "table:'circle_poll_options'",
+  "table:'circle_poll_votes'",
+  'queueCirclePollRealtimeRefresh(circleId)',
+  'handleCircleRealtime,',
+  'handleProfileBadgeRealtime,'
+]) {
+  if (!expandedCoreRealtimeSource.includes(token)) failures.push('Expanded core realtime contract is missing: ' + token);
+}
+
+const expandedRealtimeRegistry = fs.readFileSync(path.join(root, 'scripts', 'social', 'realtime-v175.js'), 'utf8');
+for (const token of [
+  "['circles','handleCircleRealtime']",
+  "['profiles','handleProfileRealtime']",
+  "['profile_badges','handleProfileBadgeRealtime']",
+  "version:'175.3'"
+]) {
+  if (!expandedRealtimeRegistry.includes(token)) failures.push('Realtime registry core binding is missing: ' + token);
+}
+
+const coreRealtimeMigrationPath = path.join(root, 'supabase', 'migrations', '20261006003000_expand_core_ui_realtime.sql');
+if (!fs.existsSync(coreRealtimeMigrationPath)) failures.push('Missing core UI realtime publication migration.');
+else {
+  const migrationSource = fs.readFileSync(coreRealtimeMigrationPath, 'utf8');
+  for (const token of ['public.circles','public.profiles','public.profile_badges','supabase_realtime']) {
+    if (!migrationSource.includes(token)) failures.push('Core realtime migration is missing: ' + token);
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
