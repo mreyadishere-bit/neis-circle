@@ -179,14 +179,12 @@
       try{await sb.removeChannel(channel)}catch(_){}
     }
     channel=null;
-    audioContext=null;
-    soundUnlocked=false;
     updateTabBadge();
   }
 
   function snapshot(){
     return {
-      version:'174.2',
+      version:'174.3',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
