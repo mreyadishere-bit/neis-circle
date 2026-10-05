@@ -51,9 +51,10 @@ vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'realtime-v175.js'});
 
 const api=context.NEISRealtimeRegistry;
-assert.equal(api.version,'175.1');
+assert.equal(api.version,'175.2');
 
-await api.setup('u1',{sb,handlers,beforeSetup:()=>{beforeSetupCalls+=1}});
+const statusEvents=[];
+await api.setup('u1',{sb,handlers,beforeSetup:()=>{beforeSetupCalls+=1},onStatus:(next,previous)=>statusEvents.push([next,previous])});
 assert.equal(channelCreates,1);
 assert.equal(bindings.length,17,'all expected realtime tables must be registered');
 assert.equal(beforeSetupCalls,1);
@@ -71,6 +72,11 @@ assert.equal(selected.message_reactions.join(','),'id,dm_message_id,circle_messa
 
 subscribedStatusCallback('SUBSCRIBED');
 assert.equal(api.snapshot().status,'SUBSCRIBED');
+assert.deepEqual(statusEvents,[['SUBSCRIBED','CONNECTING']]);
+
+subscribedStatusCallback('CHANNEL_ERROR');
+subscribedStatusCallback('SUBSCRIBED');
+assert.deepEqual(statusEvents.slice(-2),[['CHANNEL_ERROR','SUBSCRIBED'],['SUBSCRIBED','CHANNEL_ERROR']],'status listener must expose reconnect transitions');
 
 // Same user + healthy channel: reuse instead of duplicate subscription.
 await api.setup('u1',{sb,handlers,beforeSetup:()=>{beforeSetupCalls+=1}});

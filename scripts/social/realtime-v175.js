@@ -5,6 +5,7 @@
   let channel=null;
   let channelUid='';
   let status='CLOSED';
+  let statusListener=null;
 
   const same=(a,b)=>String(a)===String(b);
   const MESSAGE_REACTION_FIELDS='id,dm_message_id,circle_message_id,user_id,emoji,created_at';
@@ -37,10 +38,11 @@
     if(missing.length)throw new Error('Missing realtime handlers: '+missing.join(', '));
   }
 
-  async function setup(uid,{sb,handlers,beforeSetup}={}){
+  async function setup(uid,{sb,handlers,beforeSetup,onStatus}={}){
     if(!sb||!uid)return;
     validateHandlers(handlers);
     if(typeof beforeSetup==='function')beforeSetup();
+    if(typeof onStatus==='function')statusListener=onStatus;
 
     if(channel&&same(channelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(status))return channel;
 
@@ -61,7 +63,11 @@
         handlers[handlerName]
       );
     }
-    channel=next.subscribe(nextStatus=>{status=nextStatus});
+    channel=next.subscribe(nextStatus=>{
+      const previousStatus=status;
+      status=nextStatus;
+      try{statusListener?.(nextStatus,previousStatus)}catch(error){console.warn('[NEIS realtime status listener]',error)}
+    });
     return channel;
   }
 
@@ -72,11 +78,12 @@
     channel=null;
     channelUid='';
     status='CLOSED';
+    statusListener=null;
   }
 
   function snapshot(){
     return {
-      version:'175.1',
+      version:'175.2',
       status,
       user:channelUid,
       active:!!channel,
@@ -85,7 +92,7 @@
   }
 
   window.NEISRealtimeRegistry={
-    version:'175.1',
+    version:'175.2',
     setup,
     reset,
     snapshot

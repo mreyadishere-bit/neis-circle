@@ -1,3 +1,4 @@
+// fresh-run-trigger: chat-realtime-recovery-20261005
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -894,6 +895,47 @@ const profileViewEnd = profileViewStart >= 0 ? profileStatsSource.indexOf('\n}\n
 const profileViewSection = profileViewStart >= 0 && profileViewEnd > profileViewStart ? profileStatsSource.slice(profileViewStart, profileViewEnd) : '';
 if (!profileViewSection) failures.push('Profile view section could not be located.');
 else if (profileViewSection.includes("state.follows.filter(f=>same(f.following_id,p.id)")) failures.push('Profile follower counts must not come from the current-user follows cache.');
+
+const realtimeRecoverySource = fs.readFileSync(path.join(root, 'scripts', 'social', 'realtime-v175.js'), 'utf8');
+for (const token of [
+  'statusListener',
+  'onStatus',
+  'previousStatus',
+  'statusListener?.(nextStatus,previousStatus)'
+]) {
+  if (!realtimeRecoverySource.includes(token)) failures.push('Realtime reconnect status contract is missing: ' + token);
+}
+
+const chatCatchUpSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'chat-bootstrap-v181.js'), 'utf8');
+for (const token of [
+  'async function catchUpDirect',
+  'async function catchUpCircle',
+  'mergeById',
+  'catchUpDirect,',
+  'catchUpCircle'
+]) {
+  if (!chatCatchUpSource.includes(token)) failures.push('Chat catch-up contract is missing: ' + token);
+}
+if (chatCatchUpSource.includes('state.liveMessages=[];\n    if(!conversationIds.length)return')) {
+  failures.push('Chat reconnect catch-up must not wipe loaded DM history.');
+}
+
+const socialChatRealtimeSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'async function recoverChatRealtimeGap()',
+  'handleSocialRealtimeStatus',
+  'chatBootstrapData.catchUpDirect',
+  'chatBootstrapData.catchUpCircle',
+  'onStatus:handleSocialRealtimeStatus',
+  "messageDom.patchCircleFlow({circleId,id,event:'UPDATE'"
+]) {
+  if (!socialChatRealtimeSource.includes(token)) failures.push('Targeted chat realtime recovery is missing: ' + token);
+}
+const recoverStart = socialChatRealtimeSource.indexOf('async function recoverChatRealtimeGap()');
+const recoverEnd = recoverStart >= 0 ? socialChatRealtimeSource.indexOf('\nfunction handleSocialRealtimeStatus', recoverStart) : -1;
+const recoverSection = recoverStart >= 0 && recoverEnd > recoverStart ? socialChatRealtimeSource.slice(recoverStart, recoverEnd) : '';
+if (!recoverSection) failures.push('Chat realtime recovery section could not be located.');
+else if (recoverSection.includes('loadLiveData()')) failures.push('Chat realtime recovery must not trigger a global live-data refresh.');
 
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {

@@ -11,7 +11,7 @@ vm.runInContext(fieldsSource,context,{filename:'chat-fields-v182.js'});
 vm.runInContext(source,context,{filename:'chat-bootstrap-v181.js'});
 
 const api=context.NEISChatBootstrapData;
-assert.equal(api.version,'181.0');
+assert.equal(api.version,'181.1');
 
 const calls=[];
 const responses={
@@ -75,6 +75,19 @@ const circle=await api.loadCircle({sb,userId:'u1',state,profileData:id=>({id,ful
 assert.equal(circle.ok,true);
 assert.equal(state.circleMessages.length,1);
 assert.equal(state.circleMessages[0].profile.full_name,'User');
+
+// Reconnect catch-up must merge recent rows without wiping older loaded history.
+state.liveMessages=[{id:'older',conversation_id:'c1',sender_id:'u2',created_at:'2026-10-03T10:45:00Z'}];
+const directCatchUp=await api.catchUpDirect({sb,userId:'u1',state,profileData:id=>({id,full_name:'User'})});
+assert.equal(directCatchUp.ok,true);
+assert.equal(state.liveMessages.some(x=>x.id==='older'),true,'catch-up must preserve older loaded DM history');
+assert.equal(state.liveMessages.some(x=>x.id==='m2'),true,'catch-up must merge recent DM rows');
+
+state.circleMessages=[{id:777,circle_id:'circle1',sender_id:'u2',created_at:'2026-10-03T11:30:00Z',profile:{full_name:'Old'}}];
+const circleCatchUp=await api.catchUpCircle({sb,userId:'u1',state,profileData:id=>({id,full_name:'User'}),isAdmin:false});
+assert.equal(circleCatchUp.ok,true);
+assert.equal(state.circleMessages.some(x=>x.id===777),true,'catch-up must preserve older Circle history');
+assert.equal(state.circleMessages.some(x=>x.id===1),true,'catch-up must merge recent Circle rows');
 
 const before=calls.length;
 state.circleMembers=[];
