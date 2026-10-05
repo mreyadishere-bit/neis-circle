@@ -682,7 +682,7 @@ if (fs.existsSync(notificationTabCountRuntimePath)) {
 
 const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=9'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=10'",
   "rememberSubscriptionInWorker",
   "ensurePushHealth",
   "window.addEventListener('focus'",
@@ -697,7 +697,7 @@ const pwaSwPath = path.join(root, 'neis-pwa-sw.js');
 if (fs.existsSync(pwaSwPath)) {
   const pwaSwSource = fs.readFileSync(pwaSwPath, 'utf8');
   for (const token of [
-    'const VERSION = "neis-pwa-v9"',
+    'const VERSION = "neis-pwa-v10"',
     'pushsubscriptionchange',
     'refresh-web-push-subscription',
     'NEIS_PUSH_SUBSCRIPTION',
