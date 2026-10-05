@@ -36,6 +36,27 @@
     }
   }
 
+  async function showSystemNotification(row){
+    try{
+      if(typeof document==='undefined'||!document.hidden)return;
+      if(!('Notification' in window)||Notification.permission!=='granted')return;
+      const registration=await navigator.serviceWorker?.ready;
+      if(!registration?.showNotification)return;
+      const title=row?.title||'NEIS Circle';
+      await registration.showNotification(title,{
+        body:row?.body||'You have a new notification.',
+        icon:'/assets/email-logo.png',
+        badge:'/assets/notification-badge.png?v=2',
+        data:{route:row?.route||''},
+        tag:row?.id?'neis-'+row.id:undefined,
+        renotify:false,
+        silent:false
+      });
+    }catch(error){
+      console.warn('[NEIS notification fallback]',error);
+    }
+  }
+
   async function playSound(){
     try{
       if(!await unlockSound())return;
@@ -75,7 +96,10 @@
         state.notifications=[row,...(state.notifications||[])].slice(0,100);
       }
       renderNotificationsIfVisible();
-      if(!row.read_at)playSound();
+      if(!row.read_at){
+        playSound();
+        showSystemNotification(row);
+      }
       return;
     }
     if(event==='UPDATE'&&row?.id){
@@ -162,13 +186,21 @@
 
   function snapshot(){
     return {
-      version:'174.1',
+      version:'174.2',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
       refreshing:!!refreshPromise,
       soundUnlocked
     };
+  }
+
+  const primeNotificationSound=()=>{
+    unlockSound().catch(()=>{});
+  };
+  if(typeof document!=='undefined'){
+    document.addEventListener('pointerdown',primeNotificationSound,{capture:true,once:true});
+    document.addEventListener('keydown',primeNotificationSound,{capture:true,once:true});
   }
 
   window.NEISNotificationRuntime={

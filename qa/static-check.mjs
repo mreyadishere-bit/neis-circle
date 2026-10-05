@@ -717,6 +717,36 @@ else {
   }
 }
 
+const stalePushPwaSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+for (const token of [
+  "get_web_push_subscription_status",
+  "serverStatus==='disabled'",
+  "subscription.unsubscribe()",
+  "pushManager.subscribe"
+]) {
+  if (!stalePushPwaSource.includes(token)) failures.push('Stale push renewal contract is missing: ' + token);
+}
+
+const notificationFallbackSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'notifications-v174.js'), 'utf8');
+for (const token of [
+  'showSystemNotification',
+  'document.hidden',
+  'registration.showNotification',
+  "document.addEventListener('pointerdown',primeNotificationSound",
+  "document.addEventListener('keydown',primeNotificationSound"
+]) {
+  if (!notificationFallbackSource.includes(token)) failures.push('Background notification fallback contract is missing: ' + token);
+}
+
+const pushHealthMigrationPath = path.join(root, 'supabase', 'migrations', '20261005075500_web_push_subscription_health.sql');
+if (!fs.existsSync(pushHealthMigrationPath)) failures.push('Missing web push subscription health migration.');
+else {
+  const pushHealthMigration = fs.readFileSync(pushHealthMigrationPath, 'utf8');
+  for (const token of ['get_web_push_subscription_status','auth.uid()','enabled','authenticated']) {
+    if (!pushHealthMigration.includes(token)) failures.push('Web push health migration is missing: ' + token);
+  }
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
