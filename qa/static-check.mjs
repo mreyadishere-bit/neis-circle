@@ -859,6 +859,23 @@ else {
   if (globalReloadCount > 1) failures.push('Circle poll creation must use global loadLiveData only as a recovery fallback.');
 }
 
+const targetedMeetingRetrySource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'async function refreshCircleMeetingsOnly',
+  ".eq('circle_id',circleId).order('starts_at')",
+  "state.dataErrors.meetings=null",
+  "refreshCircleMeetingsOnly(state.activeCircleId)"
+]) {
+  if (!targetedMeetingRetrySource.includes(token)) failures.push('Targeted meeting retry contract is missing: ' + token);
+}
+const retryMeetingsIndex = targetedMeetingRetrySource.indexOf("root.querySelectorAll('[data-retry-meetings]')");
+const retryMeetingsEnd = retryMeetingsIndex >= 0 ? targetedMeetingRetrySource.indexOf('\n', retryMeetingsIndex) : -1;
+const retryMeetingsSection = retryMeetingsIndex >= 0 && retryMeetingsEnd > retryMeetingsIndex
+  ? targetedMeetingRetrySource.slice(retryMeetingsIndex, retryMeetingsEnd)
+  : '';
+if (!retryMeetingsSection) failures.push('Meeting retry binding could not be located.');
+else if (retryMeetingsSection.includes('loadLiveData()')) failures.push('Meeting retry must not reload all live data.');
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
