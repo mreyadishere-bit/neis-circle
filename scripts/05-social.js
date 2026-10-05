@@ -900,6 +900,23 @@ loadLiveData=async function(){
   if(!notificationVisibilityBound){notificationVisibilityBound=true;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refreshNotificationsOnly(true)});window.addEventListener('focus',()=>refreshNotificationsOnly(true));document.addEventListener('pointerdown',unlockNotificationSound,{capture:true});document.addEventListener('keydown',unlockNotificationSound,{capture:true})}
 };
 
+async function refreshCircleMeetingsOnly(circleId=state.activeCircleId){
+  if(!sb||!authUser||!circleId)return false;
+  const {data,error}=await sb.from('circle_meetings').select(circleMeetingFields).eq('circle_id',circleId).order('starts_at');
+  if(error){
+    state.dataErrors.meetings=error;
+    console.error('[NEIS meetings retry]',error);
+    return false;
+  }
+  const fresh=(data||[]).map(meeting=>({...meeting,creator:profileData(meeting.creator_id)}));
+  state.circleMeetings=[
+    ...(state.circleMeetings||[]).filter(meeting=>!same(meeting.circle_id,circleId)),
+    ...fresh
+  ].sort((a,b)=>new Date(a.starts_at||0)-new Date(b.starts_at||0));
+  state.dataErrors.meetings=null;
+  return true;
+}
+
 let refreshBusy=false,refreshQueued=false,deferredGlobalRefreshTimer=null;
 function chatInteractionProtected(){
   const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
@@ -2748,7 +2765,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-search-tab]').forEach(el=>el.onclick=()=>{state.searchTab=el.dataset.searchTab;render()});
   root.querySelectorAll('[data-search-open]').forEach(el=>el.onclick=()=>{const type=el.dataset.searchOpen,id=el.dataset.searchId;$('#searchSuggestions')?.classList.add('hidden');routeTo(type==='profile'?`profile/${id}`:type==='circle'?`circles/${id}/home`:`post/${id}`)});
   root.querySelectorAll('[data-retry-search]').forEach(el=>el.onclick=()=>performSearch(state.query,true));
-  root.querySelectorAll('[data-retry-meetings]').forEach(el=>el.onclick=async()=>{el.disabled=true;await loadLiveData();render()});
+  root.querySelectorAll('[data-retry-meetings]').forEach(el=>el.onclick=async()=>{el.disabled=true;await refreshCircleMeetingsOnly(state.activeCircleId);render()});
   if(state.view==='circle-detail'&&state.circleTab==='meetings'&&state.meetingInviteId){const card=root.querySelector(`[data-meeting-card="${CSS.escape(String(state.meetingInviteId))}"]`);if(card){card.classList.add('meeting-invite-target');setTimeout(()=>card.scrollIntoView({block:'center',behavior:'smooth'}),50)}}
   if(state.view==='circle-detail'&&state.circleTab==='home'&&state.circlePostTarget){const targetId=String(state.circlePostTarget),post=root.querySelector('#post-'+CSS.escape(targetId));if(post){state.circlePostTarget='';post.classList.add('notification-target-highlight');setTimeout(()=>{post.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>post.classList.remove('notification-target-highlight'),2600)},60)}}
   if(state.view==='messages'&&state.notificationMessageTarget){const targetId=String(state.notificationMessageTarget),row=root.querySelector(`#chatFlow > .chat-message[data-message-id="${CSS.escape(targetId)}"]`);if(row){state.notificationMessageTarget='';row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
