@@ -9,6 +9,37 @@
   let audioContext=null;
   let soundUnlocked=false;
   const DEFAULT_TAB_TITLE='NEIS Circle';
+  const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
+  const CACHE_PREFIX='neis-notifications-v174:';
+  const CACHE_MAX_AGE=12*60*60*1000;
+
+  const cacheKey=uid=>CACHE_PREFIX+String(uid||'guest');
+  function readCache(uid){
+    if(typeof sessionStorage==='undefined'||!uid)return [];
+    try{
+      const parsed=JSON.parse(sessionStorage.getItem(cacheKey(uid))||'null');
+      if(!parsed||!Array.isArray(parsed.rows)||!Number(parsed.savedAt))return [];
+      if(Date.now()-Number(parsed.savedAt)>CACHE_MAX_AGE)return [];
+      return parsed.rows.slice(0,100);
+    }catch{return []}
+  }
+  function writeCache(){
+    if(typeof sessionStorage==='undefined'||!channelUid)return;
+    try{
+      sessionStorage.setItem(cacheKey(channelUid),JSON.stringify({
+        savedAt:Date.now(),
+        rows:(state.notifications||[]).slice(0,100)
+      }));
+    }catch{}
+  }
+  function hydrateCache(uid){
+    if((state.notifications||[]).length)return false;
+    const rows=readCache(uid);
+    if(!rows.length)return false;
+    state.notifications=rows;
+    renderNotificationsIfVisible();
+    return true;
+  }
 
   function updateTabBadge(){
     if(typeof document==='undefined')return;
@@ -86,6 +117,7 @@
     const next=Array.isArray(rows)?rows:[];
     const fresh=next.filter(n=>!previousIds.has(String(n.id)));
     state.notifications=next;
+    writeCache();
     renderNotificationsIfVisible();
     if(soundForNew&&fresh.some(n=>!n.read_at))playSound();
   }
@@ -103,6 +135,7 @@
         created_at:row.created_at||new Date().toISOString(),
         read_at:null
       },...(state.notifications||[])].slice(0,100);
+      writeCache();
       updateTabBadge();
       renderNotificationsIfVisible();
     }else{
@@ -117,6 +150,7 @@
       if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
         state.notifications=[row,...(state.notifications||[])].slice(0,100);
       }
+      writeCache();
       renderNotificationsIfVisible();
       if(!row.read_at){
         playSound();
@@ -128,11 +162,13 @@
       const index=(state.notifications||[]).findIndex(n=>same(n.id,row.id));
       if(index>=0)state.notifications[index]={...state.notifications[index],...row};
       else state.notifications=[row,...(state.notifications||[])].slice(0,100);
+      writeCache();
       renderNotificationsIfVisible();
       return;
     }
     if(event==='DELETE'&&oldRow?.id){
       state.notifications=(state.notifications||[]).filter(n=>!same(n.id,oldRow.id));
+      writeCache();
       renderNotificationsIfVisible();
     }
   }
@@ -143,7 +179,11 @@
     if(!force&&lastFullSyncAt&&now-lastFullSyncAt<3000)return;
     if(refreshPromise)return refreshPromise;
     refreshPromise=(async()=>{
-      const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(100);
+      const {data,error}=await sb.from('notifications')
+        .select(NOTIFICATION_FIELDS)
+        .eq('user_id',authUser.id)
+        .order('created_at',{ascending:false})
+        .limit(100);
       if(error){
         console.error('[NEIS notifications refresh]',error);
         return;
@@ -163,7 +203,8 @@
 
   async function setup(uid){
     if(channel&&same(channelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(realtimeStatus)){
-      if(!(state.notifications||[]).length)await refresh(false);
+      if(!(state.notifications||[]).length)hydrateCache(uid);
+      refresh(false).catch(()=>{});
       return;
     }
     if(channel){
@@ -176,18 +217,20 @@
       updateBadges();
     }
     channelUid=uid;
+    hydrateCache(uid);
     realtimeStatus='CONNECTING';
     channel=sb.channel(`neis-notifications-${uid}`)
       .on('postgres_changes',{event:'*',schema:'public',table:'notifications',filter:`user_id=eq.${uid}`},applyRealtime)
       .subscribe(status=>{
         realtimeStatus=status;
         if(status==='SUBSCRIBED'){
-          if(!(state.notifications||[]).length||Date.now()-lastFullSyncAt>60000)refresh(false);
+          setTimeout(()=>refresh(false,{force:true}).catch(()=>{}),120);
           startFallback();
         }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
           startFallback();
         }
       });
+    refresh(false,{force:true}).catch(()=>{});
   }
 
   async function reset(){
@@ -206,7 +249,7 @@
 
   function snapshot(){
     return {
-      version:'174.5',
+      version:'174.7',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -224,7 +267,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.5',
+    version:'174.7',
     unlockSound,
     playSound,
     applyRows,
