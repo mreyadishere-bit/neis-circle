@@ -419,43 +419,53 @@
   let notificationOnboardingTimer=null;
   let notificationOnboardingShown=false;
   let notificationHiddenAt=0;
-  const NOTIFICATION_PROMPT_DISABLED_KEY='neis-pwa-notification-prompt-disabled';
 
-  function notificationOnboardingMarkup(){
+  function notificationOnboardingMarkup(mode='permission'){
     const permission=('Notification' in window)?Notification.permission:'unsupported';
     if(permission==='unsupported'){
       return {
         title:lang('Notifications unavailable','الإشعارات غير متاحة'),
-        body:lang('This browser does not support web push notifications.','هذا المتصفح لا يدعم إشعارات الويب.'),
+        body:lang('This browser does not support web push notifications.','المتصفح الحالي لا يدعم إشعارات الويب.'),
         action:''
+      };
+    }
+    if(mode==='push-health'){
+      return {
+        title:lang('Fix notifications','إصلاح الإشعارات'),
+        body:lang('Notifications are allowed, but this device is not connected to background alerts yet. Retry to register this device so messages can reach you while NEIS Circle is in the background.','الإشعارات مسموحة، لكن هذا الجهاز غير متصل بتنبيهات الخلفية بعد. أعد المحاولة لتسجيل الجهاز حتى تصلك الرسائل أثناء وجود NEIS Circle في الخلفية.'),
+        action:`<button type="button" class="primary" data-pwa-onboarding-retry>${lang('Retry notifications','إعادة تفعيل الإشعارات')}</button>`
       };
     }
     if(permission==='denied'){
       return {
         title:lang('Notifications are blocked','الإشعارات محظورة'),
-        body:lang('Open this site’s settings in your browser and change Notifications to Allow, then reopen NEIS Circle.','افتح إعدادات هذا الموقع في المتصفح وغيّر الإشعارات إلى سماح، ثم افتح NEIS Circle مرة أخرى.'),
+        body:lang('Enable Notifications for NEIS Circle from this site’s browser settings so messages can alert you on desktop and mobile even when the tab is in the background.','فعّل Notifications لموقع NEIS Circle من إعدادات الموقع في المتصفح حتى تصلك تنبيهات الرسائل على الديسكتوب والموبايل حتى عندما يكون التاب في الخلفية.'),
         action:''
       };
     }
     return {
       title:lang('Enable notifications','فعّل الإشعارات'),
-      body:lang('Allow NEIS Circle to notify you about messages, replies, likes, new posts, articles, Circles and other activity even when the app is closed.','اسمح لـ NEIS Circle بإرسال إشعارات الرسائل والردود والمجتمعات والإعلانات والإعجابات والتفاعلات حتى عند إغلاق التطبيق.'),
+      body:lang('Enable alerts so messages, replies and other activity can notify you on desktop and mobile even when NEIS Circle is in the background or closed.','فعّل التنبيهات حتى تصلك الرسائل والردود وباقي النشاط على الديسكتوب والموبايل حتى عندما يكون NEIS Circle في الخلفية أو مغلقًا.'),
       action:`<button type="button" class="primary" data-pwa-onboarding-enable>${lang('Enable notifications','تفعيل الإشعارات')}</button>`
     };
   }
 
-  function showNotificationOnboarding(){
-    if(!(typeof authUser!=='undefined'?authUser:null))return;
+  async function showNotificationOnboarding(){
     if(!('Notification' in window))return;
+    let session=null;
+    try{session=(await sb?.auth?.getSession?.())?.data?.session||null}catch(_){}
+    if(!session?.user)return;
+
+    let mode='permission';
     if(Notification.permission==='granted'){
-      ensurePushHealth().catch(()=>{});
-      return;
+      const healthy=await ensurePushHealth(true).catch(()=>false);
+      if(healthy)return;
+      mode='push-health';
     }
-    if(localStorage.getItem(NOTIFICATION_PROMPT_DISABLED_KEY)==='1')return;
     if(notificationOnboardingShown)return;
     notificationOnboardingShown=true;
 
-    const copy=notificationOnboardingMarkup();
+    const copy=notificationOnboardingMarkup(mode);
     if(typeof openModal!=='function')return;
     openModal(`
       <div class="modal-head">
@@ -465,43 +475,40 @@
         </div>
         <button class="close" data-close>×</button>
       </div>
-      <label class="pwa-notification-suppress">
-        <input type="checkbox" data-pwa-dont-show-again>
-        <span>${lang("Don't show again on this device",'عدم الإظهار مرة أخرى على هذا الجهاز')}</span>
-      </label>
       <div class="modal-actions">
         <button type="button" class="secondary" data-pwa-not-now>${lang('Not now','ليس الآن')}</button>
         ${copy.action}
       </div>
     `);
 
-    const suppress=document.querySelector('[data-pwa-dont-show-again]');
-    const rememberSuppression=()=>{
-      if(suppress?.checked)localStorage.setItem(NOTIFICATION_PROMPT_DISABLED_KEY,'1');
-    };
-
     const notNow=document.querySelector('[data-pwa-not-now]');
-    if(notNow)notNow.onclick=()=>{
-      rememberSuppression();
-      try{closeModal()}catch(_){}
-    };
+    if(notNow)notNow.onclick=()=>{try{closeModal()}catch(_){}};
 
     const enable=document.querySelector('[data-pwa-onboarding-enable]');
     if(enable)enable.onclick=async()=>{
-      rememberSuppression();
       enable.disabled=true;
       const ok=await ensureWebPush(true);
       enable.disabled=false;
+      if(ok)try{closeModal()}catch(_){}
+    };
+
+    const retry=document.querySelector('[data-pwa-onboarding-retry]');
+    if(retry)retry.onclick=async()=>{
+      retry.disabled=true;
+      const ok=await ensurePushHealth(true);
+      retry.disabled=false;
       if(ok){
-        localStorage.removeItem(NOTIFICATION_PROMPT_DISABLED_KEY);
+        if(typeof toast==='function')toast(lang('Notifications are connected on this device.','تم توصيل الإشعارات على هذا الجهاز.'));
         try{closeModal()}catch(_){}
+      }else if(typeof toast==='function'){
+        toast(lang('Could not connect background notifications yet.','تعذر توصيل إشعارات الخلفية حتى الآن.'));
       }
     };
   }
 
   function scheduleNotificationOnboarding(){
     clearTimeout(notificationOnboardingTimer);
-    notificationOnboardingTimer=setTimeout(showNotificationOnboarding,700);
+    notificationOnboardingTimer=setTimeout(()=>showNotificationOnboarding().catch(()=>{}),700);
   }
 
   function hookLiveData(){
