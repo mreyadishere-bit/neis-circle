@@ -12,6 +12,7 @@ const pending=new Promise(resolve=>{releaseFetch=resolve});
 
 class Query {
   select(){return this}
+  eq(){return this}
   order(){return this}
   limit(){
     fetchCount+=1;
@@ -48,7 +49,7 @@ vm.createContext(context);
 vm.runInContext(source,context,{filename:'notifications-v174.js'});
 
 const api=context.NEISNotificationRuntime;
-assert.equal(api.version,'174.5');
+assert.equal(api.version,'174.7');
 
 // Concurrent refreshes must share one backend request.
 const first=api.refresh(false,{force:true});
