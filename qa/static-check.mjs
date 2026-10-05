@@ -764,6 +764,37 @@ const ensurePushSection = ensurePushStart >= 0 && ensurePushEnd > ensurePushStar
 if (!ensurePushSection) failures.push('ensureWebPush section could not be located.');
 else if (ensurePushSection.includes("typeof authUser!=='undefined'")) failures.push('ensureWebPush must not depend on UI authUser hydration.');
 
+const notificationReminderSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+for (const token of [
+  "notificationOnboardingMarkup(mode='permission')",
+  "mode==='push-health'",
+  "Retry notifications",
+  "showNotificationOnboarding",
+  "scheduleNotificationOnboarding"
+]) {
+  if (!notificationReminderSource.includes(token)) failures.push('Notification reminder contract is missing: ' + token);
+}
+for (const forbidden of [
+  "NOTIFICATION_PROMPT_DISABLED_KEY",
+  "data-pwa-dont-show-again",
+  "neis-pwa-notification-prompt-disabled"
+]) {
+  if (notificationReminderSource.includes(forbidden)) failures.push('Notification reminder must not be permanently suppressible: ' + forbidden);
+}
+
+const notificationSoundSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'notifications-v174.js'), 'utf8');
+const notificationResetStart = notificationSoundSource.indexOf('async function reset()');
+const notificationResetEnd = notificationResetStart >= 0 ? notificationSoundSource.indexOf('\n  function snapshot()', notificationResetStart) : -1;
+const notificationResetSection = notificationResetStart >= 0 && notificationResetEnd > notificationResetStart
+  ? notificationSoundSource.slice(notificationResetStart, notificationResetEnd)
+  : '';
+if (!notificationResetSection) failures.push('Notification reset section could not be located.');
+else {
+  if (notificationResetSection.includes('audioContext=null')) failures.push('Notification reset must preserve the unlocked AudioContext.');
+  if (notificationResetSection.includes('soundUnlocked=false')) failures.push('Notification reset must preserve sound unlock state.');
+}
+if (!notificationSoundSource.includes('async function playSound()')) failures.push('Notification sound function is missing.');
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
