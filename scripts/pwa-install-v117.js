@@ -6,6 +6,7 @@
   let deferredInstallPrompt=null;
   let serviceWorkerRegistration=null;
   let signOutHookInstalled=false;
+  let authPushHookInstalled=false;
   let pushHealthPromise=null;
   let lastPushHealthAt=0;
 
@@ -134,7 +135,7 @@
   }
 
   async function serverSubscriptionStatus(subscription){
-    if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return 'unknown';
+    if(!subscription||!(typeof sb!=='undefined'?sb:null))return 'unknown';
     const {data,error}=await sb.rpc('get_web_push_subscription_status',{endpoint_input:subscription.endpoint});
     if(error){
       console.warn('[NEIS web push status]',error);
@@ -144,7 +145,7 @@
   }
 
   async function registerSubscriptionWithServer(subscription){
-    if(!subscription||!(typeof sb!=='undefined'?sb:null)||!(typeof authUser!=='undefined'?authUser:null))return false;
+    if(!subscription||!(typeof sb!=='undefined'?sb:null))return false;
     const json=subscription.toJSON();
     const {error}=await sb.rpc('register_web_push_subscription',{
       endpoint_input:subscription.endpoint,
@@ -166,7 +167,17 @@
       if(requestPermission&&typeof toast==='function')toast(lang('Notifications are not supported in this browser.','المتصفح الحالي لا يدعم الإشعارات.'));
       return false;
     }
-    if(!(typeof authUser!=='undefined'?authUser:null)||!(typeof sb!=='undefined'?sb:null)){
+    if(!(typeof sb!=='undefined'?sb:null)){
+      if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
+      return false;
+    }
+    let session=null;
+    try{
+      session=(await sb.auth.getSession())?.data?.session||null;
+    }catch(error){
+      console.warn('[NEIS web push session]',error);
+    }
+    if(!session?.user){
       if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
       return false;
     }
@@ -378,6 +389,23 @@
     }
   }
 
+  function installAuthPushHook(){
+    if(authPushHookInstalled||!(typeof sb!=='undefined'?sb:null)?.auth?.onAuthStateChange)return;
+    authPushHookInstalled=true;
+    sb.auth.onAuthStateChange((event,session)=>{
+      if(!session?.user)return;
+      if(!('Notification' in window)||Notification.permission!=='granted')return;
+      if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(event)){
+        setTimeout(()=>ensurePushHealth(true).catch(()=>{}),0);
+      }
+    });
+    sb.auth.getSession().then(({data})=>{
+      if(data?.session?.user&&('Notification' in window)&&Notification.permission==='granted'){
+        ensurePushHealth(true).catch(()=>{});
+      }
+    }).catch(()=>{});
+  }
+
   function installSignOutHook(){
     if(signOutHookInstalled||!(typeof sb!=='undefined'?sb:null)?.auth?.signOut)return;
     signOutHookInstalled=true;
@@ -482,7 +510,8 @@
     const wrapped=async function(){
       const result=await previous.apply(this,arguments);
       installSignOutHook();
-      if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
+      installAuthPushHook();
+      if(('Notification' in window)&&Notification.permission==='granted'){
         ensurePushHealth().catch(()=>{});
       }
       scheduleNotificationOnboarding();
@@ -531,7 +560,8 @@
     hookLiveData();
     installSettingsHook();
     installSignOutHook();
-    if((typeof authUser!=='undefined'?authUser:null)&&('Notification' in window)&&Notification.permission==='granted'){
+    installAuthPushHook();
+    if(('Notification' in window)&&Notification.permission==='granted'){
       ensurePushHealth().catch(()=>{});
     }
     scheduleNotificationOnboarding();
@@ -541,6 +571,7 @@
   updateInstallUI();
   hookLiveData();
   installSettingsHook();
+  installAuthPushHook();
 
   [900,2200,4500].forEach(delay=>{
     setTimeout(()=>{

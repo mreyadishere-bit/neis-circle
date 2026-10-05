@@ -747,6 +747,23 @@ else {
   }
 }
 
+const pushAuthSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+for (const token of [
+  "sb.auth.getSession()",
+  "installAuthPushHook",
+  "sb.auth.onAuthStateChange",
+  "INITIAL_SESSION",
+  "SIGNED_IN",
+  "TOKEN_REFRESHED"
+]) {
+  if (!pushAuthSource.includes(token)) failures.push('Push auth-session registration contract is missing: ' + token);
+}
+const ensurePushStart = pushAuthSource.indexOf('async function ensureWebPush');
+const ensurePushEnd = ensurePushStart >= 0 ? pushAuthSource.indexOf('\n  async function ensurePushHealth', ensurePushStart) : -1;
+const ensurePushSection = ensurePushStart >= 0 && ensurePushEnd > ensurePushStart ? pushAuthSource.slice(ensurePushStart, ensurePushEnd) : '';
+if (!ensurePushSection) failures.push('ensureWebPush section could not be located.');
+else if (ensurePushSection.includes("typeof authUser!=='undefined'")) failures.push('ensureWebPush must not depend on UI authUser hydration.');
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
