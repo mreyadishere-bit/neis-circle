@@ -322,7 +322,12 @@ if (!fs.existsSync(notificationRuntimePath)) {
   failures.push('Missing isolated notification runtime.');
 } else {
   const notificationRuntimeSource = fs.readFileSync(notificationRuntimePath, 'utf8');
-  for (const token of ['refreshPromise','lastFullSyncAt','applyRealtime','startFallback']) {
+  for (const token of [
+    'refreshPromise','lastFullSyncAt','applyRealtime','startFallback',
+    'NOTIFICATION_FIELDS','CACHE_PREFIX','hydrateCache(uid)',
+    ".eq('user_id',authUser.id)",
+    "refresh(false,{force:true}).catch"
+  ]) {
     if (!notificationRuntimeSource.includes(token)) failures.push('Notification runtime is missing expected behavior: ' + token);
   }
 }
@@ -346,6 +351,9 @@ if (fs.existsSync(socialPath)) {
   if (!socialSource.includes('NEISConversationData')) failures.push('Conversation hydration must remain delegated to the conversation data module.');
   if (!socialSource.includes('NEISMessageReactionData')) failures.push('Message reaction loading must remain scoped through its data module.');
   if (!socialSource.includes('NEISChatBootstrapData')) failures.push('Startup chat loading must remain delegated to the chat bootstrap module.');
+  const notificationStart= socialSource.indexOf('const notificationSetupPromise=setupNotificationRealtime(uid)');
+  const coreLoadAwait= socialSource.indexOf('await coreLoad()', notificationStart);
+  if (notificationStart < 0 || coreLoadAwait < 0 || notificationStart > coreLoadAwait) failures.push('Notification realtime must start before the heavy core load await.');
   if (!socialSource.includes('messageDom.patchCircleFlow')) failures.push('Circle chat DOM patching must remain delegated to the message DOM module.');
   if (!socialSource.includes('videoEmbedUrlValid')) failures.push('Post composer must validate generalized video embed URLs.');
   if (!socialSource.includes('videoEmbedMarkup')) failures.push('Post cards must render generalized video embeds.');
