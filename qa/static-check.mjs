@@ -876,6 +876,25 @@ const retryMeetingsSection = retryMeetingsIndex >= 0 && retryMeetingsEnd > retry
 if (!retryMeetingsSection) failures.push('Meeting retry binding could not be located.');
 else if (retryMeetingsSection.includes('loadLiveData()')) failures.push('Meeting retry must not reload all live data.');
 
+const profileStatsSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'profileStats:{}',
+  'const profileStatsRequests=new Map()',
+  'async function refreshProfileStats',
+  ".eq('following_id',id).eq('status','accepted')",
+  ".eq('follower_id',id).eq('status','accepted')",
+  ".eq('author_id',id).is('circle_id',null)",
+  "const followers=stats?stats.followers:'…'",
+  "refreshProfileStats(state.activeProfileId,{force:true})"
+]) {
+  if (!profileStatsSource.includes(token)) failures.push('Accurate profile stats contract is missing: ' + token);
+}
+const profileViewStart = profileStatsSource.indexOf('function profileView(){');
+const profileViewEnd = profileViewStart >= 0 ? profileStatsSource.indexOf('\n}\n\nfunction connectionsView', profileViewStart) : -1;
+const profileViewSection = profileViewStart >= 0 && profileViewEnd > profileViewStart ? profileStatsSource.slice(profileViewStart, profileViewEnd) : '';
+if (!profileViewSection) failures.push('Profile view section could not be located.');
+else if (profileViewSection.includes("state.follows.filter(f=>same(f.following_id,p.id)")) failures.push('Profile follower counts must not come from the current-user follows cache.');
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
