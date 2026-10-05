@@ -27,6 +27,7 @@
     ['circles','handleCircleRealtime'],
     ['profiles','handleProfileRealtime'],
     ['profile_badges','handleProfileBadgeRealtime'],
+    ['bookmarks','handleBookmarkRealtime'],
     ['articles','handleArticleRealtime'],
     ['gallery_items','handleGalleryRealtime'],
     ['reports','handleReportRealtime']
@@ -85,7 +86,7 @@
 
   function snapshot(){
     return {
-      version:'175.3',
+      version:'175.4',
       status,
       user:channelUid,
       active:!!channel,
@@ -94,7 +95,7 @@
   }
 
   window.NEISRealtimeRegistry={
-    version:'175.3',
+    version:'175.4',
     setup,
     reset,
     snapshot
