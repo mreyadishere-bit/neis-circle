@@ -2474,9 +2474,23 @@ function openCirclePost(){
       const selection=$('#cpPollSelection').value,rawMax=$('#cpPollMax').value.trim();
       const maxSelections=selection==='multiple'?(rawMax?Math.max(1,Math.min(cleanOptions.length,Number(rawMax)||1)):null):1;
       const closesAt=$('#cpPollClosing').value==='custom'?new Date($('#cpPollCloseAt').value).toISOString():null;
-      const {error}=await sb.rpc('create_circle_poll_post',{p_circle_id:c.id,p_title:$('#cpTitle').value.trim(),p_body:$('#cpBody').value.trim(),p_tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:cleanOptions,p_selection_type:selection,p_max_selections:maxSelections,p_allow_vote_change:$('#cpPollAllowChange').checked,p_anonymous:$('#cpPollAnonymous').checked,p_results_visibility:$('#cpPollResults').value,p_closes_at:closesAt});
-      if(error){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(safeError(error,'create this poll'));button.disabled=false;return}
-      closeModal();await loadLiveData();await loadCirclePolls(c.id,{force:true});refreshCirclePollCards();toast(t('Poll published.','تم نشر التصويت.'));return;
+      const {data:createdPollPostId,error}=await sb.rpc('create_circle_poll_post',{p_circle_id:c.id,p_title:$('#cpTitle').value.trim(),p_body:$('#cpBody').value.trim(),p_tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:cleanOptions,p_selection_type:selection,p_max_selections:maxSelections,p_allow_vote_change:$('#cpPollAllowChange').checked,p_anonymous:$('#cpPollAnonymous').checked,p_results_visibility:$('#cpPollResults').value,p_closes_at:closesAt});
+      if(error||!createdPollPostId){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(error?safeError(error,'create this poll'):t('The poll was created but could not be identified.','تم إنشاء التصويت لكن تعذر تحديده.'));button.disabled=false;return}
+      const {data:createdPollPost,error:pollPostReadError}=await sb.from('posts').select(postRealtimeFields).eq('id',createdPollPostId).maybeSingle();
+      closeModal();
+      if(createdPollPost&&!pollPostReadError){
+        await handlePostRealtime({eventType:'INSERT',new:createdPollPost});
+        await loadCirclePolls(c.id,{force:true});
+        if(!window.NEISPatchCircleHomeRealtime?.())render();
+        refreshCirclePollCards();
+        toast(t('Poll published.','تم نشر التصويت.'));
+        return;
+      }
+      console.warn('[NEIS Circle poll create refresh]',pollPostReadError||new Error('created_poll_post_missing'));
+      await loadLiveData();
+      await loadCirclePolls(c.id,{force:true});
+      refreshCirclePollCards();
+      toast(t('Poll published. Refresh if it does not appear immediately.','تم نشر التصويت. حدّث الصفحة إذا لم يظهر فورًا.'));return;
     }
 
     const {data:createdPost,error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url}).select(postRealtimeFields).single();
