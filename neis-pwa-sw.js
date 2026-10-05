@@ -1,5 +1,5 @@
-const VERSION = "neis-pwa-v9";
-const STATIC_CACHE = "neis-static-v9";
+const VERSION = "neis-pwa-v10";
+const STATIC_CACHE = "neis-static-v10";
 
 
 const VAPID_PUBLIC_KEY = "BKPTZrkpcjMsJHXVOCnZHW-ht94oEPCIvZ8HMu65tQEnfjhoi5-HdBODDt1iNVBFIgsZoyMwXQxQJLJ62ZQoWYw";
@@ -170,7 +170,23 @@ self.addEventListener("push", (event) => {
     renotify: false,
     silent: data.silent === true
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, options);
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const payload = {
+      type: "NEIS_PUSH_NOTIFICATION",
+      notification: {
+        id: data.notification_id || "",
+        type: data.type || "",
+        title,
+        body: options.body,
+        route: data.route || "",
+        silent: data.silent === true,
+        created_at: new Date().toISOString()
+      }
+    };
+    windows.forEach(client => client.postMessage(payload));
+  })());
 });
 
 
