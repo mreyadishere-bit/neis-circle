@@ -373,16 +373,20 @@ async function handleReactionRealtime(payload){
   const key=reactionKey(row);
   if(!key){await refreshPostReactionCount(postId);return}
   const existed=knownPostReactionKeys.has(key);
+  const post=state.posts.find(item=>same(item.id,postId));
   if(event==='INSERT'){
-    if(!existed)knownPostReactionKeys.add(key);
+    if(!existed){
+      knownPostReactionKeys.add(key);
+      if(post)post.likes=Math.max(0,Number(post.likes||0)+1);
+    }
   }else if(event==='DELETE'){
-    if(existed)knownPostReactionKeys.delete(key);
-    else{await refreshPostReactionCount(postId);return}
+    if(existed){
+      knownPostReactionKeys.delete(key);
+      if(post)post.likes=Math.max(0,Number(post.likes||0)-1);
+    }else{await refreshPostReactionCount(postId);return}
   }else return;
   saveKnownPostReactionKeys();
   syncLikedForPost(postId);
-  const post=state.posts.find(item=>same(item.id,postId));
-  if(post)post.likes=Math.max(0,postReactionCount(postId));
   patchVisiblePostState(postId);
 }
 function realtimePostProfile(authorId){
