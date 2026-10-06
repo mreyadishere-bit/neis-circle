@@ -1126,7 +1126,10 @@ if (fs.existsSync(primaryHydrationPath)) {
   const end = source.indexOf('window.NEISPrimaryContentLoad', start);
   const loader = start >= 0 ? source.slice(start, end > start ? end : start + 14000) : '';
   if (loader.includes("from('comments')")) failures.push('Primary content loader must not duplicate the social comments query.');
-  if (loader.includes('profiles!posts_author_id_fkey')) failures.push('Primary posts loader must use the cached member directory instead of an embedded profile join.');
+  if (!loader.includes('profiles!posts_author_id_fkey')) failures.push('Primary posts loader must hydrate post authors inline so Home does not wait for the full member directory.');
+  const criticalMemberQuery = loader.indexOf("sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name')");
+  const backgroundRefresh = source.indexOf('function refreshPrimaryBackground()');
+  if (criticalMemberQuery >= 0 && (backgroundRefresh < 0 || criticalMemberQuery > backgroundRefresh)) failures.push('Full member directory must stay outside the critical startup path.');
 }
 
 const socialHydrationPath = path.join(root, 'scripts', '05-social.js');
