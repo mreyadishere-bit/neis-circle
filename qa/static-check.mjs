@@ -1020,6 +1020,45 @@ for (const migrationName of [
   if (!fs.existsSync(migrationPath)) failures.push('Missing user-scoped realtime migration: ' + migrationName);
 }
 
+const criticalStartupSource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
+for (const token of [
+  'let primaryBackgroundRefreshPromise=null',
+  'function refreshPrimaryBackground()',
+  "profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)",
+  ".eq('user_id',uid)",
+  "sb.rpc('post_engagement_counts')",
+  'refreshPrimaryBackground();'
+]) {
+  if (!criticalStartupSource.includes(token)) failures.push('Critical startup split is missing: ' + token);
+}
+const primaryLoadStart = criticalStartupSource.indexOf('loadLiveData=async function(){');
+const primaryLoadEnd = primaryLoadStart >= 0 ? criticalStartupSource.indexOf('\nwindow.NEISPrimaryContentLoad=loadLiveData;', primaryLoadStart) : -1;
+const primaryLoadSection = primaryLoadStart >= 0 && primaryLoadEnd > primaryLoadStart
+  ? criticalStartupSource.slice(primaryLoadStart, primaryLoadEnd)
+  : '';
+if (!primaryLoadSection) failures.push('Primary live-data loader could not be located.');
+else {
+  if (primaryLoadSection.includes("sb.from('reactions').select('post_id,user_id,reaction')\n")) failures.push('Critical startup must not fetch the full reactions table.');
+  if (primaryLoadSection.includes("sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name')")) failures.push('Critical startup must not await the full member directory.');
+}
+
+const engagementMigrationPath = path.join(root, 'supabase', 'migrations', '20261006105000_post_engagement_counts.sql');
+if (!fs.existsSync(engagementMigrationPath)) failures.push('Missing compact post engagement counts migration.');
+else {
+  const engagementMigration = fs.readFileSync(engagementMigrationPath, 'utf8');
+  for (const token of ['post_engagement_counts','returns table(post_id uuid','security invoker']) {
+    if (!engagementMigration.includes(token)) failures.push('Engagement-count migration is missing: ' + token);
+  }
+}
+
+const reactionDeltaSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'post.likes=Math.max(0,Number(post.likes||0)+1)',
+  'post.likes=Math.max(0,Number(post.likes||0)-1)'
+]) {
+  if (!reactionDeltaSource.includes(token)) failures.push('Realtime reaction delta handling is missing: ' + token);
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
@@ -1087,7 +1126,10 @@ if (fs.existsSync(primaryHydrationPath)) {
   const end = source.indexOf('window.NEISPrimaryContentLoad', start);
   const loader = start >= 0 ? source.slice(start, end > start ? end : start + 14000) : '';
   if (loader.includes("from('comments')")) failures.push('Primary content loader must not duplicate the social comments query.');
-  if (loader.includes('profiles!posts_author_id_fkey')) failures.push('Primary posts loader must use the cached member directory instead of an embedded profile join.');
+  if (!loader.includes('profiles!posts_author_id_fkey')) failures.push('Primary posts loader must hydrate post authors inline so Home does not wait for the full member directory.');
+  const criticalMemberQuery = loader.indexOf("sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name')");
+  const backgroundRefresh = source.indexOf('function refreshPrimaryBackground()');
+  if (criticalMemberQuery >= 0 && (backgroundRefresh < 0 || criticalMemberQuery > backgroundRefresh)) failures.push('Full member directory must stay outside the critical startup path.');
 }
 
 const socialHydrationPath = path.join(root, 'scripts', '05-social.js');
