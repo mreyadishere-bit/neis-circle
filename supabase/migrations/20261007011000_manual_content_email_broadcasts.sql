@@ -17,11 +17,17 @@ revoke all on table public.admin_content_email_broadcasts from anon, authenticat
 
 -- If the earlier notification matrix migration is ever applied, keep all site
 -- notifications on but disable automatic email broadcasts. Email is manual now.
-update public.notification_broadcast_settings
-set site_enabled=true,
-    email_enabled=false,
-    updated_at=now()
-where true;
+do $
+begin
+  if to_regclass('public.notification_broadcast_settings') is not null then
+    update public.notification_broadcast_settings
+    set site_enabled=true,
+        email_enabled=false,
+        updated_at=now()
+    where true;
+  end if;
+end;
+$;
 
 create or replace function public.get_admin_content_email_broadcasts()
 returns jsonb
