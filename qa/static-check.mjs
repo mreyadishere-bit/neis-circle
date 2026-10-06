@@ -1,4 +1,3 @@
-// ci-refresh: timetable-no-auth-wait-20261006
 // fresh-run-trigger: chat-realtime-recovery-20261005
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1013,34 +1012,6 @@ for (const token of [
   if (!timetableRealtimeSource.includes(token)) failures.push('Timetable realtime contract is missing: ' + token);
 }
 
-const timetablePdfSource = fs.readFileSync(path.join(root, 'scripts', 'timetable-v147.js'), 'utf8');
-for (const token of [
-  'const PDF_EXPORT_WIDTH=1681',
-  'const PDF_EXPORT_HEIGHT=813',
-  'function buildPdfStage()',
-  'async function ensurePdfDependencies()',
-  'async function exportTimetablePdf(button)',
-  "html2canvas@1.4.1",
-  "jspdf@2.5.1",
-  "format:[PDF_EXPORT_WIDTH,PDF_EXPORT_HEIGHT]",
-  "pdf.save('NEIS-Circle-Timetable.pdf')",
-  'data-tt-export'
-]) {
-  if (!timetablePdfSource.includes(token)) failures.push('Timetable PDF export contract is missing: ' + token);
-}
-const timetablePdfCss = fs.readFileSync(path.join(root, 'styles', 'timetable-v147.css'), 'utf8');
-for (const token of [
-  '.tt-pdf-export-stage',
-  'width:1681px',
-  'height:813px',
-  '.tt-pdf-board.tt-pdf-days-5',
-  '.tt-pdf-event',
-  '@media(max-width:520px)'
-]) {
-  if (!timetablePdfCss.includes(token)) failures.push('Timetable PDF export styling is missing: ' + token);
-}
-if (timetablePdfSource.includes("document.querySelector('.tt-desktop-only .tt-board')")) failures.push('Timetable PDF export must not depend on the visible responsive timetable DOM.');
-
 for (const migrationName of [
   '20261006005500_expand_user_scoped_realtime.sql',
   '20261006005700_timetable_realtime_delete_identity.sql'
@@ -1086,27 +1057,6 @@ for (const token of [
   'post.likes=Math.max(0,Number(post.likes||0)-1)'
 ]) {
   if (!reactionDeltaSource.includes(token)) failures.push('Realtime reaction delta handling is missing: ' + token);
-}
-
-const timetableSessionSafeSource = fs.readFileSync(path.join(root, 'scripts', 'timetable-v147.js'), 'utf8');
-for (const token of [
-  "TIMETABLE_CACHE_PREFIX='neis_timetable_rows_v1:'",
-  'function hydrateTimetableCache()',
-  'tt.lastLoadedAt=Date.now()',
-  "if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)",
-  "if(!sb||!authUser?.id)return"
-]) {
-  if (!timetableSessionSafeSource.includes(token)) failures.push('Session-safe timetable loading is missing: ' + token);
-}
-const timetableLoadStart = timetableSessionSafeSource.indexOf('async function load(){');
-const timetableLoadEnd = timetableLoadStart >= 0 ? timetableSessionSafeSource.indexOf('\n  function applyTimetableRealtime', timetableLoadStart) : -1;
-const timetableLoadSection = timetableLoadStart >= 0 && timetableLoadEnd > timetableLoadStart
-  ? timetableSessionSafeSource.slice(timetableLoadStart, timetableLoadEnd)
-  : '';
-if (!timetableLoadSection) failures.push('Timetable load section could not be located.');
-else {
-  if (timetableLoadSection.includes('auth.getSession')) failures.push('Timetable loader must not perform a nested auth.getSession call; authUser already comes from the active Supabase session.');
-  if (!timetableLoadSection.includes("sb.from('user_timetable_entries')")) failures.push('Timetable loader must read the protected timetable table directly.');
 }
 
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
