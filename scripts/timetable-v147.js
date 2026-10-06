@@ -156,6 +156,135 @@
       '<section class="tt-mobile-day"><header><div><h2>'+esc(dayName(selected))+'</h2><p>'+esc(selected===currentDay()?tr('Today','اليوم'):tr('Your schedule','جدولك'))+'</p></div><div class="tt-mobile-header-actions">'+(removable?'<button class="secondary" type="button" data-tt-remove-day="'+selected+'" aria-label="'+esc(tr('Remove day','حذف اليوم'))+'">×</button>':'')+'<button class="primary" data-tt-add-day="'+selected+'">+ '+esc(tr('Add','إضافة'))+'</button></div></header><div class="tt-mobile-list">'+(rows.length?rows.map(eventCard).join(''):emptyDay(selected))+'</div></section>';
   }
 
+  const PDF_EXPORT_WIDTH=1681;
+  const PDF_EXPORT_HEIGHT=813;
+  let pdfDepsPromise=null;
+
+  function pdfTime(value){
+    const raw=String(value||'').slice(0,5);
+    if(!raw)return '';
+    const [hourValue,minuteValue]=raw.split(':').map(Number);
+    const suffix=hourValue>=12?'PM':'AM';
+    const hour=hourValue%12||12;
+    return hour+':'+String(minuteValue).padStart(2,'0')+' '+suffix;
+  }
+
+  function pdfEventCard(row){
+    const color=clean(row.color)||palette[0];
+    return '<article class="tt-pdf-event" style="--tt-pdf-color:'+esc(color)+'">'+
+      '<div class="tt-pdf-event-top">'+
+        '<b>'+esc(row.title)+'</b>'+
+        '<div class="tt-pdf-event-tools"><span>'+esc(row.category||'Class')+'</span><i aria-hidden="true">•••</i></div>'+
+      '</div>'+
+      '<div class="tt-pdf-time-row"><time><strong>'+esc(pdfTime(row.start_time))+'</strong><em>→</em><strong>'+esc(pdfTime(row.end_time))+'</strong></time>'+
+        (row.reminder_enabled?'<small>'+esc(row.reminder_minutes)+'m before</small>':'')+
+      '</div>'+
+      (row.location?'<span class="tt-pdf-location">'+esc(row.location)+'</span>':'')+
+      (row.notes?'<p>'+esc(row.notes)+'</p>':'')+
+    '</article>';
+  }
+
+  function pdfBoard(){
+    const visible=schoolDays();
+    return '<div class="tt-pdf-board tt-pdf-days-'+visible.length+'">'+visible.map(day=>{
+      const rows=rowsForDay(day);
+      return '<section class="tt-pdf-day tt-pdf-count-'+Math.min(rows.length,6)+' '+(day===currentDay()?'today':'')+'">'+
+        '<header><div><strong>'+esc(days.find(item=>item.id===Number(day))?.en||dayName(day))+'</strong>'+(day===currentDay()?'<span>TODAY</span>':'')+'</div><b aria-hidden="true">+</b></header>'+
+        '<div class="tt-pdf-day-body">'+rows.map(pdfEventCard).join('')+'</div>'+
+      '</section>';
+    }).join('')+'</div>';
+  }
+
+  function buildPdfStage(){
+    let stage=document.getElementById('ttPdfExportStage');
+    if(!stage){
+      stage=document.createElement('div');
+      stage.id='ttPdfExportStage';
+      stage.className='tt-pdf-export-stage';
+      stage.setAttribute('aria-hidden','true');
+      document.body.appendChild(stage);
+    }
+    stage.innerHTML=pdfBoard();
+    return stage;
+  }
+
+  function loadPdfScript(src,key,ready){
+    if(ready())return Promise.resolve();
+    if(window[key])return window[key];
+    window[key]=new Promise((resolve,reject)=>{
+      const existing=document.querySelector('script[data-tt-pdf-lib="'+key+'"]');
+      if(existing){
+        existing.addEventListener('load',()=>ready()?resolve():reject(new Error('PDF library did not initialize')),{once:true});
+        existing.addEventListener('error',()=>reject(new Error('Could not load PDF library')),{once:true});
+        return;
+      }
+      const script=document.createElement('script');
+      script.src=src;
+      script.async=true;
+      script.crossOrigin='anonymous';
+      script.dataset.ttPdfLib=key;
+      script.onload=()=>ready()?resolve():reject(new Error('PDF library did not initialize'));
+      script.onerror=()=>reject(new Error('Could not load PDF library'));
+      document.head.appendChild(script);
+    }).finally(()=>{if(!ready())window[key]=null});
+    return window[key];
+  }
+
+  async function ensurePdfDependencies(){
+    if(window.html2canvas&&window.jspdf?.jsPDF)return;
+    if(pdfDepsPromise)return pdfDepsPromise;
+    pdfDepsPromise=Promise.all([
+      loadPdfScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js','__neisHtml2CanvasPromise',()=>typeof window.html2canvas==='function'),
+      loadPdfScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js','__neisJsPdfPromise',()=>!!window.jspdf?.jsPDF)
+    ]).finally(()=>{pdfDepsPromise=null});
+    return pdfDepsPromise;
+  }
+
+  async function exportTimetablePdf(button){
+    if(!tt.ready||tt.loading){
+      toast(tr('Wait for the timetable to finish loading.','انتظر حتى يكتمل تحميل الجدول.'));
+      return;
+    }
+    const original=button?.innerHTML||'';
+    if(button){button.disabled=true;button.textContent=tr('Exporting…','جارٍ التصدير…')}
+    let stage=null;
+    try{
+      await ensurePdfDependencies();
+      stage=buildPdfStage();
+      if(document.fonts?.ready)await document.fonts.ready;
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const canvas=await window.html2canvas(stage,{
+        backgroundColor:'#f7f9f6',
+        scale:2,
+        useCORS:true,
+        logging:false,
+        width:PDF_EXPORT_WIDTH,
+        height:PDF_EXPORT_HEIGHT,
+        windowWidth:PDF_EXPORT_WIDTH,
+        windowHeight:PDF_EXPORT_HEIGHT,
+        scrollX:0,
+        scrollY:0
+      });
+      const {jsPDF}=window.jspdf;
+      const pdf=new jsPDF({
+        orientation:'landscape',
+        unit:'px',
+        format:[PDF_EXPORT_WIDTH,PDF_EXPORT_HEIGHT],
+        hotfixes:['px_scaling'],
+        compress:true
+      });
+      pdf.addImage(canvas.toDataURL('image/png'),'PNG',0,0,PDF_EXPORT_WIDTH,PDF_EXPORT_HEIGHT,undefined,'FAST');
+      pdf.save('NEIS-Circle-Timetable.pdf');
+      toast(tr('Timetable PDF exported.','تم تصدير الجدول PDF.'));
+    }catch(error){
+      console.error('[NEIS Timetable PDF]',error);
+      toast(tr('Could not export the PDF. Please try again.','تعذر تصدير ملف PDF. حاول مرة أخرى.'));
+    }finally{
+      if(stage)stage.innerHTML='';
+      if(button){button.disabled=false;button.innerHTML=original}
+    }
+  }
+
   function summary(){
     const next=nextEntry();
     const today=rowsForDay(currentDay());
@@ -170,7 +299,7 @@
   function view(){
     if(tt.loading&&!tt.ready)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
     if(tt.error)return '<section class="tt-shell"><div class="empty"><b>'+esc(tr('Timetable could not load','تعذر تحميل الجدول'))+'</b><span>'+esc(tt.error)+'</span><button class="primary" data-tt-retry>'+esc(tr('Try again','حاول مرة أخرى'))+'</button></div></section>';
-    return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="secondary" data-tt-extra-day>+ '+esc(tr('Add day','إضافة يوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
+    return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary tt-export-button" data-tt-export>⇩ '+esc(tr('Export as PDF','تصدير PDF'))+'</button><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="secondary" data-tt-extra-day>+ '+esc(tr('Add day','إضافة يوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
       summary()+
       '<div class="tt-desktop-only">'+desktopBoard()+'</div>'+
       '<div class="tt-mobile-only">'+mobileBoard()+'</div>';
@@ -313,7 +442,8 @@
   }
 
   function bind(){
-    $$('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
+    $('[data-tt-new]').forEach(b=>b.onclick=()=>editor());
+    $('[data-tt-export]').forEach(b=>b.onclick=()=>exportTimetablePdf(b));
     $$('[data-tt-extra-day]').forEach(b=>b.onclick=extraDayPicker);
     $$('[data-tt-add-day]').forEach(b=>b.onclick=()=>editor(null,Number(b.dataset.ttAddDay)));
     $$('[data-tt-remove-day]').forEach(b=>b.onclick=()=>removeOptionalDay(Number(b.dataset.ttRemoveDay)));

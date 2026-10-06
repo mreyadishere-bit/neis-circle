@@ -1012,6 +1012,34 @@ for (const token of [
   if (!timetableRealtimeSource.includes(token)) failures.push('Timetable realtime contract is missing: ' + token);
 }
 
+const timetablePdfSource = fs.readFileSync(path.join(root, 'scripts', 'timetable-v147.js'), 'utf8');
+for (const token of [
+  'const PDF_EXPORT_WIDTH=1681',
+  'const PDF_EXPORT_HEIGHT=813',
+  'function buildPdfStage()',
+  'async function ensurePdfDependencies()',
+  'async function exportTimetablePdf(button)',
+  "html2canvas@1.4.1",
+  "jspdf@2.5.1",
+  "format:[PDF_EXPORT_WIDTH,PDF_EXPORT_HEIGHT]",
+  "pdf.save('NEIS-Circle-Timetable.pdf')",
+  'data-tt-export'
+]) {
+  if (!timetablePdfSource.includes(token)) failures.push('Timetable PDF export contract is missing: ' + token);
+}
+const timetablePdfCss = fs.readFileSync(path.join(root, 'styles', 'timetable-v147.css'), 'utf8');
+for (const token of [
+  '.tt-pdf-export-stage',
+  'width:1681px',
+  'height:813px',
+  '.tt-pdf-board.tt-pdf-days-5',
+  '.tt-pdf-event',
+  '@media(max-width:520px)'
+]) {
+  if (!timetablePdfCss.includes(token)) failures.push('Timetable PDF export styling is missing: ' + token);
+}
+if (timetablePdfSource.includes("document.querySelector('.tt-desktop-only .tt-board')")) failures.push('Timetable PDF export must not depend on the visible responsive timetable DOM.');
+
 for (const migrationName of [
   '20261006005500_expand_user_scoped_realtime.sql',
   '20261006005700_timetable_realtime_delete_identity.sql'

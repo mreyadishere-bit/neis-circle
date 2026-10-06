@@ -874,3 +874,314 @@
 @media (min-width:521px) and (max-width:720px){
   .tt-mobile-list{grid-template-columns:1fr}
 }
+
+
+/* v157 — fixed 1681×813 timetable PDF export matching the desktop reference */
+.tt-export-button{white-space:nowrap}
+.tt-pdf-export-stage{
+  position:fixed;
+  left:-20000px;
+  top:0;
+  width:1681px;
+  height:813px;
+  box-sizing:border-box;
+  padding:14px 21px 24px;
+  overflow:hidden;
+  pointer-events:none;
+  z-index:-9999;
+  direction:ltr;
+  background:
+    radial-gradient(circle at 18% 0%,rgba(67,152,116,.035),transparent 30%),
+    radial-gradient(circle at 86% 8%,rgba(54,119,182,.028),transparent 28%),
+    #f7f9f6;
+  color:#0c1b16;
+  font-family:"DM Sans",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:geometricPrecision;
+}
+.tt-pdf-export-stage,
+.tt-pdf-export-stage *{
+  box-sizing:border-box;
+  animation:none!important;
+  transition:none!important;
+}
+.tt-pdf-board{
+  width:100%;
+  height:100%;
+  display:grid;
+  gap:16px;
+  align-items:stretch;
+}
+.tt-pdf-board.tt-pdf-days-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.tt-pdf-board.tt-pdf-days-6{grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.tt-pdf-board.tt-pdf-days-7{grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
+.tt-pdf-day{
+  min-width:0;
+  height:100%;
+  display:grid;
+  grid-template-rows:72px minmax(0,1fr);
+  overflow:hidden;
+  border:1px solid #d8e5df;
+  border-radius:28px;
+  background:rgba(255,255,255,.86);
+}
+.tt-pdf-day.today{
+  border-color:#78b9a7;
+  box-shadow:0 12px 30px rgba(46,132,103,.06);
+}
+.tt-pdf-day>header{
+  height:72px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:0 17px;
+  border-bottom:1px solid #d8e5df;
+  background:#f0f4f2;
+}
+.tt-pdf-day>header>div{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.tt-pdf-day>header strong{
+  color:#07150f;
+  font-size:16px;
+  line-height:1;
+  font-weight:800;
+  letter-spacing:-.015em;
+}
+.tt-pdf-day>header span{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:20px;
+  padding:0 8px;
+  border-radius:999px;
+  background:#e8f7f1;
+  color:#008c70;
+  font-size:8px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:.07em;
+}
+.tt-pdf-day>header>b{
+  width:39px;
+  height:38px;
+  flex:0 0 39px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:#fff;
+  color:#008f74;
+  font-size:22px;
+  line-height:1;
+  font-weight:500;
+}
+.tt-pdf-day-body{
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:12px;
+  padding:15px;
+}
+.tt-pdf-event{
+  position:relative;
+  min-width:0;
+  min-height:164px;
+  flex:0 0 auto;
+  padding:16px 17px 15px;
+  overflow:hidden;
+  border-radius:22px;
+  background:var(--tt-pdf-color,#2f7db8);
+  color:#fff;
+  box-shadow:0 17px 32px rgba(31,66,75,.14);
+}
+.tt-pdf-event::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,0) 48%,rgba(0,0,0,.08));
+}
+.tt-pdf-event>*{position:relative;z-index:1}
+.tt-pdf-event-top{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+}
+.tt-pdf-event-top>b{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#fff;
+  font-size:17px;
+  line-height:1.15;
+  font-weight:850;
+  letter-spacing:-.02em;
+}
+.tt-pdf-event-tools{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex:0 0 auto;
+}
+.tt-pdf-event-tools>span{
+  height:36px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 12px;
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:999px;
+  background:rgba(255,255,255,.13);
+  color:#fff;
+  font-size:9px;
+  line-height:1;
+  font-weight:800;
+}
+.tt-pdf-event-tools>i{
+  width:35px;
+  height:35px;
+  display:grid;
+  place-items:center;
+  border-radius:11px;
+  background:rgba(255,255,255,.13);
+  color:#fff;
+  font-size:14px;
+  line-height:1;
+  font-style:normal;
+  font-weight:900;
+  letter-spacing:1px;
+}
+.tt-pdf-time-row{
+  min-width:0;
+  height:45px;
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  padding:0 11px;
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:13px;
+  background:rgba(255,255,255,.12);
+}
+.tt-pdf-time-row time{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+.tt-pdf-time-row time strong{
+  color:#fff;
+  font-size:15px;
+  line-height:1;
+  font-weight:900;
+  letter-spacing:-.02em;
+}
+.tt-pdf-time-row time em{
+  color:rgba(255,255,255,.78);
+  font-size:12px;
+  line-height:1;
+  font-style:normal;
+  font-weight:800;
+}
+.tt-pdf-time-row small{
+  height:25px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 8px;
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:8px;
+  background:rgba(0,0,0,.12);
+  color:#fff;
+  font-size:7px;
+  line-height:1;
+  font-weight:850;
+  white-space:nowrap;
+}
+.tt-pdf-location{
+  width:max-content;
+  max-width:100%;
+  min-height:31px;
+  margin-top:11px;
+  display:inline-flex;
+  align-items:center;
+  padding:0 12px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  color:#fff;
+  font-size:10px;
+  line-height:1;
+  font-weight:800;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.tt-pdf-event p{
+  margin:9px 0 0;
+  overflow:hidden;
+  color:rgba(255,255,255,.88);
+  font-size:9px;
+  line-height:1.35;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.tt-pdf-day.tt-pdf-count-4 .tt-pdf-event{
+  min-height:150px;
+  padding-top:14px;
+  padding-bottom:13px;
+}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-event,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-event{
+  min-height:126px;
+  padding:12px 13px 11px;
+  border-radius:18px;
+}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-event-top>b,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-event-top>b{font-size:14px}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-event-tools>span,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-event-tools>span{height:29px;padding-inline:9px;font-size:7.5px}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-event-tools>i,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-event-tools>i{width:29px;height:29px}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-time-row,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-time-row{height:38px;margin-top:8px;padding-inline:9px}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-time-row time strong,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-time-row time strong{font-size:12px}
+.tt-pdf-day.tt-pdf-count-5 .tt-pdf-location,
+.tt-pdf-day.tt-pdf-count-6 .tt-pdf-location{min-height:25px;margin-top:8px;font-size:8px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-day>header,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-day>header{padding-inline:12px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-day>header strong{font-size:14px}
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-day>header strong{font-size:13px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-day-body,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-day-body{padding:11px;gap:9px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-event,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-event{min-height:145px;padding:13px;border-radius:19px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-event-top>b,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-event-top>b{font-size:14px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-event-tools>span,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-event-tools>span{height:30px;padding-inline:9px;font-size:7.5px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-event-tools>i,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-event-tools>i{width:30px;height:30px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-time-row,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-time-row{height:auto;min-height:39px;grid-template-columns:1fr;padding:7px 9px}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-time-row small,
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-time-row small{justify-self:start}
+.tt-pdf-board.tt-pdf-days-6 .tt-pdf-time-row time strong{font-size:11px}
+.tt-pdf-board.tt-pdf-days-7 .tt-pdf-time-row time strong{font-size:10px}
+
+@media (min-width:521px) and (max-width:1100px){
+  .tt-head-actions{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .tt-head-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
