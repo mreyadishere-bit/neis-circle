@@ -1,3 +1,4 @@
+// ci-refresh: timetable-no-auth-wait-20261006
 // fresh-run-trigger: chat-realtime-recovery-20261005
 import fs from 'node:fs';
 import path from 'node:path';
@@ -1091,10 +1092,9 @@ const timetableSessionSafeSource = fs.readFileSync(path.join(root, 'scripts', 't
 for (const token of [
   "TIMETABLE_CACHE_PREFIX='neis_timetable_rows_v1:'",
   'function hydrateTimetableCache()',
-  'async function timetableSessionReady()',
-  'queueTimetableLoadRetry()',
   'tt.lastLoadedAt=Date.now()',
-  "if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)"
+  "if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)",
+  "if(!sb||!authUser?.id)return"
 ]) {
   if (!timetableSessionSafeSource.includes(token)) failures.push('Session-safe timetable loading is missing: ' + token);
 }
@@ -1105,9 +1105,8 @@ const timetableLoadSection = timetableLoadStart >= 0 && timetableLoadEnd > timet
   : '';
 if (!timetableLoadSection) failures.push('Timetable load section could not be located.');
 else {
-  const sessionCheck = timetableLoadSection.indexOf('const sessionReady=await timetableSessionReady()');
-  const tableRead = timetableLoadSection.indexOf("sb.from('user_timetable_entries')");
-  if (sessionCheck < 0 || tableRead < 0 || sessionCheck > tableRead) failures.push('Timetable must verify Supabase session readiness before the protected table read.');
+  if (timetableLoadSection.includes('auth.getSession')) failures.push('Timetable loader must not perform a nested auth.getSession call; authUser already comes from the active Supabase session.');
+  if (!timetableLoadSection.includes("sb.from('user_timetable_entries')")) failures.push('Timetable loader must read the protected timetable table directly.');
 }
 
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
