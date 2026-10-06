@@ -1020,6 +1020,14 @@ for (const migrationName of [
   if (!fs.existsSync(migrationPath)) failures.push('Missing user-scoped realtime migration: ' + migrationName);
 }
 
+const homeSafetySource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
+if (!homeSafetySource.includes('Private messages may be reviewed for safety upon request.')) failures.push('Home private-message safety disclosure is missing.');
+if (!homeSafetySource.includes('class="home-safety-note"')) failures.push('Home safety disclosure must use the subtle home-only class.');
+const homeSafetyCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
+for (const token of ['.home-safety-note{','font-size:8px','font-weight:300']) {
+  if (!homeSafetyCss.includes(token)) failures.push('Home safety disclosure styling is missing: ' + token);
+}
+
 const criticalStartupSource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
 for (const token of [
   'let primaryBackgroundRefreshPromise=null',
