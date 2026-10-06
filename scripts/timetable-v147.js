@@ -3,7 +3,7 @@
   'use strict';
 
   const tt=state.timetable={
-    rows:[],loading:false,error:'',ready:false,dayFilter:'all',request:0
+    rows:[],loading:false,error:'',ready:false,dayFilter:'all',request:0,lastLoadedAt:0
   };
   let timetableRealtimeChannel=null,timetableRealtimeUser='';
   const TIMETABLE_CACHE_PREFIX='neis_timetable_rows_v1:';
@@ -152,6 +152,7 @@
     tt.ready=true;
     tt.error='';
     tt.rows=sortRows(data||[]);
+    tt.lastLoadedAt=Date.now();
     writeTimetableCache();
     renderTimetable();
   }
@@ -529,6 +530,6 @@
     if(!tt.ready&&!tt.loading)hydrateTimetableCache();
     renderTimetable();
     setupTimetableRealtime().catch(error=>console.warn('[NEIS Timetable realtime]',error));
-    if(!tt.loading)load();
+    if(!tt.loading&&(!tt.lastLoadedAt||Date.now()-tt.lastLoadedAt>30000))load();
   };
 })();
