@@ -4126,3 +4126,47 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   outline:2px solid var(--accent);
   outline-offset:3px;
 }
+
+.admin-notification-matrix .page-title{margin-bottom:14px}
+.notification-matrix-head,
+.notification-matrix-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 118px 118px;
+  gap:12px;
+  align-items:center;
+}
+.notification-matrix-head{
+  padding:0 12px 9px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.notification-matrix-head b{text-align:center}
+.notification-matrix-list{
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:18px;
+}
+.notification-matrix-row{
+  min-height:68px;
+  padding:11px 12px;
+  background:var(--card);
+}
+.notification-matrix-row+.notification-matrix-row{border-top:1px solid var(--line)}
+.notification-matrix-copy{display:grid;gap:3px;min-width:0}
+.notification-matrix-copy b{font-size:13px}
+.notification-matrix-copy small{color:var(--muted);font-size:10px}
+.notification-matrix-row .admin-switch{justify-self:center}
+.notification-matrix-note{
+  margin:10px 2px 0;
+  color:var(--muted);
+  font-size:10px;
+}
+@media(max-width:760px){
+  .notification-matrix-head,
+  .notification-matrix-row{grid-template-columns:minmax(0,1fr) 88px 88px;gap:6px}
+  .notification-matrix-row{padding:10px 8px}
+  .notification-matrix-row .admin-switch{transform:scale(.92)}
+}
