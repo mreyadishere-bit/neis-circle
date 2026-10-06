@@ -1091,6 +1091,29 @@ else {
   }
 }
 
+const adminModerationDeepLinkSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  "const canOpenAdminModerationTargets=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN",
+  'async function openAdminModerationTarget(type,id)',
+  'data-admin-open-content=',
+  'data-admin-content-id=',
+  "targetType==='circle message'",
+  "targetType==='meeting'",
+  "targetType==='reply'",
+  "post.circle_id",
+  "comments(post.id,reply.id)",
+  'data-gallery-id='
+]) {
+  if (!adminModerationDeepLinkSource.includes(token)) failures.push('Primary-admin moderation deep-link contract is missing: ' + token);
+}
+const moderationBindStart = adminModerationDeepLinkSource.indexOf("querySelectorAll('[data-admin-open-content]')");
+const moderationBindEnd = moderationBindStart >= 0 ? adminModerationDeepLinkSource.indexOf("querySelectorAll('[data-delete-report]')", moderationBindStart) : -1;
+const moderationBindSection = moderationBindStart >= 0 && moderationBindEnd > moderationBindStart
+  ? adminModerationDeepLinkSource.slice(moderationBindStart, moderationBindEnd)
+  : '';
+if (!moderationBindSection) failures.push('Primary-admin moderation row binding could not be located.');
+else if (!moderationBindSection.includes("closest?.('button,a,input,select,textarea')")) failures.push('Moderation row navigation must not hijack action-button clicks.');
+
 const notificationBellCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
 for (const token of [
   '.top-actions [data-action="notifications"]>.count-badge',
