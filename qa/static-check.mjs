@@ -1147,7 +1147,11 @@ else {
     'email_enabled=false',
     "v_type='opportunity'",
     "v_type='study resource'",
-    "v_scope:='circle'"
+    "v_scope:='circle'",
+    'notify_new_opportunity_site',
+    'opportunities_notify_new_site',
+    'notify_new_study_resource_site',
+    'study_resources_notify_new_site'
   ]) {
     if (!migration.includes(token)) failures.push('Manual content email migration is missing: ' + token);
   }
