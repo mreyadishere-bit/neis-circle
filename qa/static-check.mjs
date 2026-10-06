@@ -1059,6 +1059,38 @@ for (const token of [
   if (!reactionDeltaSource.includes(token)) failures.push('Realtime reaction delta handling is missing: ' + token);
 }
 
+const fastCommentEngagementSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'async function refreshOpenCommentEngagement(commentId)',
+  "sb.from('comment_likes').select('user_id').eq('comment_id',commentId)",
+  "sb.from('comment_creator_hearts').select('creator_id').eq('comment_id',commentId)",
+  'Promise.resolve(refreshOpenCommentEngagement(commentId))'
+]) {
+  if (!fastCommentEngagementSource.includes(token)) failures.push('Targeted comment engagement contract is missing: ' + token);
+}
+const commentLikeBindStart = fastCommentEngagementSource.indexOf("querySelectorAll('[data-comment-like]')");
+const commentLikeBindEnd = commentLikeBindStart >= 0 ? fastCommentEngagementSource.indexOf("bindComposerKeyboard($('#replyInput')", commentLikeBindStart) : -1;
+const commentLikeBindSection = commentLikeBindStart >= 0 && commentLikeBindEnd > commentLikeBindStart
+  ? fastCommentEngagementSource.slice(commentLikeBindStart, commentLikeBindEnd)
+  : '';
+if (!commentLikeBindSection) failures.push('Comment engagement binding section could not be located.');
+else if (commentLikeBindSection.includes('await comments(postId)')) failures.push('Comment likes/hearts must not reload the full discussion.');
+
+const replyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261006223000_message_reply_notifications.sql');
+if (!fs.existsSync(replyNotificationMigrationPath)) failures.push('Missing message reply notification migration.');
+else {
+  const replyNotificationMigration = fs.readFileSync(replyNotificationMigrationPath, 'utf8');
+  for (const token of [
+    "then 'reply'",
+    "replied to your message",
+    "'message',",
+    "'circle_message',",
+    "cm.user_id<>reply_owner"
+  ]) {
+    if (!replyNotificationMigration.includes(token)) failures.push('Message reply notification migration is missing: ' + token);
+  }
+}
+
 const notificationBellCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
 for (const token of [
   '.top-actions [data-action="notifications"]>.count-badge',
