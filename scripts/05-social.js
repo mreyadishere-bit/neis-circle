@@ -3113,8 +3113,17 @@ function updateBadges(){
   const bell=$('[data-action="notifications"]');
   if(bell){
     let badge=bell.querySelector('.count-badge');
-    if(not&&!badge){badge=document.createElement('i');badge.className='count-badge';bell.append(badge)}
-    if(badge){badge.textContent=not>99?'99+':String(not||'');badge.classList.toggle('hidden',!not)}
+    if(not&&!badge){
+      badge=document.createElement('i');
+      badge.className='count-badge';
+      badge.setAttribute('aria-hidden','true');
+      bell.append(badge);
+    }
+    if(badge){
+      badge.textContent=not>99?'99+':String(not||'');
+      badge.classList.toggle('hidden',!not);
+    }
+    bell.setAttribute('aria-label',not?(t('Notifications','الإشعارات')+' ('+not+' '+t('unread','غير مقروء')+')'):t('Notifications','الإشعارات'));
   }
   notificationRuntime?.updateTabBadge?.();
 }
