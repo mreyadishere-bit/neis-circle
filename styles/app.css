@@ -4170,3 +4170,14 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .notification-matrix-row{padding:10px 8px}
   .notification-matrix-row .admin-switch{transform:scale(.92)}
 }
+
+.admin-content-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.admin-email-content.is-sent{border-color:color-mix(in srgb,var(--accent) 34%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--card))}
+.admin-email-confirm-summary{display:flex;align-items:baseline;gap:10px;padding:16px 18px;margin:8px 0 12px;border:1px solid var(--line);border-radius:16px;background:var(--soft)}
+.admin-email-confirm-summary strong{font-size:28px;letter-spacing:-.04em}
+.admin-email-confirm-summary span{color:var(--muted);font-size:11px}
+.admin-email-previous{margin:10px 0 0;color:var(--muted);font-size:10px}
+@media(max-width:760px){
+  .admin-content-actions{justify-content:flex-start}
+  .admin-content-actions .secondary{flex:1 1 auto}
+}
