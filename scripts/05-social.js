@@ -506,12 +506,46 @@ function handleCommentRealtime(payload){
   patchVisiblePostState(postId);
   scheduleOpenDiscussionRefresh(postId);
 }
+async function refreshOpenCommentEngagement(commentId){
+  if(!sb||!authUser||!commentId)return;
+  const card=document.querySelector('#reply-'+CSS.escape(String(commentId)));
+  if(!card)return;
+  const [{data:likes,error:likesError},{data:hearts,error:heartsError}]=await Promise.all([
+    sb.from('comment_likes').select('user_id').eq('comment_id',commentId),
+    sb.from('comment_creator_hearts').select('creator_id').eq('comment_id',commentId)
+  ]);
+  if(likesError||heartsError){
+    if(likesError)console.warn('[NEIS targeted comment likes]',likesError);
+    if(heartsError)console.warn('[NEIS targeted creator hearts]',heartsError);
+    return;
+  }
+  const likeButton=card.querySelector('[data-comment-like]');
+  if(likeButton){
+    const mine=(likes||[]).some(row=>same(row.user_id,authUser.id));
+    likeButton.classList.toggle('active',mine);
+    likeButton.setAttribute('aria-pressed',mine?'true':'false');
+    const count=likeButton.querySelector('b');
+    if(count)count.textContent=String((likes||[]).length);
+    likeButton.disabled=false;
+  }
+  const hearted=!!(hearts||[]).length;
+  const heartToggle=card.querySelector('[data-creator-heart]');
+  if(heartToggle){
+    heartToggle.classList.toggle('active',hearted);
+    heartToggle.disabled=false;
+  }else{
+    const existing=card.querySelector('.creator-heart');
+    if(hearted&&!existing){
+      const replyButton=card.querySelector('[data-reply-to]');
+      replyButton?.insertAdjacentHTML('beforebegin',`<span class="creator-heart" title="${t('Hearted by creator','أعجب به الناشر')}">♥</span>`);
+    }else if(!hearted&&existing)existing.remove();
+  }
+}
 function handleCommentEngagementRealtime(payload){
   const row=payload?.new||payload?.old||{};
   const commentId=row.comment_id;
   if(!commentId)return;
-  const comment=(state.allComments||[]).find(item=>same(item.id,commentId));
-  if(comment?.post_id)scheduleOpenDiscussionRefresh(comment.post_id);
+  Promise.resolve(refreshOpenCommentEngagement(commentId)).catch(error=>console.warn('[NEIS comment engagement realtime]',error));
 }
 
 function handleFollowRealtime(payload){
@@ -2435,8 +2469,8 @@ comments=async function(postId,targetCommentId=''){
     try{input.setSelectionRange(input.value.length,input.value.length)}catch(_){}
     input.scrollIntoView({block:'nearest',behavior:'smooth'});
   });
-  $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.creatorHeart,hearted=heartsByComment.has(String(commentId));const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}await comments(postId)});
-  $('#replyContent').querySelectorAll('[data-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;button.disabled=true;const commentId=button.dataset.commentLike,mine=button.getAttribute('aria-pressed')==='true';const {error}=mine?await sb.from('comment_likes').delete().match({comment_id:commentId,user_id:authUser.id}):await sb.from('comment_likes').insert({comment_id:commentId,user_id:authUser.id});if(error){toast(safeError(error,mine?'unlike this comment':'like this comment'));button.disabled=false;return}await comments(postId)});
+  $('#replyContent').querySelectorAll('[data-creator-heart]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;const commentId=button.dataset.creatorHeart,hearted=button.classList.contains('active');button.disabled=true;button.classList.toggle('active',!hearted);const {error}=hearted?await sb.from('comment_creator_hearts').delete().eq('comment_id',commentId):await sb.from('comment_creator_hearts').insert({comment_id:commentId,creator_id:authUser.id});if(error){button.classList.toggle('active',hearted);toast(safeError(error,hearted?'remove creator heart':'heart this comment'));button.disabled=false;return}button.disabled=false});
+  $('#replyContent').querySelectorAll('[data-comment-like]').forEach(button=>button.onclick=async()=>{if(button.disabled)return;const commentId=button.dataset.commentLike,mine=button.getAttribute('aria-pressed')==='true',countEl=button.querySelector('b'),previousCount=Number(countEl?.textContent||0);button.disabled=true;button.classList.toggle('active',!mine);button.setAttribute('aria-pressed',mine?'false':'true');if(countEl)countEl.textContent=String(Math.max(0,previousCount+(mine?-1:1)));const {error}=mine?await sb.from('comment_likes').delete().match({comment_id:commentId,user_id:authUser.id}):await sb.from('comment_likes').insert({comment_id:commentId,user_id:authUser.id});if(error){button.classList.toggle('active',mine);button.setAttribute('aria-pressed',mine?'true':'false');if(countEl)countEl.textContent=String(previousCount);toast(safeError(error,mine?'unlike this comment':'like this comment'));button.disabled=false;return}button.disabled=false});
   bindComposerKeyboard($('#replyInput'),$('#replyForm'));
   $('#replyForm').onsubmit=async e=>{e.preventDefault();const input=$('#replyInput'),button=$('#replyForm [type="submit"]'),body=input.value.trim();if(!body)return;button.disabled=true;const payload={post_id:postId,author_id:authUser.id,body,parent_id:$('#replyParent').value||null},{data:created,error}=await sb.from('comments').insert(payload).select('*').single();if(error){toast(safeError(error,'add your reply'));button.disabled=false;return}handleCommentRealtime({eventType:'INSERT',new:created});await comments(postId);toast(t('Reply added.','تمت إضافة الرد.'))}
 };
