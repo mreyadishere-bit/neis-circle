@@ -1,3 +1,4 @@
+// ci-refresh: timetable-no-auth-wait-20261006
 // fresh-run-trigger: chat-realtime-recovery-20261005
 import fs from 'node:fs';
 import path from 'node:path';
