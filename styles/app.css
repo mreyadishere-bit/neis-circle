@@ -4181,3 +4181,6 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .admin-content-actions{justify-content:flex-start}
   .admin-content-actions .secondary{flex:1 1 auto}
 }
+
+.home-safety-note{margin:10px 2px 0;text-align:center;color:var(--muted);font-size:8px;font-weight:300;line-height:1.35;opacity:.62;letter-spacing:.01em}
+@media(max-width:760px){.home-safety-note{font-size:7px;margin-top:8px;opacity:.58}}
