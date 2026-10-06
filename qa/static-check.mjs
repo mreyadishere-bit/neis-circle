@@ -1114,6 +1114,39 @@ const moderationBindSection = moderationBindStart >= 0 && moderationBindEnd > mo
 if (!moderationBindSection) failures.push('Primary-admin moderation row binding could not be located.');
 else if (!moderationBindSection.includes("closest?.('button,a,input,select,textarea')")) failures.push('Moderation row navigation must not hijack action-button clicks.');
 
+const notificationMatrixSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'const NOTIFICATION_BROADCAST_EVENTS=[',
+  'function notificationBroadcastMatrix()',
+  "sb.rpc('get_notification_broadcast_settings')",
+  "sb.rpc('set_notification_broadcast_setting'",
+  'data-notification-channel=',
+  'data-notification-key=',
+  'new_opportunity',
+  'new_study_resource'
+]) {
+  if (!notificationMatrixSource.includes(token)) failures.push('Notification matrix UI contract is missing: ' + token);
+}
+const notificationMatrixMigrationPath = path.join(root, 'supabase', 'migrations', '20261006234000_notification_broadcast_matrix.sql');
+if (!fs.existsSync(notificationMatrixMigrationPath)) failures.push('Missing notification broadcast matrix migration.');
+else {
+  const migration = fs.readFileSync(notificationMatrixMigrationPath, 'utf8');
+  for (const token of [
+    'notification_broadcast_settings',
+    'get_notification_broadcast_settings',
+    'set_notification_broadcast_setting',
+    "('new_opportunity',true,true)",
+    "('new_study_resource',true,true)",
+    'broadcast_new_opportunity',
+    'broadcast_new_study_resource',
+    'study_resources_broadcast_new_content',
+    'opportunities_broadcast_new_content',
+    'new_circle_post',
+    'new_meeting'
+  ]) {
+    if (!migration.includes(token)) failures.push('Notification broadcast migration is missing: ' + token);
+  }
+}
 const notificationBellCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
 for (const token of [
   '.top-actions [data-action="notifications"]>.count-badge',
