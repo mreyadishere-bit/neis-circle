@@ -366,7 +366,7 @@
   }
 
   function view(){
-    if(tt.loading&&!tt.ready)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
+    if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
     if(tt.error)return '<section class="tt-shell"><div class="empty"><b>'+esc(tr('Timetable could not load','تعذر تحميل الجدول'))+'</b><span>'+esc(tt.error)+'</span><button class="primary" data-tt-retry>'+esc(tr('Try again','حاول مرة أخرى'))+'</button></div></section>';
     return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary tt-export-button" data-tt-export>⇩ '+esc(tr('Export as PDF','تصدير PDF'))+'</button><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="secondary" data-tt-extra-day>+ '+esc(tr('Add day','إضافة يوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
       summary()+
