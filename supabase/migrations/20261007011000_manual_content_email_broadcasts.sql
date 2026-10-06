@@ -55,6 +55,78 @@ begin
 end;
 $$;
 
+create or replace function public.admin_preview_content_email_audience(
+  content_type_input text,
+  content_id_input text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path=public,auth
+as $
+declare
+  v_type text := lower(trim(coalesce(content_type_input,'')));
+  v_id text := trim(coalesce(content_id_input,''));
+  v_circle_id uuid;
+  v_privacy text;
+  v_count integer := 0;
+  v_scope text := 'all';
+begin
+  if auth.uid() is null or not exists (
+    select 1 from auth.users u
+    join public.profiles p on p.id=u.id
+    where u.id=auth.uid()
+      and lower(coalesce(u.email,''))='mreyadishere@gmail.com'
+      and p.role='admin'
+      and coalesce(p.account_status,'active')='active'
+  ) then
+    raise exception 'not_authorized';
+  end if;
+
+  if v_type='post' then
+    select p.circle_id into v_circle_id from public.posts p where p.id=public.try_uuid(v_id);
+  elsif v_type='reply' then
+    select p.circle_id into v_circle_id
+    from public.comments c join public.posts p on p.id=c.post_id
+    where c.id=public.try_uuid(v_id) and c.deleted_at is null;
+  elsif v_type='circle' then
+    select c.id,c.privacy into v_circle_id,v_privacy
+    from public.circles c where c.id=public.try_uuid(v_id);
+    if coalesce(v_privacy,'private')='public' then v_circle_id:=null; end if;
+  elsif v_type='meeting' then
+    select m.circle_id into v_circle_id from public.circle_meetings m where m.id=public.try_uuid(v_id);
+  elsif v_type='circle message' then
+    select m.circle_id into v_circle_id from public.circle_messages m
+    where m.id=public.try_bigint(v_id) and m.deleted_at is null;
+  elsif v_type not in ('gallery','article','opportunity','study resource') then
+    raise exception 'unsupported_content_type';
+  end if;
+
+  if v_circle_id is not null then
+    v_scope:='circle';
+    select count(*)::integer into v_count
+    from public.circle_members cm
+    join auth.users u on u.id=cm.user_id
+    join public.profiles p on p.id=cm.user_id
+    where cm.circle_id=v_circle_id
+      and cm.status='active'
+      and coalesce(p.account_status,'active')='active'
+      and u.email is not null
+      and u.email_confirmed_at is not null;
+  else
+    select count(*)::integer into v_count
+    from auth.users u
+    join public.profiles p on p.id=u.id
+    where coalesce(p.account_status,'active')='active'
+      and u.email is not null
+      and u.email_confirmed_at is not null;
+  end if;
+
+  return jsonb_build_object('recipient_count',v_count,'scope',v_scope);
+end;
+$;
+
 create or replace function public.admin_email_content_to_audience(
   content_type_input text,
   content_id_input text,
@@ -244,6 +316,8 @@ end;
 $$;
 
 revoke all on function public.get_admin_content_email_broadcasts() from public,anon;
+revoke all on function public.admin_preview_content_email_audience(text,text) from public,anon;
 revoke all on function public.admin_email_content_to_audience(text,text,boolean) from public,anon;
 grant execute on function public.get_admin_content_email_broadcasts() to authenticated;
+grant execute on function public.admin_preview_content_email_audience(text,text) to authenticated;
 grant execute on function public.admin_email_content_to_audience(text,text,boolean) to authenticated;
