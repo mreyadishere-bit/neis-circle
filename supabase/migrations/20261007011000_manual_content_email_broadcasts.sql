@@ -7,6 +7,91 @@ drop trigger if exists articles_enqueue_new_email on public.articles;
 drop trigger if exists opportunities_enqueue_new_email on public.opportunities;
 drop trigger if exists posts_enqueue_admin_email on public.posts;
 
+-- Site notifications stay ON. Opportunities and Study resources did not
+-- have permanent production site-notification triggers, so add them here.
+
+create or replace function public.notify_new_opportunity_site()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $
+begin
+  if coalesce(new.status,'open') <> 'open' or coalesce(new.approved,true) is not true then
+    return new;
+  end if;
+
+  insert into public.notifications(
+    user_id,actor_id,type,title,body,entity_type,entity_id,route
+  )
+  select
+    p.id,
+    new.author_id,
+    'new_opportunity',
+    'New opportunity',
+    left(coalesce(nullif(new.title,''),'A new opportunity is available'),180),
+    'opportunity',
+    new.id::text,
+    'opportunities?opportunity='||new.id::text
+  from public.profiles p
+  where p.id<>new.author_id
+    and coalesce(p.account_status,'active')='active'
+    and not exists (
+      select 1 from public.notifications n
+      where n.user_id=p.id
+        and n.type='new_opportunity'
+        and n.entity_type='opportunity'
+        and n.entity_id=new.id::text
+    );
+
+  return new;
+end;
+$;
+
+drop trigger if exists opportunities_notify_new_site on public.opportunities;
+create trigger opportunities_notify_new_site
+after insert on public.opportunities
+for each row execute function public.notify_new_opportunity_site();
+
+create or replace function public.notify_new_study_resource_site()
+returns trigger
+language plpgsql
+security definer
+set search_path=public
+as $
+begin
+  insert into public.notifications(
+    user_id,actor_id,type,title,body,entity_type,entity_id,route
+  )
+  select
+    p.id,
+    new.author_id,
+    'new_study_resource',
+    'New Study resource',
+    left(coalesce(nullif(new.title,''),'A new Study resource is available'),180),
+    'study_resource',
+    new.id::text,
+    'study?resource='||new.id::text
+  from public.profiles p
+  where p.id<>new.author_id
+    and coalesce(p.account_status,'active')='active'
+    and not exists (
+      select 1 from public.notifications n
+      where n.user_id=p.id
+        and n.type='new_study_resource'
+        and n.entity_type='study_resource'
+        and n.entity_id=new.id::text
+    );
+
+  return new;
+end;
+$;
+
+drop trigger if exists study_resources_notify_new_site on public.study_resources;
+create trigger study_resources_notify_new_site
+after insert on public.study_resources
+for each row execute function public.notify_new_study_resource_site();
+
 create table if not exists public.admin_content_email_broadcasts (
   content_type text not null,
   content_id text not null,
