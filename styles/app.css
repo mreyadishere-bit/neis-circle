@@ -4118,3 +4118,11 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     font-size:7px;
   }
 }
+
+.admin-content-row[data-admin-open-content]{
+  cursor:pointer;
+}
+.admin-content-row[data-admin-open-content]:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:3px;
+}
