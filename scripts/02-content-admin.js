@@ -65,31 +65,137 @@ settings=function(){openModal(`<div class="modal-head"><div><h2>Settings</h2><p>
 setup=function(){if(!authUser||authUser.id!==NEIS_ADMIN_ID){toast("Technical settings are private to the main administrator");return}NEIS_TECH_SETUP()}
 async function signOut(){try{window.NEISSecondaryData?.clearUser?.()}catch(_){}if(sb)await sb.auth.signOut();authUser=null;state.isAdmin=false;state.profile={name:'Student',username:'',grade:'',branch:'',campus:'',bio:'',interests:'',role:'student'};state.articles=[];state.gallery=[];state.members=[];save();closeModal();nav('home');toast("Signed out safely")}
 
-loadLiveData=async function(){
-if(!sb||!authUser)return;
-const cachedMembers=window.NEISProfileCache?.read?.(authUser.id);
-const memberRequest=cachedMembers?.fresh&&Array.isArray(cachedMembers.rows)&&cachedMembers.rows.length
-  ?Promise.resolve({data:cachedMembers.rows,error:null,cached:true})
-  :sb.from('profiles').select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete').order('full_name');
-const [postRes,reactionRes,bookmarkRes,memberRes]=await Promise.all([
-sb.from('posts').select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type').order('created_at',{ascending:false}),
-sb.from('reactions').select('post_id,user_id,reaction'),
-sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),
-memberRequest
-]);
-if(!memberRes.error){
-  state.members=memberRes.data||[];
-  if(!memberRes.cached)window.NEISProfileCache?.write?.(authUser.id,state.members);
-  const p=state.members.find(x=>String(x.id)===String(authUser.id));
-  if(p){
-    state.isAdmin=p.role==='admin'||authUser.id===NEIS_ADMIN_ID;
-    if(p.onboarding_complete===true)state.onboardingComplete=true;
-    state.profile={name:p.full_name||authUser.user_metadata?.full_name||'Student',username:p.username||'',grade:p.grade||'',branch:p.branch||'',campus:p.campus||'',bio:p.bio||'',interests:Array.isArray(p.interests)?p.interests.join(', '):(p.interests||''),role:state.isAdmin?'admin':'student'};
+let primaryBackgroundRefreshPromise=null;
+function mergeStartupMembers(rows){
+  const map=new Map((state.members||[]).map(row=>[String(row.id),row]));
+  for(const row of (rows||[])){
+    if(!row?.id)continue;
+    const key=String(row.id);
+    map.set(key,{...(map.get(key)||{}),...row});
   }
+  state.members=[...map.values()];
 }
-if(!postRes.error){const rc={},previousById=new Map((state.posts||[]).map(item=>[String(item.id),item]));(reactionRes.data||[]).forEach(x=>rc[x.post_id]=(rc[x.post_id]||0)+1);const livePosts=(postRes.data||[]).map(p=>{const author=state.members.find(m=>String(m.id)===String(p.author_id))||{},previous=previousById.get(String(p.id))||{},n=author.full_name||previous.user||'NEIS Student';return {id:p.id,author_id:p.author_id,circle_id:p.circle_id,pinned:!!p.pinned,post_type:p.post_type||'post',is_live:true,created_at:p.created_at,user:n,initials:initials(n),color:'#006f5b',meta:[...new Set([author.grade,author.branch,author.campus].filter(Boolean).map(value=>String(value).trim()))].join(' · ')||previous.meta||'NEIS Circle',time:formatDate(p.created_at),kind:p.kind,title:p.title,body:p.body,tags:p.tags||[],image_url:p.image_url||'',image_urls:Array.isArray(p.image_urls)?p.image_urls.filter(Boolean):[],image_display_mode:p.image_display_mode==='fill'?'fill':'fit',link_button_label:p.link_button_label||'',link_button_url:p.link_button_url||'',youtube_url:p.youtube_url||'',likes:rc[p.id]||0,comments:Number(previous.comments||0)}});state.posts=livePosts;state.postReactionKeys=(reactionRes.data||[]).map(x=>[x.post_id,x.user_id,x.reaction||'like'].map(String).join('|'));state.liked=(reactionRes.data||[]).filter(x=>x.user_id===authUser.id).map(x=>x.post_id);state.saved=(bookmarkRes.data||[]).map(x=>x.post_id)}
-if(!state.members.length&&state.profile.name)state.members=[{id:authUser.id,full_name:state.profile.name,username:state.profile.username,grade:state.profile.grade,branch:state.profile.branch,bio:state.profile.bio||'',interests:state.profile.interests?state.profile.interests.split(',').map(x=>x.trim()).filter(Boolean):[],role:state.isAdmin?'admin':'student'}];
-state.platformReady=true;save();document.body.classList.toggle('is-admin',state.isAdmin);
+function applyOwnProfileRow(p){
+  if(!p)return;
+  state.isAdmin=p.role==='admin'||authUser.id===NEIS_ADMIN_ID;
+  if(p.onboarding_complete===true)state.onboardingComplete=true;
+  state.profile={
+    name:p.full_name||authUser.user_metadata?.full_name||'Student',
+    username:p.username||'',
+    grade:p.grade||'',
+    branch:p.branch||'',
+    campus:p.campus||'',
+    bio:p.bio||'',
+    interests:Array.isArray(p.interests)?p.interests.join(', '):(p.interests||''),
+    role:state.isAdmin?'admin':'student'
+  };
+}
+function refreshPrimaryBackground(){
+  if(primaryBackgroundRefreshPromise||!sb||!authUser)return primaryBackgroundRefreshPromise;
+  const uid=authUser.id;
+  primaryBackgroundRefreshPromise=(async()=>{
+    const [memberRes,engagementRes]=await Promise.all([
+      sb.from('profiles')
+        .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
+        .order('full_name'),
+      sb.rpc('post_engagement_counts')
+    ]);
+    if(!memberRes.error){
+      state.members=memberRes.data||state.members||[];
+      window.NEISProfileCache?.write?.(uid,state.members);
+    }else console.warn('[NEIS startup] member directory refresh failed',memberRes.error);
+
+    if(!engagementRes.error){
+      const counts=new Map((engagementRes.data||[]).map(row=>[String(row.post_id),row]));
+      const changed=[];
+      for(const post of (state.posts||[])){
+        const row=counts.get(String(post.id));
+        if(!row)continue;
+        const likes=Number(row.reaction_count||0),comments=Number(row.comment_count||0);
+        if(post.likes!==likes||post.comments!==comments){
+          post.likes=likes;
+          post.comments=comments;
+          changed.push(post.id);
+        }
+      }
+      if(typeof patchVisiblePostState==='function')changed.forEach(id=>patchVisiblePostState(id));
+    }else console.warn('[NEIS startup] engagement counts refresh failed',engagementRes.error);
+
+    if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+  })().catch(error=>console.warn('[NEIS startup] background refresh failed',error))
+    .finally(()=>{primaryBackgroundRefreshPromise=null});
+  return primaryBackgroundRefreshPromise;
+}
+
+loadLiveData=async function(){
+  if(!sb||!authUser)return;
+  const uid=authUser.id;
+  const cachedMembers=window.NEISProfileCache?.read?.(uid);
+  if(Array.isArray(cachedMembers?.rows)&&cachedMembers.rows.length){
+    state.members=cachedMembers.rows;
+    const cachedSelf=state.members.find(x=>String(x.id)===String(uid));
+    if(cachedSelf)applyOwnProfileRow(cachedSelf);
+  }
+
+  const [postRes,myReactionRes,bookmarkRes,profileRes]=await Promise.all([
+    sb.from('posts')
+      .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
+      .order('created_at',{ascending:false}),
+    sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid),
+    sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid),
+    sb.from('profiles')
+      .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
+      .eq('id',uid).maybeSingle()
+  ]);
+
+  if(!profileRes.error&&profileRes.data){
+    mergeStartupMembers([profileRes.data]);
+    applyOwnProfileRow(profileRes.data);
+  }
+
+  if(!postRes.error){
+    const previousById=new Map((state.posts||[]).map(item=>[String(item.id),item]));
+    const authors=[];
+    const livePosts=(postRes.data||[]).map(p=>{
+      const joinedAuthor=p.profiles||null;
+      if(joinedAuthor?.id)authors.push(joinedAuthor);
+      const author=joinedAuthor||(state.members||[]).find(m=>String(m.id)===String(p.author_id))||{};
+      const previous=previousById.get(String(p.id))||{};
+      const n=author.full_name||previous.user||'NEIS Student';
+      return {
+        id:p.id,author_id:p.author_id,circle_id:p.circle_id,pinned:!!p.pinned,
+        post_type:p.post_type||'post',is_live:true,created_at:p.created_at,
+        user:n,initials:initials(n),color:'#006f5b',
+        meta:[...new Set([author.grade,author.branch,author.campus].filter(Boolean).map(value=>String(value).trim()))].join(' · ')||previous.meta||'NEIS Circle',
+        time:formatDate(p.created_at),kind:p.kind,title:p.title,body:p.body,tags:p.tags||[],
+        image_url:p.image_url||'',image_urls:Array.isArray(p.image_urls)?p.image_urls.filter(Boolean):[],
+        image_display_mode:p.image_display_mode==='fill'?'fill':'fit',
+        link_button_label:p.link_button_label||'',link_button_url:p.link_button_url||'',
+        youtube_url:p.youtube_url||'',likes:Number(previous.likes||0),comments:Number(previous.comments||0)
+      };
+    });
+    mergeStartupMembers(authors);
+    state.posts=livePosts;
+  }
+
+  state.postReactionKeys=(myReactionRes.data||[])
+    .map(x=>[x.post_id,x.user_id,x.reaction||'like'].map(String).join('|'));
+  state.liked=(myReactionRes.data||[]).map(x=>x.post_id);
+  state.saved=(bookmarkRes.data||[]).map(x=>x.post_id);
+
+  if(!state.members.length&&state.profile.name){
+    state.members=[{
+      id:uid,full_name:state.profile.name,username:state.profile.username,
+      grade:state.profile.grade,branch:state.profile.branch,bio:state.profile.bio||'',
+      interests:state.profile.interests?state.profile.interests.split(',').map(x=>x.trim()).filter(Boolean):[],
+      role:state.isAdmin?'admin':'student'
+    }];
+  }
+
+  state.platformReady=true;
+  save();
+  document.body.classList.toggle('is-admin',state.isAdmin);
+  refreshPrimaryBackground();
 }
 window.NEISPrimaryContentLoad=loadLiveData;
 
