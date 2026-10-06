@@ -447,6 +447,10 @@ set search_path = public, auth
 as $$
 declare site_on boolean; email_on boolean;
 begin
+  if coalesce(new.privacy,'public') <> 'public' then
+    return new;
+  end if;
+
   select site_enabled,email_enabled into site_on,email_on
   from public.notification_broadcast_settings where event_key='new_circle';
 
