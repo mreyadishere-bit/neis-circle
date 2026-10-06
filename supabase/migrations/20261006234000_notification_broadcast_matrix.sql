@@ -197,7 +197,7 @@ begin
 
     if coalesce(site_on,false) then
       insert into public.notifications(user_id,actor_id,type,title,body,entity_type,entity_id,route)
-      select cm.user_id,new.author_id,'new_circle_post',
+      select cm.user_id,new.author_id,'circle_post',
              'New post in '||coalesce(circle_name,'Circle'),
              coalesce(author_name,'A student')||': '||left(coalesce(nullif(new.title,''),nullif(new.body,''),'New post'),140),
              'post',new.id::text,
@@ -233,6 +233,7 @@ end;
 $$;
 
 drop trigger if exists posts_enqueue_admin_email on public.posts;
+drop trigger if exists posts_notify_new on public.posts;
 drop trigger if exists posts_broadcast_new_content on public.posts;
 create trigger posts_broadcast_new_content
 after insert on public.posts
@@ -293,6 +294,7 @@ end;
 $$;
 
 drop trigger if exists articles_enqueue_new_email on public.articles;
+drop trigger if exists articles_notify_new on public.articles;
 drop trigger if exists articles_broadcast_new_content on public.articles;
 create trigger articles_broadcast_new_content
 after insert or update of status on public.articles
@@ -477,6 +479,7 @@ begin
 end;
 $$;
 
+drop trigger if exists circles_notify_new on public.circles;
 drop trigger if exists circles_broadcast_new_content on public.circles;
 create trigger circles_broadcast_new_content
 after insert on public.circles
@@ -496,7 +499,7 @@ begin
 
   if coalesce(site_on,false) then
     insert into public.notifications(user_id,actor_id,type,title,body,entity_type,entity_id,route)
-    select cm.user_id,new.creator_id,'new_meeting',
+    select cm.user_id,new.creator_id,'circle_meeting',
            'New meeting in '||coalesce(circle_name,'Circle'),
            left(coalesce(nullif(new.title,''),'A new meeting was scheduled.'),180),
            'meeting',new.id::text,
@@ -529,6 +532,7 @@ begin
 end;
 $$;
 
+drop trigger if exists circle_meetings_notify_new on public.circle_meetings;
 drop trigger if exists circle_meetings_broadcast_new_content on public.circle_meetings;
 create trigger circle_meetings_broadcast_new_content
 after insert on public.circle_meetings
