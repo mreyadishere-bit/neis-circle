@@ -32,7 +32,7 @@ const NOTIFICATION_BROADCAST_EVENTS=[
   {key:'new_opportunity',en:'New opportunities',ar:'الفرص الجديدة',scopeEn:'All active students',scopeAr:'كل الطلاب النشطين'},
   {key:'new_study_resource',en:'New Study resources',ar:'مصادر Study الجديدة',scopeEn:'All active students',scopeAr:'كل الطلاب النشطين'},
   {key:'new_gallery',en:'New approved gallery items',ar:'عناصر المعرض الجديدة بعد الموافقة',scopeEn:'All active students',scopeAr:'كل الطلاب النشطين'},
-  {key:'new_circle',en:'New Circles',ar:'المجتمعات الجديدة',scopeEn:'All active students',scopeAr:'كل الطلاب النشطين'},
+  {key:'new_circle',en:'New public Circles',ar:'المجتمعات العامة الجديدة',scopeEn:'All active students',scopeAr:'كل الطلاب النشطين'},
   {key:'new_meeting',en:'New Circle meetings',ar:'اجتماعات المجتمعات الجديدة',scopeEn:'Circle members only',scopeAr:'أعضاء المجتمع فقط'}
 ];
 const expandedPostIds=new Set();
