@@ -1059,6 +1059,24 @@ for (const token of [
   if (!reactionDeltaSource.includes(token)) failures.push('Realtime reaction delta handling is missing: ' + token);
 }
 
+const notificationBellCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
+for (const token of [
+  '.top-actions [data-action="notifications"]>.count-badge',
+  'position:absolute',
+  'background:var(--coral)',
+  'pointer-events:none'
+]) {
+  if (!notificationBellCss.includes(token)) failures.push('Notification bell badge styling is missing: ' + token);
+}
+const notificationBellSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  "bell.querySelector('.count-badge')",
+  "badge.classList.toggle('hidden',!not)",
+  "bell.setAttribute('aria-label'"
+]) {
+  if (!notificationBellSource.includes(token)) failures.push('Notification bell badge sync is missing: ' + token);
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');

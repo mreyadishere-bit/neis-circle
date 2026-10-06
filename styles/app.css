@@ -4075,3 +4075,46 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     transform-origin:top left;
   }
 }
+
+
+/* v159.80 — keep the top notification bell badge visually synced with unread state */
+.top-actions [data-action="notifications"]{
+  position:relative;
+  overflow:visible;
+}
+.top-actions [data-action="notifications"]>.count-badge{
+  position:absolute;
+  top:-3px;
+  right:-3px;
+  z-index:4;
+  width:auto;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  display:grid;
+  place-items:center;
+  border:2px solid var(--paper);
+  border-radius:999px;
+  background:var(--coral);
+  color:#fff;
+  font-size:8px;
+  font-weight:850;
+  font-style:normal;
+  line-height:1;
+  letter-spacing:-.02em;
+  box-sizing:border-box;
+  pointer-events:none;
+}
+.top-actions [data-action="notifications"]>.count-badge.hidden{
+  display:none!important;
+}
+@media(max-width:600px){
+  .top-actions [data-action="notifications"]>.count-badge{
+    top:-2px;
+    right:-2px;
+    min-width:16px;
+    height:16px;
+    padding:0 4px;
+    font-size:7px;
+  }
+}
