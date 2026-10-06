@@ -1147,6 +1147,22 @@ else {
     if (!migration.includes(token)) failures.push('Notification broadcast migration is missing: ' + token);
   }
 }
+const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
+if (!fs.existsSync(circleReplyNotificationMigrationPath)) failures.push('Missing production Circle reply notification fix migration.');
+else {
+  const migration = fs.readFileSync(circleReplyNotificationMigrationPath, 'utf8');
+  for (const token of [
+    "new.reply_to_id is not null",
+    "reply_owner",
+    "'reply'",
+    "replied to your message",
+    "'circle_message'",
+    "cm.user_id<>reply_owner",
+    "New messages in "
+  ]) {
+    if (!migration.includes(token)) failures.push('Circle reply notification fix is missing: ' + token);
+  }
+}
 const notificationBellCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
 for (const token of [
   '.top-actions [data-action="notifications"]>.count-badge',
