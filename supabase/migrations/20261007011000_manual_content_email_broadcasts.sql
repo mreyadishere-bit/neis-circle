@@ -2,6 +2,11 @@
 -- Site notifications remain enabled independently; email is sent only when the
 -- primary admin explicitly chooses "Email all" for a specific moderation item.
 
+-- Content emails are now manual from Content moderation only.
+drop trigger if exists articles_enqueue_new_email on public.articles;
+drop trigger if exists opportunities_enqueue_new_email on public.opportunities;
+drop trigger if exists posts_enqueue_admin_email on public.posts;
+
 create table if not exists public.admin_content_email_broadcasts (
   content_type text not null,
   content_id text not null,
