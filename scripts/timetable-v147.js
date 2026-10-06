@@ -35,19 +35,6 @@
     tt.error='';
     return true;
   }
-  async function timetableSessionReady(){
-    try{
-      const {data,error}=await sb.auth.getSession();
-      if(error)return false;
-      return same(data?.session?.user?.id,authUser?.id);
-    }catch{return false}
-  }
-  function queueTimetableLoadRetry(){
-    clearTimeout(timetableLoadRetryTimer);
-    timetableLoadRetryTimer=setTimeout(()=>{
-      if(state.view==='timetable'&&authUser&&!tt.loading)load();
-    },350);
-  }
   const tr=(en,ar)=>state.lang==='ar'?ar:en;
   const same=(a,b)=>String(a)===String(b);
   const days=[
@@ -118,21 +105,11 @@
   }
 
   async function load(){
-    if(!sb||!authUser)return;
+    if(!sb||!authUser?.id)return;
     const request=++tt.request;
-    const hadCache=hydrateTimetableCache();
+    hydrateTimetableCache();
     tt.loading=true;tt.error='';
     renderTimetable();
-
-    const sessionReady=await timetableSessionReady();
-    if(request!==tt.request)return;
-    if(!sessionReady){
-      tt.loading=false;
-      if(!hadCache&&!tt.ready)tt.error='';
-      renderTimetable();
-      queueTimetableLoadRetry();
-      return;
-    }
 
     const {data,error}=await sb.from('user_timetable_entries')
       .select('*')
