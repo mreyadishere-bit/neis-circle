@@ -3,9 +3,51 @@
   'use strict';
 
   const tt=state.timetable={
-    rows:[],loading:false,error:'',ready:false,dayFilter:'all',request:0
+    rows:[],loading:false,error:'',ready:false,dayFilter:'all',request:0,lastLoadedAt:0
   };
   let timetableRealtimeChannel=null,timetableRealtimeUser='';
+  const TIMETABLE_CACHE_PREFIX='neis_timetable_rows_v1:';
+  const TIMETABLE_CACHE_MAX_AGE=7*24*60*60*1000;
+  let timetableLoadRetryTimer=null;
+
+  function timetableCacheKey(){return TIMETABLE_CACHE_PREFIX+String(authUser?.id||'guest')}
+  function readTimetableCache(){
+    if(typeof localStorage==='undefined'||!authUser?.id)return [];
+    try{
+      const parsed=JSON.parse(localStorage.getItem(timetableCacheKey())||'null');
+      if(!parsed||!Array.isArray(parsed.rows)||!Number(parsed.savedAt))return [];
+      if(Date.now()-Number(parsed.savedAt)>TIMETABLE_CACHE_MAX_AGE)return [];
+      return parsed.rows;
+    }catch{return []}
+  }
+  function writeTimetableCache(){
+    if(typeof localStorage==='undefined'||!authUser?.id)return;
+    try{
+      localStorage.setItem(timetableCacheKey(),JSON.stringify({savedAt:Date.now(),rows:tt.rows||[]}));
+    }catch{}
+  }
+  function hydrateTimetableCache(){
+    if((tt.rows||[]).length)return false;
+    const rows=readTimetableCache();
+    if(!rows.length)return false;
+    tt.rows=sortRows(rows);
+    tt.ready=true;
+    tt.error='';
+    return true;
+  }
+  async function timetableSessionReady(){
+    try{
+      const {data,error}=await sb.auth.getSession();
+      if(error)return false;
+      return same(data?.session?.user?.id,authUser?.id);
+    }catch{return false}
+  }
+  function queueTimetableLoadRetry(){
+    clearTimeout(timetableLoadRetryTimer);
+    timetableLoadRetryTimer=setTimeout(()=>{
+      if(state.view==='timetable'&&authUser&&!tt.loading)load();
+    },350);
+  }
   const tr=(en,ar)=>state.lang==='ar'?ar:en;
   const same=(a,b)=>String(a)===String(b);
   const days=[
@@ -77,15 +119,41 @@
 
   async function load(){
     if(!sb||!authUser)return;
-    const request=++tt.request;tt.loading=true;tt.error='';renderTimetable();
+    const request=++tt.request;
+    const hadCache=hydrateTimetableCache();
+    tt.loading=true;tt.error='';
+    renderTimetable();
+
+    const sessionReady=await timetableSessionReady();
+    if(request!==tt.request)return;
+    if(!sessionReady){
+      tt.loading=false;
+      if(!hadCache&&!tt.ready)tt.error='';
+      renderTimetable();
+      queueTimetableLoadRetry();
+      return;
+    }
+
     const {data,error}=await sb.from('user_timetable_entries')
       .select('*')
       .eq('user_id',authUser.id)
       .order('day_of_week')
       .order('start_time');
     if(request!==tt.request)return;
-    tt.loading=false;tt.ready=true;
-    if(error){tt.error=friendly(error);tt.rows=[]}else tt.rows=sortRows(data||[]);
+
+    tt.loading=false;
+    if(error){
+      if(!(tt.rows||[]).length)tt.error=friendly(error);
+      else console.warn('[NEIS Timetable] refresh failed; keeping cached timetable',error);
+      renderTimetable();
+      return;
+    }
+
+    tt.ready=true;
+    tt.error='';
+    tt.rows=sortRows(data||[]);
+    tt.lastLoadedAt=Date.now();
+    writeTimetableCache();
     renderTimetable();
   }
 
@@ -106,6 +174,7 @@
     }else return;
     tt.rows=sortRows(tt.rows);
     tt.ready=true;tt.error='';
+    writeTimetableCache();
     if(state.view==='timetable')renderTimetable();
   }
   async function setupTimetableRealtime(){
@@ -297,7 +366,7 @@
   }
 
   function view(){
-    if(tt.loading&&!tt.ready)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
+    if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)return '<section class="tt-shell"><div class="tt-loading">'+Array.from({length:5},()=>'<i></i>').join('')+'</div></section>';
     if(tt.error)return '<section class="tt-shell"><div class="empty"><b>'+esc(tr('Timetable could not load','تعذر تحميل الجدول'))+'</b><span>'+esc(tt.error)+'</span><button class="primary" data-tt-retry>'+esc(tr('Try again','حاول مرة أخرى'))+'</button></div></section>';
     return '<section class="tt-head"><div><p class="kicker"><i></i>'+esc(tr('Private weekly planner','مخطط أسبوعي خاص'))+'</p><h1>'+esc(tr('My Timetable','جدولي'))+'</h1><p>'+esc(tr('Build your week once, then see every class clearly at a glance. Only you can access this timetable.','رتّب أسبوعك مرة واحدة وشاهد حصصك بوضوح. أنت فقط تستطيع الوصول إلى هذا الجدول.'))+'</p></div><div class="tt-head-actions"><button class="secondary tt-export-button" data-tt-export>⇩ '+esc(tr('Export as PDF','تصدير PDF'))+'</button><button class="secondary" data-tt-today>'+esc(tr('Today','اليوم'))+'</button><button class="secondary" data-tt-extra-day>+ '+esc(tr('Add day','إضافة يوم'))+'</button><button class="primary" data-tt-new>+ '+esc(tr('Add class','إضافة حصة'))+'</button></div></section>'+
       summary()+
@@ -458,8 +527,9 @@
   render=function(){
     if(state.view!=='timetable'){previousRender();return}
     if(!authUser||state.onboardingComplete!==true){previousRender();return}
+    if(!tt.ready&&!tt.loading)hydrateTimetableCache();
     renderTimetable();
     setupTimetableRealtime().catch(error=>console.warn('[NEIS Timetable realtime]',error));
-    if(!tt.ready&&!tt.loading)load();
+    if(!tt.loading&&(!tt.lastLoadedAt||Date.now()-tt.lastLoadedAt>30000))load();
   };
 })();

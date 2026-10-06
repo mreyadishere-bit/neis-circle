@@ -1087,6 +1087,29 @@ for (const token of [
   if (!reactionDeltaSource.includes(token)) failures.push('Realtime reaction delta handling is missing: ' + token);
 }
 
+const timetableSessionSafeSource = fs.readFileSync(path.join(root, 'scripts', 'timetable-v147.js'), 'utf8');
+for (const token of [
+  "TIMETABLE_CACHE_PREFIX='neis_timetable_rows_v1:'",
+  'function hydrateTimetableCache()',
+  'async function timetableSessionReady()',
+  'queueTimetableLoadRetry()',
+  'tt.lastLoadedAt=Date.now()',
+  "if((tt.loading||!tt.ready)&&!(tt.rows||[]).length)"
+]) {
+  if (!timetableSessionSafeSource.includes(token)) failures.push('Session-safe timetable loading is missing: ' + token);
+}
+const timetableLoadStart = timetableSessionSafeSource.indexOf('async function load(){');
+const timetableLoadEnd = timetableLoadStart >= 0 ? timetableSessionSafeSource.indexOf('\n  function applyTimetableRealtime', timetableLoadStart) : -1;
+const timetableLoadSection = timetableLoadStart >= 0 && timetableLoadEnd > timetableLoadStart
+  ? timetableSessionSafeSource.slice(timetableLoadStart, timetableLoadEnd)
+  : '';
+if (!timetableLoadSection) failures.push('Timetable load section could not be located.');
+else {
+  const sessionCheck = timetableLoadSection.indexOf('const sessionReady=await timetableSessionReady()');
+  const tableRead = timetableLoadSection.indexOf("sb.from('user_timetable_entries')");
+  if (sessionCheck < 0 || tableRead < 0 || sessionCheck > tableRead) failures.push('Timetable must verify Supabase session readiness before the protected table read.');
+}
+
 const hotfixPath = path.join(root, 'scripts', 'hotfix-v21.js');
 if (fs.existsSync(hotfixPath)) {
   const hotfixSource = fs.readFileSync(hotfixPath, 'utf8');
