@@ -188,7 +188,7 @@
     const visible=schoolDays();
     return '<div class="tt-pdf-board tt-pdf-days-'+visible.length+'">'+visible.map(day=>{
       const rows=rowsForDay(day);
-      return '<section class="tt-pdf-day '+(day===currentDay()?'today':'')+'">'+
+      return '<section class="tt-pdf-day tt-pdf-count-'+Math.min(rows.length,6)+' '+(day===currentDay()?'today':'')+'">'+
         '<header><div><strong>'+esc(days.find(item=>item.id===Number(day))?.en||dayName(day))+'</strong>'+(day===currentDay()?'<span>TODAY</span>':'')+'</div><b aria-hidden="true">+</b></header>'+
         '<div class="tt-pdf-day-body">'+rows.map(pdfEventCard).join('')+'</div>'+
       '</section>';
