@@ -1114,37 +1114,42 @@ const moderationBindSection = moderationBindStart >= 0 && moderationBindEnd > mo
 if (!moderationBindSection) failures.push('Primary-admin moderation row binding could not be located.');
 else if (!moderationBindSection.includes("closest?.('button,a,input,select,textarea')")) failures.push('Moderation row navigation must not hijack action-button clicks.');
 
-const notificationMatrixSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+const manualContentEmailSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 for (const token of [
-  'const NOTIFICATION_BROADCAST_EVENTS=[',
-  'function notificationBroadcastMatrix()',
-  "sb.rpc('get_notification_broadcast_settings')",
-  "sb.rpc('set_notification_broadcast_setting'",
-  'data-notification-channel=',
-  'data-notification-key=',
-  'new_opportunity',
-  'new_study_resource'
+  'function loadAdminModerationEmailData()',
+  'function sendAdminContentEmail(type,id,title)',
+  "sb.rpc('admin_preview_content_email_audience'",
+  "sb.rpc('admin_email_content_to_audience'",
+  'data-admin-email-content=',
+  "type:'opportunity'",
+  "type:'study resource'",
+  'Site notifications stay enabled independently.'
 ]) {
-  if (!notificationMatrixSource.includes(token)) failures.push('Notification matrix UI contract is missing: ' + token);
+  if (!manualContentEmailSource.includes(token)) failures.push('Manual content email UI contract is missing: ' + token);
 }
-const notificationMatrixMigrationPath = path.join(root, 'supabase', 'migrations', '20261006234000_notification_broadcast_matrix.sql');
-if (!fs.existsSync(notificationMatrixMigrationPath)) failures.push('Missing notification broadcast matrix migration.');
+for (const forbidden of [
+  'function notificationBroadcastMatrix()',
+  'data-notification-channel=',
+  'data-notification-key='
+]) {
+  if (manualContentEmailSource.includes(forbidden)) failures.push('Legacy notification matrix UI must be removed: ' + forbidden);
+}
+const manualContentEmailMigrationPath = path.join(root, 'supabase', 'migrations', '20261007011000_manual_content_email_broadcasts.sql');
+if (!fs.existsSync(manualContentEmailMigrationPath)) failures.push('Missing manual content email broadcast migration.');
 else {
-  const migration = fs.readFileSync(notificationMatrixMigrationPath, 'utf8');
+  const migration = fs.readFileSync(manualContentEmailMigrationPath, 'utf8');
   for (const token of [
-    'notification_broadcast_settings',
-    'get_notification_broadcast_settings',
-    'set_notification_broadcast_setting',
-    "('new_opportunity',true,true)",
-    "('new_study_resource',true,true)",
-    'broadcast_new_opportunity',
-    'broadcast_new_study_resource',
-    'study_resources_broadcast_new_content',
-    'opportunities_broadcast_new_content',
-    'new_circle_post',
-    'new_meeting'
+    'admin_content_email_broadcasts',
+    'admin_preview_content_email_audience',
+    'admin_email_content_to_audience',
+    "lower(coalesce(u.email,''))='mreyadishere@gmail.com'",
+    'site_enabled=true',
+    'email_enabled=false',
+    "v_type='opportunity'",
+    "v_type='study resource'",
+    "v_scope:='circle'"
   ]) {
-    if (!migration.includes(token)) failures.push('Notification broadcast migration is missing: ' + token);
+    if (!migration.includes(token)) failures.push('Manual content email migration is missing: ' + token);
   }
 }
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
