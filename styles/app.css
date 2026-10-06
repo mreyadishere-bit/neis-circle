@@ -4181,3 +4181,32 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .admin-content-actions{justify-content:flex-start}
   .admin-content-actions .secondary{flex:1 1 auto}
 }
+
+.home-safety-note{margin:10px 2px 0;text-align:center;color:var(--muted);font-size:8px;font-weight:300;line-height:1.35;opacity:.62;letter-spacing:.01em}
+@media(max-width:760px){.home-safety-note{font-size:7px;margin-top:8px;opacity:.58}}
+
+
+.admin-dm-safety-search{display:flex;gap:8px;align-items:center;margin-top:14px}
+.admin-dm-safety-search input{flex:1;min-width:0}
+.admin-dm-safety-users,.admin-dm-safety-conversations{display:grid;gap:8px;margin-top:12px}
+.admin-dm-safety-user,.admin-dm-safety-conversation{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:left}
+.admin-dm-safety-user span:first-child,.admin-dm-safety-conversation>div{display:grid;gap:3px;min-width:0}
+.admin-dm-safety-user small,.admin-dm-safety-conversation small,.admin-dm-safety-selected small{color:var(--muted);font-size:12px}
+.admin-dm-safety-user.active{border-color:currentColor}
+.admin-dm-safety-selected{display:flex;gap:6px;align-items:baseline;margin:4px 0}
+.admin-dm-review-form{display:grid;gap:14px}
+.admin-dm-review-form label{display:grid;gap:7px}
+.admin-dm-review-form textarea{min-height:100px;resize:vertical}
+.admin-dm-review-note,.admin-dm-review-banner{font-size:12px;color:var(--muted);line-height:1.45}
+.admin-dm-review-banner{padding:10px 12px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px}
+.admin-dm-review-messages{display:grid;gap:8px;max-height:64vh;overflow:auto}
+.admin-dm-review-message{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.admin-dm-review-message>div{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.admin-dm-review-message small{color:var(--muted);font-size:11px}
+.admin-dm-review-message p{margin:7px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.admin-dm-review-message a{display:inline-block;margin-top:7px;font-size:12px}
+@media(max-width:760px){
+  .admin-dm-safety-search{align-items:stretch;flex-direction:column}
+  .admin-dm-safety-conversation{align-items:flex-start;flex-direction:column}
+  .admin-dm-safety-conversation button{width:100%}
+}

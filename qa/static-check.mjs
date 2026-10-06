@@ -1020,6 +1020,46 @@ for (const migrationName of [
   if (!fs.existsSync(migrationPath)) failures.push('Missing user-scoped realtime migration: ' + migrationName);
 }
 
+const homeSafetySource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
+if (!homeSafetySource.includes('Private messages may be reviewed for safety upon request.')) failures.push('Home private-message safety disclosure is missing.');
+if (!homeSafetySource.includes('class="home-safety-note"')) failures.push('Home safety disclosure must use the subtle home-only class.');
+const homeSafetyCss = fs.readFileSync(path.join(root, 'styles', 'app.css'), 'utf8');
+for (const token of ['.home-safety-note{','font-size:8px','font-weight:300']) {
+  if (!homeSafetyCss.includes(token)) failures.push('Home safety disclosure styling is missing: ' + token);
+}
+
+const dmSafetySource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  "function adminDmSafetyPanel()",
+  "admin_search_dm_users",
+  "admin_list_user_dm_conversations",
+  "admin_create_dm_review_request",
+  "admin_get_dm_review_messages",
+  "data-admin-dm-safety-search",
+  "data-admin-dm-review-conversation"
+]) {
+  if (!dmSafetySource.includes(token)) failures.push('Main-admin DM safety review UI missing: ' + token);
+}
+if (!dmSafetySource.includes("canOpenAdminModerationTargets()?adminDmSafetyPanel():''")) failures.push('DM safety review must remain main-admin-only in the Admin view.');
+
+const dmSafetyMigrationPath = path.join(root, 'supabase', 'migrations', '20261007023000_main_admin_dm_safety_review.sql');
+if (!fs.existsSync(dmSafetyMigrationPath)) failures.push('DM safety review migration is missing.');
+else {
+  const dmSafetySql = fs.readFileSync(dmSafetyMigrationPath, 'utf8');
+  for (const token of [
+    'admin_dm_review_requests',
+    'admin_dm_audit_log',
+    "lower(coalesce(u.email,''))='mreyadishere@gmail.com'",
+    "p.role='admin'",
+    "expires_at>now()",
+    "action in ('request','view')",
+    'revoke all on table public.admin_dm_review_requests from public, anon, authenticated',
+    'revoke all on table public.admin_dm_audit_log from public, anon, authenticated'
+  ]) {
+    if (!dmSafetySql.includes(token)) failures.push('DM safety review database guard missing: ' + token);
+  }
+}
+
 const criticalStartupSource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
 for (const token of [
   'let primaryBackgroundRefreshPromise=null',
