@@ -75,7 +75,7 @@ language plpgsql
 stable
 security definer
 set search_path=public,auth
-as $
+as $preview$
 declare
   v_type text := lower(trim(coalesce(content_type_input,'')));
   v_id text := trim(coalesce(content_id_input,''));
@@ -136,7 +136,7 @@ begin
 
   return jsonb_build_object('recipient_count',v_count,'scope',v_scope);
 end;
-$;
+$preview$;
 
 create or replace function public.admin_email_content_to_audience(
   content_type_input text,
