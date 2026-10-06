@@ -1,5 +1,5 @@
 create or replace function public.post_engagement_counts()
-returns table(post_id bigint, reaction_count bigint, comment_count bigint)
+returns table(post_id uuid, reaction_count bigint, comment_count bigint)
 language sql
 stable
 security invoker
