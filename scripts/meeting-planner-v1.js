@@ -26,7 +26,7 @@
     var h=Math.floor(minute/60),m=minute%60,h12=h%12||12,period=h<12?'AM':'PM';
     return state.lang==='ar'?h12+':'+pad(m)+' '+(period==='AM'?'ص':'م'):h12+':'+pad(m)+' '+period;
   }
-  function timeInputValue(minute){var h=Math.floor(Number(minute||0)/60),m=Number(minute||0)%60;return pad(h)+':'+pad(m)}
+  function timeInputValue(minute){minute=Number(minute||0);if(minute===1440)return '00:00';var h=Math.floor(minute/60),m=minute%60;return pad(h)+':'+pad(m)}
   function timeToMinute(value){var parts=String(value||'').split(':');if(parts.length<2)return NaN;return Number(parts[0])*60+Number(parts[1])}
   function safeError(error){
     console.error('[NEIS Meeting Planner]',error);
@@ -43,6 +43,7 @@
     var ids=plannerIds(),sig=ids.join('|');
     if(!force&&store.loaded&&store.signature===sig){decorateAll();return}
     store.loading=true;
+    if(force||store.signature!==sig)store.loaded=false;
     store.signature=sig;
     try{
       store.planners=[];store.results=[];store.myRanges=[];
@@ -96,7 +97,7 @@
     Object.keys(grouped).forEach(function(dayKey){
       var list=grouped[dayKey].sort(function(a,b){return a.start-b.start}),current=null;
       list.forEach(function(row){
-        if(current&&current.count===row.count&&current.total===row.total&&current.end===row.start){
+        if(current&&current.count===current.total&&row.count===row.total&&current.total===row.total&&current.end===row.start){
           current.end=row.start+slot;
         }else{
           if(current)windows.push(current);
@@ -114,7 +115,7 @@
 
   function heatFor(postId,day){
     var rows=rowsFor(postId).filter(function(r){return Number(r.day_of_week)===day}),max=0;
-    rows.forEach(function(r){max=Math.max(max,Number(r.participant_count||0))});
+    rows.forEach(function(r){max=Math.max(max,Number(r.available_count||0))});
     if(!rows.length||!max)return '<span class="meeting-day-empty"></span>';
     var buckets=new Array(24).fill(0);
     rows.forEach(function(r){
@@ -196,6 +197,7 @@
         var day=Number(daySection.dataset.meetingDay);
         daySection.querySelectorAll('.meeting-range-row').forEach(function(row){
           var start=timeToMinute(row.querySelector('[data-range-start]').value),end=timeToMinute(row.querySelector('[data-range-end]').value);
+          if(end===0&&start>0)end=1440;
           if(Number.isFinite(start)&&Number.isFinite(end))output.push({day:day,start:start,end:end});
         });
       });
@@ -279,7 +281,13 @@
     injectTypeOptions();
     if(typeof authUser!=='undefined'&&typeof sb!=='undefined'&&authUser&&sb)load(false,false);
     if(!observer){
-      observer=new MutationObserver(function(){injectTypeOptions();if(store.loaded)decorateAll()});
+      observer=new MutationObserver(function(){
+        injectTypeOptions();
+        var ready=typeof authUser!=='undefined'&&typeof sb!=='undefined'&&authUser&&sb;
+        var sig=signature();
+        if(ready&&!store.loading&&(!store.loaded||store.signature!==sig))load(false,false);
+        else if(store.loaded)decorateAll();
+      });
       observer.observe(document.body,{childList:true,subtree:true});
     }
   }
