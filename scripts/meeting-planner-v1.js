@@ -262,11 +262,12 @@
     if(!select||[].slice.call(select.options).some(function(option){return option.value==='Meeting Planner'}))return;
     var option=document.createElement('option');option.value='Meeting Planner';option.textContent=tr('Meeting planner','منظم اجتماع');select.appendChild(option);
   }
-  function injectTypeOptions(){document.querySelectorAll('#postKind').forEach(addTypeOption)}
+  function injectTypeOptions(){document.querySelectorAll('#postKind,#cpKind').forEach(addTypeOption)}
 
   document.addEventListener('change',function(event){
     var select=event.target;
-    if(!select||select.id!=='postKind'||select.value!=='Meeting Planner')return;
+    if(!select||!['postKind','cpKind'].includes(select.id)||select.value!=='Meeting Planner')return;
+    event.preventDefault();
     event.stopImmediatePropagation();
     openComposer();
   },true);

@@ -1483,12 +1483,19 @@ if (fs.existsSync(socialHydrationPath)) {
   if (!source.includes('profile:profileData(message.sender_id)')) failures.push('Circle messages must attach sender profiles locally.');
 }
 
+const meetingPlannerHomeComposerSource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
+if (!meetingPlannerHomeComposerSource.includes('<option>Meeting Planner</option>')) failures.push('Home composer must expose Meeting Planner as a fixed post type.');
+const meetingPlannerCircleComposerSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+if (!meetingPlannerCircleComposerSource.includes('<option>Meeting Planner</option>')) failures.push('Circle composer must expose Meeting Planner as a fixed post type.');
+
 const meetingPlannerSourcePath = path.join(root, 'scripts', 'meeting-planner-v1.js');
 if (!fs.existsSync(meetingPlannerSourcePath)) failures.push('Meeting planner post module is missing.');
 else {
   const source = fs.readFileSync(meetingPlannerSourcePath, 'utf8');
   for (const token of [
     "post_type==='meeting_availability'",
+    "['postKind','cpKind'].includes(select.id)",
+    "document.querySelectorAll('#postKind,#cpKind')",
     "sb.rpc('create_meeting_planner_post'",
     "sb.rpc('save_meeting_availability'",
     "sb.rpc('get_meeting_planner_results'",
