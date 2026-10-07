@@ -4318,3 +4318,14 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 
 .meeting-planner-badges{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 @media(max-width:760px){.meeting-planner-badges{justify-content:flex-start}}
+
+
+.content-share-sheet{width:min(600px,100%)}
+.content-share-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 18px 12px}
+.content-share-tabs button{min-height:38px;border:1px solid var(--line);border-radius:12px;background:var(--soft);color:var(--muted);font-weight:700}
+.content-share-tabs button.active{background:color-mix(in srgb,var(--accent) 10%,var(--card));border-color:color-mix(in srgb,var(--accent) 35%,var(--line));color:var(--accent)}
+.content-share-circle .article-share-avatar{border-radius:11px}
+.shared-content-message{cursor:pointer}
+@media(max-width:760px){
+  .content-share-tabs{padding:0 14px 10px}
+}
