@@ -229,7 +229,6 @@ as $$
     and r.start_minute<=s.slot_start and r.end_minute>=s.slot_start+s.slot_minutes
   left join participants p on p.post_id=s.post_id
   group by s.post_id,s.day_of_week,s.slot_start,p.participant_count
-  having count(distinct r.user_id)>0
   order by s.post_id,s.day_of_week,s.slot_start;
 $$;
 
