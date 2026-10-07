@@ -2453,8 +2453,14 @@ async function loadAdminModerationEmailData(){
 }
 async function checkAdminEmailCapacity(requiredRecipients){
   const required=Math.max(0,Number(requiredRecipients||0));
-  const {data,error}=await sb.functions.invoke('brevo-email-capacity',{body:{required_recipients:required}});
-  if(error||!data){toast(t('Could not verify Brevo capacity, so nothing was sent.','تعذر التحقق من سعة Brevo، لذلك لم يتم إرسال أي شيء.'));return null}
+  const {data:sessionData,error:sessionError}=await sb.auth.getSession();
+  const accessToken=sessionData?.session?.access_token||'';
+  if(sessionError||!accessToken){toast(t('Your session needs to be refreshed before checking email capacity.','يجب تحديث جلستك قبل التحقق من سعة البريد.'));return null}
+  const {data,error}=await sb.functions.invoke('brevo-email-capacity',{
+    body:{required_recipients:required},
+    headers:{Authorization:`Bearer ${accessToken}`}
+  });
+  if(error||!data){console.error('[NEIS Brevo capacity]',error);toast(t('Could not verify Brevo capacity, so nothing was sent.','تعذر التحقق من سعة Brevo، لذلك لم يتم إرسال أي شيء.'));return null}
   const credits=data.credits===null?null:Number(data.credits);
   if(data.allowed!==true){
     toast(t('Brevo has only','متبقي في Brevo فقط')+' '+Number(credits||0)+' '+t('emails today, but this needs','رسائل اليوم، بينما هذا الإرسال يحتاج')+' '+required+'. '+t('Nothing was queued.','لم تتم إضافة أي رسالة لقائمة الانتظار.'));
