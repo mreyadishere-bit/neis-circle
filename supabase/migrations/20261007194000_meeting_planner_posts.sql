@@ -44,17 +44,53 @@ alter table public.meeting_availability_responses enable row level security;
 
 drop policy if exists "meeting planners read" on public.meeting_planners;
 create policy "meeting planners read"
-on public.meeting_planners for select to authenticated using (true);
+on public.meeting_planners for select to authenticated
+using (
+  exists(
+    select 1 from public.posts p
+    where p.id=post_id
+      and (
+        p.circle_id is null
+        or exists(select 1 from public.circle_members cm where cm.circle_id=p.circle_id and cm.user_id=(select auth.uid()) and cm.status='active')
+        or exists(select 1 from public.circles c where c.id=p.circle_id and c.owner_id=(select auth.uid()))
+        or public.is_admin()
+      )
+  )
+);
 
 drop policy if exists "meeting ranges own read" on public.meeting_availability_ranges;
 create policy "meeting ranges own read"
 on public.meeting_availability_ranges for select to authenticated
-using (user_id=(select auth.uid()));
+using (
+  user_id=(select auth.uid())
+  and exists(
+    select 1 from public.posts p
+    where p.id=post_id
+      and (
+        p.circle_id is null
+        or exists(select 1 from public.circle_members cm where cm.circle_id=p.circle_id and cm.user_id=(select auth.uid()) and cm.status='active')
+        or exists(select 1 from public.circles c where c.id=p.circle_id and c.owner_id=(select auth.uid()))
+        or public.is_admin()
+      )
+  )
+);
 
 drop policy if exists "meeting responses own read" on public.meeting_availability_responses;
 create policy "meeting responses own read"
 on public.meeting_availability_responses for select to authenticated
-using (user_id=(select auth.uid()));
+using (
+  user_id=(select auth.uid())
+  and exists(
+    select 1 from public.posts p
+    where p.id=post_id
+      and (
+        p.circle_id is null
+        or exists(select 1 from public.circle_members cm where cm.circle_id=p.circle_id and cm.user_id=(select auth.uid()) and cm.status='active')
+        or exists(select 1 from public.circles c where c.id=p.circle_id and c.owner_id=(select auth.uid()))
+        or public.is_admin()
+      )
+  )
+);
 
 revoke all on public.meeting_planners from anon;
 revoke all on public.meeting_availability_ranges from anon;
