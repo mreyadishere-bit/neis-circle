@@ -18,17 +18,28 @@ serve(async (req) => {
 
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
   const brevoKey = Deno.env.get("BREVO_API_KEY") ?? "";
-  if (!serviceRole || !supabaseUrl || !brevoKey) {
+  if (!serviceRole || !supabaseUrl || !anonKey || !brevoKey) {
     return new Response(JSON.stringify({ error: "Email capacity check is not configured" }), { status: 503, headers: corsHeaders });
   }
 
-  const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
-  const { data: userData, error: userError } = await admin.auth.getUser(token);
-  const user = userData?.user;
-  if (userError || !user || String(user.email ?? "").toLowerCase() !== "mreyadishere@gmail.com") {
+  const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      accept: "application/json",
+    },
+  });
+  if (!userResponse.ok) {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
+  const user = await userResponse.json();
+  if (!user?.id || String(user.email ?? "").toLowerCase() !== "mreyadishere@gmail.com") {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  }
+
+  const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
 
   const { data: profile, error: profileError } = await admin
     .from("profiles")
