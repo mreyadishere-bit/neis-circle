@@ -83,7 +83,7 @@
   }
 
   function windowsFor(postId){
-    var planner=plannerFor(postId),slot=Number(planner?.slot_minutes||30),rows=rowsFor(postId);
+    var planner=plannerFor(postId),slot=Number(planner?.slot_minutes||30),rows=rowsFor(postId).filter(function(r){return Number(r.available_count||0)>0});
     if(!rows.length)return [];
     var grouped={};
     rows.forEach(function(r){
@@ -127,14 +127,14 @@
   function markup(post){
     var planner=plannerFor(post.id);
     if(!planner)return '<section class="meeting-planner-card meeting-planner-loading">'+tr('Loading availability…','جارٍ تحميل المواعيد…')+'</section>';
-    var windows=windowsFor(post.id),mine=myRangesFor(post.id),participantCount=windows[0]?.total||0;
+    var allRows=rowsFor(post.id),windows=windowsFor(post.id),mine=myRangesFor(post.id),participantCount=Number(allRows[0]?.participant_count||0);
     var best=windows[0],perfect=best&&best.total>0&&best.count===best.total;
     var bestHtml=best
       ?'<div class="meeting-best-time"><span class="meeting-best-icon">✓</span><div><small>'+tr(perfect?'Best match · everyone is free':'Best match so far',perfect?'أفضل موعد · الجميع متاح':'أفضل موعد حتى الآن')+'</small><b>'+dayName(best.day)+' · '+minuteLabel(best.start)+'–'+minuteLabel(best.end)+'</b><em>'+best.count+'/'+best.total+' '+tr('available','متاح')+'</em></div></div>'
       :'<div class="meeting-best-time is-empty"><span class="meeting-best-icon">⌁</span><div><small>'+tr('Waiting for availability','في انتظار المواعيد')+'</small><b>'+tr('Be the first to add your free times','كن أول من يضيف أوقات فراغه')+'</b></div></div>';
     var suggestions=windows.slice(0,3).map(function(w,index){
       var all=w.total>0&&w.count===w.total;
-      return '<button type="button" class="meeting-suggestion" data-meeting-suggestion="'+esc(post.id)+'"><span>'+(index+1)+'</span><div><b>'+dayName(w.day)+' · '+minuteLabel(w.start)+'–'+minuteLabel(w.end)+'</b><small>'+w.count+'/'+w.total+' '+tr('students free','طالب متاح')+(all?' · '+tr('Perfect','مثالي'):'')+'</small></div></button>';
+      return '<div class="meeting-suggestion"><span>'+(index+1)+'</span><div><b>'+dayName(w.day)+' · '+minuteLabel(w.start)+'–'+minuteLabel(w.end)+'</b><small>'+w.count+'/'+w.total+' '+tr('students free','طالب متاح')+(all?' · '+tr('Perfect','مثالي'):'')+'</small></div></div>';
     }).join('');
     var week=DAYS_EN.map(function(_,day){
       return '<div class="meeting-week-day"><b>'+dayName(day).slice(0,state.lang==='ar'?3:3)+'</b>'+heatFor(post.id,day)+'</div>';
