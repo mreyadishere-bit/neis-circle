@@ -2168,7 +2168,7 @@ async function openAdminModerationTarget(type,id){
     if(!reply||!postId){toast(t('This reply is no longer available.','هذا الرد لم يعد متاحًا.'));return}
     if(circleId){
       routeTo(`circles/${encodeURIComponent(circleId)}/home?post=${encodeURIComponent(postId)}`);
-      if(post)setTimeout(()=>comments(postId,targetId),140);
+      if(post)setTimeout(()=>comments(post.id,reply.id),140);
     }else routeTo(`post/${encodeURIComponent(postId)}?comment=${encodeURIComponent(targetId)}`);
     return;
   }
