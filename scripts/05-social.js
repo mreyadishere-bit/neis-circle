@@ -23,7 +23,7 @@ let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
 let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
 let adminPostEmailSetting=null,adminPostEmailSettingLoading=false;
-let adminModerationExtras={opportunities:[],studyResources:[],loaded:false,loading:false};
+let adminContentModeration={items:[],loaded:false,loading:false,type:'all',period:'all',query:'',sort:'newest',from:'',to:'',hasMore:false,offset:0};
 let adminContentEmailBroadcasts={};
 let adminDmSafetyReview={query:'',users:[],selectedUser:null,conversations:[],loading:false};
 const AUTHOR_LIKE_EMAIL_ADMIN='mreyadishere@gmail.com';
@@ -2291,24 +2291,66 @@ const adminContentModerationHidden=()=>localStorage.getItem(ADMIN_CONTENT_MODERA
 const adminMembersBranchesHidden=()=>localStorage.getItem(ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY)==='1';
 
 function adminEmailBroadcastKey(type,id){return String(type||'').toLowerCase()+':'+String(id||'')}
+const ADMIN_MODERATION_TYPES=[
+  ['all','All content','كل المحتوى'],
+  ['post','Posts','المنشورات'],
+  ['reply','Post replies','ردود المنشورات'],
+  ['article','Articles','المقالات'],
+  ['article comment','Article comments','تعليقات المقالات'],
+  ['circle','Circles','المجتمعات'],
+  ['circle message','Circle messages','رسائل المجتمعات'],
+  ['meeting','Meetings','الاجتماعات'],
+  ['gallery','Gallery','المعرض'],
+  ['opportunity','Opportunities','الفرص'],
+  ['study resource','Study resources','مصادر الدراسة']
+];
+const ADMIN_EMAILABLE_CONTENT_TYPES=new Set(['post','reply','circle','meeting','circle message','gallery','article','opportunity','study resource']);
+function adminModerationRange(){
+  const period=adminContentModeration.period;
+  if(period==='custom'){
+    const from=adminContentModeration.from?new Date(adminContentModeration.from+'T00:00:00').toISOString():null;
+    const to=adminContentModeration.to?new Date(new Date(adminContentModeration.to+'T00:00:00').getTime()+86400000).toISOString():null;
+    return {from,to};
+  }
+  if(period==='all')return {from:null,to:null};
+  const days=Number(period||0);
+  return {from:Number.isFinite(days)&&days>0?new Date(Date.now()-days*86400000).toISOString():null,to:null};
+}
+async function loadAdminContentModerationFeed({append=false}={}){
+  if(!canOpenAdminModerationTargets()||adminContentModeration.loading)return;
+  adminContentModeration.loading=true;
+  if(!append)adminContentModeration.offset=0;
+  const range=adminModerationRange();
+  const {data,error}=await sb.rpc('admin_get_content_moderation_feed',{
+    type_input:adminContentModeration.type,
+    from_input:range.from,
+    to_input:range.to,
+    search_input:adminContentModeration.query||null,
+    sort_input:adminContentModeration.sort,
+    limit_input:200,
+    offset_input:adminContentModeration.offset
+  });
+  adminContentModeration.loading=false;
+  if(error){console.error('[NEIS moderation feed]',error);toast(safeError(error,'load content moderation'));return}
+  const rows=Array.isArray(data)?data:[];
+  adminContentModeration.items=append?[...adminContentModeration.items,...rows]:rows;
+  adminContentModeration.offset=adminContentModeration.items.length;
+  adminContentModeration.hasMore=rows.length===200;
+  adminContentModeration.loaded=true;
+  if(state.view==='admin')render();
+}
 async function loadAdminModerationEmailData(){
-  if(!canControlAuthorLikeEmails()||adminModerationExtras.loading||adminModerationExtras.loaded)return;
-  adminModerationExtras.loading=true;
-  const [opportunitiesResult,studyResult,broadcastResult]=await Promise.allSettled([
-    sb.from('opportunities').select('id,author_id,title,description,status,created_at').order('created_at',{ascending:false}).limit(100),
-    sb.from('study_resources').select('id,author_id,title,description,subject,unit,created_at').order('created_at',{ascending:false}).limit(100),
-    sb.rpc('get_admin_content_email_broadcasts')
-  ]);
-  const unpack=result=>result.status==='fulfilled'&&!result.value?.error?(result.value.data||[]):[];
-  adminModerationExtras.opportunities=unpack(opportunitiesResult);
-  adminModerationExtras.studyResources=unpack(studyResult);
-  adminContentEmailBroadcasts=broadcastResult.status==='fulfilled'&&!broadcastResult.value?.error?(broadcastResult.value.data||{}):{};
-  adminModerationExtras.loading=false;
-  adminModerationExtras.loaded=true;
+  if(!canOpenAdminModerationTargets())return;
+  if(!adminContentModeration.loaded&&!adminContentModeration.loading)loadAdminContentModerationFeed();
+  if(window.__neisAdminBroadcastHistoryLoading)return;
+  window.__neisAdminBroadcastHistoryLoading=true;
+  const {data,error}=await sb.rpc('get_admin_content_email_broadcasts');
+  window.__neisAdminBroadcastHistoryLoading=false;
+  if(!error)adminContentEmailBroadcasts=data||{};
   if(state.view==='admin')render();
 }
 async function sendAdminContentEmail(type,id,title){
-  if(!canControlAuthorLikeEmails())return;
+  if(!canControlAuthorLikeEmails()||!ADMIN_EMAILABLE_CONTENT_TYPES.has(String(type||'').toLowerCase()))return;
   const key=adminEmailBroadcastKey(type,id),previous=adminContentEmailBroadcasts[key]||null;
   const {data:preview,error:previewError}=await sb.rpc('admin_preview_content_email_audience',{
     content_type_input:type,
@@ -2339,17 +2381,41 @@ async function sendAdminContentEmail(type,id,title){
     toast(t('Email queued for','تمت إضافة البريد للإرسال إلى')+' '+Number(data?.recipient_count||0)+' '+t('recipients.','مستلم.'));
   };
 }
-async function deleteAdminModerationExtra(type,id){
-  const table=type==='opportunity'?'opportunities':type==='study resource'?'study_resources':'';
-  if(!table)return;
-  const item=type==='opportunity'?adminModerationExtras.opportunities.find(row=>same(row.id,id)):adminModerationExtras.studyResources.find(row=>same(row.id,id));
-  if(!item||!await confirmAction(t('Delete content?','حذف المحتوى؟'),item.title||t('Selected content','المحتوى المحدد')))return;
-  const {data,error}=await sb.from(table).delete().eq('id',id).select('id');
-  if(error||!data?.length){toast(error?safeError(error,'delete this content'):t('This content could not be deleted.','تعذر حذف هذا المحتوى.'));return}
-  if(type==='opportunity')adminModerationExtras.opportunities=adminModerationExtras.opportunities.filter(row=>!same(row.id,id));
-  else adminModerationExtras.studyResources=adminModerationExtras.studyResources.filter(row=>!same(row.id,id));
+async function deleteAdminModerationFeedItem(type,id,title){
+  if(!canOpenAdminModerationTargets())return;
+  if(!await confirmAction(t('Delete content?','حذف المحتوى؟'),title||t('Selected content','المحتوى المحدد')))return;
+  const {data,error}=await sb.rpc('admin_delete_moderation_content',{content_type_input:type,content_id_input:String(id)});
+  if(error||!data){toast(error?safeError(error,'delete this content'):t('This content could not be deleted.','تعذر حذف هذا المحتوى.'));return}
+  adminContentModeration.items=adminContentModeration.items.filter(row=>!(String(row.content_type)===String(type)&&same(row.content_id,id)));
+  adminContentModeration.offset=adminContentModeration.items.length;
   render();
+  toast(t('Content deleted.','تم حذف المحتوى.'));
 }
+function adminModerationFeedItem(type,id){
+  return (adminContentModeration.items||[]).find(row=>String(row.content_type)===String(type)&&same(row.content_id,id))||null;
+}
+function adminModerationFiltersMarkup(){
+  const custom=adminContentModeration.period==='custom';
+  return `<div class="admin-content-filters">
+    <div class="admin-content-search"><input id="adminContentSearch" type="search" autocomplete="off" placeholder="${t('Search content or author…','ابحث في المحتوى أو الكاتب…')}" value="${esc(adminContentModeration.query||'')}"><button class="secondary" data-admin-content-search>${t('Search','بحث')}</button></div>
+    <select data-admin-content-type aria-label="${t('Content type','نوع المحتوى')}">${ADMIN_MODERATION_TYPES.map(([value,en,ar])=>`<option value="${esc(value)}" ${adminContentModeration.type===value?'selected':''}>${t(en,ar)}</option>`).join('')}</select>
+    <select data-admin-content-period aria-label="${t('Time period','الفترة الزمنية')}">
+      <option value="all" ${adminContentModeration.period==='all'?'selected':''}>${t('All time','كل الوقت')}</option>
+      <option value="1" ${adminContentModeration.period==='1'?'selected':''}>${t('Last 24 hours','آخر 24 ساعة')}</option>
+      <option value="7" ${adminContentModeration.period==='7'?'selected':''}>${t('Last 7 days','آخر 7 أيام')}</option>
+      <option value="30" ${adminContentModeration.period==='30'?'selected':''}>${t('Last 30 days','آخر 30 يوم')}</option>
+      <option value="90" ${adminContentModeration.period==='90'?'selected':''}>${t('Last 90 days','آخر 90 يوم')}</option>
+      <option value="365" ${adminContentModeration.period==='365'?'selected':''}>${t('Last year','آخر سنة')}</option>
+      <option value="custom" ${custom?'selected':''}>${t('Custom dates','تاريخ مخصص')}</option>
+    </select>
+    <select data-admin-content-sort aria-label="${t('Sort','الترتيب')}">
+      <option value="newest" ${adminContentModeration.sort==='newest'?'selected':''}>${t('Newest first','الأحدث أولًا')}</option>
+      <option value="oldest" ${adminContentModeration.sort==='oldest'?'selected':''}>${t('Oldest first','الأقدم أولًا')}</option>
+    </select>
+    ${custom?`<div class="admin-content-date-range"><label>${t('From','من')}<input type="date" data-admin-content-from value="${esc(adminContentModeration.from||'')}"></label><label>${t('To','إلى')}<input type="date" data-admin-content-to value="${esc(adminContentModeration.to||'')}"></label><button class="secondary" data-admin-content-apply-dates>${t('Apply','تطبيق')}</button></div>`:''}
+  </div>`;
+}
+
 function adminControlsPanel(){
   if(!state.isAdmin)return '';
   const rows=[];
