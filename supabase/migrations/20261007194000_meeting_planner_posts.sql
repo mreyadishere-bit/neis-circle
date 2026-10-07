@@ -12,6 +12,7 @@ create table if not exists public.meeting_planners (
   creator_id uuid not null references public.profiles(id) on delete cascade,
   timezone text not null default 'Africa/Cairo',
   slot_minutes integer not null default 30 check (slot_minutes in (15,30,60)),
+  meeting_duration_minutes integer not null default 60 check (meeting_duration_minutes in (15,30,45,60,90,120,180)),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -123,13 +124,16 @@ create trigger meeting_response_touch_planner
 after insert or update or delete on public.meeting_availability_responses
 for each row execute function public.touch_meeting_planner_from_range();
 
-create or replace function public.create_meeting_planner_post(
+drop function if exists public.create_meeting_planner_post(text,text,text[],uuid,text,integer);
+
+create function public.create_meeting_planner_post(
   p_title text,
   p_body text,
   p_tags text[] default '{}',
   p_circle_id uuid default null,
   p_timezone text default 'Africa/Cairo',
-  p_slot_minutes integer default 30
+  p_slot_minutes integer default 30,
+  p_duration_minutes integer default 60
 )
 returns uuid
 language plpgsql
@@ -143,6 +147,7 @@ begin
   if char_length(btrim(coalesce(p_title,'')))<3 then raise exception 'Title is too short' using errcode='22023'; end if;
   if char_length(btrim(coalesce(p_body,'')))<1 then raise exception 'Description is required' using errcode='22023'; end if;
   if p_slot_minutes not in (15,30,60) then raise exception 'Invalid slot size' using errcode='22023'; end if;
+  if p_duration_minutes not in (15,30,45,60,90,120,180) then raise exception 'Invalid meeting duration' using errcode='22023'; end if;
 
   if p_circle_id is not null and not exists(
     select 1 from public.circle_members cm
@@ -157,8 +162,8 @@ begin
   values(auth.uid(),p_circle_id,'Meeting Planner',btrim(p_title),btrim(p_body),coalesce(p_tags,'{}'),'meeting_availability')
   returning id into v_post_id;
 
-  insert into public.meeting_planners(post_id,creator_id,timezone,slot_minutes)
-  values(v_post_id,auth.uid(),coalesce(nullif(btrim(p_timezone),''),'Africa/Cairo'),p_slot_minutes);
+  insert into public.meeting_planners(post_id,creator_id,timezone,slot_minutes,meeting_duration_minutes)
+  values(v_post_id,auth.uid(),coalesce(nullif(btrim(p_timezone),''),'Africa/Cairo'),p_slot_minutes,p_duration_minutes);
 
   return v_post_id;
 end;
@@ -232,7 +237,7 @@ security definer
 set search_path=pg_catalog,public,auth
 as $$
   with allowed as (
-    select mp.post_id,mp.slot_minutes
+    select mp.post_id,mp.slot_minutes,mp.meeting_duration_minutes
     from public.meeting_planners mp
     join public.posts p on p.id=mp.post_id
     where mp.post_id=any(coalesce(p_post_ids,'{}'::uuid[]))
@@ -251,10 +256,10 @@ as $$
     group by r.post_id
   ),
   slots as (
-    select a.post_id,d.day::smallint day_of_week,s.slot_start::integer,a.slot_minutes
+    select a.post_id,d.day::smallint day_of_week,s.slot_start::integer,a.meeting_duration_minutes
     from allowed a
     cross join generate_series(0,6) d(day)
-    cross join lateral generate_series(0,1440-a.slot_minutes,a.slot_minutes) s(slot_start)
+    cross join lateral generate_series(0,1440-a.meeting_duration_minutes,a.slot_minutes) s(slot_start)
   )
   select s.post_id,s.day_of_week,s.slot_start,
     count(distinct r.user_id)::bigint available_count,
@@ -262,16 +267,16 @@ as $$
   from slots s
   left join public.meeting_availability_ranges r
     on r.post_id=s.post_id and r.day_of_week=s.day_of_week
-    and r.start_minute<=s.slot_start and r.end_minute>=s.slot_start+s.slot_minutes
+    and r.start_minute<=s.slot_start and r.end_minute>=s.slot_start+s.meeting_duration_minutes
   left join participants p on p.post_id=s.post_id
   group by s.post_id,s.day_of_week,s.slot_start,p.participant_count
   order by s.post_id,s.day_of_week,s.slot_start;
 $$;
 
-revoke all on function public.create_meeting_planner_post(text,text,text[],uuid,text,integer) from public,anon;
+revoke all on function public.create_meeting_planner_post(text,text,text[],uuid,text,integer,integer) from public,anon;
 revoke all on function public.save_meeting_availability(uuid,jsonb) from public,anon;
 revoke all on function public.get_meeting_planner_results(uuid[]) from public,anon;
-grant execute on function public.create_meeting_planner_post(text,text,text[],uuid,text,integer) to authenticated;
+grant execute on function public.create_meeting_planner_post(text,text,text[],uuid,text,integer,integer) to authenticated;
 grant execute on function public.save_meeting_availability(uuid,jsonb) to authenticated;
 grant execute on function public.get_meeting_planner_results(uuid[]) to authenticated;
 
