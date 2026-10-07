@@ -243,6 +243,17 @@ async function loadCirclePinnedMessages(circleId){
     if(index>=0)state.circleMessages[index]={...state.circleMessages[index],...row};
     else state.circleMessages.push({...row,profile:profileData(row.sender_id)});
   }
+  state.circleMessages.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
+    const flow=$('#circleChatFlow');
+    if(flow){
+      const wasNearBottom=flow.scrollHeight-flow.scrollTop-flow.clientHeight<100;
+      const activeMessages=state.circleMessages.filter(message=>same(message.circle_id,circleId)&&!message.deleted_at);
+      flow.innerHTML=activeMessages.length?activeMessages.map((message,index)=>circleMessageBubble(message,activeMessages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+      bindV6(flow);
+      requestAnimationFrame(()=>{if(wasNearBottom)flow.scrollTop=flow.scrollHeight});
+    }
+  }
   syncCirclePinnedPanel(circleId);
 }
 function circlePinExpiryText(message){return message.pin_expires_at?t('Until','حتى')+' '+when(message.pin_expires_at):t('Until unpinned','حتى إلغاء التثبيت')}
@@ -267,11 +278,30 @@ function syncCirclePinnedPanel(circleId){
   if(html)bindV6(panel);
   scheduleCirclePinExpiryRefresh(circleId);
 }
-function jumpToPinnedCircleMessage(id){
-  const row=document.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(String(id))}"]`);
-  if(!row){toast(t('This pinned message is not currently loaded.','الرسالة المثبتة غير محملة حاليًا.'));return}
+async function jumpToPinnedCircleMessage(id){
+  const key=String(id||'').trim(),circleId=state.activeCircleId;
+  if(!key||!circleId)return;
+  let row=document.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(key)}"]`);
+  if(!row){
+    let message=(state.circleMessages||[]).find(item=>same(item.id,key));
+    if(!message){
+      const {data,error}=await sb.from('circle_messages').select(chatFields.circleMessage).eq('id',Number(key)).eq('circle_id',circleId).maybeSingle();
+      if(error){toast(safeError(error,'load this pinned message'));return}
+      if(data){message={...data,profile:profileData(data.sender_id)};state.circleMessages.push(message);state.circleMessages.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at))}
+    }
+    const flow=$('#circleChatFlow');
+    if(message&&flow&&!message.deleted_at){
+      const activeMessages=state.circleMessages.filter(item=>same(item.circle_id,circleId)&&!item.deleted_at);
+      flow.innerHTML=activeMessages.length?activeMessages.map((item,index)=>circleMessageBubble(item,activeMessages[index-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));
+      bindV6(flow);
+      row=flow.querySelector(`.chat-message[data-message-id="${CSS.escape(key)}"]`);
+    }
+  }
+  if(!row){toast(t('This pinned message is no longer available.','هذه الرسالة المثبتة لم تعد متاحة.'));return}
   document.querySelectorAll('#circleChatFlow > .chat-message.reply-jump-highlight').forEach(node=>node.classList.remove('reply-jump-highlight'));
-  row.classList.add('reply-jump-highlight');row.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>row.classList.remove('reply-jump-highlight'),1800);
+  row.classList.add('reply-jump-highlight');
+  row.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>row.classList.remove('reply-jump-highlight'),1800);
 }
 async function unpinCircleMessage(id){
   const message=byId(state.circleMessages,id);if(!message||!canPinCircleMessage(message.circle_id))return;
@@ -1915,7 +1945,9 @@ async function loadCircleHistory(circleId,force=false){
     const fetched=(data||[]).map(message=>({...message,profile:profileData(message.sender_id)})).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     const other=state.circleMessages.filter(m=>!same(m.circle_id,circleId));
     const freshLocal=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&same(m.sender_id,authUser.id)&&Date.now()-new Date(m.created_at).getTime()<30000&&!fetched.some(row=>same(row.id,m.id)));
-    state.circleMessages=[...other,...fetched,...freshLocal].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const preservedPins=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&circleMessagePinActive(m)&&!fetched.some(row=>same(row.id,m.id)));
+    const merged=[...fetched,...freshLocal,...preservedPins].filter((message,index,list)=>list.findIndex(item=>same(item.id,message.id))===index);
+    state.circleMessages=[...other,...merged].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
     circleHistoryLoadedAt.set(key,Date.now());
     if(state.view==='circle-detail'&&state.circleTab==='chat'&&same(state.activeCircleId,circleId)){
       const flow=$('#circleChatFlow');
