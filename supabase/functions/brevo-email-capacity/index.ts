@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -16,18 +15,23 @@ serve(async (req) => {
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!token) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
 
-  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const legacyAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const publishableKeysRaw = Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "";
+  let apiKey = legacyAnonKey;
+  try {
+    const publishableKeys = JSON.parse(publishableKeysRaw || "{}");
+    apiKey = publishableKeys?.default || apiKey;
+  } catch {}
   const brevoKey = Deno.env.get("BREVO_API_KEY") ?? "";
-  if (!serviceRole || !supabaseUrl || !anonKey || !brevoKey) {
+  if (!supabaseUrl || !apiKey || !brevoKey) {
     return new Response(JSON.stringify({ error: "Email capacity check is not configured" }), { status: 503, headers: corsHeaders });
   }
 
   const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      apikey: anonKey,
+      apikey: apiKey,
       accept: "application/json",
     },
   });
@@ -39,14 +43,22 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
 
-  const admin = createClient(supabaseUrl, serviceRole, { auth: { persistSession: false } });
-
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("role,account_status")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (profileError || !profile || profile.role !== "admin" || (profile.account_status ?? "active") !== "active") {
+  const profileResponse = await fetch(
+    `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role,account_status&limit=1`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: apiKey,
+        accept: "application/json",
+      },
+    },
+  );
+  if (!profileResponse.ok) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
+  }
+  const profileRows = await profileResponse.json();
+  const profile = Array.isArray(profileRows) ? profileRows[0] : null;
+  if (!profile || profile.role !== "admin" || (profile.account_status ?? "active") !== "active") {
     return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
   }
 
