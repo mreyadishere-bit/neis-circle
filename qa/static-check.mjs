@@ -1356,7 +1356,9 @@ for (const token of [
 }
 const brevoCapacityFunctionSource = fs.readFileSync(path.join(root, 'supabase', 'functions', 'brevo-email-capacity', 'index.ts'), 'utf8');
 for (const token of [
-  'admin.auth.getUser(token)',
+  'SUPABASE_ANON_KEY',
+  '/auth/v1/user',
+  'Authorization: `Bearer ${token}`',
   'mreyadishere@gmail.com',
   'profile.role !== "admin"',
   'account_status'
@@ -1479,6 +1481,57 @@ if (fs.existsSync(socialHydrationPath)) {
   }
   if (!source.includes('profile:profileData(comment.author_id)')) failures.push('Comments must attach profiles locally from state.members.');
   if (!source.includes('profile:profileData(message.sender_id)')) failures.push('Circle messages must attach sender profiles locally.');
+}
+
+const meetingPlannerSourcePath = path.join(root, 'scripts', 'meeting-planner-v1.js');
+if (!fs.existsSync(meetingPlannerSourcePath)) failures.push('Meeting planner post module is missing.');
+else {
+  const source = fs.readFileSync(meetingPlannerSourcePath, 'utf8');
+  for (const token of [
+    "post_type==='meeting_availability'",
+    "sb.rpc('create_meeting_planner_post'",
+    "sb.rpc('save_meeting_availability'",
+    "sb.rpc('get_meeting_planner_results'",
+    "data-meeting-availability",
+    "Friday 7:00 PM–10:00 PM",
+    "meeting-day-editor",
+    "Meeting Planner"
+  ]) {
+    if (!source.includes(token)) failures.push('Meeting planner UI contract is missing: ' + token);
+  }
+}
+const meetingPlannerMigrationPath = path.join(root, 'supabase', 'migrations', '20261007194000_meeting_planner_posts.sql');
+if (!fs.existsSync(meetingPlannerMigrationPath)) failures.push('Meeting planner migration is missing.');
+else {
+  const sql = fs.readFileSync(meetingPlannerMigrationPath, 'utf8');
+  for (const token of [
+    'public.meeting_planners',
+    'public.meeting_availability_ranges',
+    'public.meeting_availability_responses',
+    "'Meeting Planner'::text",
+    'create_meeting_planner_post',
+    'save_meeting_availability',
+    'get_meeting_planner_results',
+    'meeting_response_touch_planner',
+    "revoke all on function public.create_meeting_planner_post",
+    "revoke all on function public.save_meeting_availability",
+    "revoke all on function public.get_meeting_planner_results"
+  ]) {
+    if (!sql.includes(token)) failures.push('Meeting planner database contract is missing: ' + token);
+  }
+}
+const indexMeetingPlannerSource = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+if (!indexMeetingPlannerSource.includes('scripts/meeting-planner-v1.js')) failures.push('Meeting planner script must be loaded by index.html.');
+
+const brevoCapacityAuthSource = fs.readFileSync(path.join(root, 'supabase', 'functions', 'brevo-email-capacity', 'index.ts'), 'utf8');
+for (const token of [
+  'SUPABASE_ANON_KEY',
+  '/auth/v1/user',
+  'Authorization: `Bearer ${token}`',
+  'mreyadishere@gmail.com',
+  'profile.role !== "admin"'
+]) {
+  if (!brevoCapacityAuthSource.includes(token)) failures.push('Brevo capacity verification auth is missing: ' + token);
 }
 
 const largeFiles = [
