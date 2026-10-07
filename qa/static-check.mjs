@@ -1247,6 +1247,27 @@ else {
     if (!migration.includes(token)) failures.push('Admin moderation feed migration is missing: ' + token);
   }
 }
+const manualOnlyPostArticleEmailMigrationPath = path.join(root, 'supabase', 'migrations', '20261007160000_manual_only_post_article_emails.sql');
+if (!fs.existsSync(manualOnlyPostArticleEmailMigrationPath)) failures.push('Missing manual-only post/article email migration.');
+else {
+  const migration = fs.readFileSync(manualOnlyPostArticleEmailMigrationPath, 'utf8');
+  for (const token of [
+    'drop trigger if exists posts_enqueue_admin_email on public.posts',
+    'drop trigger if exists articles_enqueue_new_email on public.articles',
+    'create or replace function public.enqueue_admin_post_email()',
+    'create or replace function public.enqueue_admin_article_email()',
+    'create or replace function public.enqueue_new_article_email()',
+    'revoke execute on function public.enqueue_admin_post_email() from public, anon, authenticated',
+    "event_key like 'admin-post:%'",
+    "event_key like 'article-published:%'"
+  ]) {
+    if (!migration.includes(token)) failures.push('Manual-only post/article email guard is missing: ' + token);
+  }
+}
+
+const notificationEmailWorker = fs.readFileSync(path.join(root, 'supabase', 'functions', 'send-notification-email', 'index.ts'), 'utf8');
+if (!notificationEmailWorker.includes('.limit(25)')) failures.push('Email worker batch limit must remain capped at 25 jobs per run.');
+
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
 if (!fs.existsSync(circleReplyNotificationMigrationPath)) failures.push('Missing production Circle reply notification fix migration.');
 else {
