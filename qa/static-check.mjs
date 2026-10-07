@@ -1296,6 +1296,17 @@ for (const token of [
   if (!manualContentEmailSource.includes(token)) failures.push('Admin email capacity UI guard is missing: ' + token);
 }
 
+const pinnedCircleJumpSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'async function jumpToPinnedCircleMessage(id)',
+  "select(chatFields.circleMessage).eq('id',Number(key)).eq('circle_id',circleId).maybeSingle()",
+  'const preservedPins=state.circleMessages.filter',
+  "circleMessagePinActive(m)&&!fetched.some",
+  'flow.innerHTML=activeMessages.length?activeMessages.map'
+]) {
+  if (!pinnedCircleJumpSource.includes(token)) failures.push('Pinned Circle message jump recovery is missing: ' + token);
+}
+
 const circleMessagePinsMigrationPath = path.join(root, 'supabase', 'migrations', '20261007133000_circle_chat_message_pins.sql');
 if (!fs.existsSync(circleMessagePinsMigrationPath)) failures.push('Missing Circle chat message pins migration.');
 else {
