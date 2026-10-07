@@ -31,8 +31,16 @@ create table if not exists public.meeting_availability_ranges (
 create index if not exists meeting_availability_post_user_idx
 on public.meeting_availability_ranges(post_id,user_id);
 
+create table if not exists public.meeting_availability_responses (
+  post_id uuid not null references public.meeting_planners(post_id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  updated_at timestamptz not null default now(),
+  primary key(post_id,user_id)
+);
+
 alter table public.meeting_planners enable row level security;
 alter table public.meeting_availability_ranges enable row level security;
+alter table public.meeting_availability_responses enable row level security;
 
 drop policy if exists "meeting planners read" on public.meeting_planners;
 create policy "meeting planners read"
@@ -43,10 +51,17 @@ create policy "meeting ranges own read"
 on public.meeting_availability_ranges for select to authenticated
 using (user_id=(select auth.uid()));
 
+drop policy if exists "meeting responses own read" on public.meeting_availability_responses;
+create policy "meeting responses own read"
+on public.meeting_availability_responses for select to authenticated
+using (user_id=(select auth.uid()));
+
 revoke all on public.meeting_planners from anon;
 revoke all on public.meeting_availability_ranges from anon;
+revoke all on public.meeting_availability_responses from anon;
 grant select on public.meeting_planners to authenticated;
 grant select on public.meeting_availability_ranges to authenticated;
+grant select on public.meeting_availability_responses to authenticated;
 
 create or replace function public.touch_meeting_planner_from_range()
 returns trigger
@@ -65,6 +80,11 @@ $$;
 drop trigger if exists meeting_availability_touch_planner on public.meeting_availability_ranges;
 create trigger meeting_availability_touch_planner
 after insert or update or delete on public.meeting_availability_ranges
+for each row execute function public.touch_meeting_planner_from_range();
+
+drop trigger if exists meeting_response_touch_planner on public.meeting_availability_responses;
+create trigger meeting_response_touch_planner
+after insert or update or delete on public.meeting_availability_responses
 for each row execute function public.touch_meeting_planner_from_range();
 
 create or replace function public.create_meeting_planner_post(
@@ -160,6 +180,10 @@ begin
   insert into public.meeting_availability_ranges(post_id,user_id,day_of_week,start_minute,end_minute)
   select p_post_id,auth.uid(),day_of_week,start_minute,end_minute from tmp_meeting_ranges;
 
+  insert into public.meeting_availability_responses(post_id,user_id,updated_at)
+  values(p_post_id,auth.uid(),now())
+  on conflict(post_id,user_id) do update set updated_at=excluded.updated_at;
+
   update public.meeting_planners set updated_at=now() where post_id=p_post_id;
   return true;
 end;
@@ -185,8 +209,8 @@ as $$
       )
   ),
   participants as (
-    select r.post_id,count(distinct r.user_id)::bigint participant_count
-    from public.meeting_availability_ranges r
+    select r.post_id,count(*)::bigint participant_count
+    from public.meeting_availability_responses r
     join allowed a on a.post_id=r.post_id
     group by r.post_id
   ),
