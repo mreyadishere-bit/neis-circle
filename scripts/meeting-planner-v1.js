@@ -10,9 +10,9 @@
   var DAYS_EN=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   var DAYS_AR=['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
 
-  function tr(en,ar){return window.state&&state.lang==='ar'?ar:en}
+  function tr(en,ar){return typeof state!=='undefined'&&state.lang==='ar'?ar:en}
   function same(a,b){return String(a??'')===String(b??'')}
-  function plannerPosts(){return (Array.isArray(state?.posts)?state.posts:[]).filter(function(p){return p&&p.post_type==='meeting_availability'})}
+  function plannerPosts(){return (typeof state!=='undefined'&&Array.isArray(state.posts)?state.posts:[]).filter(function(p){return p&&p.post_type==='meeting_availability'})}
   function plannerIds(){return plannerPosts().map(function(p){return String(p.id)}).sort()}
   function signature(){return plannerIds().join('|')}
   function plannerFor(postId){return store.planners.find(function(x){return same(x.post_id,postId)})}
@@ -39,7 +39,7 @@
   }
 
   async function load(force,rerender){
-    if(!window.sb||!window.authUser||store.loading)return;
+    if(typeof sb==='undefined'||typeof authUser==='undefined'||!sb||!authUser||store.loading)return;
     var ids=plannerIds(),sig=ids.join('|');
     if(!force&&store.loaded&&store.signature===sig){decorateAll();return}
     store.loading=true;
@@ -277,7 +277,7 @@
 
   function boot(){
     injectTypeOptions();
-    if(window.authUser&&window.sb)load(false,false);
+    if(typeof authUser!=='undefined'&&typeof sb!=='undefined'&&authUser&&sb)load(false,false);
     if(!observer){
       observer=new MutationObserver(function(){injectTypeOptions();if(store.loaded)decorateAll()});
       observer.observe(document.body,{childList:true,subtree:true});
