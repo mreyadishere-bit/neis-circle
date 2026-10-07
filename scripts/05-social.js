@@ -3066,7 +3066,7 @@ function openCirclePost(){
   const c=byId(state.circleRows,state.activeCircleId);
   openModal(`<div class="modal-head"><div><h2>${t('Post in','منشور في')} ${esc(c.name)}</h2><p>${t('Choose a post type. Polls include voting and live results.','اختر نوع المنشور. التصويتات تشمل تصويتًا ونتائج مباشرة.')}</p></div><button class="close" data-close>×</button></div>
     <form id="circlePostForm">
-      <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Experience</option><option>Announcement</option><option>Poll</option></select></label>
+      <label class="field">${t('Type','النوع')}<select id="cpKind"><option>Discussion</option><option>Question</option><option>Resource</option><option>Experience</option><option>Announcement</option><option>Poll</option><option>Meeting Planner</option></select></label>
       <label class="field"><span id="cpTitleLabel">${t('Title','العنوان')}</span><input id="cpTitle" required maxlength="140"></label>
       <label class="field"><span id="cpBodyLabel">${t('Details','التفاصيل')}</span><textarea id="cpBody" required rows="6" maxlength="6000"></textarea></label>
 
