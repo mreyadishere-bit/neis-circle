@@ -1266,7 +1266,35 @@ else {
 }
 
 const notificationEmailWorker = fs.readFileSync(path.join(root, 'supabase', 'functions', 'send-notification-email', 'index.ts'), 'utf8');
-if (!notificationEmailWorker.includes('.limit(25)')) failures.push('Email worker batch limit must remain capped at 25 jobs per run.');
+for (const token of [
+  'https://api.brevo.com/v3/account',
+  'const batchLimit = remainingCredits === null ? 25 : Math.min(25, remainingCredits)',
+  '.limit(batchLimit)',
+  'brevo_daily_limit_reached'
+]) {
+  if (!notificationEmailWorker.includes(token)) failures.push('Email worker Brevo-capacity guard is missing: ' + token);
+}
+const brevoCapacityFunctionPath = path.join(root, 'supabase', 'functions', 'brevo-email-capacity', 'index.ts');
+if (!fs.existsSync(brevoCapacityFunctionPath)) failures.push('Missing Brevo email capacity Edge Function.');
+else {
+  const capacitySource = fs.readFileSync(brevoCapacityFunctionPath, 'utf8');
+  for (const token of [
+    'mreyadishere@gmail.com',
+    'required_recipients',
+    'https://api.brevo.com/v3/account',
+    'const allowed = credits === null ? true : required <= credits'
+  ]) {
+    if (!capacitySource.includes(token)) failures.push('Brevo capacity function guard is missing: ' + token);
+  }
+}
+for (const token of [
+  'async function checkAdminEmailCapacity(requiredRecipients)',
+  "sb.functions.invoke('brevo-email-capacity'",
+  'Nothing was queued.',
+  'const freshCapacity=await checkAdminEmailCapacity(count)'
+]) {
+  if (!manualContentEmailSource.includes(token)) failures.push('Admin email capacity UI guard is missing: ' + token);
+}
 
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
 if (!fs.existsSync(circleReplyNotificationMigrationPath)) failures.push('Missing production Circle reply notification fix migration.');
