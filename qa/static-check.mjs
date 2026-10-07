@@ -1296,6 +1296,45 @@ for (const token of [
   if (!manualContentEmailSource.includes(token)) failures.push('Admin email capacity UI guard is missing: ' + token);
 }
 
+const circleMessagePinsMigrationPath = path.join(root, 'supabase', 'migrations', '20261007133000_circle_chat_message_pins.sql');
+if (!fs.existsSync(circleMessagePinsMigrationPath)) failures.push('Missing Circle chat message pins migration.');
+else {
+  const migration = fs.readFileSync(circleMessagePinsMigrationPath, 'utf8');
+  for (const token of [
+    'add column if not exists pinned_at timestamptz',
+    'add column if not exists pinned_by uuid',
+    'add column if not exists pin_expires_at timestamptz',
+    'pin_circle_message',
+    'unpin_circle_message',
+    "cm.role in ('owner','admin')",
+    "lower(coalesce(u.email,''))='mreyadishere@gmail.com'",
+    'duration_minutes_input < 5 or duration_minutes_input > 43200',
+    'revoke all on function public.pin_circle_message(bigint,integer) from public, anon',
+    'revoke all on function public.unpin_circle_message(bigint) from public, anon'
+  ]) {
+    if (!migration.includes(token)) failures.push('Circle message pin database contract is missing: ' + token);
+  }
+}
+const circlePinSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'function canPinCircleMessage(circleId)',
+  'function circleMessagePinActive(message)',
+  'function circlePinnedPanelInner(circleId)',
+  "sb.rpc('pin_circle_message'",
+  "sb.rpc('unpin_circle_message'",
+  'data-circle-pin-jump',
+  'data-circle-unpin',
+  'data-message-dialog-pin',
+  "tr('Pin message','تثبيت الرسالة')",
+  "tr('Unpin message','إلغاء تثبيت الرسالة')"
+]) {
+  if (!circlePinSource.includes(token)) failures.push('Circle message pin UI contract is missing: ' + token);
+}
+const chatFieldSource = fs.readFileSync(path.join(root, 'scripts', 'social', 'chat-fields-v182.js'), 'utf8');
+for (const token of ['pinned_at','pinned_by','pin_expires_at']) {
+  if (!chatFieldSource.includes(token)) failures.push('Circle message pin realtime field is missing: ' + token);
+}
+
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
 if (!fs.existsSync(circleReplyNotificationMigrationPath)) failures.push('Missing production Circle reply notification fix migration.');
 else {
