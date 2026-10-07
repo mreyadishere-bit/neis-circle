@@ -4315,3 +4315,6 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .meeting-range-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) 32px}
   .meeting-day-editor{padding:9px}
 }
+
+.meeting-planner-badges{display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+@media(max-width:760px){.meeting-planner-badges{justify-content:flex-start}}
