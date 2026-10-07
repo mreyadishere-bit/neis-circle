@@ -232,7 +232,7 @@ function activeCirclePins(circleId){return (state.circleMessages||[]).filter(mes
 async function loadCirclePinnedMessages(circleId){
   if(!circleId||!authUser)return;
   const {data,error}=await sb.from('circle_messages')
-    .select(`${chatFields.circleMessage},profile:profiles(id,full_name,username,avatar_url)`)
+    .select(chatFields.circleMessage)
     .eq('circle_id',circleId)
     .not('pinned_at','is',null)
     .or(`pin_expires_at.is.null,pin_expires_at.gt.${new Date().toISOString()}`)
@@ -241,7 +241,7 @@ async function loadCirclePinnedMessages(circleId){
   for(const row of (data||[])){
     const index=(state.circleMessages||[]).findIndex(message=>same(message.id,row.id));
     if(index>=0)state.circleMessages[index]={...state.circleMessages[index],...row};
-    else state.circleMessages.push(row);
+    else state.circleMessages.push({...row,profile:profileData(row.sender_id)});
   }
   syncCirclePinnedPanel(circleId);
 }
