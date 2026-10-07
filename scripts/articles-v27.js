@@ -480,6 +480,10 @@
   }
   async function shareArticle(article,title){
     const button=$('[data-article-share]');if(!button||button.disabled)return;
+    if(window.NEISContentShare?.open){
+      window.NEISContentShare.open({type:'article',id:article.id,title});
+      return;
+    }
     openArticleConnectionShare(article,title);
   }
   function articleCommentEmojiGroups(){
