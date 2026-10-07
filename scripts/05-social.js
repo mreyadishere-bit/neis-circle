@@ -2152,22 +2152,30 @@ const canControlAuthorLikeEmails=()=>state.isAdmin&&String(authUser?.email||'').
 const canOpenAdminModerationTargets=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN;
 async function openAdminModerationTarget(type,id){
   if(!canOpenAdminModerationTargets()||!type||!id)return;
-  const targetType=String(type),targetId=String(id);
+  const targetType=String(type),targetId=String(id),feedItem=adminModerationFeedItem(targetType,targetId);
   if(targetType==='post'){
-    const post=byId(state.posts,targetId);
+    const post=byId(state.posts,targetId)||feedItem;
     if(!post){toast(t('This post is no longer available.','هذا المنشور لم يعد متاحًا.'));return}
-    if(post.circle_id)routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(post.id)}`);
-    else routeTo(`post/${encodeURIComponent(post.id)}`);
+    if(post.circle_id)routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(targetId)}`);
+    else routeTo(`post/${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='reply'){
-    const reply=byId(state.allComments,targetId);
-    const post=reply?byId(state.posts,reply.post_id):null;
-    if(!reply||!post){toast(t('This reply is no longer available.','هذا الرد لم يعد متاحًا.'));return}
-    if(post.circle_id){
-      routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(post.id)}`);
-      setTimeout(()=>comments(post.id,reply.id),140);
-    }else routeTo(`post/${encodeURIComponent(post.id)}?comment=${encodeURIComponent(reply.id)}`);
+    const reply=byId(state.allComments,targetId)||feedItem;
+    const postId=reply?.post_id||reply?.parent_id;
+    const post=postId?byId(state.posts,postId):null;
+    const circleId=post?.circle_id||reply?.circle_id;
+    if(!reply||!postId){toast(t('This reply is no longer available.','هذا الرد لم يعد متاحًا.'));return}
+    if(circleId){
+      routeTo(`circles/${encodeURIComponent(circleId)}/home?post=${encodeURIComponent(postId)}`);
+      if(post)setTimeout(()=>comments(postId,targetId),140);
+    }else routeTo(`post/${encodeURIComponent(postId)}?comment=${encodeURIComponent(targetId)}`);
+    return;
+  }
+  if(targetType==='article comment'){
+    const articleId=feedItem?.parent_id;
+    if(!articleId){toast(t('This article comment is no longer available.','تعليق المقال لم يعد متاحًا.'));return}
+    routeTo(`articles/${encodeURIComponent(articleId)}?comment=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='circle'){
@@ -2175,15 +2183,15 @@ async function openAdminModerationTarget(type,id){
     return;
   }
   if(targetType==='meeting'){
-    const meeting=byId(state.circleMeetings,targetId);
-    if(!meeting){toast(t('This meeting is no longer available.','هذا الاجتماع لم يعد متاحًا.'));return}
-    routeTo(`circles/${encodeURIComponent(meeting.circle_id)}/meetings?meeting=${encodeURIComponent(meeting.id)}`);
+    const meeting=byId(state.circleMeetings,targetId)||feedItem;
+    if(!meeting?.circle_id){toast(t('This meeting is no longer available.','هذا الاجتماع لم يعد متاحًا.'));return}
+    routeTo(`circles/${encodeURIComponent(meeting.circle_id)}/meetings?meeting=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='circle message'){
-    const message=byId(state.circleMessages,targetId);
-    if(!message){toast(t('This message is no longer available.','هذه الرسالة لم تعد متاحة.'));return}
-    routeTo(`circles/${encodeURIComponent(message.circle_id)}/chat?message=${encodeURIComponent(message.id)}`);
+    const message=byId(state.circleMessages,targetId)||feedItem;
+    if(!message?.circle_id){toast(t('This message is no longer available.','هذه الرسالة لم تعد متاحة.'));return}
+    routeTo(`circles/${encodeURIComponent(message.circle_id)}/chat?message=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='gallery'){
