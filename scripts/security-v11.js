@@ -39,14 +39,6 @@
     await sb.auth.signOut();authUser=null;closeModal();authScreen();toast(tr('Account deactivated. You can reactivate it by signing in again.','تم تعطيل الحساب. يمكنك إعادة تفعيله بتسجيل الدخول مرة أخرى.'));
   }
 
-  async function deleteAccount(){
-    const btn=$('#dangerProceed');btn.disabled=true;
-    const {error}=await sb.rpc('delete_my_account');
-    if(error){toast(error);btn.disabled=false;return}
-    try{await sb.auth.signOut()}catch(_){}
-    authUser=null;localStorage.removeItem('neis-profile-v2');closeModal();authScreen();toast(tr('Your account and associated data were permanently deleted.','تم حذف حسابك والبيانات المرتبطة به نهائيًا.'));
-  }
-
   function accountStateScreen(status,reason=''){
     document.body.classList.remove('app-ready');
     const blocked=status==='blocked';
@@ -77,11 +69,10 @@
     const modal=document.querySelector('#modalRoot .modal');if(!modal)return;
     const signout=modal.querySelector('.signout');
     const safety=document.createElement('section');safety.className='account-safety';
-    safety.innerHTML=`<div><h3>${tr('Account & safety','الحساب والأمان')}</h3><p>${tr('Review the rules or control the lifecycle of your account.','راجع القواعد أو تحكم في دورة حياة حسابك.')}</p></div><button class="account-row" data-open-policies><span>${tr('Community policies & guidelines','سياسات وإرشادات المجتمع')}</span><b>→</b></button><div class="account-safety-actions"><button class="secondary" data-deactivate-account>${tr('Deactivate account','تعطيل الحساب')}</button><button class="secondary danger" data-delete-account>${tr('Delete permanently','حذف نهائي')}</button></div>`;
+    safety.innerHTML=`<div><h3>${tr('Account & safety','الحساب والأمان')}</h3><p>${tr('Review the rules or control the lifecycle of your account.','راجع القواعد أو تحكم في دورة حياة حسابك.')}</p></div><button class="account-row" data-open-policies><span>${tr('Community policies & guidelines','سياسات وإرشادات المجتمع')}</span><b>→</b></button><div class="account-safety-actions"><button class="secondary" data-deactivate-account>${tr('Deactivate account','تعطيل الحساب')}</button></div>`;
     modal.insertBefore(safety,signout||null);
     safety.querySelector('[data-open-policies]').onclick=openPolicies;
     safety.querySelector('[data-deactivate-account]').onclick=()=>confirmAction(tr('Deactivate your account?','تعطيل حسابك؟'),tr('Your profile and content remain stored, but your account cannot use the platform until you reactivate it.','سيظل ملفك ومحتواك محفوظين، لكن لن تتمكن من استخدام المنصة حتى تعيد التفعيل.'),tr('Deactivate','تعطيل'),deactivateAccount);
-    safety.querySelector('[data-delete-account]').onclick=()=>confirmAction(tr('Delete your account permanently?','حذف حسابك نهائيًا؟'),tr('This permanently removes your account and associated content. This cannot be undone.','سيؤدي هذا إلى حذف حسابك والمحتوى المرتبط به نهائيًا، ولا يمكن التراجع.'),tr('Delete permanently','حذف نهائي'),deleteAccount,'DELETE');
   };
 
   function enhanceOnboarding(){
