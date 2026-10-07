@@ -33,15 +33,17 @@ begin
   select * into v_message
   from public.circle_messages
   where id=message_id_input and deleted_at is null;
-
   if not found then raise exception 'Message not found' using errcode='P0002'; end if;
 
-  select exists(
-    select 1 from public.circle_members cm
-    where cm.circle_id=v_message.circle_id
-      and cm.user_id=auth.uid()
-      and cm.status='active'
-      and cm.role in ('owner','admin')
+  select (
+    exists(select 1 from public.circles c where c.id=v_message.circle_id and c.owner_id=auth.uid())
+    or exists(
+      select 1 from public.circle_members cm
+      where cm.circle_id=v_message.circle_id
+        and cm.user_id=auth.uid()
+        and cm.status='active'
+        and cm.role in ('owner','admin')
+    )
   ) into v_can_pin;
 
   if not (v_is_main_admin or v_can_pin) then
@@ -49,8 +51,8 @@ begin
   end if;
 
   if duration_minutes_input is not null then
-    if duration_minutes_input not in (60,1440,10080,43200) then
-      raise exception 'Unsupported pin duration' using errcode='22023';
+    if duration_minutes_input < 5 or duration_minutes_input > 43200 then
+      raise exception 'Pin duration must be between 5 minutes and 30 days' using errcode='22023';
     end if;
     v_expires := now()+make_interval(mins=>duration_minutes_input);
   end if;
@@ -89,12 +91,15 @@ begin
   select * into v_message from public.circle_messages where id=message_id_input;
   if not found then raise exception 'Message not found' using errcode='P0002'; end if;
 
-  select exists(
-    select 1 from public.circle_members cm
-    where cm.circle_id=v_message.circle_id
-      and cm.user_id=auth.uid()
-      and cm.status='active'
-      and cm.role in ('owner','admin')
+  select (
+    exists(select 1 from public.circles c where c.id=v_message.circle_id and c.owner_id=auth.uid())
+    or exists(
+      select 1 from public.circle_members cm
+      where cm.circle_id=v_message.circle_id
+        and cm.user_id=auth.uid()
+        and cm.status='active'
+        and cm.role in ('owner','admin')
+    )
   ) into v_can_pin;
 
   if not (v_is_main_admin or v_can_pin) then
