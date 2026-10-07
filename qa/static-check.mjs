@@ -1060,6 +1060,27 @@ else {
   }
 }
 
+const accountSafetySource = fs.readFileSync(path.join(root, 'scripts', 'security-v11.js'), 'utf8');
+for (const forbidden of [
+  "data-delete-account",
+  "async function deleteAccount()",
+  "sb.rpc('delete_my_account')",
+  "Delete permanently",
+  "Delete your account permanently?"
+]) {
+  if (accountSafetySource.includes(forbidden)) failures.push('Permanent account deletion must stay disabled in the client: ' + forbidden);
+}
+if (!accountSafetySource.includes("data-deactivate-account")) failures.push('Account deactivation should remain available.');
+
+const disableAccountDeletionMigration = path.join(root, 'supabase', 'migrations', '20261007124500_disable_permanent_account_deletion.sql');
+if (!fs.existsSync(disableAccountDeletionMigration)) failures.push('Permanent account deletion disable migration is missing.');
+else {
+  const sql = fs.readFileSync(disableAccountDeletionMigration, 'utf8');
+  if (!sql.includes('revoke execute on function public.delete_my_account() from public, anon, authenticated;')) {
+    failures.push('delete_my_account EXECUTE must be revoked from public, anon, and authenticated.');
+  }
+}
+
 const criticalStartupSource = fs.readFileSync(path.join(root, 'scripts', '02-content-admin.js'), 'utf8');
 for (const token of [
   'let primaryBackgroundRefreshPromise=null',
