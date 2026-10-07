@@ -1346,6 +1346,24 @@ for (const token of ['pinned_at','pinned_by','pin_expires_at']) {
   if (!chatFieldSource.includes(token)) failures.push('Circle message pin realtime field is missing: ' + token);
 }
 
+const brevoCapacityUiSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  "sb.auth.getSession()",
+  "headers:{Authorization:`Bearer ${accessToken}`}",
+  "sb.functions.invoke('brevo-email-capacity'"
+]) {
+  if (!brevoCapacityUiSource.includes(token)) failures.push('Brevo capacity auth handoff is missing: ' + token);
+}
+const brevoCapacityFunctionSource = fs.readFileSync(path.join(root, 'supabase', 'functions', 'brevo-email-capacity', 'index.ts'), 'utf8');
+for (const token of [
+  'admin.auth.getUser(token)',
+  'mreyadishere@gmail.com',
+  'profile.role !== "admin"',
+  'account_status'
+]) {
+  if (!brevoCapacityFunctionSource.includes(token)) failures.push('Brevo capacity in-function authorization is missing: ' + token);
+}
+
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');
 if (!fs.existsSync(circleReplyNotificationMigrationPath)) failures.push('Missing production Circle reply notification fix migration.');
 else {
