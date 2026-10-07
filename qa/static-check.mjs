@@ -1356,7 +1356,9 @@ for (const token of [
 }
 const brevoCapacityFunctionSource = fs.readFileSync(path.join(root, 'supabase', 'functions', 'brevo-email-capacity', 'index.ts'), 'utf8');
 for (const token of [
-  'admin.auth.getUser(token)',
+  'SUPABASE_ANON_KEY',
+  '/auth/v1/user',
+  'Authorization: `Bearer ${token}`',
   'mreyadishere@gmail.com',
   'profile.role !== "admin"',
   'account_status'
