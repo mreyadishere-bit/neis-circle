@@ -56,6 +56,32 @@ serve(async (request) => {
   ).replace(/\/$/, "");
   const logoUrl = `${siteUrl}/assets/email-logo.png`;
   const posterUrl = `${siteUrl}/assets/email-poster.png`;
+
+  const accountResponse = await fetch("https://api.brevo.com/v3/account", {
+    headers: { "api-key": brevoKey, accept: "application/json" },
+  });
+  if (!accountResponse.ok) {
+    return new Response(JSON.stringify({ error: "Could not verify Brevo sending capacity" }), {
+      status: 503,
+      headers: cors,
+    });
+  }
+  const account = await accountResponse.json();
+  const sendPlan = Array.isArray(account?.plan)
+    ? account.plan.find((item: any) => String(item?.creditsType ?? "").toLowerCase() === "sendlimit")
+    : null;
+  const creditsRaw = Number(sendPlan?.credits);
+  const remainingCredits = Number.isFinite(creditsRaw) && creditsRaw >= 0
+    ? Math.floor(creditsRaw)
+    : null;
+  if (remainingCredits === 0) {
+    return new Response(JSON.stringify({ processed: 0, sent: 0, reason: "brevo_daily_limit_reached" }), {
+      status: 200,
+      headers: cors,
+    });
+  }
+  const batchLimit = remainingCredits === null ? 25 : Math.min(25, remainingCredits);
+
   const { data: jobs, error } = await supabase
     .from("email_notification_outbox")
     .select("*")
@@ -63,7 +89,7 @@ serve(async (request) => {
     .lte("next_attempt_at", new Date().toISOString())
     .lt("attempts", 5)
     .order("created_at")
-    .limit(25);
+    .limit(batchLimit);
   if (error)
     return new Response(JSON.stringify({ error: "Queue unavailable" }), {
       status: 500,

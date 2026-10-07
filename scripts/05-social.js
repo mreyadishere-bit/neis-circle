@@ -2357,6 +2357,18 @@ async function loadAdminModerationEmailData(){
   if(!error)adminContentEmailBroadcasts=data||{};
   if(state.view==='admin')render();
 }
+async function checkAdminEmailCapacity(requiredRecipients){
+  const required=Math.max(0,Number(requiredRecipients||0));
+  const {data,error}=await sb.functions.invoke('brevo-email-capacity',{body:{required_recipients:required}});
+  if(error||!data){toast(t('Could not verify Brevo capacity, so nothing was sent.','تعذر التحقق من سعة Brevo، لذلك لم يتم إرسال أي شيء.'));return null}
+  const credits=data.credits===null?null:Number(data.credits);
+  if(data.allowed!==true){
+    toast(t('Brevo has only','متبقي في Brevo فقط')+' '+Number(credits||0)+' '+t('emails today, but this needs','رسائل اليوم، بينما هذا الإرسال يحتاج')+' '+required+'. '+t('Nothing was queued.','لم تتم إضافة أي رسالة لقائمة الانتظار.'));
+    return null;
+  }
+  return {credits,required};
+}
+
 async function sendAdminContentEmail(type,id,title){
   if(!canControlAuthorLikeEmails()||!ADMIN_EMAILABLE_CONTENT_TYPES.has(String(type||'').toLowerCase()))return;
   const key=adminEmailBroadcastKey(type,id),previous=adminContentEmailBroadcasts[key]||null;
@@ -2367,6 +2379,8 @@ async function sendAdminContentEmail(type,id,title){
   if(previewError){toast(safeError(previewError,'preview this email audience'));return}
   const count=Number(preview?.recipient_count||0),circleOnly=preview?.scope==='circle';
   if(!count){toast(t('No eligible email recipients were found.','لم يتم العثور على مستلمين مؤهلين بالبريد.'));return}
+  const capacity=await checkAdminEmailCapacity(count);
+  if(!capacity)return;
   const resend=!!previous;
   openModal(`<div class="modal-head"><div><h2>${resend?t('Send this email again?','إرسال هذا البريد مرة أخرى؟'):t('Email this content?','إرسال هذا المحتوى بالبريد؟')}</h2><p>${esc(title||t('Selected content','المحتوى المحدد'))}</p></div><button class="close" data-admin-email-cancel>×</button></div>
     <div class="admin-email-confirm-summary"><strong>${count}</strong><span>${circleOnly?t('active Circle members with confirmed emails','عضو نشط في المجتمع لديه بريد مؤكد'):t('active accounts with confirmed emails','حساب نشط لديه بريد مؤكد')}</span></div>
@@ -2378,6 +2392,8 @@ async function sendAdminContentEmail(type,id,title){
   if(confirm)confirm.onclick=async()=>{
     if(confirm.disabled)return;
     confirm.disabled=true;
+    const freshCapacity=await checkAdminEmailCapacity(count);
+    if(!freshCapacity){confirm.disabled=false;return}
     const {data,error}=await sb.rpc('admin_email_content_to_audience',{
       content_type_input:type,
       content_id_input:String(id),
@@ -2386,7 +2402,7 @@ async function sendAdminContentEmail(type,id,title){
     if(error){confirm.disabled=false;toast(safeError(error,'send this content email'));return}
     adminContentEmailBroadcasts[key]={sent_at:data?.sent_at||new Date().toISOString(),recipient_count:Number(data?.recipient_count||0)};
     closeModal();render();
-    toast(t('Email queued for','تمت إضافة البريد للإرسال إلى')+' '+Number(data?.recipient_count||0)+' '+t('recipients.','مستلم.'));
+    toast(t('Email sending started for','بدأ إرسال البريد إلى')+' '+Number(data?.recipient_count||0)+' '+t('recipients.','مستلم.'));
   };
 }
 async function deleteAdminModerationFeedItem(type,id,title){
