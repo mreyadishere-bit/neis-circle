@@ -84,31 +84,20 @@
   }
 
   function windowsFor(postId){
-    var planner=plannerFor(postId),slot=Number(planner?.slot_minutes||30),rows=rowsFor(postId).filter(function(r){return Number(r.available_count||0)>0});
-    if(!rows.length)return [];
-    var grouped={};
-    rows.forEach(function(r){
-      var key=String(r.day_of_week);
-      (grouped[key]||(grouped[key]=[])).push({
-        start:Number(r.slot_start),count:Number(r.available_count||0),total:Number(r.participant_count||0)
-      });
-    });
-    var windows=[];
-    Object.keys(grouped).forEach(function(dayKey){
-      var list=grouped[dayKey].sort(function(a,b){return a.start-b.start}),current=null;
-      list.forEach(function(row){
-        if(current&&current.count===current.total&&row.count===row.total&&current.total===row.total&&current.end===row.start){
-          current.end=row.start+slot;
-        }else{
-          if(current)windows.push(current);
-          current={day:Number(dayKey),start:row.start,end:row.start+slot,count:row.count,total:row.total};
-        }
-      });
-      if(current)windows.push(current);
+    var planner=plannerFor(postId),duration=Number(planner?.meeting_duration_minutes||60);
+    var rows=rowsFor(postId).filter(function(r){return Number(r.available_count||0)>0});
+    var windows=rows.map(function(row){
+      return {
+        day:Number(row.day_of_week),
+        start:Number(row.slot_start),
+        end:Number(row.slot_start)+duration,
+        count:Number(row.available_count||0),
+        total:Number(row.participant_count||0)
+      };
     });
     windows.sort(function(a,b){
       var aPerfect=a.total>0&&a.count===a.total?1:0,bPerfect=b.total>0&&b.count===b.total?1:0;
-      return bPerfect-aPerfect||b.count-a.count||(b.end-b.start)-(a.end-a.start)||a.day-b.day||a.start-b.start;
+      return bPerfect-aPerfect||b.count-a.count||a.day-b.day||a.start-b.start;
     });
     return windows;
   }
@@ -141,7 +130,7 @@
       return '<div class="meeting-week-day"><b>'+dayName(day).slice(0,state.lang==='ar'?3:3)+'</b>'+heatFor(post.id,day)+'</div>';
     }).join('');
     return '<section class="meeting-planner-card" data-meeting-planner="'+esc(post.id)+'" data-meeting-rev="'+esc(planner.updated_at||'')+'" data-meeting-lang="'+esc(state.lang||'en')+'">'+
-      '<div class="meeting-planner-head"><div><span class="meeting-planner-kicker">◷ '+tr('Meeting planner','منظم اجتماع')+'</span><small>'+tr('Add every time you are free this week. The best overlap updates live.','أضف كل الأوقات المتاحة لك هذا الأسبوع. أفضل وقت يتحدث مباشرة.')+'</small></div><span class="meeting-timezone">'+esc(planner.timezone||'Africa/Cairo')+'</span></div>'+
+      '<div class="meeting-planner-head"><div><span class="meeting-planner-kicker">◷ '+tr('Meeting planner','منظم اجتماع')+'</span><small>'+tr('Add every time you are free this week. The best overlap updates live.','أضف كل الأوقات المتاحة لك هذا الأسبوع. أفضل وقت يتحدث مباشرة.')+'</small></div><div class="meeting-planner-badges"><span class="meeting-timezone">'+esc(planner.timezone||'Africa/Cairo')+'</span><span class="meeting-timezone">'+Number(planner.meeting_duration_minutes||60)+' '+tr('min meeting','دقيقة للاجتماع')+'</span></div></div>'+
       bestHtml+
       '<div class="meeting-week-heat">'+week+'</div>'+
       (suggestions?'<div class="meeting-suggestions">'+suggestions+'</div>':'')+
@@ -249,7 +238,7 @@
     if(typeof requireAccount==='function'&&!requireAccount())return;
     var circleId=circleContext(),timezone;
     try{timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Africa/Cairo'}catch(_){timezone='Africa/Cairo'}
-    openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+tr('Smart scheduling','تنسيق ذكي')+'</p><h2>'+tr('Find the best meeting time','اعثر على أفضل وقت للاجتماع')+'</h2><p>'+tr('Everyone adds all the times they are free during the week. NEIS Circle finds the strongest overlap automatically.','كل شخص يضيف جميع أوقات فراغه خلال الأسبوع، والمنصة تحسب أفضل وقت تلقائيًا.')+'</p></div><button class="close" data-close>×</button></div><form id="meetingPlannerCreate"><label class="field">'+tr('Meeting / activity','الاجتماع / النشاط')+'<input id="meetingPlannerTitle" required minlength="3" maxlength="140" placeholder="'+tr('e.g. Physics project meeting','مثال: اجتماع مشروع الفيزياء')+'"></label><label class="field">'+tr('Context','التفاصيل')+'<textarea id="meetingPlannerBody" required rows="4" maxlength="6000" placeholder="'+tr('What are you trying to schedule?','ما الاجتماع الذي تحاولون تحديد موعده؟')+'"></textarea></label><div class="row"><label class="field">'+tr('Planning precision','دقة المواعيد')+'<select id="meetingPlannerSlot"><option value="15">15 '+tr('minutes','دقيقة')+'</option><option value="30" selected>30 '+tr('minutes','دقيقة')+'</option><option value="60">60 '+tr('minutes','دقيقة')+'</option></select></label><label class="field">'+tr('Timezone','المنطقة الزمنية')+'<input id="meetingPlannerTimezone" value="'+esc(timezone)+'" readonly></label></div><label class="field">'+tr('Tags','الوسوم')+'<input id="meetingPlannerTags" placeholder="Meeting, Project, Grade11"></label><div class="meeting-create-preview"><span>◷</span><div><b>'+tr('How it works','كيف تعمل')+'</b><small>'+tr('Students can enter ranges such as “Friday 7–10 PM”. Results update live and rank the best common windows.','يمكن للطلاب إدخال فترات مثل «الجمعة من 7 إلى 10 مساءً». النتائج تتحدث مباشرة وترتب أفضل الفترات المشتركة.')+'</small></div></div><div class="modal-actions"><button type="button" class="secondary" data-close>'+tr('Cancel','إلغاء')+'</button><button class="primary" id="meetingPlannerPublish">'+tr('Publish planner','نشر منظم الاجتماع')+'</button></div></form>',true);
+    openModal('<div class="modal-head"><div><p class="kicker"><i></i>'+tr('Smart scheduling','تنسيق ذكي')+'</p><h2>'+tr('Find the best meeting time','اعثر على أفضل وقت للاجتماع')+'</h2><p>'+tr('Everyone adds all the times they are free during the week. NEIS Circle finds the strongest overlap automatically.','كل شخص يضيف جميع أوقات فراغه خلال الأسبوع، والمنصة تحسب أفضل وقت تلقائيًا.')+'</p></div><button class="close" data-close>×</button></div><form id="meetingPlannerCreate"><label class="field">'+tr('Meeting / activity','الاجتماع / النشاط')+'<input id="meetingPlannerTitle" required minlength="3" maxlength="140" placeholder="'+tr('e.g. Physics project meeting','مثال: اجتماع مشروع الفيزياء')+'"></label><label class="field">'+tr('Context','التفاصيل')+'<textarea id="meetingPlannerBody" required rows="4" maxlength="6000" placeholder="'+tr('What are you trying to schedule?','ما الاجتماع الذي تحاولون تحديد موعده؟')+'"></textarea></label><div class="row"><label class="field">'+tr('Meeting duration','مدة الاجتماع')+'<select id="meetingPlannerDuration"><option value="30">30 '+tr('minutes','دقيقة')+'</option><option value="45">45 '+tr('minutes','دقيقة')+'</option><option value="60" selected>60 '+tr('minutes','دقيقة')+'</option><option value="90">90 '+tr('minutes','دقيقة')+'</option><option value="120">120 '+tr('minutes','دقيقة')+'</option></select></label><label class="field">'+tr('Start-time precision','دقة وقت البداية')+'<select id="meetingPlannerSlot"><option value="15">15 '+tr('minutes','دقيقة')+'</option><option value="30" selected>30 '+tr('minutes','دقيقة')+'</option><option value="60">60 '+tr('minutes','دقيقة')+'</option></select></label></div><label class="field">'+tr('Timezone','المنطقة الزمنية')+'<input id="meetingPlannerTimezone" value="'+esc(timezone)+'" readonly></label><label class="field">'+tr('Tags','الوسوم')+'<input id="meetingPlannerTags" placeholder="Meeting, Project, Grade11"></label><div class="meeting-create-preview"><span>◷</span><div><b>'+tr('How it works','كيف تعمل')+'</b><small>'+tr('Students can enter ranges such as “Friday 7–10 PM”. Results update live and rank the best common windows.','يمكن للطلاب إدخال فترات مثل «الجمعة من 7 إلى 10 مساءً». النتائج تتحدث مباشرة وترتب أفضل الفترات المشتركة.')+'</small></div></div><div class="modal-actions"><button type="button" class="secondary" data-close>'+tr('Cancel','إلغاء')+'</button><button class="primary" id="meetingPlannerPublish">'+tr('Publish planner','نشر منظم الاجتماع')+'</button></div></form>',true);
     document.querySelector('#meetingPlannerCreate').onsubmit=async function(event){
       event.preventDefault();
       var button=document.querySelector('#meetingPlannerPublish');button.disabled=true;
@@ -259,7 +248,8 @@
         p_tags:document.querySelector('#meetingPlannerTags').value.split(',').map(function(x){return x.trim()}).filter(Boolean).slice(0,8),
         p_circle_id:circleId,
         p_timezone:document.querySelector('#meetingPlannerTimezone').value||'Africa/Cairo',
-        p_slot_minutes:Number(document.querySelector('#meetingPlannerSlot').value||30)
+        p_slot_minutes:Number(document.querySelector('#meetingPlannerSlot').value||30),
+        p_duration_minutes:Number(document.querySelector('#meetingPlannerDuration').value||60)
       });
       if(result.error){toast(safeError(result.error));button.disabled=false;return}
       closeModal();await loadLiveData();store.loaded=false;await load(true,false);
