@@ -1541,6 +1541,48 @@ for (const token of [
   if (!brevoCapacityAuthSource.includes(token)) failures.push('Brevo capacity verification auth is missing: ' + token);
 }
 
+const sharedContentSourcePath = path.join(root, 'scripts', 'content-share-v1.js');
+if (!fs.existsSync(sharedContentSourcePath)) failures.push('Unified content share module is missing.');
+else {
+  const source = fs.readFileSync(sharedContentSourcePath, 'utf8');
+  for (const token of [
+    "data-content-share-tab=\"dm\"",
+    "data-content-share-tab=\"circle\"",
+    "start_direct_conversation",
+    "sb.from('messages').insert(payload)",
+    "sb.from('circle_messages').insert(payload)",
+    "payload.shared_article_id=item.id",
+    "payload.shared_post_id=item.id",
+    "data-action=\"share\"",
+    "window.NEISContentShare={open:open}"
+  ]) {
+    if (!source.includes(token)) failures.push('Unified content share contract is missing: ' + token);
+  }
+}
+const sharedContentMigrationPath = path.join(root, 'supabase', 'migrations', '20261007202000_shared_posts_articles_in_chats.sql');
+if (!fs.existsSync(sharedContentMigrationPath)) failures.push('Shared posts/articles chat migration is missing.');
+else {
+  const sql = fs.readFileSync(sharedContentMigrationPath, 'utf8');
+  for (const token of [
+    'shared_post_id uuid references public.posts(id) on delete set null',
+    'shared_article_id bigint references public.articles(id) on delete set null',
+    "['native'::text,'copy'::text,'connections'::text,'circles'::text]"
+  ]) {
+    if (!sql.includes(token)) failures.push('Shared content migration contract is missing: ' + token);
+  }
+}
+const sharedContentSocialSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'function sharedChatContentCard(m)',
+  'data-shared-post=',
+  'data-shared-article=',
+  "root.querySelectorAll('[data-shared-post]')"
+]) {
+  if (!sharedContentSocialSource.includes(token)) failures.push('Shared content chat rendering is missing: ' + token);
+}
+const sharedContentArticleSource = fs.readFileSync(path.join(root, 'scripts', 'articles-v27.js'), 'utf8');
+if (!sharedContentArticleSource.includes('window.NEISContentShare?.open')) failures.push('Article sharing must use the unified DM/Circle picker.');
+
 const largeFiles = [
   ...jsFiles,
   ...walk(path.join(root, 'styles'), '.css')
