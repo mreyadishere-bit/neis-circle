@@ -1178,22 +1178,32 @@ else if (!moderationBindSection.includes("closest?.('button,a,input,select,texta
 const manualContentEmailSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 for (const token of [
   'function loadAdminModerationEmailData()',
+  'function loadAdminContentModerationFeed({append=false}={})',
+  'function adminModerationFiltersMarkup()',
   'function sendAdminContentEmail(type,id,title)',
+  "sb.rpc('admin_get_content_moderation_feed'",
   "sb.rpc('admin_preview_content_email_audience'",
   "sb.rpc('admin_email_content_to_audience'",
+  "sb.rpc('admin_delete_moderation_content'",
   'data-admin-email-content=',
-  "type:'opportunity'",
-  "type:'study resource'",
-  'Site notifications stay enabled independently.'
+  'data-admin-content-type',
+  'data-admin-content-period',
+  'data-admin-content-sort',
+  'data-admin-content-from',
+  'data-admin-content-to',
+  "'article comment'",
+  "'study resource'",
+  'All platform content appears here, including articles.'
 ]) {
-  if (!manualContentEmailSource.includes(token)) failures.push('Manual content email UI contract is missing: ' + token);
+  if (!manualContentEmailSource.includes(token)) failures.push('Admin content moderation contract is missing: ' + token);
 }
 for (const forbidden of [
   'function notificationBroadcastMatrix()',
   'data-notification-channel=',
-  'data-notification-key='
+  'data-notification-key=',
+  'adminModerationExtras'
 ]) {
-  if (manualContentEmailSource.includes(forbidden)) failures.push('Legacy notification matrix UI must be removed: ' + forbidden);
+  if (manualContentEmailSource.includes(forbidden)) failures.push('Legacy admin moderation UI must be removed: ' + forbidden);
 }
 const manualContentEmailMigrationPath = path.join(root, 'supabase', 'migrations', '20261007011000_manual_content_email_broadcasts.sql');
 if (!fs.existsSync(manualContentEmailMigrationPath)) failures.push('Missing manual content email broadcast migration.');
@@ -1215,6 +1225,26 @@ else {
     'study_resources_notify_new_site'
   ]) {
     if (!migration.includes(token)) failures.push('Manual content email migration is missing: ' + token);
+  }
+}
+const moderationFeedMigrationPath = path.join(root, 'supabase', 'migrations', '20261007150000_admin_content_moderation_feed_filters.sql');
+if (!fs.existsSync(moderationFeedMigrationPath)) failures.push('Missing complete admin content moderation feed migration.');
+else {
+  const migration = fs.readFileSync(moderationFeedMigrationPath, 'utf8');
+  for (const token of [
+    'admin_get_content_moderation_feed',
+    'admin_delete_moderation_content',
+    "'article comment'",
+    'public.article_comments',
+    'public.articles',
+    'public.opportunities',
+    'public.study_resources',
+    "lower(coalesce(u.email,''))='mreyadishere@gmail.com'",
+    "p.role='admin'",
+    'revoke all on function public.admin_get_content_moderation_feed',
+    'revoke all on function public.admin_delete_moderation_content'
+  ]) {
+    if (!migration.includes(token)) failures.push('Admin moderation feed migration is missing: ' + token);
   }
 }
 const circleReplyNotificationMigrationPath = path.join(root, 'supabase', 'migrations', '20261007004200_fix_circle_reply_notifications_dedicated.sql');

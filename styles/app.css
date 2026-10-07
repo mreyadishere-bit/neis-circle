@@ -4210,3 +4210,29 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .admin-dm-safety-conversation{align-items:flex-start;flex-direction:column}
   .admin-dm-safety-conversation button{width:100%}
 }
+
+
+.admin-content-filters{display:grid;grid-template-columns:minmax(260px,1.5fr) repeat(3,minmax(150px,.55fr));gap:9px;margin:14px 0}
+.admin-content-search{display:flex;gap:8px;min-width:0}
+.admin-content-search input{min-width:0;flex:1}
+.admin-content-filters select,.admin-content-filters input{min-height:44px}
+.admin-content-date-range{grid-column:1/-1;display:flex;gap:9px;align-items:end;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--soft)}
+.admin-content-date-range label{display:grid;gap:5px;color:var(--muted);font-size:10px;font-weight:700}
+.admin-content-date-range input{min-width:170px;background:var(--card)}
+.admin-content-count{color:var(--muted);font-size:11px;white-space:nowrap}
+.admin-content-load-more{display:flex;justify-content:center;padding-top:12px}
+.admin-content-row>div:first-child{min-width:0}
+.admin-content-row>div:first-child b{display:block;overflow-wrap:anywhere}
+@media(max-width:980px){
+  .admin-content-filters{grid-template-columns:1fr 1fr}
+  .admin-content-search{grid-column:1/-1}
+}
+@media(max-width:620px){
+  .admin-content-filters{grid-template-columns:1fr}
+  .admin-content-search{grid-column:auto}
+  .admin-content-search button{flex:0 0 auto}
+  .admin-content-date-range{grid-column:auto;display:grid;grid-template-columns:1fr 1fr}
+  .admin-content-date-range label,.admin-content-date-range input{min-width:0;width:100%}
+  .admin-content-date-range button{grid-column:1/-1}
+  .admin-content-count{display:none}
+}

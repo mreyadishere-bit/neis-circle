@@ -23,7 +23,7 @@ let activeMeetingRuntime=null,liveKitModulePromise=null;
 let authorLikeEmailSetting=null,authorLikeEmailSettingLoading=false;
 let adminDmEmailSetting=null,adminDmEmailSettingLoading=false;
 let adminPostEmailSetting=null,adminPostEmailSettingLoading=false;
-let adminModerationExtras={opportunities:[],studyResources:[],loaded:false,loading:false};
+let adminContentModeration={items:[],loaded:false,loading:false,type:'all',period:'all',query:'',sort:'newest',from:'',to:'',hasMore:false,offset:0};
 let adminContentEmailBroadcasts={};
 let adminDmSafetyReview={query:'',users:[],selectedUser:null,conversations:[],loading:false};
 const AUTHOR_LIKE_EMAIL_ADMIN='mreyadishere@gmail.com';
@@ -2152,22 +2152,30 @@ const canControlAuthorLikeEmails=()=>state.isAdmin&&String(authUser?.email||'').
 const canOpenAdminModerationTargets=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN;
 async function openAdminModerationTarget(type,id){
   if(!canOpenAdminModerationTargets()||!type||!id)return;
-  const targetType=String(type),targetId=String(id);
+  const targetType=String(type),targetId=String(id),feedItem=adminModerationFeedItem(targetType,targetId);
   if(targetType==='post'){
-    const post=byId(state.posts,targetId);
+    const post=byId(state.posts,targetId)||feedItem;
     if(!post){toast(t('This post is no longer available.','هذا المنشور لم يعد متاحًا.'));return}
-    if(post.circle_id)routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(post.id)}`);
-    else routeTo(`post/${encodeURIComponent(post.id)}`);
+    if(post.circle_id)routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(targetId)}`);
+    else routeTo(`post/${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='reply'){
-    const reply=byId(state.allComments,targetId);
-    const post=reply?byId(state.posts,reply.post_id):null;
-    if(!reply||!post){toast(t('This reply is no longer available.','هذا الرد لم يعد متاحًا.'));return}
-    if(post.circle_id){
-      routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(post.id)}`);
-      setTimeout(()=>comments(post.id,reply.id),140);
-    }else routeTo(`post/${encodeURIComponent(post.id)}?comment=${encodeURIComponent(reply.id)}`);
+    const reply=byId(state.allComments,targetId)||feedItem;
+    const postId=reply?.post_id||reply?.parent_id;
+    const post=postId?byId(state.posts,postId):null;
+    const circleId=post?.circle_id||reply?.circle_id;
+    if(!reply||!postId){toast(t('This reply is no longer available.','هذا الرد لم يعد متاحًا.'));return}
+    if(circleId){
+      routeTo(`circles/${encodeURIComponent(circleId)}/home?post=${encodeURIComponent(postId)}`);
+      if(post)setTimeout(()=>comments(post.id,reply.id),140);
+    }else routeTo(`post/${encodeURIComponent(postId)}?comment=${encodeURIComponent(targetId)}`);
+    return;
+  }
+  if(targetType==='article comment'){
+    const articleId=feedItem?.parent_id;
+    if(!articleId){toast(t('This article comment is no longer available.','تعليق المقال لم يعد متاحًا.'));return}
+    routeTo(`articles/${encodeURIComponent(articleId)}?comment=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='circle'){
@@ -2175,15 +2183,15 @@ async function openAdminModerationTarget(type,id){
     return;
   }
   if(targetType==='meeting'){
-    const meeting=byId(state.circleMeetings,targetId);
-    if(!meeting){toast(t('This meeting is no longer available.','هذا الاجتماع لم يعد متاحًا.'));return}
-    routeTo(`circles/${encodeURIComponent(meeting.circle_id)}/meetings?meeting=${encodeURIComponent(meeting.id)}`);
+    const meeting=byId(state.circleMeetings,targetId)||feedItem;
+    if(!meeting?.circle_id){toast(t('This meeting is no longer available.','هذا الاجتماع لم يعد متاحًا.'));return}
+    routeTo(`circles/${encodeURIComponent(meeting.circle_id)}/meetings?meeting=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='circle message'){
-    const message=byId(state.circleMessages,targetId);
-    if(!message){toast(t('This message is no longer available.','هذه الرسالة لم تعد متاحة.'));return}
-    routeTo(`circles/${encodeURIComponent(message.circle_id)}/chat?message=${encodeURIComponent(message.id)}`);
+    const message=byId(state.circleMessages,targetId)||feedItem;
+    if(!message?.circle_id){toast(t('This message is no longer available.','هذه الرسالة لم تعد متاحة.'));return}
+    routeTo(`circles/${encodeURIComponent(message.circle_id)}/chat?message=${encodeURIComponent(targetId)}`);
     return;
   }
   if(targetType==='gallery'){
@@ -2291,24 +2299,66 @@ const adminContentModerationHidden=()=>localStorage.getItem(ADMIN_CONTENT_MODERA
 const adminMembersBranchesHidden=()=>localStorage.getItem(ADMIN_MEMBERS_BRANCHES_HIDDEN_KEY)==='1';
 
 function adminEmailBroadcastKey(type,id){return String(type||'').toLowerCase()+':'+String(id||'')}
+const ADMIN_MODERATION_TYPES=[
+  ['all','All content','كل المحتوى'],
+  ['post','Posts','المنشورات'],
+  ['reply','Post replies','ردود المنشورات'],
+  ['article','Articles','المقالات'],
+  ['article comment','Article comments','تعليقات المقالات'],
+  ['circle','Circles','المجتمعات'],
+  ['circle message','Circle messages','رسائل المجتمعات'],
+  ['meeting','Meetings','الاجتماعات'],
+  ['gallery','Gallery','المعرض'],
+  ['opportunity','Opportunities','الفرص'],
+  ['study resource','Study resources','مصادر الدراسة']
+];
+const ADMIN_EMAILABLE_CONTENT_TYPES=new Set(['post','reply','circle','meeting','circle message','gallery','article','opportunity','study resource']);
+function adminModerationRange(){
+  const period=adminContentModeration.period;
+  if(period==='custom'){
+    const from=adminContentModeration.from?new Date(adminContentModeration.from+'T00:00:00').toISOString():null;
+    const to=adminContentModeration.to?new Date(new Date(adminContentModeration.to+'T00:00:00').getTime()+86400000).toISOString():null;
+    return {from,to};
+  }
+  if(period==='all')return {from:null,to:null};
+  const days=Number(period||0);
+  return {from:Number.isFinite(days)&&days>0?new Date(Date.now()-days*86400000).toISOString():null,to:null};
+}
+async function loadAdminContentModerationFeed({append=false}={}){
+  if(!canOpenAdminModerationTargets()||adminContentModeration.loading)return;
+  adminContentModeration.loading=true;
+  if(!append)adminContentModeration.offset=0;
+  const range=adminModerationRange();
+  const {data,error}=await sb.rpc('admin_get_content_moderation_feed',{
+    type_input:adminContentModeration.type,
+    from_input:range.from,
+    to_input:range.to,
+    search_input:adminContentModeration.query||null,
+    sort_input:adminContentModeration.sort,
+    limit_input:200,
+    offset_input:adminContentModeration.offset
+  });
+  adminContentModeration.loading=false;
+  if(error){console.error('[NEIS moderation feed]',error);toast(safeError(error,'load content moderation'));return}
+  const rows=Array.isArray(data)?data:[];
+  adminContentModeration.items=append?[...adminContentModeration.items,...rows]:rows;
+  adminContentModeration.offset=adminContentModeration.items.length;
+  adminContentModeration.hasMore=rows.length===200;
+  adminContentModeration.loaded=true;
+  if(state.view==='admin')render();
+}
 async function loadAdminModerationEmailData(){
-  if(!canControlAuthorLikeEmails()||adminModerationExtras.loading||adminModerationExtras.loaded)return;
-  adminModerationExtras.loading=true;
-  const [opportunitiesResult,studyResult,broadcastResult]=await Promise.allSettled([
-    sb.from('opportunities').select('id,author_id,title,description,status,created_at').order('created_at',{ascending:false}).limit(100),
-    sb.from('study_resources').select('id,author_id,title,description,subject,unit,created_at').order('created_at',{ascending:false}).limit(100),
-    sb.rpc('get_admin_content_email_broadcasts')
-  ]);
-  const unpack=result=>result.status==='fulfilled'&&!result.value?.error?(result.value.data||[]):[];
-  adminModerationExtras.opportunities=unpack(opportunitiesResult);
-  adminModerationExtras.studyResources=unpack(studyResult);
-  adminContentEmailBroadcasts=broadcastResult.status==='fulfilled'&&!broadcastResult.value?.error?(broadcastResult.value.data||{}):{};
-  adminModerationExtras.loading=false;
-  adminModerationExtras.loaded=true;
+  if(!canOpenAdminModerationTargets())return;
+  if(!adminContentModeration.loaded&&!adminContentModeration.loading)loadAdminContentModerationFeed();
+  if(window.__neisAdminBroadcastHistoryLoading)return;
+  window.__neisAdminBroadcastHistoryLoading=true;
+  const {data,error}=await sb.rpc('get_admin_content_email_broadcasts');
+  window.__neisAdminBroadcastHistoryLoading=false;
+  if(!error)adminContentEmailBroadcasts=data||{};
   if(state.view==='admin')render();
 }
 async function sendAdminContentEmail(type,id,title){
-  if(!canControlAuthorLikeEmails())return;
+  if(!canControlAuthorLikeEmails()||!ADMIN_EMAILABLE_CONTENT_TYPES.has(String(type||'').toLowerCase()))return;
   const key=adminEmailBroadcastKey(type,id),previous=adminContentEmailBroadcasts[key]||null;
   const {data:preview,error:previewError}=await sb.rpc('admin_preview_content_email_audience',{
     content_type_input:type,
@@ -2339,17 +2389,41 @@ async function sendAdminContentEmail(type,id,title){
     toast(t('Email queued for','تمت إضافة البريد للإرسال إلى')+' '+Number(data?.recipient_count||0)+' '+t('recipients.','مستلم.'));
   };
 }
-async function deleteAdminModerationExtra(type,id){
-  const table=type==='opportunity'?'opportunities':type==='study resource'?'study_resources':'';
-  if(!table)return;
-  const item=type==='opportunity'?adminModerationExtras.opportunities.find(row=>same(row.id,id)):adminModerationExtras.studyResources.find(row=>same(row.id,id));
-  if(!item||!await confirmAction(t('Delete content?','حذف المحتوى؟'),item.title||t('Selected content','المحتوى المحدد')))return;
-  const {data,error}=await sb.from(table).delete().eq('id',id).select('id');
-  if(error||!data?.length){toast(error?safeError(error,'delete this content'):t('This content could not be deleted.','تعذر حذف هذا المحتوى.'));return}
-  if(type==='opportunity')adminModerationExtras.opportunities=adminModerationExtras.opportunities.filter(row=>!same(row.id,id));
-  else adminModerationExtras.studyResources=adminModerationExtras.studyResources.filter(row=>!same(row.id,id));
+async function deleteAdminModerationFeedItem(type,id,title){
+  if(!canOpenAdminModerationTargets())return;
+  if(!await confirmAction(t('Delete content?','حذف المحتوى؟'),title||t('Selected content','المحتوى المحدد')))return;
+  const {data,error}=await sb.rpc('admin_delete_moderation_content',{content_type_input:type,content_id_input:String(id)});
+  if(error||!data){toast(error?safeError(error,'delete this content'):t('This content could not be deleted.','تعذر حذف هذا المحتوى.'));return}
+  adminContentModeration.items=adminContentModeration.items.filter(row=>!(String(row.content_type)===String(type)&&same(row.content_id,id)));
+  adminContentModeration.offset=adminContentModeration.items.length;
   render();
+  toast(t('Content deleted.','تم حذف المحتوى.'));
 }
+function adminModerationFeedItem(type,id){
+  return (adminContentModeration.items||[]).find(row=>String(row.content_type)===String(type)&&same(row.content_id,id))||null;
+}
+function adminModerationFiltersMarkup(){
+  const custom=adminContentModeration.period==='custom';
+  return `<div class="admin-content-filters">
+    <div class="admin-content-search"><input id="adminContentSearch" type="search" autocomplete="off" placeholder="${t('Search content or author…','ابحث في المحتوى أو الكاتب…')}" value="${esc(adminContentModeration.query||'')}"><button class="secondary" data-admin-content-search>${t('Search','بحث')}</button></div>
+    <select data-admin-content-type aria-label="${t('Content type','نوع المحتوى')}">${ADMIN_MODERATION_TYPES.map(([value,en,ar])=>`<option value="${esc(value)}" ${adminContentModeration.type===value?'selected':''}>${t(en,ar)}</option>`).join('')}</select>
+    <select data-admin-content-period aria-label="${t('Time period','الفترة الزمنية')}">
+      <option value="all" ${adminContentModeration.period==='all'?'selected':''}>${t('All time','كل الوقت')}</option>
+      <option value="1" ${adminContentModeration.period==='1'?'selected':''}>${t('Last 24 hours','آخر 24 ساعة')}</option>
+      <option value="7" ${adminContentModeration.period==='7'?'selected':''}>${t('Last 7 days','آخر 7 أيام')}</option>
+      <option value="30" ${adminContentModeration.period==='30'?'selected':''}>${t('Last 30 days','آخر 30 يوم')}</option>
+      <option value="90" ${adminContentModeration.period==='90'?'selected':''}>${t('Last 90 days','آخر 90 يوم')}</option>
+      <option value="365" ${adminContentModeration.period==='365'?'selected':''}>${t('Last year','آخر سنة')}</option>
+      <option value="custom" ${custom?'selected':''}>${t('Custom dates','تاريخ مخصص')}</option>
+    </select>
+    <select data-admin-content-sort aria-label="${t('Sort','الترتيب')}">
+      <option value="newest" ${adminContentModeration.sort==='newest'?'selected':''}>${t('Newest first','الأحدث أولًا')}</option>
+      <option value="oldest" ${adminContentModeration.sort==='oldest'?'selected':''}>${t('Oldest first','الأقدم أولًا')}</option>
+    </select>
+    ${custom?`<div class="admin-content-date-range"><label>${t('From','من')}<input type="date" data-admin-content-from value="${esc(adminContentModeration.from||'')}"></label><label>${t('To','إلى')}<input type="date" data-admin-content-to value="${esc(adminContentModeration.to||'')}"></label><button class="secondary" data-admin-content-apply-dates>${t('Apply','تطبيق')}</button></div>`:''}
+  </div>`;
+}
+
 function adminControlsPanel(){
   if(!state.isAdmin)return '';
   const rows=[];
@@ -2465,17 +2539,39 @@ async function showAdminDmSafetyMessages(requestId,conversation){
     <div class="admin-dm-review-messages">${rows.length?rows.map(message=>`<article class="admin-dm-review-message"><div><b>${esc(message.sender_name||'Student')}</b><small>${when(message.created_at)}${message.edited_at?' · '+t('edited','معدل'):''}</small></div><p dir="auto">${message.deleted_at?`<i>${t('Deleted message','رسالة محذوفة')}</i>`:esc(message.body||'')}</p>${message.attachment_url&&!message.deleted_at?`<a href="${esc(message.attachment_url)}" target="_blank" rel="noopener noreferrer">${t('Open attachment','فتح المرفق')}</a>`:''}</article>`).join(''):emptyState(t('No messages','لا توجد رسائل'),t('There are no messages in this conversation.','لا توجد رسائل في هذه المحادثة.'))}</div>`,true);
 }
 
-admin=function(){const base=originalAdmin();if(!state.isAdmin)return base;const moderationLinks=canOpenAdminModerationTargets();const content=[
-  ...state.posts.map(x=>({type:'post',id:x.id,title:x.title,meta:x.user,action:`data-delete-post="${x.id}"`})),
-  ...state.allComments.filter(x=>!x.deleted_at).map(x=>({type:'reply',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-reply="${x.id}"`})),
-  ...state.circleRows.map(x=>({type:'circle',id:x.id,title:x.name,meta:profileData(x.owner_id).full_name,action:`data-delete-circle="${x.id}"`})),
-  ...state.circleMeetings.map(x=>({type:'meeting',id:x.id,title:x.title,meta:x.creator?.full_name||'Student',action:`data-delete-meeting="${x.id}"`})),
-  ...state.circleMessages.filter(x=>!x.deleted_at).map(x=>({type:'circle message',id:x.id,title:x.body,meta:x.profile?.full_name||'Student',action:`data-delete-circle-message="${x.id}"`})),
-  ...state.gallery.map(x=>({type:'gallery',id:x.id,title:x.caption_en||x.caption_ar||'Gallery item',meta:authorName(x.author),action:`data-delete-gallery="${x.id}"`})),
-  ...state.articles.map(x=>({type:'article',id:x.id,title:x.title_en||x.title_ar||'Article',meta:authorName(x.author),action:`data-delete-article="${x.id}"`})),
-  ...adminModerationExtras.opportunities.map(x=>({type:'opportunity',id:x.id,title:x.title,meta:profileData(x.author_id).full_name||'Student',extraDelete:true})),
-  ...adminModerationExtras.studyResources.map(x=>({type:'study resource',id:x.id,title:x.title,meta:[x.subject,x.unit].filter(Boolean).join(' · ')||profileData(x.author_id).full_name||'Student',extraDelete:true}))
-];return `${base}${adminControlsPanel()}${canOpenAdminModerationTargets()?adminDmSafetyPanel():''}<section class="module-card" style="margin-top:18px"><div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(s=>`<option value="${s}" ${normalizedReportStatus(r.status)===s?'selected':''}>${s}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}</section><section class="module-card ${adminContentModerationHidden()?'hidden':''}" data-admin-content-moderation style="margin-top:18px"><div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('Open any item, delete it, or choose exactly which content deserves an email broadcast. Site notifications stay enabled independently.','افتح أي محتوى أو احذفه أو اختر بنفسك المحتوى الذي يستحق إرسال بريد جماعي. إشعارات الموقع تظل مفعلة بشكل مستقل.')}</p></div></div><div class="admin-content-list">${content.length?content.slice(0,120).map(x=>{const mail=adminContentEmailBroadcasts[adminEmailBroadcastKey(x.type,x.id)],mailLabel=mail?t('Emailed','تم الإرسال')+' · '+Number(mail.recipient_count||0):t('Email all','إرسال بريد للجميع');return `<div class="admin-content-row" ${moderationLinks?`data-admin-open-content="${esc(x.type)}" data-admin-content-id="${esc(x.id)}" role="link" tabindex="0" aria-label="${t('Open content','فتح المحتوى')}: ${esc(x.title)}"`:''}><div><b>${esc(x.title)}</b><p>${esc(x.type)} · ${esc(x.meta||'')}</p></div><div class="admin-content-actions">${canOpenAdminModerationTargets()?`<button class="secondary admin-email-content ${mail?'is-sent':''}" data-admin-email-content="${esc(x.type)}" data-admin-email-content-id="${esc(x.id)}" data-admin-email-title="${esc(x.title)}">${mailLabel}</button>`:''}<button class="secondary danger" ${x.extraDelete?`data-delete-admin-extra="${esc(x.type)}" data-delete-admin-extra-id="${esc(x.id)}"`:x.action||''}>${t('Delete','حذف')}</button></div></div>`}).join(''):emptyState(t('No content','لا يوجد محتوى'),t('The production database is clean.','قاعدة بيانات الإنتاج نظيفة.'))}</div></section>`}
+admin=function(){
+  const base=originalAdmin();
+  if(!state.isAdmin)return base;
+  const moderationLinks=canOpenAdminModerationTargets();
+  const content=canOpenAdminModerationTargets()?(adminContentModeration.items||[]):[];
+  const moderationBody=adminContentModeration.loading&&!adminContentModeration.loaded
+    ?'<div class="loading-card"></div><div class="loading-card"></div>'
+    :content.length
+      ?content.map(x=>{
+        const type=String(x.content_type||''),id=String(x.content_id||''),mail=adminContentEmailBroadcasts[adminEmailBroadcastKey(type,id)];
+        const mailLabel=mail?t('Emailed','تم الإرسال')+' · '+Number(mail.recipient_count||0):t('Email all','إرسال بريد للجميع');
+        const emailable=ADMIN_EMAILABLE_CONTENT_TYPES.has(type);
+        return `<div class="admin-content-row" ${moderationLinks?`data-admin-open-content="${esc(type)}" data-admin-content-id="${esc(id)}" role="link" tabindex="0" aria-label="${t('Open content','فتح المحتوى')}: ${esc(x.title||type)}"`:''}>
+          <div><b>${esc(x.title||t('Untitled','بدون عنوان'))}</b><p>${esc(type)} · ${esc(x.meta||x.author_name||'')} · ${x.created_at?when(x.created_at):''}</p></div>
+          <div class="admin-content-actions">
+            ${emailable?`<button class="secondary admin-email-content ${mail?'is-sent':''}" data-admin-email-content="${esc(type)}" data-admin-email-content-id="${esc(id)}" data-admin-email-title="${esc(x.title||type)}">${mailLabel}</button>`:''}
+            <button class="secondary danger" data-delete-admin-feed="${esc(type)}" data-delete-admin-feed-id="${esc(id)}" data-delete-admin-feed-title="${esc(x.title||type)}">${t('Delete','حذف')}</button>
+          </div>
+        </div>`;
+      }).join('')
+      :emptyState(t('No matching content','لا يوجد محتوى مطابق'),t('Try changing the content type, date range, or search.','جرّب تغيير نوع المحتوى أو الفترة الزمنية أو البحث.'));
+  return `${base}${adminControlsPanel()}${canOpenAdminModerationTargets()?adminDmSafetyPanel():''}
+    <section class="module-card" style="margin-top:18px">
+      <div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>
+      ${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(status=>`<option value="${status}" ${normalizedReportStatus(r.status)===status?'selected':''}>${status}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}
+    </section>
+    <section class="module-card ${adminContentModerationHidden()?'hidden':''}" data-admin-content-moderation style="margin-top:18px">
+      <div class="page-title"><div><h2>${t('Content moderation','إدارة المحتوى')}</h2><p>${t('All platform content appears here, including articles. Filter by type, time period, date range, or search.','كل محتوى المنصة يظهر هنا بما في ذلك المقالات. فلتر حسب النوع أو الفترة الزمنية أو التاريخ أو البحث.')}</p></div><span class="admin-content-count">${content.length}${adminContentModeration.hasMore?'+':''} ${t('items','عنصر')}</span></div>
+      ${moderationLinks?adminModerationFiltersMarkup():''}
+      <div class="admin-content-list">${moderationBody}</div>
+      ${adminContentModeration.hasMore?`<div class="admin-content-load-more"><button class="secondary" data-admin-content-load-more ${adminContentModeration.loading?'disabled':''}>${adminContentModeration.loading?t('Loading…','جارٍ التحميل…'):t('Load more','تحميل المزيد')}</button></div>`:''}
+    </section>`;
+}
 
 async function deleteResolvedReport(id){
   const report=state.reports.find(item=>same(item.id,id));
@@ -3144,13 +3240,21 @@ function bindV6(root=document){
   root.querySelectorAll('[data-author-like-email-toggle]').forEach(el=>el.onclick=()=>changeAuthorLikeEmailSetting(el.dataset.authorLikeEmailToggle==='true'));
   root.querySelectorAll('[data-admin-dm-email-toggle]').forEach(el=>el.onclick=()=>changeAdminDmEmailSetting(el.dataset.adminDmEmailToggle==='true'));
   root.querySelectorAll('[data-admin-post-email-toggle]').forEach(el=>el.onclick=()=>changeAdminPostEmailSetting(el.dataset.adminPostEmailToggle==='true'));
-  if(state.view==='admin'&&canOpenAdminModerationTargets()&&!adminModerationExtras.loaded&&!adminModerationExtras.loading)loadAdminModerationEmailData();
+  if(state.view==='admin'&&canOpenAdminModerationTargets()&&!adminContentModeration.loaded&&!adminContentModeration.loading)loadAdminModerationEmailData();
   root.querySelectorAll('[data-admin-email-content][data-admin-email-content-id]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();sendAdminContentEmail(el.dataset.adminEmailContent,el.dataset.adminEmailContentId,el.dataset.adminEmailTitle)});
+  root.querySelectorAll('[data-delete-admin-feed][data-delete-admin-feed-id]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();deleteAdminModerationFeedItem(el.dataset.deleteAdminFeed,el.dataset.deleteAdminFeedId,el.dataset.deleteAdminFeedTitle)});
+  const adminContentType=root.querySelector('[data-admin-content-type]');if(adminContentType)adminContentType.onchange=()=>{adminContentModeration.type=adminContentType.value;loadAdminContentModerationFeed()};
+  const adminContentPeriod=root.querySelector('[data-admin-content-period]');if(adminContentPeriod)adminContentPeriod.onchange=()=>{adminContentModeration.period=adminContentPeriod.value;if(adminContentModeration.period!=='custom'){adminContentModeration.from='';adminContentModeration.to='';loadAdminContentModerationFeed()}else render()};
+  const adminContentSort=root.querySelector('[data-admin-content-sort]');if(adminContentSort)adminContentSort.onchange=()=>{adminContentModeration.sort=adminContentSort.value;loadAdminContentModerationFeed()};
+  const adminContentSearch=root.querySelector('#adminContentSearch');const runAdminContentSearch=()=>{adminContentModeration.query=String(adminContentSearch?.value||'').trim();loadAdminContentModerationFeed()};
+  const adminContentSearchButton=root.querySelector('[data-admin-content-search]');if(adminContentSearchButton)adminContentSearchButton.onclick=runAdminContentSearch;
+  if(adminContentSearch)adminContentSearch.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();runAdminContentSearch()}};
+  const adminContentApplyDates=root.querySelector('[data-admin-content-apply-dates]');if(adminContentApplyDates)adminContentApplyDates.onclick=()=>{adminContentModeration.from=root.querySelector('[data-admin-content-from]')?.value||'';adminContentModeration.to=root.querySelector('[data-admin-content-to]')?.value||'';loadAdminContentModerationFeed()};
+  const adminContentLoadMore=root.querySelector('[data-admin-content-load-more]');if(adminContentLoadMore)adminContentLoadMore.onclick=()=>loadAdminContentModerationFeed({append:true});
   const adminDmSafetySearchButton=root.querySelector('[data-admin-dm-safety-search]');if(adminDmSafetySearchButton)adminDmSafetySearchButton.onclick=searchAdminDmSafetyUsers;
   const adminDmSafetySearchInput=root.querySelector('#adminDmSafetySearch');if(adminDmSafetySearchInput)adminDmSafetySearchInput.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();searchAdminDmSafetyUsers()}};
   root.querySelectorAll('[data-admin-dm-safety-user]').forEach(el=>el.onclick=()=>loadAdminDmSafetyConversations(el.dataset.adminDmSafetyUser));
   root.querySelectorAll('[data-admin-dm-review-conversation]').forEach(el=>el.onclick=()=>openAdminDmSafetyReview(el.dataset.adminDmReviewConversation,el.dataset.adminDmReviewTarget));
-  root.querySelectorAll('[data-delete-admin-extra][data-delete-admin-extra-id]').forEach(el=>el.onclick=event=>{event.preventDefault();event.stopPropagation();deleteAdminModerationExtra(el.dataset.deleteAdminExtra,el.dataset.deleteAdminExtraId)});
   root.querySelectorAll('[data-toggle-content-moderation-visibility]').forEach(el=>el.onclick=()=>setAdminContentModerationVisibility(el.dataset.toggleContentModerationVisibility));
   root.querySelectorAll('[data-toggle-members-branches-visibility]').forEach(el=>el.onclick=()=>setAdminMembersBranchesVisibility(el.dataset.toggleMembersBranchesVisibility));
   root.querySelectorAll('[data-post-gallery-id]').forEach(el=>el.onclick=e=>{e.preventDefault();e.stopPropagation();openPostImageGallery(el.dataset.postGalleryId,Number(el.dataset.postGalleryIndex||0))});
