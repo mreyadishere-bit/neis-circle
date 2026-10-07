@@ -140,7 +140,7 @@
     var week=DAYS_EN.map(function(_,day){
       return '<div class="meeting-week-day"><b>'+dayName(day).slice(0,state.lang==='ar'?3:3)+'</b>'+heatFor(post.id,day)+'</div>';
     }).join('');
-    return '<section class="meeting-planner-card" data-meeting-planner="'+esc(post.id)+'">'+
+    return '<section class="meeting-planner-card" data-meeting-planner="'+esc(post.id)+'" data-meeting-rev="'+esc(planner.updated_at||'')+'" data-meeting-lang="'+esc(state.lang||'en')+'">'+
       '<div class="meeting-planner-head"><div><span class="meeting-planner-kicker">◷ '+tr('Meeting planner','منظم اجتماع')+'</span><small>'+tr('Add every time you are free this week. The best overlap updates live.','أضف كل الأوقات المتاحة لك هذا الأسبوع. أفضل وقت يتحدث مباشرة.')+'</small></div><span class="meeting-timezone">'+esc(planner.timezone||'Africa/Cairo')+'</span></div>'+
       bestHtml+
       '<div class="meeting-week-heat">'+week+'</div>'+
@@ -152,7 +152,11 @@
   function decoratePost(post){
     var card=document.querySelector('.post[data-post="'+CSS.escape(String(post.id))+'"]');
     if(!card)return;
+    var planner=plannerFor(post.id);
     var existing=card.querySelector('[data-meeting-planner="'+CSS.escape(String(post.id))+'"]');
+    if(existing&&planner&&existing.dataset.meetingRev===String(planner.updated_at||'')&&existing.dataset.meetingLang===String(state.lang||'en')){
+      bindPlannerControls(card);return;
+    }
     var html=markup(post);
     if(existing){existing.outerHTML=html}
     else{
