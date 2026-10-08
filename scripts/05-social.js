@@ -1220,7 +1220,7 @@ function chatInteractionProtected(){
   const active=document.activeElement;
   const dmForm=$('#liveChatForm'),circleForm=$('#circleChatForm');
   return !!(
-    (state.view==='circle-detail'&&(circleTouchActive||Date.now()-circleLastTouchAt<900))||
+    (state.view==='circle-detail'&&((circleTouchActive&&Date.now()-circleLastTouchAt<1800)||Date.now()-circleLastTouchAt<900))||
     (liveInput&&(active===liveInput||liveInput.value.length>0))||
     (circleInput&&(active===circleInput||circleInput.value.length>0))||
     dmForm?.dataset?.sending==='1'||
@@ -1302,10 +1302,10 @@ async function refreshV6(){
         if(nextFlow&&flowBottom!==null)nextFlow.scrollTop=Math.max(0,nextFlow.scrollHeight-nextFlow.clientHeight-flowBottom);
         if(nextCircleFlow&&circleBottom!==null)nextCircleFlow.scrollTop=Math.max(0,nextCircleFlow.scrollHeight-nextCircleFlow.clientHeight-circleBottom);
       });
-    }while(refreshQueued)
+    }while(false) // Yield to the browser between live-data batches, especially on touch devices.
   }finally{
     refreshBusy=false;
-    if(refreshQueued&&!chatInteractionProtected())setTimeout(refreshV6,0);
+    if(refreshQueued&&!chatInteractionProtected())setTimeout(refreshV6,120);
   }
 }
 
