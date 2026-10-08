@@ -3779,8 +3779,10 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
   };
 
   const resolve=eventTarget=>{
-    const row=eventTarget?.closest?.('#chatFlow > .chat-message, #circleChatFlow > .chat-message');
-    const bubble=row?.querySelector?.('.bubble');
+    // A long press on the empty area of a message card must NOT open
+    // an HTML modal dialog or capture interaction with the rest of the app.
+    const bubble=eventTarget?.closest?.('#chatFlow > .chat-message .bubble, #circleChatFlow > .chat-message .bubble');
+    const row=bubble?.closest?.('.chat-message');
     return row&&bubble?{row,bubble}:null;
   };
 
@@ -3794,6 +3796,10 @@ setTimeout(async()=>{if(authUser){await loadLiveData();if(!location.hash)history
     dialog.addEventListener('click',event=>{
       if(event.target===dialog){try{dialog.close()}catch(_){}}
     });
+    // Native modal dialogs block every tap and scroll in the document.
+    // Ensure they cannot survive navigation away from the message context.
+    window.addEventListener('hashchange',()=>{if(dialog.open)dialog.close()},{passive:true});
+    window.addEventListener('pageshow',()=>{if(dialog.open)dialog.close()},{passive:true});
     return dialog;
   };
 
