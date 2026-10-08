@@ -1,7 +1,12 @@
 /* NEIS Circle — approved illustrated profile avatars (CC0 styles only). */
 (()=>{
  'use strict';
- const groups=[['Characters','lorelei'],['People','open-peeps'],['Creative','notionists'],['Sketches','notionists-neutral'],['Cats','cats'],['Creatures','critters'],['Anime-inspired','adventurer'],['Cartoon characters','big-ears'],...['Sports','Music','Science','Art','Reading','Gaming','Nature','Travel','Food','Technology'].map(x=>[x,'hobby'])];
+ const groups=[
+  ['Line Face','line-face'],['Lorelei','lorelei'],['Notionists Neutral','notionists-neutral'],
+  ['Patchwork','patchwork'],['Sprouts','sprouts'],['Adventurer Neutral','adventurer-neutral'],
+  ['Open Peeps','open-peeps'],
+  ...['Sports','Music','Science','Art','Reading','Gaming','Nature','Travel','Food','Technology'].map(x=>[x,'hobby'])
+ ];
  // Curated Twemoji artwork, graphics licensed CC BY 4.0.
  const hobbies={
  Sports:'26bd 1f3c0 1f3c8 1f3be 1f3d3 1f3bf 1f3b3 1f6b4 1f94a',
@@ -17,7 +22,7 @@
  };
  // Retain provider style and a deterministic seed in the persistent avatar URL.
  const url=(style,seed)=>style==='hobby'?'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/svg/'+seed+'.svg':'https://api.dicebear.com/'+(style==='cats'?'11.x':'10.x')+'/'+style+'/svg?seed='+encodeURIComponent(seed);
- const authorized=u=>/^https:\/\/api\.dicebear\.com\/(?:10\.x\/(?:lorelei|open-peeps|notionists|notionists-neutral|critters|adventurer|big-ears|blobs|marbles|moods)|11\.x\/cats)\/svg\?seed=neis-[a-z]{3,24}-[0-9]{1,3}$/.test(String(u||''))||/^https:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@14\.0\.2\/assets\/svg\/[a-f0-9-]+\.svg$/.test(String(u||''));
+ const authorized=u=>/^https:\/\/api\.dicebear\.com\/(?:10\.x\/(?:line-face|lorelei|notionists-neutral|patchwork|sprouts|adventurer-neutral|open-peeps|notionists|critters|adventurer|big-ears|blobs|marbles|moods)|11\.x\/cats)\/svg\?seed=neis-[a-z0-9-]{3,40}$/.test(String(u||''))||/^https:\/\/cdn\.jsdelivr\.net\/gh\/twitter\/twemoji@14\.0\.2\/assets\/svg\/[a-f0-9-]+\.svg$/.test(String(u||''));
  const escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  // Show approved illustrations in every preexisting avatar location, without modifying identity records.
  const previousAvatar=avatar;
@@ -58,7 +63,7 @@
  const getCurrent=()=>state.members?.find(p=>String(p.id)===String(authUser?.id))?.avatar_url||'';
  function renderPicker(){
    const root=document.getElementById('neisIllustrationPicker');if(!root)return;
-   root.querySelector('[data-avatar-preview]').src=selected?.url||(authorized(getCurrent())?getCurrent():url('lorelei','neis-lorelei-1'));
+   root.querySelector('[data-avatar-preview]').src=selected?.url||(authorized(getCurrent())?getCurrent():url('line-face','neis-line-face-1'));
    const results=all.filter(x=>(filter==='all'||x.category===filter)&&(!query||(x.category+' '+x.style+' '+x.index).toLowerCase().includes(query)));
    root.querySelector('[data-avatar-grid]').innerHTML=results.map(x=>{
      const img=url(x.style,x.seed),active=selected?.url===img;
@@ -71,7 +76,7 @@
    selected=null;filter='all';query='';
    const modal=document.createElement('div');modal.id='neisIllustrationPicker';modal.className='neis-avatar-layer';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
    modal.setAttribute('aria-label','Choose a profile illustration');
-   modal.innerHTML='<div class="neis-avatar-dialog"><header class="neis-avatar-head"><div><small>YOUR PROFILE</small><h2>'+(state.lang==='ar'?'اختر صورة رمزية':'Choose an illustration')+'</h2><p>'+(state.lang==='ar'?'صور رمزية فقط — دون رفع صور شخصية':'Illustrations only — no personal photo uploads')+'</p></div><button type="button" data-avatar-close aria-label="Close">×</button></header><div class="neis-avatar-preview"><img data-avatar-preview alt="Selected illustration preview"><div><b>'+(state.lang==='ar'?'صورتك الرمزية':'Your profile illustration')+'</b><span>'+(state.lang==='ar'?'اختر من المجموعة أدناه':'Pick your favorite from the gallery')+'</span></div></div><div class="neis-avatar-filters"><input type="search" data-avatar-search placeholder="Search illustrations…" aria-label="Search illustrations"><div data-avatar-categories class="neis-avatar-categories"></div></div><div class="neis-avatar-scroll"><div data-avatar-grid class="neis-avatar-grid"></div></div><footer class="neis-avatar-footer"><small>DiceBear styles (CC0 / CC BY 4.0) · Twemoji (CC BY 4.0) · © Twitter</small><button type="button" class="primary" data-avatar-save disabled>Save illustration</button></footer></div>';
+   modal.innerHTML='<div class="neis-avatar-dialog"><header class="neis-avatar-head"><div><small>YOUR PROFILE</small><h2>'+(state.lang==='ar'?'اختر صورة رمزية':'Choose an illustration')+'</h2><p>'+(state.lang==='ar'?'صور رمزية فقط — دون رفع صور شخصية':'Illustrations only — no personal photo uploads')+'</p></div><button type="button" data-avatar-close aria-label="Close">×</button></header><div class="neis-avatar-preview"><img data-avatar-preview alt="Selected illustration preview"><div><b>'+(state.lang==='ar'?'صورتك الرمزية':'Your profile illustration')+'</b><span>'+(state.lang==='ar'?'اختر من المجموعة أدناه':'Pick your favorite from the gallery')+'</span></div></div><div class="neis-avatar-filters"><input type="search" data-avatar-search placeholder="Search illustrations…" aria-label="Search illustrations"><div data-avatar-categories class="neis-avatar-categories"></div></div><div class="neis-avatar-scroll"><div data-avatar-grid class="neis-avatar-grid"></div></div><footer class="neis-avatar-footer"><small>DiceBear · Twemoji graphics (CC BY 4.0) · © Twitter</small><button type="button" class="primary" data-avatar-save disabled>Save illustration</button></footer></div>';
    document.body.appendChild(modal);
    modal.querySelector('[data-avatar-categories]').innerHTML=[['All','all'],...groups.map(g=>[g[0],g[0]])].map(([label,value])=>'<button type="button" data-avatar-category="'+value+'" class="'+(value==='all'?'active':'')+'">'+label+'</button>').join('');
    renderPicker();
