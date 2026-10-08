@@ -13,8 +13,8 @@
   ['Moods','moods','Expressive illustrations']
  ];
  // Retain provider style and a deterministic seed in the persistent avatar URL.
- const url=(style,seed)=>'https://api.dicebear.com/10.x/'+style+'/svg?seed='+encodeURIComponent(seed);
- const authorized=u=>/^https:\/\/api\.dicebear\.com\/10\.x\/(lorelei|open-peeps|notionists|notionists-neutral|cats|critters|blobs|marbles|moods)\/svg\?seed=neis-[a-z]{3,24}-[0-9]{1,3}$/.test(String(u||''));
+ const url=(style,seed)=>'https://api.dicebear.com/'+(style==='cats'?'11.x':'10.x')+'/'+style+'/svg?seed='+encodeURIComponent(seed);
+ const authorized=u=>/^https:\/\/api\.dicebear\.com\/(?:10\.x\/(?:lorelei|open-peeps|notionists|notionists-neutral|critters|blobs|marbles|moods)|11\.x\/cats)\/svg\?seed=neis-[a-z]{3,24}-[0-9]{1,3}$/.test(String(u||''));
  const escHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  // Show approved illustrations in every preexisting avatar location, without modifying identity records.
  const previousAvatar=avatar;
