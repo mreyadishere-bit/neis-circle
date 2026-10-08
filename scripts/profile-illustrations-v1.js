@@ -19,19 +19,9 @@
  // Show approved illustrations in every preexisting avatar location, without modifying identity records.
  const previousAvatar=avatar;
  avatar=function(person,large){
-   const image=person?.avatar_url||(person?.author_id&&typeof profileData==='function'?profileData(person.author_id)?.avatar_url:null)||(person?.sender_id&&typeof profileData==='function'?profileData(person.sender_id)?.avatar_url:null);
+   const image=person?.avatar_url||((person?.author_id||person?.sender_id)&&Array.isArray(state?.members)?state.members.find(p=>String(p.id)===String(person.author_id||person.sender_id))?.avatar_url:null);
    if(authorized(image))return '<span class="avatar neis-illustrated-avatar '+(large?'large':'')+'"><img src="'+escHtml(image)+'" alt="" loading="lazy" decoding="async"></span>';
    return previousAvatar(person,large);
- };
- const oldProfileAvatar=profileAvatar;
- profileAvatar=function(person,large){
-   if(authorized(person?.avatar_url))return avatar({avatar_url:person.avatar_url,name:person.full_name},large);
-   return oldProfileAvatar(person,large);
- };
- const oldProfileView=profileView;
- profileView=function(){
-   const page=oldProfileView();
-   return state.activeProfileId===authUser?.id?page.replace('data-action="profile"', 'data-action="profile"') .replace('</section>', '<button type="button" class="secondary neis-avatar-edit" data-edit-illustration>'+ (state.lang==='ar'?'اختر صورة رمزية':'Choose illustration')+'</button></section>'):page;
  };
  // Expose the picker in the actual Your profile edit dialog, not just the profile page.
  function addEditProfilePicker(){
