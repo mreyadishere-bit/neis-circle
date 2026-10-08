@@ -5,7 +5,7 @@
   if(window.__neisMeetingPlannerV1)return;
   window.__neisMeetingPlannerV1=true;
 
-  var store={planners:[],results:[],myRanges:[],loading:false,loaded:false,signature:''};
+  var store={planners:[],results:[],myRanges:[],loading:false,loaded:false,signature:'',error:''};
   var realtime=null,refreshTimer=null,observer=null;
   var DAYS_EN=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   var DAYS_AR=['الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت','الأحد'];
@@ -43,6 +43,7 @@
     var ids=plannerIds(),sig=ids.join('|');
     if(!force&&store.loaded&&store.signature===sig){decorateAll();return}
     store.loading=true;
+    store.error='';
     if(force||store.signature!==sig)store.loaded=false;
     store.signature=sig;
     try{
@@ -65,8 +66,15 @@
       if(rerender&&typeof render==='function')render();
       queueMicrotask(decorateAll);
     }catch(error){
-      console.error('[NEIS Meeting Planner load]',error);
-    }finally{store.loading=false}
+      store.error=safeError(error);
+      store.loaded=true;
+      queueMicrotask(decorateAll);
+    }finally{
+      store.loading=false;
+      // Posts may have arrived while the first request was still in flight.
+      // A DOM observer won't necessarily fire again once that request ends.
+      if(signature()!==store.signature)setTimeout(function(){load(false,false)},0);
+    }
   }
 
   function setupRealtime(){
@@ -116,7 +124,7 @@
 
   function markup(post){
     var planner=plannerFor(post.id);
-    if(!planner)return '<section class="meeting-planner-card meeting-planner-loading">'+tr('Loading availability…','جارٍ تحميل المواعيد…')+'</section>';
+    if(!planner)return store.error?'<section class="meeting-planner-card meeting-planner-error" role="alert"><p>'+tr('Could not load meeting availability.','تعذر تحميل المواعيد المتاحة.')+'</p><button type="button" class="secondary" data-meeting-retry>'+tr('Retry','إعادة المحاولة')+'</button></section>':'<section class="meeting-planner-card meeting-planner-loading">'+tr('Loading availability…','جارٍ تحميل المواعيد…')+'</section>';
     var allRows=rowsFor(post.id),windows=windowsFor(post.id),mine=myRangesFor(post.id),participantCount=Number(allRows[0]?.participant_count||0);
     var best=windows[0],perfect=best&&best.total>0&&best.count===best.total;
     var bestHtml=best
@@ -161,6 +169,10 @@
   }
 
   function bindPlannerControls(root){
+    root.querySelectorAll('[data-meeting-retry]').forEach(function(button){
+      if(button.dataset.bound==='1')return;button.dataset.bound='1';
+      button.addEventListener('click',function(event){event.preventDefault();load(true,false)});
+    });
     root.querySelectorAll('[data-meeting-availability]').forEach(function(button){
       if(button.dataset.bound==='1')return;button.dataset.bound='1';
       button.addEventListener('click',function(event){event.preventDefault();event.stopPropagation();openAvailability(button.dataset.meetingAvailability)});
