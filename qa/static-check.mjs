@@ -448,7 +448,7 @@ if (!followActionSection) {
 }
 const followRequestStart = followActionSource.indexOf("root.querySelectorAll('[data-follow-request]')");
 const followRequestEnd = followRequestStart >= 0
-  ? followActionSource.indexOf("root.querySelectorAll('[data-open-circle]')", followRequestStart)
+  ? followActionSource.indexOf("root.querySelectorAll('[data-new-circle]')", followRequestStart)
   : -1;
 const followRequestSection = followRequestStart >= 0 && followRequestEnd > followRequestStart
   ? followActionSource.slice(followRequestStart, followRequestEnd)
