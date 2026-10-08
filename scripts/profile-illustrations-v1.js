@@ -41,7 +41,7 @@
    if(!actions)return;
    const section=document.createElement('div');
    section.className='neis-avatar-profile-field';
-   section.innerHTML='<div><b>'+(state.lang==='ar'?'الصورة الرمزية':'Profile illustration')+'</b><small>'+(state.lang==='ar'?'اختر رسمة من مجموعتنا — بدون رفع صور':'Choose an illustration — no photo uploads')+'</small></div><button type="button" class="secondary" data-edit-illustration>'+(state.lang==='ar'?'تصفح الرسومات':'Browse illustrations')+'</button>';
+   section.innerHTML='<div><b>'+(state.lang==='ar'?'الصورة الرمزية':'Profile illustration')+'</b><small>'+(state.lang==='ar'?'اختر رسمة من مجموعتنا — بدون رفع صور':'Choose an illustration — no photo uploads')+'</small></div><button type="button" class="secondary" data-edit-illustration onclick="window.NEISIllustrations?.openPicker()">'+(state.lang==='ar'?'تصفح الرسومات':'Browse illustrations')+'</button>';
    actions.before(section);
  }
  const editDialogObserver=new MutationObserver(addEditProfilePicker);
