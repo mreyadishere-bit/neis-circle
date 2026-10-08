@@ -17,28 +17,32 @@
     if(serial!==generation||!root.isConnected)return;
     if(error){results.textContent='Could not load users: '+error.message;return}
     results.replaceChildren();
-    if(!data?.length){results.textContent='No matching users.';return}
+    if(!data?.length){results.innerHTML='<div class="main-admin-empty">No matching students found.</div>';return}
     const frag=document.createDocumentFragment();
     for(const p of data){
       const isMain=p.user_id===MAIN_ID,admin=p.role==='admin';
       const row=document.createElement('div');
       row.className='main-admin-role-row';
-      row.innerHTML='<div class="main-admin-role-name"><b>'+htmlEscape(p.full_name||'Student')+'</b><small>@'+htmlEscape(p.username||'student')+' · '+htmlEscape(isMain?'Main Admin':admin?'Admin':p.role||'Student')+'</small></div>'+
-        (isMain?'<span class="main-admin-protected">Protected</span>':'<button type="button" class="secondary" data-role-user="'+htmlEscape(p.user_id)+'" data-role-enable="'+(!admin)+'">'+(admin?'Remove Admin':'Make Admin')+'</button>');
+      const name=htmlEscape(p.full_name||'Student'),user=htmlEscape(p.username||'student');
+      const initials=(p.full_name||p.username||'S').trim().split(/\s+/).slice(0,2).map(word=>word[0]).join('').toUpperCase();
+      row.innerHTML='<div class="main-admin-person"><span class="main-admin-avatar" aria-hidden="true">'+htmlEscape(initials)+'</span><div class="main-admin-role-name"><b>'+name+'</b><small>@'+user+'</small></div></div>'+
+        '<span class="main-admin-role-pill '+(isMain?'is-owner':admin?'is-admin':'is-member')+'">'+(isMain?'Main Admin':admin?'Admin':'Student')+'</span>'+
+        '<div class="main-admin-role-action">'+(isMain?'<span class="main-admin-protected">Protected</span>':'<button type="button" class="'+(admin?'main-admin-remove':'main-admin-grant')+'" data-role-user="'+htmlEscape(p.user_id)+'" data-role-enable="'+(!admin)+'">'+(admin?'Remove access':'Make admin')+'</button>')+'</div>';
       frag.appendChild(row);
     }
     results.appendChild(frag);
+    const count=root.querySelector('[data-role-count]');if(count)count.textContent=data.length+' users shown';
   }
   const baseAdmin=admin;
   admin=function(){
     const page=baseAdmin();
     if(!isOwner()||!state.isAdmin)return page;
     queueMicrotask(()=>{if(state.view==='admin')loadRoles()});
-    return page+`<section class="module-card" id="mainAdminRoles" style="margin-top:20px">
-      <h2>Manage Administrators</h2>
-      <p>Grant or revoke platform Admin permissions. Only the Main Admin can change roles.</p>
-      <label class="field">Search students by name or username<input data-role-search type="search" autocomplete="off" placeholder="Search students…"></label>
-      <div data-role-results aria-live="polite">Loading users…</div>
+    return page+`<section class="module-card main-admin-panel" id="mainAdminRoles">
+      <div class="main-admin-header"><div><span class="main-admin-eyebrow">ACCESS CONTROL</span><h2>Manage Administrators</h2><p>Grant or revoke platform-wide administrator permissions.</p></div><span class="main-admin-security">Main Admin only</span></div>
+      <div class="main-admin-toolbar"><label class="main-admin-search"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="7.3"/><path d="m16 16 5 5"/></svg><input data-role-search type="search" aria-label="Search students" autocomplete="off" placeholder="Search by name or username"></label><small data-role-count></small></div>
+      <div class="main-admin-table-head"><span>STUDENT</span><span>ROLE</span><span>ACTION</span></div>
+      <div class="main-admin-role-list" data-role-results aria-live="polite">Loading users…</div>
     </section>`;
   };
   document.addEventListener('input',event=>{
@@ -60,7 +64,7 @@
       if(typeof toast==='function')toast(makeAdmin?'Admin access granted.':'Admin access removed.');
     }catch(error){
       button.disabled=false;
-      button.textContent=makeAdmin?'Make Admin':'Remove Admin';
+      button.textContent=makeAdmin?'Make admin':'Remove access';
       if(typeof toast==='function')toast(error.message||'Role update failed.');
     }
   });
