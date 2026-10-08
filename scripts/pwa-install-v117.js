@@ -158,6 +158,11 @@
       return false;
     }
     await rememberSubscriptionInWorker(subscription);
+    // Restore this browser's own settings when a push endpoint is registered/refreshed.
+    const local=localDevicePushSettings();
+    if(Object.keys(local).length){
+      await sb.rpc('set_web_push_device_preferences',{endpoint_input:subscription.endpoint,preferences_input:local});
+    }
     lastPushHealthAt=Date.now();
     return true;
   }
@@ -259,17 +264,51 @@
     }
   }
 
+  // Notification settings are local to this browser and its push endpoint, not global user preferences.
+  const devicePushPreferenceKeys=['direct_messages','post_comments_replies','article_comments_replies','post_likes','article_likes','comment_reactions','new_posts','new_articles','new_circles','circle_posts','circle_messages','circle_meetings','circle_membership','followers','timetable_reminders','sound'];
+  function devicePushSettingsKey(){
+    return 'neis-device-push-prefs-v1:'+String((typeof authUser!=='undefined'&&authUser?.id)||'guest');
+  }
+  function localDevicePushSettings(){
+    try{
+      const value=JSON.parse(localStorage.getItem(devicePushSettingsKey())||'{}');
+      return value&&typeof value==='object'?value:{};
+    }catch(_){return {}}
+  }
+  async function saveDevicePushSettings(values){
+    const prefs={};
+    devicePushPreferenceKeys.forEach(key=>{prefs[key]=values[key]!==false});
+    try{localStorage.setItem(devicePushSettingsKey(),JSON.stringify(prefs))}catch(_){}
+    if(('Notification' in window)&&Notification.permission==='granted')await ensureWebPush(false);
+    const sub=await currentSubscription();
+    if(sub&&typeof sb!=='undefined'&&sb){
+      const {data,error}=await sb.rpc('set_web_push_device_preferences',{endpoint_input:sub.endpoint,preferences_input:prefs});
+      if(error||data!==true)throw error||new Error('Could not save device preferences');
+    }
+    return prefs;
+  }
+  async function loadDevicePushSettings(){
+    const local=localDevicePushSettings();
+    const sub=await currentSubscription().catch(()=>null);
+    if(!sub)return local;
+    const {data,error}=await sb.rpc('get_web_push_device_preferences',{endpoint_input:sub.endpoint});
+    if(error)return local;
+    const remote=data&&typeof data==='object'?data:{};
+    // Local values take priority when first binding a new push subscription.
+    if(Object.keys(local).length && !Object.keys(remote).length){
+      await sb.rpc('set_web_push_device_preferences',{endpoint_input:sub.endpoint,preferences_input:local});
+      return local;
+    }
+    try{localStorage.setItem(devicePushSettingsKey(),JSON.stringify(remote))}catch(_){}
+    return remote;
+  }
+
   async function openPwaNotificationSettings(){
     if(!(typeof authUser!=='undefined'?authUser:null)||!(typeof sb!=='undefined'?sb:null)){
       if(typeof toast==='function')toast(lang('Sign in first.','سجّل الدخول أولًا.'));
       return;
     }
-    const {data,error}=await sb.from('push_preferences').select('*').eq('user_id',authUser.id).maybeSingle();
-    if(error){
-      if(typeof toast==='function')toast(lang('Could not load notification settings.','تعذر تحميل إعدادات الإشعارات.'));
-      return;
-    }
-    const prefs=data||{direct_messages:true,post_comments_replies:true,article_comments_replies:true,post_likes:true,article_likes:true,comment_reactions:true,new_posts:true,new_articles:true,new_circles:true,circle_posts:true,circle_messages:true,circle_meetings:true,circle_membership:true,followers:true,timetable_reminders:true,sound:true};
+    const prefs=await loadDevicePushSettings();
     const notificationPermission=('Notification' in window)?Notification.permission:'unsupported';
     const row=(key,en,arText)=>`<label class="account-row" style="cursor:pointer"><span><b>${lang(en,arText)}</b></span><input type="checkbox" data-pwa-push-pref="${key}" ${prefs[key]!==false?'checked':''}></label>`;
 
@@ -316,11 +355,12 @@
       toggleAllButton.dataset.enableAll=anyEnabled?'0':'1';
     };
     const persistAllPreferences=async enabled=>{
-      const values={user_id:authUser.id};
+      const values={};
       preferenceInputs().forEach(input=>{input.checked=enabled;values[input.dataset.pwaPushPref]=enabled});
       syncToggleAllLabel();
       if(toggleAllButton)toggleAllButton.disabled=true;
-      const {error:bulkError}=await sb.from('push_preferences').upsert(values,{onConflict:'user_id'});
+      let bulkError=null;
+      try{await saveDevicePushSettings(values)}catch(error){bulkError=error}
       if(toggleAllButton)toggleAllButton.disabled=false;
       if(bulkError){
         preferenceInputs().forEach(input=>{input.checked=!enabled});
@@ -345,10 +385,11 @@
 
     const saveButton=document.querySelector('[data-save-pwa-push]');
     if(saveButton)saveButton.onclick=async()=>{
-      const values={user_id:authUser.id};
+      const values={};
       document.querySelectorAll('[data-pwa-push-pref]').forEach(input=>{values[input.dataset.pwaPushPref]=!!input.checked});
       saveButton.disabled=true;
-      const {error:saveError}=await sb.from('push_preferences').upsert(values,{onConflict:'user_id'});
+      let saveError=null;
+      try{await saveDevicePushSettings(values)}catch(error){saveError=error}
       if(saveError){
         saveButton.disabled=false;
         if(typeof toast==='function')toast(lang('Could not save notification settings.','تعذر حفظ إعدادات الإشعارات.'));
