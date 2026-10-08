@@ -1197,11 +1197,30 @@ async function refreshCircleMeetingsOnly(circleId=state.activeCircleId){
 }
 
 let refreshBusy=false,refreshQueued=false,deferredGlobalRefreshTimer=null;
+// Keep Circle DOM stable during mobile scroll/swipe. Rebuilding it mid-gesture
+// can interrupt touch scrolling and cause apparent input freezes on mobile.
+let circleTouchActive=false,circleLastTouchAt=0;
+const isCircleTouchTarget=target=>!!target?.closest?.('.circle-home-dashboard,.circle-chat,.circle-tabs,.circle-panel,.circle-hero,.circle-home-feed,.circle-members-side-card');
+document.addEventListener('touchstart',event=>{
+  if(state.view==='circle-detail'&&isCircleTouchTarget(event.target)){
+    circleTouchActive=true;
+    circleLastTouchAt=Date.now();
+  }
+},{passive:true,capture:true});
+document.addEventListener('touchmove',event=>{
+  if(circleTouchActive)circleLastTouchAt=Date.now();
+},{passive:true,capture:true});
+for(const type of ['touchend','touchcancel']){
+  document.addEventListener(type,()=>{
+    if(circleTouchActive){circleTouchActive=false;circleLastTouchAt=Date.now()}
+  },{passive:true,capture:true});
+}
 function chatInteractionProtected(){
   const liveInput=$('#liveChatInput'),circleInput=$('#circleChatInput');
   const active=document.activeElement;
   const dmForm=$('#liveChatForm'),circleForm=$('#circleChatForm');
   return !!(
+    (state.view==='circle-detail'&&(circleTouchActive||Date.now()-circleLastTouchAt<900))||
     (liveInput&&(active===liveInput||liveInput.value.length>0))||
     (circleInput&&(active===circleInput||circleInput.value.length>0))||
     dmForm?.dataset?.sending==='1'||
