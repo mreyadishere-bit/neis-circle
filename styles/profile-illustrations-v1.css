@@ -31,3 +31,10 @@
 .neis-avatar-footer small{font-size:10px;color:var(--muted)}
 .neis-avatar-footer button:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:640px){.neis-avatar-layer{padding:0}.neis-avatar-dialog{width:100%;height:100dvh;max-height:100dvh;border-radius:0}.neis-avatar-head{padding:19px 17px 9px}.neis-avatar-head h2{font-size:20px}.neis-avatar-preview{padding:9px 17px}.neis-avatar-filters{padding:12px 17px}.neis-avatar-scroll{padding:15px 17px}.neis-avatar-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.neis-avatar-footer{padding:13px 17px}}
+
+.neis-avatar-profile-field{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:16px 0 8px;padding:16px;border:1px solid var(--line);background:var(--soft);border-radius:14px}
+.neis-avatar-profile-field>div{display:grid;gap:5px}
+.neis-avatar-profile-field b{font-size:13px}
+.neis-avatar-profile-field small{font-size:11px;color:var(--muted)}
+.neis-avatar-profile-field button{flex-shrink:0}
+@media(max-width:520px){.neis-avatar-profile-field{align-items:stretch;flex-direction:column}.neis-avatar-profile-field button{width:100%}}
