@@ -36,7 +36,7 @@
   addEventListener('hashchange',schedule,{passive:true});
   addEventListener('pageshow',schedule,{passive:true});
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)schedule()},{passive:true});
-  document.addEventListener('touchstart',schedule,{passive:true,capture:true});
+  // Do not scan overlays on every tap: this is hot-path work on Android.
   const root=document.getElementById('modalRoot');
   if(root)new MutationObserver(schedule).observe(root,{childList:true,subtree:false});
   schedule();
