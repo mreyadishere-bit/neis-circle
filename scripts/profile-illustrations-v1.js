@@ -46,7 +46,7 @@
  const getCurrent=()=>state.members?.find(p=>String(p.id)===String(authUser?.id))?.avatar_url||'';
  function renderPicker(){
    const root=document.getElementById('neisIllustrationPicker');if(!root)return;
-   root.querySelector('[data-avatar-preview]').src=selected?.url||getCurrent()&&authorized(getCurrent())?selected?.url||getCurrent():url('lorelei','neis-lorelei-1');
+   root.querySelector('[data-avatar-preview]').src=selected?.url||(authorized(getCurrent())?getCurrent():url('lorelei','neis-lorelei-1'));
    const results=all.filter(x=>(filter==='all'||x.category===filter)&&(!query||(x.category+' '+x.style+' '+x.index).toLowerCase().includes(query)));
    root.querySelector('[data-avatar-grid]').innerHTML=results.map(x=>{
      const img=url(x.style,x.seed),active=selected?.url===img;
