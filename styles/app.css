@@ -4336,3 +4336,8 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .circle-discovery-card{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
   .circle-discovery-card [data-open-circle]{touch-action:manipulation;-webkit-touch-callout:none;}
 }
+
+/* Circle cards are a single native navigation link, including their visible action. */
+.circle-discovery-card[href]{display:block;color:inherit;text-decoration:none;cursor:pointer;touch-action:manipulation}
+.circle-discovery-card[href] .circle-open-link{display:inline-flex;align-items:center;justify-content:center;margin-top:15px;pointer-events:none}
+.circle-discovery-card[href]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
