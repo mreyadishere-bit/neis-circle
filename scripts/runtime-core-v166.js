@@ -21,9 +21,17 @@
     }
   }
 
+  // Compact aggregation with backward-compatible fallback.
+  async function loadCommentsCompact(){
+    const compact=await safeQuery('comment_counts',sb.rpc('neis_post_comment_counts'),8000);
+    if(!compact.error&&Array.isArray(compact.data))return compact;
+    console.warn('[NEIS] Comment count RPC unavailable; falling back');
+    return safeQuery('comments',sb.from('comments').select('post_id').is('deleted_at',null),8000);
+  }
+
   function applyCore(posts,profiles,comments,reactions,bookmarks){
     const commentCounts={},reactionCounts={};
-    if(!comments?.error)safeArray(comments?.data).forEach(row=>commentCounts[row.post_id]=(commentCounts[row.post_id]||0)+1);
+    if(!comments?.error)safeArray(comments?.data).forEach(row=>commentCounts[row.post_id]=(commentCounts[row.post_id]||0)+Number(row.comment_count??1));
     if(!reactions?.error)safeArray(reactions?.data).forEach(row=>reactionCounts[row.post_id]=(reactionCounts[row.post_id]||0)+1);
 
     if(!profiles?.error){
@@ -148,7 +156,7 @@
 
       const [posts,comments,reactions,bookmarks,profiles]=await Promise.all([
         safeQuery('posts',sb.from('posts').select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type').order('created_at',{ascending:false}),8000),
-        safeQuery('comments',sb.from('comments').select('post_id').is('deleted_at',null),8000),
+        loadCommentsCompact(),
         safeQuery('reactions',sb.from('reactions').select('post_id,user_id,reaction'),8000),
         safeQuery('bookmarks',sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),8000),
         profileRequest
