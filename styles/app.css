@@ -4389,3 +4389,36 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   #mainAdminRoles .main-admin-role-action{grid-column:2;grid-row:1 / span 2}
   #mainAdminRoles .main-admin-role-action button{min-width:96px;padding:0 8px}
 }
+
+/* Circle discovery: consistent card rhythm without changing link navigation or other cards. */
+.circle-discovery-grid{align-items:stretch}
+.circle-discovery-grid>.circle-discovery-card{
+  box-sizing:border-box;min-width:0;height:100%;display:flex;flex-direction:column;
+  align-items:stretch;padding:24px;gap:0;text-decoration:none;
+}
+.circle-discovery-card>.module-icon{flex:0 0 auto;margin-bottom:16px}
+.circle-discovery-card>h3{
+  margin:0 0 8px;line-height:1.35;min-height:2.7em;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+  overflow:hidden;overflow-wrap:anywhere;
+}
+.circle-discovery-card>p{
+  margin:0;line-height:1.55;min-height:6.2em;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
+  overflow:hidden;overflow-wrap:anywhere;
+}
+.circle-discovery-card>.module-meta{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  flex-wrap:wrap;margin-top:auto;padding-top:20px;min-width:0;
+}
+.circle-discovery-card>.module-meta>span{min-width:0;overflow-wrap:anywhere}
+.circle-discovery-card>.circle-open-link{
+  box-sizing:border-box;display:flex;align-items:center;justify-content:center;
+  min-height:46px;width:100%;margin-top:20px;flex:0 0 auto;text-align:center;
+}
+@media(max-width:640px){
+  .circle-discovery-grid>.circle-discovery-card{padding:19px}
+  .circle-discovery-card>h3{min-height:0}
+  .circle-discovery-card>p{min-height:0;-webkit-line-clamp:3}
+  .circle-discovery-card>.module-meta{padding-top:18px}
+}
