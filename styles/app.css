@@ -4329,3 +4329,10 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 @media(max-width:760px){
   .content-share-tabs{padding:0 14px 10px}
 }
+
+/* Circles: blank card areas are passive scroll surfaces, not tap targets.
+   Long presses must not trigger text selection or native context menus. */
+@media (hover:none) and (pointer:coarse){
+  .circle-discovery-card{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  .circle-discovery-card [data-open-circle]{touch-action:manipulation;-webkit-touch-callout:none;}
+}
