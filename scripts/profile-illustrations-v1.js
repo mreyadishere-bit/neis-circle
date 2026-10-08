@@ -73,6 +73,7 @@
    root.querySelector('[data-avatar-save]').disabled=!selected;
  }
  function openPicker(){
+   if(document.getElementById('neisIllustrationPicker'))return;
    selected=null;filter='all';query='';
    const modal=document.createElement('div');modal.id='neisIllustrationPicker';modal.className='neis-avatar-layer';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');
    modal.setAttribute('aria-label','Choose a profile illustration');
@@ -82,6 +83,7 @@
    renderPicker();
    modal.querySelector('[data-avatar-search]').focus();
  }
+ window.NEISIllustrations={openPicker};
  document.addEventListener('click',async e=>{
    if(e.target.closest('[data-edit-illustration]')){openPicker();return}
    const root=e.target.closest('#neisIllustrationPicker');if(!root)return;
