@@ -185,7 +185,7 @@ async function refreshMessageReactionsV1(){
 }
 
 function profileData(id){return state.members.find(x=>same(x.id,id))||{id,full_name:t('NEIS Student','طالب NEIS'),username:'student',grade:'',branch:'',bio:'',interests:[]}}
-function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,initials:initials(p.full_name||p.name),color:'#006f5b'},large)}
+function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,initials:initials(p.full_name||p.name),color:'#006f5b',avatar_url:p.avatar_url},large)}
 function circleChatAvatar(p){
   const me=profileData(authUser?.id),senderBranch=normalize(p?.branch||''),myBranch=normalize(me?.branch||state.profile?.branch||'');
   const sameBranch=!!senderBranch&&!!myBranch&&senderBranch===myBranch;
