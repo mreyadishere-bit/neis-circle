@@ -75,7 +75,7 @@ Deno.serve(async(req:Request)=>{
   const entityType=String(notification?.entity_type||"");
   const preferenceKey=(()=>{
     if(notificationType==="message")return "direct_messages";
-    if(["reply","comment_reply","comment_edit"].includes(notificationType))return entityType==="article_comment"?"article_comments_replies":"post_comments_replies";
+    if(["reply","comment_reply","comment_edit","article_comment_edit"].includes(notificationType))return entityType==="article_comment"?"article_comments_replies":"post_comments_replies";
     if(notificationType==="reaction")return entityType==="article"?"article_likes":"post_likes";
     if(["comment_like","article_comment_like","comment_heart","article_comment_heart"].includes(notificationType))return "comment_reactions";
     if(["admin_post","new_post"].includes(notificationType))return "new_posts";
