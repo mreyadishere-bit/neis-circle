@@ -1583,6 +1583,28 @@ for (const token of [
 const sharedContentArticleSource = fs.readFileSync(path.join(root, 'scripts', 'articles-v27.js'), 'utf8');
 if (!sharedContentArticleSource.includes('window.NEISContentShare?.open')) failures.push('Article sharing must use the unified DM/Circle picker.');
 
+const circleAdminRoleMigrationPath = path.join(root, 'supabase', 'migrations', '20261008093000_fix_circle_admin_role_persistence.sql');
+if (!fs.existsSync(circleAdminRoleMigrationPath)) failures.push('Circle admin role persistence migration is missing.');
+else {
+  const sql = fs.readFileSync(circleAdminRoleMigrationPath, 'utf8');
+  for (const token of [
+    "'admin'::text",
+    'drop policy if exists circle_members_manage',
+    "public.circle_role(circle_id) in ('owner','admin')",
+    "role in ('member','moderator','admin')"
+  ]) {
+    if (!sql.includes(token)) failures.push('Circle admin role persistence contract is missing: ' + token);
+  }
+}
+const circleAdminRoleSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
+for (const token of [
+  'data.role!==nextRole',
+  "toast(t('Role updated.'",
+  ".select('circle_id,user_id,role,status,joined_at')"
+]) {
+  if (!circleAdminRoleSource.includes(token)) failures.push('Circle role update verification is missing: ' + token);
+}
+
 const largeFiles = [
   ...jsFiles,
   ...walk(path.join(root, 'styles'), '.css')

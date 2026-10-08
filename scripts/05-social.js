@@ -3495,7 +3495,25 @@ function bindV6(root=document){
   root.querySelectorAll('[data-delete-report]').forEach(el=>el.onclick=()=>deleteResolvedReport(el.dataset.deleteReport));
   root.querySelectorAll('[data-reply-to]').forEach(el=>el.onclick=()=>{const r=byId(state.allComments,el.dataset.replyTo),input=$('#replyInput');$('#replyParent').value=el.dataset.replyTo;input.placeholder=`${t('Reply to','رد على')} ${r?.profile?.full_name||'Student'}…`;input.focus()});
   root.querySelectorAll('[data-delete-reply]').forEach(el=>{if(el.closest('#replyContent'))return;el.onclick=async()=>{const r=byId(state.allComments,el.dataset.deleteReply);if(!r||el.disabled)return;if(el.dataset.confirmDelete!=='1'){el.dataset.confirmDelete='1';el.dataset.originalText=el.textContent;el.textContent=t('Confirm delete','تأكيد الحذف');setTimeout(()=>{if(el.isConnected&&el.dataset.confirmDelete==='1'){el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف')}},5000);return}el.disabled=true;const {data,error}=await sb.from('comments').delete().eq('id',r.id).select('id');if(error||!data?.length){toast(error?safeError(error,'delete this reply'):t('This reply could not be deleted.','تعذر حذف هذا الرد.'));el.disabled=false;el.dataset.confirmDelete='';el.textContent=el.dataset.originalText||t('Delete','حذف');return}handleCommentRealtime({eventType:'DELETE',old:r});render();toast(t('Reply deleted.','تم حذف الرد.'))}});
-  root.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=async()=>{const userId=el.dataset.memberRole,circleId=state.activeCircleId,previous=membership(circleId,userId);const {data,error}=await sb.from('circle_members').update({role:el.value}).match({circle_id:circleId,user_id:userId}).select('circle_id,user_id,role,status,joined_at').maybeSingle();if(error||!data){if(previous)el.value=previous.role;toast(error?safeError(error,'change this role'):t('Could not change this role.','تعذر تغيير هذا الدور.'));return}await handleCircleMemberRealtime({eventType:'UPDATE',new:data,old:previous||{}})});
+  root.querySelectorAll('[data-member-role]').forEach(el=>el.onchange=async()=>{
+    if(el.disabled)return;
+    const userId=el.dataset.memberRole,circleId=state.activeCircleId,previous=membership(circleId,userId),nextRole=el.value;
+    if(!previous){render();return}
+    el.disabled=true;
+    const {data,error}=await sb.from('circle_members')
+      .update({role:nextRole})
+      .match({circle_id:circleId,user_id:userId})
+      .select('circle_id,user_id,role,status,joined_at')
+      .maybeSingle();
+    if(error||!data||data.role!==nextRole){
+      el.value=previous.role;
+      el.disabled=false;
+      toast(error?safeError(error,'change this role'):t('The role was not saved.','لم يتم حفظ الدور.'));
+      return;
+    }
+    await handleCircleMemberRealtime({eventType:'UPDATE',new:data,old:previous});
+    toast(t('Role updated.','تم تحديث الدور.'));
+  });
   root.querySelectorAll('[data-remove-member]').forEach(el=>el.onclick=async()=>{const userId=el.dataset.removeMember,circleId=state.activeCircleId,p=profileData(userId),previous=membership(circleId,userId);if(!previous||!await confirmAction(t('Remove member?','إزالة العضو؟'),p.full_name||'Student'))return;const {error}=await sb.from('circle_members').delete().match({circle_id:circleId,user_id:userId});if(error){toast(safeError(error,'remove this member'));return}await handleCircleMemberRealtime({eventType:'DELETE',old:previous})});
   root.querySelectorAll('[data-post-read-more]').forEach(el=>el.onclick=()=>{
     const id=String(el.dataset.postReadMore);
