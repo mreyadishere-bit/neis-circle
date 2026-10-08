@@ -276,7 +276,17 @@
     injectTypeOptions();
     if(typeof authUser!=='undefined'&&typeof sb!=='undefined'&&authUser&&sb)load(false,false);
     if(!observer){
-      observer=new MutationObserver(function(){
+      observer=new MutationObserver(function(records){
+        // Only react to newly mounted posts/composers. Planner markup itself
+        // changes the DOM; observing our own decorations can create a loop.
+        var relevant=records.some(function(record){
+          return Array.from(record.addedNodes).some(function(node){
+            if(node.nodeType!==1)return false;
+            return node.matches?.('.post[data-post],#postKind,#cpKind')||
+              !!node.querySelector?.('.post[data-post],#postKind,#cpKind');
+          });
+        });
+        if(!relevant)return;
         injectTypeOptions();
         var ready=typeof authUser!=='undefined'&&typeof sb!=='undefined'&&authUser&&sb;
         var sig=signature();
