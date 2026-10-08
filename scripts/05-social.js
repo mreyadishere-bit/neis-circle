@@ -2061,7 +2061,11 @@ circles=function(){
   if(state.circleFilter==='created')items=items.filter(c=>same(c.owner_id,authUser.id));
   return `${pageTitle(t('Circles','المجتمعات'),t('Real student communities with posts, chat, meetings and shared purpose.','مجتمعات طلابية حقيقية بها منشورات ودردشة واجتماعات وهدف مشترك.'),`<button class="primary circle-create-button" data-new-circle aria-label="${t('New circle','مجتمع جديد')}">${t('+ New circle','+ مجتمع جديد')}</button>`)}<div class="tabs"><button class="${state.circleFilter==='all'?'active':''}" data-circle-filter="all">${t('Explore','استكشف')}</button><button class="${state.circleFilter==='joined'?'active':''}" data-circle-filter="joined">${t('Joined','منضم إليها')}</button><button class="${state.circleFilter==='created'?'active':''}" data-circle-filter="created">${t('Created','أنشأتها')}</button></div><div class="grid-3" style="margin-top:18px">${items.length?items.map(circleCard).join(''):emptyState(t('No circles here yet','لا توجد مجتمعات هنا بعد'),state.circleFilter==='all'?t('Create the first Circle and it will open immediately.','أنشئ أول مجتمع وسيفتح فورًا.'):t('Change the filter or create a Circle.','غيّر الفلتر أو أنشئ مجتمعًا.'))}</div>`
 };
-function circleCard(c){const members=state.circleMembers.filter(m=>same(m.circle_id,c.id)&&m.status==='active').length,mine=membership(c.id);return `<article class="module-card profile-card circle-discovery-card" data-open-circle="${c.id}" role="link" tabindex="0" aria-label="${t('Open circle','فتح المجتمع')}: ${esc(c.name)}"><span class="module-icon" style="--tone:var(--accent2)">${esc((c.name||'NC').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase())}</span><h3>${esc(c.name)}</h3><p>${esc(c.description||t('A student community.','مجتمع طلابي.'))}</p><div class="module-meta"><span>${esc(c.category)} · ${c.privacy==='private'?t('Private','خاص'):t('Public','عام')}</span><span>${members} ${t('members','أعضاء')}</span></div><button class="primary" data-open-circle="${c.id}">${mine?.status==='active'?t('Open circle','فتح المجتمع'):t('View circle','عرض المجتمع')}</button></article>`}
+function circleCard(c){
+  const members=state.circleMembers.filter(m=>same(m.circle_id,c.id)&&m.status==='active').length,mine=membership(c.id);
+  const route='#/circles/'+encodeURIComponent(c.id)+'/home';
+  return `<a class="module-card profile-card circle-discovery-card" href="${route}" aria-label="${t('Open circle','فتح المجتمع')}: ${esc(c.name)}"><span class="module-icon" style="--tone:var(--accent2)">${esc((c.name||'NC').split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase())}</span><h3>${esc(c.name)}</h3><p>${esc(c.description||t('A student community.','مجتمع طلابي.'))}</p><div class="module-meta"><span>${esc(c.category)} · ${c.privacy==='private'?t('Private','خاص'):t('Public','عام')}</span><span>${members} ${t('members','أعضاء')}</span></div><span class="primary circle-open-link">${mine?.status==='active'?t('Open circle','فتح المجتمع'):t('View circle','عرض المجتمع')}</span></a>`;
+}
 function circleView(){
   const c=byId(state.circleRows,state.activeCircleId);if(!c)return blank(t('Circle not found','المجتمع غير موجود'),t('It may have been removed or is private.','ربما تمت إزالته أو أصبح خاصًا.'));const mine=membership(c.id),members=state.circleMembers.filter(m=>same(m.circle_id,c.id)&&m.status==='active'),role=mine?.role||'visitor',roleLabel={owner:t('Owner','المالك'),admin:t('Admin','مشرف'),moderator:t('Moderator','منسق'),member:t('Member','عضو'),visitor:t('Visitor','زائر')}[role]||role,memberWord=members.length===1?t('member','عضو'):t('members','أعضاء');
   const tabs=[['home',t('Home','الرئيسية')],['chat',t('Chat','الدردشة')],['meetings',t('Meetings','الاجتماعات')],['members',t('Members','الأعضاء')],['about',t('About','حول')]];
@@ -3432,20 +3436,6 @@ function bindV6(root=document){
   root.querySelectorAll('[data-mobile-threads]').forEach(el=>el.onclick=()=>{state.activeConversationId='';routeTo('messages',true);requestAnimationFrame(()=>{const shell=document.querySelector('.messages');if(shell)shell.classList.remove('mobile-thread-open')})});
   root.querySelectorAll('[data-connection-tab]').forEach(el=>el.onclick=()=>routeTo(`connections/${el.dataset.connectionTab}`));
   root.querySelectorAll('[data-follow-request]').forEach(el=>el.onclick=async e=>{e.stopPropagation();const accepted=el.dataset.followRequest==='accept',q=(accepted?sb.from('follows').update({status:'accepted'}):sb.from('follows').delete()).match({follower_id:el.dataset.user,following_id:authUser.id}).select('follower_id,following_id,status,created_at').maybeSingle(),{data,error}=await q;if(error||!data){toast(error?safeError(error,accepted?'accept this request':'reject this request'):t('This request could not be updated.','تعذر تحديث هذا الطلب.'));return}await handleFollowRealtime(accepted?{eventType:'UPDATE',new:data}:{eventType:'DELETE',old:data});toast(accepted?t('Request accepted.','تم قبول الطلب.'):t('Request rejected.','تم رفض الطلب.'))});
-  root.querySelectorAll('[data-open-circle]').forEach(el=>{
-    const open=e=>{
-      e.stopPropagation();
-      // A nested button uses its own handler; never navigate twice.
-      if(el.matches('article')&&e.target.closest('button,[data-open-circle]:not(article)'))return;
-      routeTo(`circles/${el.dataset.openCircle}/home`);
-    };
-    el.onclick=open;
-    if(el.matches('article'))el.onkeydown=e=>{
-      if(e.target!==el||!['Enter',' '].includes(e.key))return;
-      e.preventDefault();
-      open(e);
-    };
-  });
   root.querySelectorAll('[data-new-circle]').forEach(el=>el.onclick=newCircle);
   root.querySelectorAll('[data-circle-filter]').forEach(el=>el.onclick=()=>{state.circleFilter=el.dataset.circleFilter;render()});
   root.querySelectorAll('[data-circle-tab]').forEach(el=>el.onclick=()=>routeTo(`circles/${state.activeCircleId}/${el.dataset.circleTab}`));
