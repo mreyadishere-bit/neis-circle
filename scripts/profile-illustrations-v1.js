@@ -33,6 +33,24 @@
    const page=oldProfileView();
    return state.activeProfileId===authUser?.id?page.replace('data-action="profile"', 'data-action="profile"') .replace('</section>', '<button type="button" class="secondary neis-avatar-edit" data-edit-illustration>'+ (state.lang==='ar'?'اختر صورة رمزية':'Choose illustration')+'</button></section>'):page;
  };
+ // Expose the picker in the actual Your profile edit dialog, not just the profile page.
+ function addEditProfilePicker(){
+   const form=document.getElementById('profileFormPlus');
+   if(!form||form.querySelector('[data-edit-illustration]'))return;
+   const actions=form.querySelector('.modal-actions');
+   if(!actions)return;
+   const section=document.createElement('div');
+   section.className='neis-avatar-profile-field';
+   section.innerHTML='<div><b>'+(state.lang==='ar'?'الصورة الرمزية':'Profile illustration')+'</b><small>'+(state.lang==='ar'?'اختر رسمة من مجموعتنا — بدون رفع صور':'Choose an illustration — no photo uploads')+'</small></div><button type="button" class="secondary" data-edit-illustration>'+(state.lang==='ar'?'تصفح الرسومات':'Browse illustrations')+'</button>';
+   actions.before(section);
+ }
+ const editDialogObserver=new MutationObserver(addEditProfilePicker);
+ const dialogRoot=document.getElementById('modalRoot');
+ if(dialogRoot)editDialogObserver.observe(dialogRoot,{childList:true,subtree:true});
+ document.addEventListener('click',event=>{
+   if(event.target.closest('[data-action="profile"]'))queueMicrotask(addEditProfilePicker);
+ });
+ queueMicrotask(addEditProfilePicker);
  // The initial picker selects from a limited approved palette; no arbitrary URLs or photos.
  let selected=null,filter='all',query='';
  function items(){
