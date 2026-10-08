@@ -124,7 +124,20 @@
 
   function markup(post){
     var planner=plannerFor(post.id);
-    if(!planner)return store.error?'<section class="meeting-planner-card meeting-planner-error" role="alert"><p>'+tr('Could not load meeting availability.','تعذر تحميل المواعيد المتاحة.')+'</p><button type="button" class="secondary" data-meeting-retry>'+tr('Retry','إعادة المحاولة')+'</button></section>':'<section class="meeting-planner-card meeting-planner-loading">'+tr('Loading availability…','جارٍ تحميل المواعيد…')+'</section>';
+    if(!planner){
+      // Non-members cannot read a Circle planner under database RLS.
+      // Render a permission state rather than an endless loading placeholder.
+      var isVisitor=!!post.circle_id&&typeof membership==='function'&&
+        !(membership(post.circle_id)?.status==='active')&&
+        !(typeof state!=='undefined'&&state.isAdmin)&&
+        !(typeof authUser!=='undefined'&&state.circleRows?.some(function(c){return same(c.id,post.circle_id)&&same(c.owner_id,authUser?.id)}));
+      var inner=isVisitor
+        ?'<p>'+tr('Join this Circle to view meeting availability.','انضم إلى هذا المجتمع لعرض المواعيد المتاحة.')+'</p>'
+        :store.error||store.loaded
+          ?'<p>'+tr('Meeting availability could not be loaded.','تعذر تحميل المواعيد المتاحة.')+'</p><button type="button" class="secondary" data-meeting-retry>'+tr('Retry','إعادة المحاولة')+'</button>'
+          :tr('Loading availability…','جارٍ تحميل المواعيد…');
+      return '<section class="meeting-planner-card '+(isVisitor?'meeting-planner-restricted':store.error||store.loaded?'meeting-planner-error':'meeting-planner-loading')+'" data-meeting-planner="'+esc(post.id)+'" data-meeting-rev="pending" data-meeting-lang="'+esc(state.lang||'en')+'">'+inner+'</section>';
+    }
     var allRows=rowsFor(post.id),windows=windowsFor(post.id),mine=myRangesFor(post.id),participantCount=Number(allRows[0]?.participant_count||0);
     var best=windows[0],perfect=best&&best.total>0&&best.count===best.total;
     var bestHtml=best
