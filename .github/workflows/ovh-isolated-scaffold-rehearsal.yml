@@ -19,6 +19,19 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Validate SQL rehearsal script syntax
+        run: |
+          bash -n scripts/ops/ovh-isolated-scaffold-rehearsal.sh
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          source=Path('scripts/ops/ovh-isolated-scaffold-rehearsal.sh').read_text()
+          blocks=source.split("<<'PY'")[1:]
+          if not blocks: raise RuntimeError('No embedded Python blocks')
+          for block in blocks:
+              ast.parse(block.split('\nPY\n',1)[0])
+          print('Embedded Python syntax checked')
+          PY
       - name: SSH credentials
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
