@@ -106,6 +106,16 @@ if m:
             mask=_re.sub(r"'(?:''|[^'])*'", 'LITERAL', context)
             tokens=_re.findall(r'[A-Za-z_][A-Za-z_0-9]*',mask)
             print('DDL_PRECEDING_'+str(n)+'='+' '.join(tokens[:4])[:70]+' punctuation='+''.join(c for c in context if c in '(),;')[:15])
+    # pg_dump contains DDL only. Emit a sanitized structural excerpt of the failed CREATE TABLE.
+    if 1 <= i <= len(lines):
+        for n in range(max(1,i-11), i+1):
+            original=lines[n-1].strip()
+            cleaned=re.sub(r"'(?:''|[^'])*'", 'CONST', original)
+            cleaned=re.sub(r'"[^"]*"', 'IDENT', cleaned)
+            cleaned=re.sub(r'[^A-Za-z0-9_.,()=;<> :+*\-]', '_', cleaned)
+            print('DDL_SAFE_'+str(n)+'='+cleaned[:160])
+    parser_token=re.search(r'at or near "([A-Za-z_][A-Za-z0-9_]*)"',m.group(2))
+    if parser_token: print('SQL_PARSER_TOKEN='+parser_token.group(1))
     err=re.sub(r'"[^"]*"','"[identifier]"',m.group(2))
     print('ERROR_SUMMARY='+err[:160])
 else:
