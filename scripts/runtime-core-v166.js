@@ -188,8 +188,8 @@
     const previousNav=nav;
     nav=function(view){
       const result=previousNav(view);
-      if(view==='home'&&(!safeArray(state.posts).length||!safeArray(state.members).length)){
-        setTimeout(()=>hydrate({force:true,reason:'home-nav'}),0);
+      if(view==='home'&&!primaryReady()){
+        setTimeout(()=>{if(!primaryReady())hydrate({reason:'home-nav'});},0);
       }
       return result;
     };
