@@ -1,6 +1,11 @@
 name: OVH Isolated Schema Restore Test
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-isolated-schema-restore.sh'
+      - '.github/workflows/ovh-isolated-schema-restore.yml'
 permissions:
   contents: read
   issues: write
