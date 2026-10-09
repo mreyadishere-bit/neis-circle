@@ -1,0 +1,50 @@
+name: OVH Complete Auth Storage Bootstrap
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-full-auth-storage-bootstrap.sh'
+      - '.github/workflows/ovh-full-auth-storage-bootstrap.yml'
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: isolated-ovh-full-auth-storage
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Bash
+        run: bash -n scripts/ops/ovh-full-auth-storage-bootstrap.sh
+      - name: Set SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Bootstrap new disconnected test database
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-full-auth-storage-bootstrap.sh
+      - name: Publish run link
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          printf 'Full Auth/Storage schema-only staging: %s\nOutcome: %s\n' "$RUN_URL" "$OUTCOME" > /tmp/report.txt
+          gh issue create --repo "$GH_REPO" --title "OVH full Auth Storage bootstrap #${{ github.run_number }} (${{ job.status }})" --body-file /tmp/report.txt
