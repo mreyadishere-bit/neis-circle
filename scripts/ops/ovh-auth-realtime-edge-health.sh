@@ -1,23 +1,35 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Passive HTTP health checks; no user sessions, secrets, writes, or service restarts.
+# Read-only reachability checks. Never treat a 404 as verified route health.
 python3 - <<'PY'
-import urllib.request,urllib.error
-urls={
- 'AUTH':'https://supabase.neiscircle.site/auth/v1/health',
- 'REST':'https://supabase.neiscircle.site/rest/v1/',
- 'REALTIME':'https://supabase.neiscircle.site/realtime/v1/',
- 'EDGE':'https://supabase.neiscircle.site/functions/v1/',
+import sys, urllib.request, urllib.error
+base='https://supabase.neiscircle.site'
+paths={
+ 'AUTH':'/auth/v1/health',
+ 'REST':'/rest/v1/',
+ 'REALTIME':'/realtime/v1/',
+ 'EDGE':'/functions/v1/',
 }
-for name,url in urls.items():
- req=urllib.request.Request(url,headers={'User-Agent':'NEIS-OVH-Readiness/1.0'})
+problems=[]
+for name,path in paths.items():
+ req=urllib.request.Request(base+path,headers={'User-Agent':'NEIS-OVH-Readiness/1.1'})
  try:
   with urllib.request.urlopen(req,timeout=12) as r: code=r.status
- except urllib.error.HTTPError as e:code=e.code
+ except urllib.error.HTTPError as e:
+  code=e.code
  except Exception:
   print(name+'_NETWORK=FAILED')
+  problems.append(name+'_NETWORK')
   continue
  print(name+'_HTTP='+str(code))
- print(name+'_ROUTED='+('YES' if code in (200,400,401,403,404,405,426) else 'CHECK'))
+ # Protected services may correctly reject requests without credentials.
+ if name=='AUTH':
+  verified=(code==200)
+ else:
+  verified=(code in (200,400,401,403,405,426))
+ print(name+'_GATEWAY_RESPONSE='+('PLAUSIBLE' if verified else 'UNVERIFIED'))
+ if not verified: problems.append(name+'_ROUTING')
 print('HEALTH_CHECK=READ_ONLY')
+print('HEALTH_CHECK_RESULT='+('PASS_PASSIVE_ONLY' if not problems else 'FAIL_INCONCLUSIVE'))
+sys.exit(1 if problems else 0)
 PY
