@@ -1,0 +1,47 @@
+name: OVH REST Table Smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-rest-table-smoke.sh'
+      - '.github/workflows/ovh-api-route-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash
+        run: bash -n scripts/ops/ovh-rest-table-smoke.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Check read-only OVH HTTP endpoints
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rest-table-smoke.sh
+      - name: Report outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ job.status }}
+        run: |
+          printf 'OVH HTTP smoke: %s\nOutcome: %s\n' "$RUN_URL" "$OUTCOME" > /tmp/report.txt
+          gh issue create --repo "$GH_REPO" --title "OVH REST table smoke #${{ github.run_number }} (${{ job.status }})" --body-file /tmp/report.txt
