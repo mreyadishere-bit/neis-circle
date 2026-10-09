@@ -33,7 +33,16 @@ def check(name,v):
    j=json.loads(v)
    return isinstance(j,dict) and j.get('type')=='service_account' and bool(j.get('client_email')) and bool(j.get('private_key')) and bool(j.get('project_id'))
   except (ValueError,TypeError):return False
- if name in ('SUPABASE_URL','SITE_URL'):return valid_url(v,{'https'})
+ if name=='SUPABASE_URL':
+  # Docker service URLs may legitimately use HTTP over a private network.
+  # Do not silently approve arbitrary cleartext public URLs.
+  try:
+   u=urlsplit(v)
+   host=u.hostname or ''
+   private_name=(host in ('localhost','127.0.0.1','::1') or ('.' not in host and ':' not in host) or host.endswith(('.internal','.local','.docker')))
+   return valid_url(v,{'https'}) or (private_name and valid_url(v,{'http'}))
+  except ValueError:return False
+ if name=='SITE_URL':return valid_url(v,{'https'})
  if name=='LIVEKIT_URL':return valid_url(v,{'https','wss'})
  if name=='NOTIFICATION_FROM_EMAIL':return bool(re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',v))
  if name=='SUPABASE_PUBLISHABLE_KEYS':
