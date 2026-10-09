@@ -87,42 +87,24 @@ if docker exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 -v V
   docker exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE (n.nspname,c.relname) IN (('auth','identities'),('storage','objects'),('storage','buckets')) ORDER BY 1" </dev/null
 else
   echo 'ISOLATED_SCAFFOLD_IMPORT=BLOCKED (transaction rolled back)'
-  # The imported artifact is DDL-only (no data). Redact quoted values and return just the first PostgreSQL error.
   python3 - "$log" "$tmp" <<'PY'
 from pathlib import Path
 import re,sys
 log=Path(sys.argv[1]).read_text(errors='replace')
 m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)',log)
-if not m:
-    print('SQL_ERROR=UNCLASSIFIED')
-else:
+if m:
+    print('SQL_LINE='+m.group(1))
+    sql=Path(sys.argv[2]).read_text(errors='replace').splitlines()
+    pos=int(m.group(1))
+    for n in range(max(1,pos-2),min(len(sql),pos+2)+1):
+        line=sql[n-1].strip()
+        label='BLANK' if not line else ('COMMENT' if line.startswith('--') else ('CREATE' if line.startswith('CREATE ') else 'OTHER'))
+        print('DDL_CONTEXT_'+str(n)+'='+label+' LENGTH='+str(len(line)))
     message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
     message=re.sub(r'"[^"]*"', '"[identifier]"', message)
-    print('SQL_LINE='+m.group(1))
-    # Debug SQL composition without publishing code, identifiers, or data.
-    source_lines=Path(sys.argv[2]).read_text(errors='replace').splitlines()
-    pos=int(m.group(1))
-    for n in range(max(1,pos-2),min(len(source_lines),pos+2)+1):
-        line=source_lines[n-1].strip()
-        kind=('COMMENT' if line.startswith('--') else
-              'CREATE' if line.startswith('CREATE ') else
-              'CLOSING_DOLLAR' if line.startswith('
     print('SQL_ERROR_SUMMARY='+message[:200])
-    # SQL identifiers in schema-only DDL are not student records or credentials.
-    # Permit only a safe PostgreSQL type identifier for precise dependency diagnosis.
-    found=re.search(r'type "([A-Za-z_][A-Za-z_0-9.]*)" does not exist', m.group(2))
-    if found: print('MISSING_TYPE='+found.group(1))
-PY
-  exit 1
-fi
-) else
-              'BLANK' if not line else 'OTHER')
-        print('DDL_CONTEXT_'+str(n)+'='+kind+' len='+str(len(line))+' terminator='+str(line.endswith(';')))
-    print('SQL_ERROR_SUMMARY='+message[:200])
-    # SQL identifiers in schema-only DDL are not student records or credentials.
-    # Permit only a safe PostgreSQL type identifier for precise dependency diagnosis.
-    found=re.search(r'type "([A-Za-z_][A-Za-z_0-9.]*)" does not exist', m.group(2))
-    if found: print('MISSING_TYPE='+found.group(1))
+else:
+    print('SQL_ERROR=UNCLASSIFIED')
 PY
   exit 1
 fi
