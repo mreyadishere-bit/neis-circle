@@ -45,6 +45,10 @@ else:
     message=re.sub(r'"[^"]*"', '"[identifier]"', message)
     print('SQL_LINE='+m.group(1))
     print('SQL_ERROR_SUMMARY='+message[:200])
+    # SQL identifiers in schema-only DDL are not student records or credentials.
+    # Permit only a safe PostgreSQL type identifier for precise dependency diagnosis.
+    found=re.search(r'type "([A-Za-z_][A-Za-z_0-9.]*)" does not exist', m.group(2))
+    if found: print('MISSING_TYPE='+found.group(1))
 PY
   exit 1
 fi
