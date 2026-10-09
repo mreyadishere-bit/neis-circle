@@ -16,6 +16,15 @@ if [[ "$running" != "true" || "$network" != "none" || "$image" != "supabase/post
 fi
 db_exists="$(docker exec "$container" psql -U postgres -d postgres -Atqc "SELECT count(*) FROM pg_database WHERE datname='$database'")"
 [[ "$db_exists" == "1" ]] || { echo "::error::Disposable test database not found"; exit 1; }
+# Do not replay schema when previously restored in this disconnected test database.
+existing="$(docker exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE'")"
+if [[ "$existing" == "62" ]]; then
+  echo "SCHEMA_RESTORE_TEST=PASSED_PREVIOUSLY (62 existing tables)"
+  exit 0
+elif [[ "$existing" != "0" ]]; then
+  echo "::error::Unexpected partial schema ($existing tables); refusing to overwrite"
+  exit 1
+fi
 # Schema-only exercise. Single transaction rolls back schema changes on any SQL error.
 log="$(mktemp)"
 filtered="$(mktemp)"
