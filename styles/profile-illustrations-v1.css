@@ -56,3 +56,25 @@
 .profile-hero .neis-illustrated-avatar{flex-shrink:0}
 .neis-avatar-preview img,.neis-illustration-choice img{background:var(--soft);border:1px solid var(--line);box-sizing:border-box}
 .neis-illustration-choice:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+
+/* Keep profile illustrations circular and legible on mobile, without a square
+   image background or theme-specific opaque overrides. */
+.avatar.neis-illustrated-avatar,
+.profile-hero .avatar.neis-illustrated-avatar,
+.chat-head .avatar.neis-illustrated-avatar,
+.circle-message .avatar.neis-illustrated-avatar {
+ display:inline-flex!important;align-items:center;justify-content:center;
+ overflow:hidden!important;padding:0!important;border-radius:50%!important;
+ background:var(--soft)!important;border:1px solid var(--line)!important;
+ box-shadow:0 0 0 2px var(--card),0 2px 8px rgba(0,0,0,.06);
+}
+.avatar.neis-illustrated-avatar>img {
+ display:block;width:100%;height:100%;object-fit:contain;
+ border-radius:50%!important;background:transparent!important;
+ border:0!important;box-shadow:none!important;
+}
+@media(max-width:760px) {
+ .profile-hero .avatar.neis-illustrated-avatar {margin-inline:auto}
+ .circle-message .avatar.neis-illustrated-avatar,
+ .chat-head .avatar.neis-illustrated-avatar {flex-shrink:0}
+}
