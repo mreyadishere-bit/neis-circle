@@ -26,27 +26,24 @@ if [[ -z "$enum_values" ]]; then echo 'ABORT: storage.buckettype enum absent fro
 enum_sql="$(printf '%s\n' "$enum_values" | paste -sd, -)"
 
 echo 'TEST_ONLY_DEPENDENCY=storage.buckettype enum recreated from initialized metadata'
-# Exact Storage function definition, sourced read-only from the running OVH
-# Supabase database. Only the disconnected test receives the SQL.
+# Read all trigger/check functions from the initialized Storage namespace,
+# using pg_get_functiondef. Limit to Storage, and never export DB rows.
 func_file="$(mktemp)"
-chmod 600 "$func_file"
-trap 'rm -f "$tmp" "$func_file"' EXIT
-sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT pg_get_functiondef('storage.enforce_bucket_name_length()'::regprocedure)" </dev/null > "$func_file"
-if ! grep -Eq '^CREATE OR REPLACE FUNCTION storage[.]enforce_bucket_name_length[(][)]' "$func_file"; then
-  echo 'ABORT: expected Storage function definition not found'; exit 1
-fi
-# Append exact function DDL before any table statements; no app/user rows exported.
 combined="$(mktemp)"
-chmod 600 "$combined"
+chmod 600 "$func_file" "$combined"
 trap 'rm -f "$tmp" "$func_file" "$combined"' EXIT
+sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='storage' AND p.prokind='f' AND p.prolang <> (SELECT oid FROM pg_language WHERE lanname='internal') ORDER BY p.proname, p.oid" </dev/null > "$func_file"
+if ! grep -Fq 'enforce_bucket_name_length' "$func_file" || ! grep -Fq 'protect_bucket_control_columns' "$func_file"; then
+  echo 'ABORT: Required Storage function definitions were not exported'
+  exit 1
+fi
 {
   printf '%s\n' "CREATE TYPE storage.buckettype AS ENUM ($enum_sql);"
   cat "$func_file"
   cat "$tmp"
 } > "$combined"
 mv "$combined" "$tmp"
-echo 'TEST_ONLY_DEPENDENCY=storage.enforce_bucket_name_length function copied as DDL only'
-
+echo 'TEST_ONLY_DEPENDENCY=all Storage SQL functions from initialized metadata'
 if grep -Eq '^(COPY |INSERT INTO |ALTER ROLE |DROP TABLE|DROP SCHEMA|CREATE ROLE)' "$tmp"; then
   echo 'ABORT: unexpected unsafe statement in DDL dump'
   exit 1
