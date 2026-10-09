@@ -1,0 +1,43 @@
+name: OVH Supabase read-only health check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ovh-readonly-healthcheck
+  cancel-in-progress: false
+
+jobs:
+  healthcheck:
+    name: Inspect OVH self-hosted services
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check SSH configuration
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" || { echo "::error::Missing OVH_HOST"; exit 1; }
+          test -n "$OVH_SSH_KEY" || { echo "::error::Missing OVH_SSH_KEY"; exit 1; }
+          test -n "$OVH_SSH_KNOWN_HOSTS" || { echo "::error::Missing OVH_SSH_KNOWN_HOSTS"; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          ssh-keygen -y -f ~/.ssh/id_ed25519 > /dev/null
+          printf 'SSH configuration available.\n'
+      - name: Execute approved read-only server checks
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-health-check.sh
