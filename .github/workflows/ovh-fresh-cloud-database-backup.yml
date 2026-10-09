@@ -1,6 +1,10 @@
 name: OVH Fresh Cloud Database Backup
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-fresh-cloud-database-backup.yml'
 permissions:
   contents: read
 jobs:
