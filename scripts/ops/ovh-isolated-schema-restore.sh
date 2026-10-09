@@ -39,8 +39,19 @@ PY
 echo "=== Disposable database privilege preflight ==="
 docker exec "$container" psql -U postgres -d "$database" -Atqc \
   "SELECT 'CURRENT_USER='||current_user UNION ALL SELECT 'DATABASE_OWNER='||pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database() UNION ALL SELECT 'CAN_CREATE_SCHEMA='||has_database_privilege(current_user,current_database(),'CREATE')"
+# PostgreSQL image assigns the disposable DB to supabase_admin, not postgres.
+# Verify the owner can connect and CREATE before trying any SQL restore.
+if ! owner_access="$(docker exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "SELECT current_user||':'||has_database_privilege(current_user,current_database(),'CREATE')" 2>/dev/null)"; then
+  echo "::error::Disposable database owner login unavailable; no permission changes made"
+  exit 1
+fi
+if [[ "$owner_access" != "supabase_admin:true" ]]; then
+  echo "::error::Disposable database owner lacks CREATE; no permission changes made"
+  exit 1
+fi
+echo "RESTORE_ROLE=supabase_admin (isolated database owner)"
 echo "Trying schema.sql in isolated $container/$database (single transaction)."
-if docker exec -i "$container" psql -X -U postgres -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$filtered" > "$log" 2>&1; then
+if docker exec -i "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$filtered" > "$log" 2>&1; then
   echo "SCHEMA_RESTORE_TEST=PASSED"
   docker exec "$container" psql -U postgres -d "$database" -Atqc "SELECT table_schema||'='||count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE' GROUP BY table_schema ORDER BY table_schema"
 else
