@@ -16,7 +16,7 @@ for name in sorted(expected):
   print('ENTRY_'+name+'=MISSING');bad+=1;continue
  t=p.read_text(encoding='utf-8')
  # Most standalone Supabase Edge entrypoints register a Deno.serve handler.
- has_handler=bool(re.search(r'(?:Deno\\.serve|serve\\s*\\()',t))
+ has_handler=('Deno.serve(' in t or 'serve(' in t)
  print('ENTRY_'+name+'='+('HANDLER_DETECTED' if has_handler else 'REVIEW_REQUIRED'))
  if not has_handler:bad+=1
 print('EDGE_ENTRYPOINT_REVIEW_REQUIRED='+str(bad))
