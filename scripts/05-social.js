@@ -189,7 +189,7 @@ function profileAvatar(p,large=false){return avatar({name:p.full_name||p.name,in
 function circleChatAvatar(p){
   const me=profileData(authUser?.id),senderBranch=normalize(p?.branch||''),myBranch=normalize(me?.branch||state.profile?.branch||'');
   const sameBranch=!!senderBranch&&!!myBranch&&senderBranch===myBranch;
-  return avatar({name:p?.full_name||p?.name,initials:initials(p?.full_name||p?.name),color:sameBranch?'var(--accent2)':'var(--accent)'});
+  return avatar({name:p?.full_name||p?.name,initials:initials(p?.full_name||p?.name),color:sameBranch?'var(--accent2)':'var(--accent)',avatar_url:p?.avatar_url});
 }
 async function markVisibleLocationNotificationsRead(){
   if(!sb||!authUser||!state.notifications?.length)return;
