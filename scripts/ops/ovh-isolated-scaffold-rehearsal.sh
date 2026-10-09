@@ -68,7 +68,7 @@ marker='\nCREATE TABLE '
 position=sql.find(marker)
 if position < 0 or 'CREATE TYPE storage.buckettype' not in sql[:position]:
     raise SystemExit('ABORT: cannot safely determine DDL ordering')
-Path(sys.argv[3]).write_text(sql[:position]+'\n'+function+'\n'+sql[position:])
+Path(sys.argv[3]).write_text(sql[:position]+'\n'+function+'\n;\n'+sql[position:])
 PY
 mv "$prepended" "$tmp"
 echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for rehearsal'
