@@ -55,7 +55,10 @@ sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f d
 if ! grep -Fq 'protect_bucket_control_columns' "$second_function"; then
   echo 'ABORT: required trigger function missing'; exit 1
 fi
-cat "$second_function" >> "$tmp"
+prepended="$(mktemp)"
+chmod 600 "$prepended"
+cat "$second_function" "$tmp" > "$prepended"
+mv "$prepended" "$tmp"
 echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for rehearsal'
 
 
