@@ -44,7 +44,7 @@ jobs:
           # Pinned PostgreSQL major version, independent of GitHub runner defaults.
           export PGCONNECT_TIMEOUT=15
           export PGSSLMODE=verify-full
-          if ! docker run --rm --network bridge \
+          if ! docker run --rm --network bridge --user "$(id -u):$(id -g)" \
             -e CLOUD_DATABASE_URL -e PGCONNECT_TIMEOUT -e PGSSLMODE \
             -v /tmp/neis-private-backup:/backup postgres:17 \
             sh -c 'pg_dump --dbname="$CLOUD_DATABASE_URL" --format=custom --no-owner --no-acl --file=/backup/cloud.dump' \
