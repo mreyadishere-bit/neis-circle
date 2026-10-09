@@ -36,5 +36,5 @@ find "$functions/supabase/functions" -type f | wc -l
 echo "=== Isolated test database state ==="
 sudo -n docker inspect --format '{{.Name}} {{.State.Status}} {{.HostConfig.NetworkMode}}' neis-restore-test
 sudo -n docker exec neis-restore-test psql -U postgres -d neis_restore_test -Atc \
-  "SELECT table_schema||':'||count(*) FROM information_schema.tables WHERE table_schema IN ('auth','storage','public','realtime') AND table_type='BASE TABLE' GROUP BY 1 ORDER BY 1;"
+  "SELECT table_schema||':'||count(*) FROM information_schema.tables WHERE table_schema IN ('auth','storage','public','realtime') AND table_type='BASE TABLE' GROUP BY table_schema ORDER BY table_schema;"
 echo "AUDIT COMPLETE: no restore or data mutation performed"
