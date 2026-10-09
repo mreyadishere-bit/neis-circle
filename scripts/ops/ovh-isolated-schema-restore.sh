@@ -32,7 +32,7 @@ else
 import re, sys
 from pathlib import Path
 content = Path(sys.argv[1]).read_text(errors='replace')
-match = re.search(r'psql:<stdin>:(\\d+):\\s*ERROR:\\s*([A-Z0-9]{5})', content)
+match = re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([A-Z0-9]{5})', content)
 if match:
     print(f"SQL_ERROR_LINE={match.group(1)}")
     print(f"SQLSTATE={match.group(2)}")
