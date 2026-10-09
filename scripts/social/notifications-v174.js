@@ -204,7 +204,10 @@
   async function setup(uid){
     if(channel&&same(channelUid,uid)&&['CONNECTING','SUBSCRIBED'].includes(realtimeStatus)){
       if(!(state.notifications||[]).length)hydrateCache(uid);
-      refresh(false).catch(()=>{});
+      // Global data refreshes must not refetch the same notification page while
+      // the existing Realtime channel is healthy. The fallback timer and
+      // tab-focus sync still reconcile missed events.
+      if(!lastFullSyncAt||Date.now()-lastFullSyncAt>=120000)refresh(false).catch(()=>{});
       return;
     }
     if(channel){
