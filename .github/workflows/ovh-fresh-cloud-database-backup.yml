@@ -1,0 +1,59 @@
+name: OVH Fresh Cloud Database Backup
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Capture Cloud DB using secure direct connection and transfer to private OVH path
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          CLOUD_DATABASE_URL: ${{ secrets.CLOUD_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$CLOUD_DATABASE_URL" ]]; then
+            echo "BACKUP=BLOCKED_CLOUD_DATABASE_URL_NOT_CONFIGURED"
+            exit 1
+          fi
+          mkdir -p /tmp/neis-private-backup
+          chmod 700 /tmp/neis-private-backup
+          trap 'rm -rf /tmp/neis-private-backup' EXIT
+          # Use the PostgreSQL 17 client to match the source major version.
+          PG_VERSION="$(pg_dump --version)"
+          if [[ "$PG_VERSION" != *"17."* ]]; then
+            echo "BACKUP=BLOCKED_PG_DUMP_REQUIRES_17"
+            exit 1
+          fi
+          export PGCONNECT_TIMEOUT=15
+          export PGSSLMODE=verify-full
+          export PGAPPNAME=neis_ovh_backup
+          # Do not print the connection string or pg_dump stderr (may include hostname).
+          if ! pg_dump --dbname="$CLOUD_DATABASE_URL" --format=custom --no-owner --no-acl --file=/tmp/neis-private-backup/cloud.dump 2>/tmp/neis-private-backup/pgdump.err; then
+            echo "BACKUP=FAILED_PG_DUMP"
+            exit 1
+          fi
+          test -s /tmp/neis-private-backup/cloud.dump
+          sha256sum /tmp/neis-private-backup/cloud.dump | awk '{print $1}' > /tmp/neis-private-backup/cloud.sha256
+          BDIR="cloud-import-$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "umask 077; mkdir -p /home/ubuntu/neis-backups/$BDIR"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-private-backup/cloud.dump /tmp/neis-private-backup/cloud.sha256 "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/$BDIR/"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "set -eu; cd /home/ubuntu/neis-backups/$BDIR; test -s cloud.dump; test -s cloud.sha256; test -f cloud.dump; ACTUAL=\$(sha256sum cloud.dump | awk '{print \$1}'); EXPECTED=\$(cat cloud.sha256); test \"\$ACTUAL\" = \"\$EXPECTED\"; chmod 600 cloud.dump cloud.sha256; echo BACKUP_TRANSFER=VERIFIED; echo BACKUP_PRODUCTION_DATABASE=UNCHANGED"
