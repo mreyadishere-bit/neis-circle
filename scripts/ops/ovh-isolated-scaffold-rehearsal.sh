@@ -57,7 +57,18 @@ if ! grep -Fq 'protect_bucket_control_columns' "$second_function"; then
 fi
 prepended="$(mktemp)"
 chmod 600 "$prepended"
-cat "$second_function" "$tmp" > "$prepended"
+python3 - "$tmp" "$second_function" "$prepended" <<'PY'
+from pathlib import Path
+import sys
+sql=Path(sys.argv[1]).read_text()
+function=Path(sys.argv[2]).read_text().strip()
+# Insert the dependency before the first table definition; after the enum.
+marker='\nCREATE TABLE '
+position=sql.find(marker)
+if position < 0 or 'CREATE TYPE storage.buckettype' not in sql[:position]:
+    raise SystemExit('ABORT: cannot safely determine DDL ordering')
+Path(sys.argv[3]).write_text(sql[:position]+'\n'+function+'\n'+sql[position:])
+PY
 mv "$prepended" "$tmp"
 echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for rehearsal'
 
