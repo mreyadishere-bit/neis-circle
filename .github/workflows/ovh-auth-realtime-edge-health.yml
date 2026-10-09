@@ -1,0 +1,20 @@
+name: OVH Auth Realtime Edge Health
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-auth-realtime-edge-health.sh'
+      - '.github/workflows/ovh-auth-realtime-edge-health.yml'
+permissions:
+  contents: read
+jobs:
+  health:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/ops/ovh-auth-realtime-edge-health.sh
+      - name: Verify OVH public gateway routing
+        run: bash scripts/ops/ovh-auth-realtime-edge-health.sh
