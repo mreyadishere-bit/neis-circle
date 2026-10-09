@@ -22,7 +22,12 @@ trap 'rm -rf "$tmp"' EXIT
 if ! dock exec "$C" test -r /tmp/neis-fresh-37988124956.dump; then
  dock cp "$archive" "$C:/tmp/neis-fresh-37988124956.dump"
 fi
-if dock exec "$C" pg_restore -U supabase_admin -d "$D" --data-only --no-owner --no-acl --exit-on-error --single-transaction /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
+# Foreign keys referencing other restored tables can reject COPY ordering.
+# Use a verified superuser to disable only user triggers within the restore transaction.
+is_superuser="$(dock exec "$C" psql -X -U postgres -d "$D" -Atqc "SELECT rolsuper FROM pg_roles WHERE rolname='postgres'")"
+test "$is_superuser" = t || { echo 'DATA_RETRY=POSTGRES_NOT_SUPERUSER'; exit 1; }
+echo 'DATA_RETRY=FK_SAFE_TRANSACTION'
+if dock exec "$C" pg_restore -U postgres -d "$D" --data-only --disable-triggers --no-owner --no-acl --exit-on-error --single-transaction /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
  echo 'FRESH_DATA_RESTORE=PASS'
  for t in auth.users public.profiles public.posts public.messages public.circle_messages public.notifications storage.objects; do
   dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT 'COUNT_'||'$t'||'='||count(*) FROM $t" </dev/null
