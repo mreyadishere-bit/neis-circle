@@ -27,7 +27,7 @@
  // Show approved illustrations in every preexisting avatar location, without modifying identity records.
  const previousAvatar=avatar;
  avatar=function(person,large){
-   const image=person?.avatar_url||((person?.author_id||person?.sender_id)&&Array.isArray(state?.members)?state.members.find(p=>String(p.id)===String(person.author_id||person.sender_id))?.avatar_url:null);
+   const image=person?.avatar_url||(person?.id&&String(person.id)===String(authUser?.id)?state.profile?.avatar_url:null)||((person?.author_id||person?.sender_id)&&Array.isArray(state?.members)?state.members.find(p=>String(p.id)===String(person.author_id||person.sender_id))?.avatar_url:null);
    if(authorized(image))return '<span class="avatar neis-illustrated-avatar '+(large?'large':'')+'"><img src="'+escHtml(image)+'" alt="" loading="lazy" decoding="async"></span>';
    return previousAvatar(person,large);
  };
