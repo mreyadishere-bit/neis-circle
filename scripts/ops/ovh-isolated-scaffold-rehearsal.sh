@@ -18,6 +18,14 @@ echo "Exporting DDL only (no INSERT/COPY) from initialized OVH Supabase DB"
 # Run pg_dump in the database service for exact authentic DDL, never student data.
 sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db pg_dump -U postgres -d postgres --schema-only --no-owner --no-acl --table=auth.identities --table=storage.buckets --table=storage.objects </dev/null > "$tmp"
 grep -q 'CREATE TABLE' "$tmp" || { echo 'ABORT: no table definitions'; exit 1; }
+# Storage tables depend on storage.buckettype. Extract only that enum from the
+# initialized OVH database and prepend its authentic values, without row data.
+enum_values="$(sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT quote_literal(e.enumlabel) FROM pg_enum e JOIN pg_type t ON t.oid=e.enumtypid JOIN pg_namespace n ON n.oid=t.typnamespace WHERE n.nspname='storage' AND t.typname='buckettype' ORDER BY e.enumsortorder" </dev/null)"
+if [[ -z "$enum_values" ]]; then echo 'ABORT: storage.buckettype enum absent from source'; exit 1; fi
+# Permit only safely quoted enum literals generated server-side via quote_literal.
+enum_sql="$(printf '%s\n' "$enum_values" | paste -sd, -)"
+sed -i '1i CREATE TYPE storage.buckettype AS ENUM ('"$enum_sql"');' "$tmp"
+echo 'TEST_ONLY_DEPENDENCY=storage.buckettype enum recreated from initialized metadata'
 if grep -Eq '^(COPY |INSERT INTO |ALTER ROLE |DROP TABLE|DROP SCHEMA|CREATE ROLE)' "$tmp"; then
   echo 'ABORT: unexpected unsafe statement in DDL dump'
   exit 1
