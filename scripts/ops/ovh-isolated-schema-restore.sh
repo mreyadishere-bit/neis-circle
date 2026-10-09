@@ -36,6 +36,20 @@ match = re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([A-Z0-9]{5})', content)
 if match:
     print(f"SQL_ERROR_LINE={match.group(1)}")
     print(f"SQLSTATE={match.group(2)}")
+    line_no=int(match.group(1))
+    schema_lines=Path("/home/ubuntu/neis-backups/cloud-20261009T130848Z/schema.sql").read_text(errors="replace").splitlines()
+    # Print ONLY structural tokens: do not publish literal SQL, credentials or data.
+    if 0 < line_no <= len(schema_lines):
+        line=schema_lines[line_no-1]
+        without_strings=re.sub(r"'(?:''|[^'])*'|\\$\\$.*?\\$\\$", " ", line)
+        structural=re.findall(r"[A-Za-z_][A-Za-z_0-9]*", without_strings)
+        print("SQL_LINE_TOKENS=" + " ".join(structural[:8])[:120])
+    # Classify the error in the private log without exposing the error message itself.
+    m=re.search(r'psql:<stdin>:\\d+:\\s*ERROR:\\s*[A-Z0-9]{5}:?\\s*([^\\r\\n]*)',content)
+    if m:
+        msg=m.group(1).lower()
+        categories={'extension':'EXTENSION','already exists':'ALREADY_EXISTS','permission':'PERMISSIONS','superuser':'SUPERUSER','schema':'SCHEMA','role':'ROLE','database':'DATABASE','cron':'PG_CRON','vault':'VAULT','realtime':'REALTIME','pg_net':'PG_NET','postgres':'POSTGRES'}
+        print("ERROR_HINTS=" + (",".join(v for k,v in categories.items() if k in msg) or "OTHER"))
 else:
     print("SQLSTATE=UNAVAILABLE (raw error kept private on runner only)")
 PY
