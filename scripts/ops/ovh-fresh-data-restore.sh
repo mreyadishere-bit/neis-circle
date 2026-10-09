@@ -40,7 +40,7 @@ import re,sys
 lines=Path(sys.argv[1]).read_text().splitlines(keepends=True)
 out=[];skipped=0
 for line in lines:
-    match=re.match(r'^\\d+;\\s+\\d+\\s+\\d+\\s+(TABLE DATA|SEQUENCE SET)\\s+(\\S+)\\s+',line)
+    match=re.match(r'^\d+;\s+\d+\s+\d+\s+(TABLE DATA|SEQUENCE SET)\s+(\S+)\s+',line)
     if match and match.group(2)=='cron':
         out.append(';'+line);skipped+=1
     else:out.append(line)
