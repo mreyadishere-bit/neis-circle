@@ -82,6 +82,10 @@ if m:
     x=re.sub(r"'(?:''|[^'])*'",'[value]',m.group(2))
     x=re.sub(r'"[^"]*"','[identifier]',x)
     print('ERROR_SUMMARY='+x[:170])
+    found=re.search(r'column "([A-Za-z_][A-Za-z_0-9]*)" of relation "([A-Za-z_][A-Za-z_0-9]*)" does not exist',m.group(2))
+    if found:
+        print('MISSING_COLUMN='+found.group(1))
+        print('MISSING_COLUMN_TABLE='+found.group(2))
 PY
   exit 1
 fi
