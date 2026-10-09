@@ -100,6 +100,12 @@ if m:
         line=lines[i-1].strip()
         print('ERROR_LINE_LENGTH='+str(len(line)))
         print('ERROR_LINE_PUNCTUATION='+''.join(c for c in line if c in '$();')[:30])
+        for n in range(max(1,i-12),i):
+            context=lines[n-1].strip()
+            import re as _re
+            mask=_re.sub(r"'(?:''|[^'])*'", 'LITERAL', context)
+            tokens=_re.findall(r'[A-Za-z_][A-Za-z_0-9]*',mask)
+            print('DDL_PRECEDING_'+str(n)+'='+' '.join(tokens[:4])[:70]+' punctuation='+''.join(c for c in context if c in '(),;')[:15])
     err=re.sub(r'"[^"]*"','"[identifier]"',m.group(2))
     print('ERROR_SUMMARY='+err[:160])
 else:
