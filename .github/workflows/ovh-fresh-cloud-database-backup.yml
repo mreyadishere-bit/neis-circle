@@ -58,3 +58,5 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "umask 077; mkdir -p /home/ubuntu/neis-backups/$BDIR"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-private-backup/cloud.dump /tmp/neis-private-backup/cloud.sha256 "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/$BDIR/"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "set -eu; cd /home/ubuntu/neis-backups/$BDIR; test -s cloud.dump; test -s cloud.sha256; test -f cloud.dump; ACTUAL=\$(sha256sum cloud.dump | awk '{print \$1}'); EXPECTED=\$(cat cloud.sha256); test \"\$ACTUAL\" = \"\$EXPECTED\"; chmod 600 cloud.dump cloud.sha256; echo BACKUP_TRANSFER=VERIFIED; echo BACKUP_PRODUCTION_DATABASE=UNCHANGED"
+
+# Retry after updating the environment database connection secret.
