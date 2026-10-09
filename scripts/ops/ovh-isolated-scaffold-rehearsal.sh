@@ -100,6 +100,19 @@ if m:
         line=sql[n-1].strip()
         label='BLANK' if not line else ('COMMENT' if line.startswith('--') else ('CREATE' if line.startswith('CREATE ') else 'OTHER'))
         print('DDL_CONTEXT_'+str(n)+'='+label+' LENGTH='+str(len(line)))
+        if n==pos:
+            import hashlib
+            print('ERROR_LINE_CHAR_CLASS='+''.join('A' if c.isalpha() else '9' if c.isdigit() else c if c in '();
+    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
+    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
+    print('SQL_ERROR_SUMMARY='+message[:200])
+else:
+    print('SQL_ERROR=UNCLASSIFIED')
+PY
+  exit 1
+fi
+ else '_' for c in line)[:90])
+            print('ERROR_LINE_SHA256_PREFIX='+hashlib.sha256(line.encode()).hexdigest()[:12])
     message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
     message=re.sub(r'"[^"]*"', '"[identifier]"', message)
     print('SQL_ERROR_SUMMARY='+message[:200])
