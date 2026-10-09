@@ -37,17 +37,14 @@ jobs:
           mkdir -p /tmp/neis-private-backup
           chmod 700 /tmp/neis-private-backup
           trap 'rm -rf /tmp/neis-private-backup' EXIT
-          # Use the PostgreSQL 17 client to match the source major version.
-          PG_VERSION="$(pg_dump --version)"
-          if [[ "$PG_VERSION" != *"17."* ]]; then
-            echo "BACKUP=BLOCKED_PG_DUMP_REQUIRES_17"
-            exit 1
-          fi
+          # Pinned PostgreSQL major version, independent of GitHub runner defaults.
           export PGCONNECT_TIMEOUT=15
           export PGSSLMODE=verify-full
-          export PGAPPNAME=neis_ovh_backup
-          # Do not print the connection string or pg_dump stderr (may include hostname).
-          if ! pg_dump --dbname="$CLOUD_DATABASE_URL" --format=custom --no-owner --no-acl --file=/tmp/neis-private-backup/cloud.dump 2>/tmp/neis-private-backup/pgdump.err; then
+          if ! docker run --rm --network bridge \
+            -e CLOUD_DATABASE_URL -e PGCONNECT_TIMEOUT -e PGSSLMODE \
+            -v /tmp/neis-private-backup:/backup postgres:17 \
+            sh -c 'pg_dump --dbname="$CLOUD_DATABASE_URL" --format=custom --no-owner --no-acl --file=/backup/cloud.dump' \
+            >/dev/null 2>/tmp/neis-private-backup/pgdump.err; then
             echo "BACKUP=FAILED_PG_DUMP"
             exit 1
           fi
