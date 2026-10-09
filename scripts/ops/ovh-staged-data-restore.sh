@@ -9,6 +9,9 @@ test -r "$SNAP"
 test "$(dock inspect -f '{{.HostConfig.NetworkMode}}' "$C")" = none
 test "$(dock inspect -f '{{.Config.Image}}' "$C")" = supabase/postgres:17.6.1.136
 test "$(dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('auth','storage','public','private') AND table_type='BASE TABLE'")" -ge 90
+# Exact source-cloud compatibility column, staging database only.
+dock exec "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 -c "ALTER TABLE auth.one_time_tokens ADD COLUMN IF NOT EXISTS expires_at timestamptz" >/dev/null
+echo 'STAGE_ONLY_AUTH_COLUMN=one_time_tokens.expires_at'
 for table in auth.users auth.identities storage.objects public.profiles; do
   test "$(dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT count(*) FROM $table")" = 0
 done
