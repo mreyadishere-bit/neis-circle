@@ -17,7 +17,7 @@ echo "EDGE_FUNCTIONS_WITH_INDEX_TS=$funcs"
 echo '=== Checking DB file digests ==='
 (cd "$db" && sha256sum -c SHA256SUMS | grep -E ': OK$' | wc -l)
 echo '=== Checking Storage file digests ==='
-(cd "$storage" && sha256sum -c files-SHA256SUMS | grep -E ': OK$' | wc -l)
+(cd "$storage/files" && sha256sum -c ../files-SHA256SUMS | grep -E ': OK$' | wc -l)
 echo '=== Checking Edge Function file digests ==='
 (cd "$edge" && sha256sum -c functions-SHA256SUMS | grep -E ': OK$' | wc -l)
 echo 'BACKUP_INTEGRITY=PASSED'
