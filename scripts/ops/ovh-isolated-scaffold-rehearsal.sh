@@ -27,21 +27,24 @@ echo "Schema-only trial in disconnected test DB, transaction rollback on error"
 log="$(mktemp)"
 chmod 600 "$log"
 trap 'rm -f "$tmp" "$log"' EXIT
-if docker exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$tmp" > "$log" 2>&1; then
+if docker exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 -v VERBOSITY=default --single-transaction -f - < "$tmp" > "$log" 2>&1; then
   echo 'ISOLATED_SCAFFOLD_IMPORT=PASSED'
   docker exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT n.nspname||'.'||c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE (n.nspname,c.relname) IN (('auth','identities'),('storage','objects'),('storage','buckets')) ORDER BY 1" </dev/null
 else
   echo 'ISOLATED_SCAFFOLD_IMPORT=BLOCKED (transaction rolled back)'
-  # Only report SQLSTATE and SQL input line, never SQL/schema statements or data.
+  # The imported artifact is DDL-only (no data). Redact quoted values and return just the first PostgreSQL error.
   python3 - "$log" <<'PY'
 from pathlib import Path
 import re,sys
-m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([A-Z0-9]{5})',Path(sys.argv[1]).read_text(errors='replace'))
-print('SQL_LINE='+m.group(1)+' SQLSTATE='+m.group(2) if m else 'SQL_ERROR=UNCLASSIFIED')
-if m:
-    msg=Path(sys.argv[1]).read_text(errors='replace').lower()
-    for phrase,label in [('role ','ROLE'),('type ','TYPE'),('schema ','SCHEMA'),('function ','FUNCTION'),('relation ','RELATION'),('extension ','EXTENSION'),('operator ','OPERATOR'),('constraint ','CONSTRAINT')]:
-        if phrase in msg: print('UNDEFINED_OBJECT_CATEGORY='+label)
+log=Path(sys.argv[1]).read_text(errors='replace')
+m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)',log)
+if not m:
+    print('SQL_ERROR=UNCLASSIFIED')
+else:
+    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
+    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
+    print('SQL_LINE='+m.group(1))
+    print('SQL_ERROR_SUMMARY='+message[:200])
 PY
   exit 1
 fi
