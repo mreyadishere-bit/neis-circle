@@ -31,7 +31,27 @@ test "$(dock inspect -f '{{.HostConfig.NetworkMode}}' "$C")" = none
 super_role="$(dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT rolname FROM pg_roles WHERE rolsuper AND rolcanlogin ORDER BY CASE WHEN rolname='supabase_admin' THEN 0 ELSE 1 END LIMIT 1")"
 test -n "$super_role" || { echo 'DATA_RETRY=NO_ISOLATED_SUPERUSER'; exit 1; }
 echo 'DATA_RETRY=ISOLATED_FK_SAFE_TRANSACTION'
-if dock exec "$C" pg_restore -U "$super_role" -d "$D" --data-only --disable-triggers --no-owner --no-acl --exit-on-error --single-transaction /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
+# pg_cron extension cannot be installed in this disconnected rehearsal DB.
+# Its operational job records are not student data and must not be copied.
+dock exec "$C" pg_restore --list /tmp/neis-fresh-37988124956.dump >"$tmp/full.list"
+python3 - "$tmp/full.list" "$tmp/data.list" <<'PY'
+from pathlib import Path
+import re,sys
+lines=Path(sys.argv[1]).read_text().splitlines(keepends=True)
+out=[];skipped=0
+for line in lines:
+    match=re.match(r'^\\d+;\\s+\\d+\\s+\\d+\\s+(TABLE DATA|SEQUENCE SET)\\s+(\\S+)\\s+',line)
+    if match and match.group(2)=='cron':
+        out.append(';'+line);skipped+=1
+    else:out.append(line)
+if skipped<1:
+    raise SystemExit('CRON_DATA_FILTER=UNEXPECTED_NO_CRON_ENTRIES')
+Path(sys.argv[2]).write_text(''.join(out))
+print('CRON_DATA_ENTRIES_SKIPPED='+str(skipped))
+PY
+dock cp "$tmp/data.list" "$C:/tmp/neis-fresh-data-filtered.list"
+trap 'dock exec "$C" rm -f /tmp/neis-fresh-data-filtered.list >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
+if dock exec "$C" pg_restore -U "$super_role" -d "$D" --data-only --disable-triggers --no-owner --no-acl --exit-on-error --single-transaction -L /tmp/neis-fresh-data-filtered.list /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
  echo 'FRESH_DATA_RESTORE=PASS'
  for t in auth.users public.profiles public.posts public.messages public.circle_messages public.notifications storage.objects; do
   dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT 'COUNT_'||'$t'||'='||count(*) FROM $t" </dev/null
