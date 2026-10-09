@@ -108,6 +108,7 @@ if m:
             print('DDL_PRECEDING_'+str(n)+'='+' '.join(tokens[:4])[:70]+' punctuation='+''.join(c for c in context if c in '(),;')[:15])
     err=re.sub(r'"[^"]*"','"[identifier]"',m.group(2))
     print('ERROR_SUMMARY='+err[:160])
+    print('ERROR_TOKEN='+str(re.findall(r'at or near "([^\"]+)"',m.group(2)))[:90])
 else:
     print('SQL_ERROR=UNCLASSIFIED')
 PY
