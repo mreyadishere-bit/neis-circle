@@ -195,11 +195,26 @@
     };
   }
 
+  // Recovery is a fallback, not a second mandatory full bootstrap.
+  // Wait briefly for the primary loader; do not duplicate its successful
+  // posts/profiles/reactions reads during a normal startup.
+  const primaryReady=()=>!!(
+    state?.platformReady &&
+    Array.isArray(state?.members) &&
+    Array.isArray(state?.posts) &&
+    state.members.length
+  );
   setTimeout(async()=>{
-    const ok=await hydrate({force:true,reason:'startup'});
+    if(primaryReady())return;
+    // The normal loader may still be in flight on slower mobile connections.
+    await new Promise(resolve=>setTimeout(resolve,1800));
+    if(primaryReady())return;
+    const ok=await hydrate({force:true,reason:'startup-recovery'});
     if(!ok&&!startupRetryUsed){
       startupRetryUsed=true;
-      setTimeout(()=>hydrate({force:true,reason:'startup-retry'}),1800);
+      setTimeout(()=>{
+        if(!primaryReady())hydrate({force:true,reason:'startup-retry'});
+      },1800);
     }
   },650);
 })();
