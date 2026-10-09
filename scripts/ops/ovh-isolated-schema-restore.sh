@@ -29,7 +29,13 @@ python3 - "$schema" "$filtered" <<'PY'
 from pathlib import Path
 import re, sys
 original=Path(sys.argv[1]).read_text()
-pattern=r'(?im)^[ \\t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \\t]*
+pattern = r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*$'
+updated, count = re.subn(pattern, '-- pg_cron omitted only for the isolated rehearsal', original)
+if count != 1:
+    raise SystemExit('ABORT: expected exactly one pg_cron extension statement; found ' + str(count))
+Path(sys.argv[2]).write_text(updated)
+print('TEST_ONLY_ADAPTATION=pg_cron extension skipped in disposable DB')
+PY
 echo "Trying schema.sql in isolated $container/$database (single transaction)."
 if docker exec -i "$container" psql -X -U postgres -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$filtered" > "$log" 2>&1; then
   echo "SCHEMA_RESTORE_TEST=PASSED"
