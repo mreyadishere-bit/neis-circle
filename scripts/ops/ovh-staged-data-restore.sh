@@ -13,7 +13,10 @@ for table in auth.users auth.identities storage.objects public.profiles; do
   test "$(dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT count(*) FROM $table")" = 0
 done
 # Abort before importing if any COPY target from source backup is absent.
-SNAPSHOT="$SNAP" python3 - <<'PY'
+FILTERED="$(mktemp)"
+chmod 600 "$FILTERED"
+trap 'rm -f "$FILTERED"' EXIT
+SNAPSHOT="$SNAP" FILTERED="$FILTERED" python3 - <<'PY'
 import os,re,subprocess,sys
 from pathlib import Path
 targets=[]
@@ -32,12 +35,36 @@ if len(flags)!=len(targets): raise SystemExit('BLOCKED: invalid inventory respon
 missing=[t for t,v in zip(targets,flags) if v!='t']
 print('MISSING_COPY_TARGET_COUNT='+str(len(missing)))
 for t in missing: print('MISSING_COPY_TABLE='+t)
-if missing: sys.exit(1)
+allow={'auth.mfa_recovery_code_sets','auth.mfa_recovery_codes','auth.scim_tokens','auth.scim_users'}
+if set(missing)!=allow:
+    raise SystemExit('BLOCKED: missing tables differ from four expected empty Auth tables')
+# Preserve every byte of supported COPY blocks; skip only independently-verified
+# empty blocks from obsolete source Auth features unsupported in destination.
+lines=Path(os.environ['SNAPSHOT']).read_text().splitlines(keepends=True)
+output=[]
+skip_count=0
+i=0
+while i<len(lines):
+    line=lines[i]
+    m=re.match(r'^COPY "([A-Za-z_][A-Za-z_0-9]*)"\."([A-Za-z_][A-Za-z_0-9]*)" ',line)
+    name=(m.group(1)+'.'+m.group(2)) if m else None
+    if name in allow:
+        if i+1>=len(lines) or lines[i+1].strip()!=r'\.':
+            raise SystemExit('BLOCKED: unsupported Auth COPY has rows or unexpected format: '+name)
+        output.append('-- intentionally omitted empty Auth COPY block: '+name+'\n')
+        skip_count+=1
+        i+=2
+        continue
+    output.append(line)
+    i+=1
+if skip_count!=4: raise SystemExit('BLOCKED: expected four empty Auth COPY blocks')
+Path(os.environ['FILTERED']).write_text(''.join(output))
+print('EMPTY_AUTH_COPY_BLOCKS_SKIPPED='+str(skip_count))
 PY
 log="$(mktemp)"
 chmod 600 "$log"
-trap 'rm -f "$log"' EXIT
-if dock exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 --single-transaction -f - < "$SNAP" > "$log" 2>&1; then
+trap 'rm -f "$log" "$FILTERED"' EXIT
+if dock exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 --single-transaction -f - < "$FILTERED" > "$log" 2>&1; then
   echo 'STAGED_DATA_RESTORE=PASSED'
   for table in auth.users auth.identities storage.objects public.profiles; do
     dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT '$table='||count(*) FROM $table" </dev/null
