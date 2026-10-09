@@ -30,6 +30,9 @@ if count!=1: raise SystemExit('BLOCKED: unexpected pg_cron extension pattern')
 Path(sys.argv[2]).write_text(filtered)
 print('DISCONNECTED_TEST_PG_CRON=OMITTED')
 PY
+# template0 does not carry extension namespaces from the Supabase initializer.
+# Only this disconnected staging database receives these schema prerequisites.
+sed -i '1i CREATE SCHEMA IF NOT EXISTS extensions;\nCREATE SCHEMA IF NOT EXISTS vault;' "$filtered"
 echo 'Applying full platform schema transactionally to disconnected test database'
 if docker exec -i "$C" psql -X -U supabase_admin -d "$D" -v ON_ERROR_STOP=1 -v VERBOSITY=default --single-transaction -f - < "$filtered" > "$log" 2>&1; then
   echo 'PLATFORM_SCHEMA_BOOTSTRAP=PASSED'
@@ -46,6 +49,8 @@ if m:
     msg=re.sub(r"'(?:''|[^'])*'",'[value]',m.group(2))
     msg=re.sub(r'"[^"]*"','[identifier]',msg)
     print('SQL_DIAGNOSTIC='+msg[:150])
+    ident=re.search(r'schema "([A-Za-z_][A-Za-z_0-9]*)" does not exist',m.group(2))
+    if ident: print('MISSING_SCHEMA='+ident.group(1))
 else: print('SQL_DIAGNOSTIC=UNAVAILABLE')
 PY
   exit 1
