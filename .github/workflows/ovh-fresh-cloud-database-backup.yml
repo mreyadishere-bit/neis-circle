@@ -43,12 +43,30 @@ jobs:
           trap 'rm -rf /tmp/neis-private-backup' EXIT
           # Pinned PostgreSQL major version, independent of GitHub runner defaults.
           export PGCONNECT_TIMEOUT=15
-          export PGSSLMODE=verify-full
+          export PGSSLMODE=require
           if ! docker run --rm --network bridge --user "$(id -u):$(id -g)" \
             -e CLOUD_DATABASE_URL -e PGCONNECT_TIMEOUT -e PGSSLMODE \
             -v /tmp/neis-private-backup:/backup postgres:17 \
             sh -c 'pg_dump --dbname="$CLOUD_DATABASE_URL" --format=custom --no-owner --no-acl --file=/backup/cloud.dump' \
             >/dev/null 2>/tmp/neis-private-backup/pgdump.err; then
+            # Report only a fixed non-sensitive error class; never print stderr or URI.
+            if grep -qi 'password authentication failed' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=AUTHENTICATION"
+            elif grep -Eqi 'certificate|SSL|TLS' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=TLS"
+            elif grep -Eqi 'could not translate host name|name or service not known' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=DNS"
+            elif grep -Eqi 'timed out|network is unreachable|connection refused|no route to host' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=NETWORK"
+            elif grep -Eqi 'permission denied|must be owner' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=PERMISSIONS"
+            elif grep -Eqi 'pg_dump: error: server version|aborting because of server version' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=POSTGRES_VERSION"
+            elif grep -Eqi 'invalid URI|invalid connection option|missing "=" after' /tmp/neis-private-backup/pgdump.err; then
+              echo "BACKUP_ERROR=URI_FORMAT"
+            else
+              echo "BACKUP_ERROR=OTHER"
+            fi
             echo "BACKUP=FAILED_PG_DUMP"
             exit 1
           fi
