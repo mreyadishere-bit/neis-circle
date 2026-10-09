@@ -72,6 +72,28 @@ Path(sys.argv[3]).write_text(sql[:position]+'\n'+function+'\n;\n'+sql[position:]
 PY
 mv "$prepended" "$tmp"
 echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for rehearsal'
+trigger_file="$(mktemp)"
+chmod 600 "$trigger_file"
+trap 'rm -f "$tmp" "$trigger_file" "$func_file" "$second_function"' EXIT
+sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT pg_get_functiondef(p.oid) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='storage' AND p.prokind='f' AND p.prorettype='pg_catalog.trigger'::regtype AND p.proname NOT IN ('enforce_bucket_name_length','protect_bucket_control_columns') ORDER BY p.proname" </dev/null > "$trigger_file"
+if ! grep -Fq 'enforce_bucket_lifecycle_service_role' "$trigger_file"; then
+  echo 'ABORT: required Storage trigger missing from initialized DB'; exit 1
+fi
+final_file="$(mktemp)"
+chmod 600 "$final_file"
+python3 - "$tmp" "$trigger_file" "$final_file" <<'PY'
+from pathlib import Path
+import sys
+sql=Path(sys.argv[1]).read_text()
+funcs=Path(sys.argv[2]).read_text().strip()
+marker='\nCREATE TABLE '
+pos=sql.find(marker)
+if pos < 0 or not funcs:
+    raise SystemExit('ABORT: could not insert trigger definitions')
+Path(sys.argv[3]).write_text(sql[:pos]+'\n'+funcs+'\n;\n'+sql[pos:])
+PY
+mv "$final_file" "$tmp"
+echo 'TEST_ONLY_DEPENDENCY=remaining Storage trigger functions loaded'
 
 
 if grep -Eq '^(COPY |INSERT INTO |ALTER ROLE |DROP TABLE|DROP SCHEMA|CREATE ROLE)' "$tmp"; then
