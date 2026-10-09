@@ -38,6 +38,25 @@ if dock exec "$C" pg_restore -U "$super_role" -d "$D" --data-only --disable-trig
  done
 else
  echo 'FRESH_DATA_RESTORE=FAILED_ROLLED_BACK'
+ # Only bounded, sanitized SQL object identifiers, never contents of COPY data or raw stderr.
+ python3 - "$tmp/restore.log" <<'PY'
+import re,sys
+from pathlib import Path
+data=Path(sys.argv[1]).read_text(errors='replace')
+for pattern,kind in [
+ (r'relation "([a-zA-Z_][a-zA-Z0-9_.]*)" does not exist','RELATION'),
+ (r'schema "([a-zA-Z_][a-zA-Z0-9_]*)" does not exist','SCHEMA'),
+ (r'table "([a-zA-Z_][a-zA-Z0-9_]*)" does not exist','TABLE'),
+ (r'column "([a-zA-Z_][a-zA-Z0-9_]*)" of relation "([a-zA-Z_][a-zA-Z0-9_]*)" does not exist','COLUMN'),
+ (r'role "([a-zA-Z_][a-zA-Z0-9_]*)" does not exist','ROLE'),
+]:
+ m=re.search(pattern,data,re.I)
+ if m:
+  print('MISSING_OBJECT_TYPE='+kind)
+  print('MISSING_OBJECT_NAME='+'.'.join(m.groups())[:120])
+  break
+else:print('MISSING_OBJECT_TYPE=UNCLASSIFIED')
+PY
  if grep -qi 'does not exist' "$tmp/restore.log";then echo 'DATA_ERROR_CLASS=MISSING_SCHEMA'
  elif grep -qi 'permission denied' "$tmp/restore.log";then echo 'DATA_ERROR_CLASS=PERMISSION'
  elif grep -qi 'foreign key' "$tmp/restore.log";then echo 'DATA_ERROR_CLASS=FOREIGN_KEY'
