@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  issues: write
 concurrency:
   group: ovh-disposable-schema-restore
   cancel-in-progress: false
@@ -32,3 +33,15 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-isolated-schema-restore.sh
+
+      - name: Report failed test to GitHub Issues
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # The issue contains only a link to GitHub's own job log, not SQL or data.
+          printf 'Isolated schema test failed. Read the existing sanitized SQL diagnostics in the run logs:\n\n%s\n\nThis did not target the production database.\n' "$RUN_URL" > /tmp/neis-restore-issue.txt
+          gh issue create --repo "$GH_REPO" --title "OVH isolated schema test failed (run #${{ github.run_number }})" --body-file /tmp/neis-restore-issue.txt
