@@ -36,6 +36,9 @@ if count != 1:
 Path(sys.argv[2]).write_text(updated)
 print('TEST_ONLY_ADAPTATION=pg_cron extension skipped in disposable DB')
 PY
+echo "=== Disposable database privilege preflight ==="
+docker exec "$container" psql -U postgres -d "$database" -Atqc \
+  "SELECT 'CURRENT_USER='||current_user UNION ALL SELECT 'DATABASE_OWNER='||pg_get_userbyid(datdba) FROM pg_database WHERE datname=current_database() UNION ALL SELECT 'CAN_CREATE_SCHEMA='||has_database_privilege(current_user,current_database(),'CREATE')"
 echo "Trying schema.sql in isolated $container/$database (single transaction)."
 if docker exec -i "$container" psql -X -U postgres -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$filtered" > "$log" 2>&1; then
   echo "SCHEMA_RESTORE_TEST=PASSED"
