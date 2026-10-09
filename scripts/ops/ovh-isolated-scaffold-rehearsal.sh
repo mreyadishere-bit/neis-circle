@@ -42,6 +42,7 @@ trap 'rm -f "$tmp" "$func_file" "$combined"' EXIT
 {
   printf '%s\n' "CREATE TYPE storage.buckettype AS ENUM ($enum_sql);"
   cat "$func_file"
+  printf "\n;\n"
   cat "$tmp"
 } > "$combined"
 mv "$combined" "$tmp"
