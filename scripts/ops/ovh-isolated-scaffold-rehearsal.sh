@@ -38,6 +38,10 @@ from pathlib import Path
 import re,sys
 m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([A-Z0-9]{5})',Path(sys.argv[1]).read_text(errors='replace'))
 print('SQL_LINE='+m.group(1)+' SQLSTATE='+m.group(2) if m else 'SQL_ERROR=UNCLASSIFIED')
+if m:
+    msg=Path(sys.argv[1]).read_text(errors='replace').lower()
+    for phrase,label in [('role ','ROLE'),('type ','TYPE'),('schema ','SCHEMA'),('function ','FUNCTION'),('relation ','RELATION'),('extension ','EXTENSION'),('operator ','OPERATOR'),('constraint ','CONSTRAINT')]:
+        if phrase in msg: print('UNDEFINED_OBJECT_CATEGORY='+label)
 PY
   exit 1
 fi
