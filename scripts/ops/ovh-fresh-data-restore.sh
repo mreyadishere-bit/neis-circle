@@ -24,10 +24,14 @@ if ! dock exec "$C" test -r /tmp/neis-fresh-37988124956.dump; then
 fi
 # Foreign keys referencing other restored tables can reject COPY ordering.
 # Use a verified superuser to disable only user triggers within the restore transaction.
-is_superuser="$(dock exec "$C" psql -X -U postgres -d "$D" -Atqc "SELECT rolsuper FROM pg_roles WHERE rolname='postgres'")"
-test "$is_superuser" = t || { echo 'DATA_RETRY=POSTGRES_NOT_SUPERUSER'; exit 1; }
-echo 'DATA_RETRY=FK_SAFE_TRANSACTION'
-if dock exec "$C" pg_restore -U postgres -d "$D" --data-only --disable-triggers --no-owner --no-acl --exit-on-error --single-transaction /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
+# The disposable PostgreSQL image uses supabase_admin as the database owner.
+# Use a temporary isolated-only superuser role to disable FK triggers during restore.
+# Verify the container has absolutely no networking before any role modification.
+test "$(dock inspect -f '{{.HostConfig.NetworkMode}}' "$C")" = none
+super_role="$(dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT rolname FROM pg_roles WHERE rolsuper AND rolcanlogin ORDER BY CASE WHEN rolname='supabase_admin' THEN 0 ELSE 1 END LIMIT 1")"
+test -n "$super_role" || { echo 'DATA_RETRY=NO_ISOLATED_SUPERUSER'; exit 1; }
+echo 'DATA_RETRY=ISOLATED_FK_SAFE_TRANSACTION'
+if dock exec "$C" pg_restore -U "$super_role" -d "$D" --data-only --disable-triggers --no-owner --no-acl --exit-on-error --single-transaction /tmp/neis-fresh-37988124956.dump >"$tmp/restore.log" 2>&1; then
  echo 'FRESH_DATA_RESTORE=PASS'
  for t in auth.users public.profiles public.posts public.messages public.circle_messages public.notifications storage.objects; do
   dock exec "$C" psql -X -U supabase_admin -d "$D" -Atqc "SELECT 'COUNT_'||'$t'||'='||count(*) FROM $t" </dev/null
