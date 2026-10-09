@@ -47,6 +47,21 @@ trap 'rm -f "$tmp" "$func_file" "$combined"' EXIT
 mv "$combined" "$tmp"
 echo 'TEST_ONLY_DEPENDENCY=storage.enforce_bucket_name_length function copied as DDL only'
 
+# Source the second required trigger function DDL from initialized Storage only.
+second_function="$(mktemp)"
+chmod 600 "$second_function"
+trap 'rm -f "$tmp" "$func_file" "$second_function"' EXIT
+sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT pg_get_functiondef('storage.protect_bucket_control_columns()'::regprocedure)" </dev/null > "$second_function"
+if ! grep -Fq 'protect_bucket_control_columns' "$second_function"; then
+  echo 'ABORT: required trigger function missing'; exit 1
+fi
+prepended="$(mktemp)"
+chmod 600 "$prepended"
+cat "$second_function" "$tmp" > "$prepended"
+mv "$prepended" "$tmp"
+echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for rehearsal'
+
+
 if grep -Eq '^(COPY |INSERT INTO |ALTER ROLE |DROP TABLE|DROP SCHEMA|CREATE ROLE)' "$tmp"; then
   echo 'ABORT: unexpected unsafe statement in DDL dump'
   exit 1
