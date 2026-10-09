@@ -75,7 +75,7 @@ echo 'TEST_ONLY_DEPENDENCY=storage.protect_bucket_control_columns loaded for reh
 trigger_file="$(mktemp)"
 chmod 600 "$trigger_file"
 trap 'rm -f "$tmp" "$trigger_file" "$func_file" "$second_function"' EXIT
-sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT string_agg(pg_get_functiondef(p.oid) || chr(10) || ';' || chr(10), chr(10) ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='storage' AND p.prokind='f' AND p.prorettype='pg_catalog.trigger'::regtype AND p.proname NOT IN ('enforce_bucket_name_length','protect_bucket_control_columns') ORDER BY p.proname" </dev/null > "$trigger_file"
+sudo -n docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml exec -T db psql -X -U postgres -d postgres -Atqc "SELECT string_agg(pg_get_functiondef(p.oid) || chr(10) || ';' || chr(10), chr(10) ORDER BY p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='storage' AND p.prokind='f' AND p.prorettype='pg_catalog.trigger'::regtype AND p.proname NOT IN ('enforce_bucket_name_length','protect_bucket_control_columns')" </dev/null > "$trigger_file"
 if ! grep -Fq 'enforce_bucket_lifecycle_service_role' "$trigger_file"; then
   echo 'ABORT: required Storage trigger missing from initialized DB'; exit 1
 fi
