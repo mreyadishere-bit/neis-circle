@@ -90,32 +90,18 @@ else
   python3 - "$log" "$tmp" <<'PY'
 from pathlib import Path
 import re,sys
-log=Path(sys.argv[1]).read_text(errors='replace')
-m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)',log)
+message=Path(sys.argv[1]).read_text(errors='replace')
+m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)',message)
 if m:
     print('SQL_LINE='+m.group(1))
-    sql=Path(sys.argv[2]).read_text(errors='replace').splitlines()
-    pos=int(m.group(1))
-    for n in range(max(1,pos-2),min(len(sql),pos+2)+1):
-        line=sql[n-1].strip()
-        label='BLANK' if not line else ('COMMENT' if line.startswith('--') else ('CREATE' if line.startswith('CREATE ') else 'OTHER'))
-        print('DDL_CONTEXT_'+str(n)+'='+label+' LENGTH='+str(len(line)))
-        if n==pos:
-            import hashlib
-            print('ERROR_LINE_CHAR_CLASS='+''.join('A' if c.isalpha() else '9' if c.isdigit() else c if c in '();
-    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
-    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
-    print('SQL_ERROR_SUMMARY='+message[:200])
-else:
-    print('SQL_ERROR=UNCLASSIFIED')
-PY
-  exit 1
-fi
- else '_' for c in line)[:90])
-            print('ERROR_LINE_SHA256_PREFIX='+hashlib.sha256(line.encode()).hexdigest()[:12])
-    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
-    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
-    print('SQL_ERROR_SUMMARY='+message[:200])
+    lines=Path(sys.argv[2]).read_text(errors='replace').splitlines()
+    i=int(m.group(1))
+    if 1 <= i <= len(lines):
+        line=lines[i-1].strip()
+        print('ERROR_LINE_LENGTH='+str(len(line)))
+        print('ERROR_LINE_PUNCTUATION='+''.join(c for c in line if c in '$();')[:30])
+    err=re.sub(r'"[^"]*"','"[identifier]"',m.group(2))
+    print('ERROR_SUMMARY='+err[:160])
 else:
     print('SQL_ERROR=UNCLASSIFIED')
 PY
