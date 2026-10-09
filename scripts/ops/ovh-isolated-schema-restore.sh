@@ -21,12 +21,24 @@ log="$(mktemp)"
 chmod 600 "$log"
 trap 'rm -f "$log"' EXIT
 echo "Trying schema.sql in isolated $container/$database (single transaction)."
-if docker exec -i "$container" psql -X -U postgres -d "$database" -v ON_ERROR_STOP=1 --single-transaction -f - < "$schema" > "$log" 2>&1; then
+if docker exec -i "$container" psql -X -U postgres -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate --single-transaction -f - < "$schema" > "$log" 2>&1; then
   echo "SCHEMA_RESTORE_TEST=PASSED"
   docker exec "$container" psql -U postgres -d "$database" -Atqc "SELECT table_schema||'='||count(*) FROM information_schema.tables WHERE table_schema IN ('public','private') AND table_type='BASE TABLE' GROUP BY table_schema ORDER BY table_schema"
 else
   echo "::error::SCHEMA_RESTORE_TEST=FAILED (disposable environment only)"
   # Do not publish raw SQL or secrets into GitHub Actions logs.
-  echo "A statement was rejected; transaction should have rolled back. Inspect locally before adjusting the test."
+  # Print only the SQLSTATE and line number, never raw SQL, secrets or database rows.
+  python3 - "$log" <<'PY'
+import re, sys
+from pathlib import Path
+content = Path(sys.argv[1]).read_text(errors='replace')
+match = re.search(r'psql:<stdin>:(\\d+):\\s*ERROR:\\s*([A-Z0-9]{5})', content)
+if match:
+    print(f"SQL_ERROR_LINE={match.group(1)}")
+    print(f"SQLSTATE={match.group(2)}")
+else:
+    print("SQLSTATE=UNAVAILABLE (raw error kept private on runner only)")
+PY
+  echo "Original SQL logs not exposed in GitHub Actions."
   exit 1
 fi
