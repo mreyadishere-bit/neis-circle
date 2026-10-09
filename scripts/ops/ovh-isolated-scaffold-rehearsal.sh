@@ -89,35 +89,23 @@ else
   echo 'ISOLATED_SCAFFOLD_IMPORT=BLOCKED (transaction rolled back)'
   python3 - "$log" "$tmp" <<'PY'
 from pathlib import Path
-import re,sys
-log=Path(sys.argv[1]).read_text(errors='replace')
-m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)',log)
-if m:
-    print('SQL_LINE='+m.group(1))
-    sql=Path(sys.argv[2]).read_text(errors='replace').splitlines()
-    pos=int(m.group(1))
-    for n in range(max(1,pos-2),min(len(sql),pos+2)+1):
-        line=sql[n-1].strip()
-        label='BLANK' if not line else ('COMMENT' if line.startswith('--') else ('CREATE' if line.startswith('CREATE ') else 'OTHER'))
-        print('DDL_CONTEXT_'+str(n)+'='+label+' LENGTH='+str(len(line)))
-        if n==pos:
-            import hashlib
-            print('ERROR_LINE_CHAR_CLASS='+''.join('A' if c.isalpha() else '9' if c.isdigit() else c if c in '();
-    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
-    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
-    print('SQL_ERROR_SUMMARY='+message[:200])
+import re
+import sys
+error_log = Path(sys.argv[1]).read_text(errors="replace")
+match = re.search(r"psql:<stdin>:(\d+):\s*ERROR:\s*([^\r\n]+)", error_log)
+if match is None:
+    print("SQL_ERROR=UNCLASSIFIED")
 else:
-    print('SQL_ERROR=UNCLASSIFIED')
-PY
-  exit 1
-fi
- else '_' for c in line)[:90])
-            print('ERROR_LINE_SHA256_PREFIX='+hashlib.sha256(line.encode()).hexdigest()[:12])
-    message=re.sub(r"'(?:''|[^'])*'", "'[redacted]'", m.group(2))
-    message=re.sub(r'"[^"]*"', '"[identifier]"', message)
-    print('SQL_ERROR_SUMMARY='+message[:200])
-else:
-    print('SQL_ERROR=UNCLASSIFIED')
+    pos = int(match.group(1))
+    print("SQL_LINE=" + str(pos))
+    lines = Path(sys.argv[2]).read_text(errors="replace").splitlines()
+    if 1 <= pos <= len(lines):
+        line = lines[pos - 1].strip()
+        print("ERROR_LINE_LENGTH=" + str(len(line)))
+        print("ERROR_LINE_PUNCTUATION=" + "".join(ch for ch in line if ch in "()$;")[:30])
+    message = re.sub(r"'(?:''|[^'])*'", "'[redacted]'", match.group(2))
+    message = re.sub(r'"[^"]*"', '"[identifier]"', message)
+    print("SQL_ERROR_SUMMARY=" + message[:160])
 PY
   exit 1
 fi
