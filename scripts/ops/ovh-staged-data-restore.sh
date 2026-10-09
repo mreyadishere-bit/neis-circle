@@ -30,6 +30,9 @@ m=re.search(r'psql:<stdin>:(\d+):\s*ERROR:\s*([^\n]+)',s)
 if m:
     print('ERROR_LINE='+m.group(1))
     print('ERROR_CLASS='+('foreign_key' if 'foreign key' in m.group(2) else 'permission' if 'permission' in m.group(2) else 'other'))
+    x=re.sub(r"'(?:''|[^'])*'",'[value]',m.group(2))
+    x=re.sub(r'"[^"]*"','[identifier]',x)
+    print('ERROR_SUMMARY='+x[:170])
 PY
   exit 1
 fi
