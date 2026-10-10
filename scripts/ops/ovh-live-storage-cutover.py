@@ -35,6 +35,10 @@ print("STORAGE_LIVE_OBJECTS="+str(current_objects))
 if current_users<204 or current_profiles<204 or current_objects!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_DATABASE_PARITY")
 live_names=set(query("select bucket_id||'/'||name from storage.objects order by bucket_id,name").splitlines())
+p=run(["sudo","-n","find",str(candidate),"-type","f"])
+links=run(["sudo","-n","find",str(candidate),"-type","l","-print","-quit"])
+if p.returncode or links.returncode or links.stdout.strip() or len(p.stdout.splitlines())!=104:
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_STAGED_FILES")
 # Protected private backup directory is intentionally unreadable by ubuntu.
 # Reuse the already-verified sudo find output instead of silently seeing zero files.
 staged_names={Path(raw).relative_to(candidate).as_posix() for raw in p.stdout.splitlines()}
@@ -45,10 +49,6 @@ print("STORAGE_STAGE_PATHS_NOT_IN_LIVE_METADATA="+str(len(extra)))
 if missing or extra or len(staged_names)!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_OBJECT_PATH_DRIFT")
 print("STORAGE_LIVE_METADATA_PATHS_MATCH_STAGE=YES")
-p=run(["sudo","-n","find",str(candidate),"-type","f"])
-links=run(["sudo","-n","find",str(candidate),"-type","l","-print","-quit"])
-if p.returncode or links.returncode or links.stdout.strip() or len(p.stdout.splitlines())!=104:
-    raise SystemExit("STORAGE_CUTOVER=BLOCKED_STAGED_FILES")
 status=run(base+["config","--format","json"])
 if status.returncode:raise SystemExit("STORAGE_CUTOVER=INVALID_BASE_COMPOSE")
 try:
