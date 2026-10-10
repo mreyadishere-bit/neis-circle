@@ -4,7 +4,7 @@ import urllib.request,urllib.error
 base='https://supabase.neiscircle.site'
 for origin in ('https://neiscircle.site','https://www.neiscircle.site'):
  for label,path,method,req_headers in (
-  ('TOKEN_POST','/auth/v1/token?grant_type=pkce','POST','apikey,authorization,content-type,x-client-info'),
+  ('TOKEN_POST','/auth/v1/token?grant_type=pkce','POST','apikey,authorization,content-type,x-client-info,x-supabase-api-version'),
   ('SETTINGS_GET','/auth/v1/settings','GET','apikey,authorization,x-client-info'),
   ('AUTHORIZE_GET','/auth/v1/authorize','GET','apikey,authorization'),
  ):

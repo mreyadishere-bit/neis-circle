@@ -3,7 +3,7 @@ set -Eeuo pipefail
 cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
-baseline="$stage/public-auth.before-cors.Caddyfile"
+baseline="$stage/public-auth.before-cors-v3.Caddyfile"
 test -s "$mounted"
 if [[ ! -s "$baseline" ]];then
  echo 'AUTH_CORS_ROLLBACK=BASELINE_NOT_CREATED'
