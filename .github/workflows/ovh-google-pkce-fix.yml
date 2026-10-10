@@ -1,0 +1,66 @@
+name: OVH Google PKCE Production Fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-deploy-google-pkce.sh'
+      - 'scripts/ops/ovh-rollback-google-pkce.sh'
+      - 'qa/ovh-pkce-browser-integration.mjs'
+      - '.github/workflows/ovh-google-pkce-fix.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-google-pkce-production
+  cancel-in-progress: false
+jobs:
+  deploy-validate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate source and synthetic OAuth recovery
+        run: |
+          node --check scripts/01-core.js
+          node qa/oauth-fragment-recovery.test.mjs
+          node --check qa/ovh-pkce-browser-integration.mjs
+          bash -n scripts/ops/ovh-deploy-google-pkce.sh
+          bash -n scripts/ops/ovh-rollback-google-pkce.sh
+      - name: Install Chromium for real browser integration
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Deploy rollback-ready PKCE frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/ovh-google-pkce-20261010'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/01-core.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-google-pkce-20261010/01-core.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-deploy-google-pkce.sh
+      - name: Confirm PKCE flow in real Chromium with synthetic Google session
+        run: node qa/ovh-pkce-browser-integration.mjs
+      - name: Roll back only this frontend release if any preceding step failed
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-google-pkce.sh
+          fi
