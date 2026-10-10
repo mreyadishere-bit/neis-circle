@@ -1,0 +1,19 @@
+name: OVH Public Auth CORS Preflight Diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-public-auth-cors-preflight.py'
+      - '.github/workflows/ovh-public-auth-cors-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile qa/ovh-public-auth-cors-preflight.py
+      - name: Check public Auth CORS preflight from outside OVH
+        run: python3 qa/ovh-public-auth-cors-preflight.py
