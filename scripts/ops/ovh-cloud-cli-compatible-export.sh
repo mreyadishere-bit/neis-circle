@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Supabase CLI-filtered Cloud export, private SQL and logs only.
+# Fresh owner-approved maintenance snapshot; Cloud cron jobs were paused separately.
+# Does not imply a database-level write freeze; verify final catch-up before cutover.
 test -n "$CLOUD_DATABASE_URL" && test -n "$OVH_HOST" && test -n "$GITHUB_RUN_ID"
 private="$(mktemp -d)"
 chmod 700 "$private"
