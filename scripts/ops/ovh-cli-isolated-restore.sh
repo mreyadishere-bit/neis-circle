@@ -5,7 +5,7 @@ set -Eeuo pipefail
 source=/home/ubuntu/neis-backups/cloud-cli-import-38047355178
 backup=/home/ubuntu/neis-backups/ovh-destination-precrossover-20261010
 container=neis-restore-test
-database=neis_cli_stage_20261010_v1
+database=neis_cli_stage_20261010_v2
 dock() { sudo -n /usr/bin/docker "$@"; }
 [[ "$(dock inspect -f '{{.HostConfig.NetworkMode}}' "$container")" == none ]] || { echo 'CLI_RESTORE=BLOCKED_NETWORK'; exit 1; }
 [[ "$(dock inspect -f '{{.State.Running}}' "$container")" == true ]] || { echo 'CLI_RESTORE=BLOCKED_CONTAINER'; exit 1; }
@@ -97,7 +97,44 @@ PY
  exit 1
 fi
 echo 'CLI_STAGE_CLOUD_SCHEMA=IMPORTED_TRANSACTIONALLY'
-dock cp "$source/data.sql" "$container:/tmp/neis-cli-cloud-data.sql"
+# Cloud Auth has four newer platform-only tables that this OVH Auth
+# bootstrap does not include. Skip their COPY blocks *only if empty*.
+# SHA-verified source remains unchanged; produce a disposable test copy.
+python3 - "$source/data.sql" "$temp/data-compatible.sql" <<'PY'
+from pathlib import Path
+import re,sys
+src=Path(sys.argv[1]);dst=Path(sys.argv[2])
+omit={'auth.mfa_recovery_code_sets','auth.mfa_recovery_codes','auth.scim_tokens','auth.scim_users'}
+seen=set()
+active=None;skipping=False;rows=0;total_removed=0
+with src.open(encoding='utf-8') as source, dst.open('w',encoding='utf-8',newline='') as output:
+ for line in source:
+  if active is None and line.startswith('COPY '):
+   match=re.match(r'^COPY\s+(?:"?([A-Za-z_][A-Za-z_0-9]*)"?\.)?"?([A-Za-z_][A-Za-z_0-9]*)"?\s+\(',line)
+   if not match:raise SystemExit('CLI_RESTORE=BLOCKED_COPY_SYNTAX')
+   active=(match.group(1) or 'public')+'.'+match.group(2)
+   skipping=active in omit
+   if skipping:
+    if active in seen:raise SystemExit('CLI_RESTORE=BLOCKED_DUPLICATE_NEW_AUTH_COPY')
+    seen.add(active);rows=0
+   else:output.write(line)
+   continue
+  if active is not None:
+   if line.rstrip('\r\n')==r'\.':
+    if skipping:
+     if rows:raise SystemExit('CLI_RESTORE=BLOCKED_NONEMPTY_NEW_AUTH_TABLE')
+     total_removed+=1
+    else:output.write(line)
+    active=None;skipping=False
+   elif skipping:rows+=1
+   else:output.write(line)
+  else:output.write(line)
+if active is not None or seen!=omit or total_removed!=4:
+ raise SystemExit('CLI_RESTORE=BLOCKED_INCOMPLETE_NEW_AUTH_FILTER')
+print('CLI_NEW_AUTH_EMPTY_COPY_BLOCKS_SKIPPED=4')
+print('CLI_SOURCE_SQL_UNMODIFIED=YES')
+PY
+dock cp "$temp/data-compatible.sql" "$container:/tmp/neis-cli-cloud-data.sql"
 if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 --single-transaction -c "SET session_replication_role = replica" -f /tmp/neis-cli-cloud-data.sql >"$temp/data.log" 2>&1 </dev/null;then
  echo 'CLI_RESTORE=FAILED_CLOUD_DATA'
  if grep -Eqi 'does not exist' "$temp/data.log";then echo 'CLI_RESTORE_FAILURE_CLASS=MISSING_RELATION'
@@ -124,6 +161,11 @@ with open(path,errors='replace') as file:
    if line.rstrip('\r\n')==r'\.':current=None
    else:counts[current]+=1
 if current is not None or len(counts)<80:raise SystemExit('CLI_RESTORE=BLOCKED_INCOMPLETE_SOURCE_DATA')
+omit={'auth.mfa_recovery_code_sets','auth.mfa_recovery_codes','auth.scim_tokens','auth.scim_users'}
+if not omit.issubset(counts) or any(counts[t]!=0 for t in omit):
+ raise SystemExit('CLI_RESTORE=BLOCKED_NEW_AUTH_COPY_NONEMPTY_OR_MISSING')
+for t in omit:counts.pop(t)
+print('CLI_RESTORE_EMPTY_AUTH_TABLES_OMITTED=4')
 query=' UNION ALL '.join("SELECT '"+table+"' k,count(*) n FROM "+table for table in sorted(counts))
 p=subprocess.run(['sudo','-n','/usr/bin/docker','exec',container,'psql','-X','-U','supabase_admin','-d',db,'-AtF','|','-c',query],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=50)
 if p.returncode:raise SystemExit('CLI_RESTORE=BLOCKED_COUNT_QUERY')
