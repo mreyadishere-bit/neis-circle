@@ -1,0 +1,47 @@
+name: OVH Live Caddy and DNS Trace
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-live-dns-caddy-audit.py'
+      - '.github/workflows/ovh-live-dns-caddy-audit.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile scripts/ops/ovh-live-dns-caddy-audit.py
+      - name: Resolve DNS from external GitHub runner
+        run: |
+          python3 - <<'PY'
+          import socket,hashlib
+          try:
+           v=sorted(set((a[0],a[4][0]) for a in socket.getaddrinfo('supabase.neiscircle.site',443,type=socket.SOCK_STREAM)))
+           raw=';'.join(str(f)+':'+ip for f,ip in v)
+           print('EXTERNAL_DNS_ADDRESS_HASH='+hashlib.sha256(raw.encode()).hexdigest()[:16])
+           print('EXTERNAL_DNS_A_COUNT='+str(sum(f==socket.AF_INET for f,_ in v)))
+           print('EXTERNAL_DNS_AAAA_COUNT='+str(sum(f==socket.AF_INET6 for f,_ in v)))
+          except Exception:
+           print('EXTERNAL_DNS_RESOLUTION=FAILED')
+          PY
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect actual Caddy configuration and compare public DNS safely
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-live-dns-caddy-audit.py
