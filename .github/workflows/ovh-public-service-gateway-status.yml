@@ -1,0 +1,20 @@
+name: OVH Public API Service Status
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-public-service-gateway-status.py'
+      - '.github/workflows/ovh-public-service-gateway-status.yml'
+permissions:
+  contents: read
+jobs:
+  external:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile safe read-only public API probe
+        run: python3 -m py_compile qa/ovh-public-service-gateway-status.py
+      - name: Check public Auth REST Storage Functions from external runner
+        run: python3 qa/ovh-public-service-gateway-status.py
