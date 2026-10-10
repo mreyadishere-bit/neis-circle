@@ -15,8 +15,8 @@ for m in j['Mounts']:
  if 'caddy' in dst.lower() or dst.lower().endswith('caddyfile') or 'config' in dst.lower():
   q=pathlib.Path(src)
   print('MOUNT_DEST='+dst)
-  print('MOUNT_SOURCE_TYPE='+('FILE' if q.is_file() else 'DIR' if q.is_dir() else 'OTHER'))
-  if q.is_file():
+  print('MOUNT_SOURCE_TYPE='+('BIND' if m.get('Type')=='bind' else 'VOLUME'))
+  if m.get('Type')=='bind' and q.is_file():
    txt=q.read_text(errors='replace')
    for k in ('neiscircle.site','www.neiscircle.site','supabase.neiscircle.site','reverse_proxy','file_server'):
     print('MOUNT_HAS_'+k.replace('.','_')+'='+str(k in txt))
