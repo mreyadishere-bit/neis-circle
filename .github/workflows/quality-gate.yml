@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Use pre-maintenance page in CI only
         run: |
           if grep -q 'Maintenance · NEIS Circle' index.html; then
@@ -42,6 +44,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Use pre-maintenance page in CI only
         run: |
           if grep -q 'Maintenance · NEIS Circle' index.html; then
