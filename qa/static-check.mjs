@@ -832,7 +832,7 @@ const authRestoreSource = fs.readFileSync(path.join(root, 'scripts', '03-auth-i1
 for (const token of [
   'function hasPersistedSupabaseSession()',
   'async function resolveInitialSession()',
-  "key.startsWith('sb-')&&key.endsWith('-auth-token')",
+  "const key='sb-'+host+'-auth-token'",
   'await resolveInitialSession()'
 ]) {
   if (!authRestoreSource.includes(token)) failures.push('Saved-session auth restore contract is missing: ' + token);
