@@ -691,7 +691,7 @@ if (fs.existsSync(notificationTabCountRuntimePath)) {
 
 const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=10'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=12'",
   "rememberSubscriptionInWorker",
   "ensurePushHealth",
   "window.addEventListener('focus'",
@@ -821,7 +821,7 @@ for (const token of ['function ingestPush(payload)','renderNotificationsIfVisibl
 
 const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=10'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=12'",
   "event.data?.type==='NEIS_PUSH_NOTIFICATION'",
   "NEISNotificationRuntime?.ingestPush"
 ]) {
