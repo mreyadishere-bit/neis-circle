@@ -187,6 +187,15 @@ async function neisRecoverPKCEOAuth(client){
   if(!neisOAuthCallbackCode)return null;
   let timer;
   try{
+    // Auth codes are useless without the original same-origin PKCE verifier.
+    // Check only its presence; never print or expose its contents.
+    const verifierKey=String(client.auth.storageKey||'')+'-code-verifier';
+    const verifier=await Promise.resolve(neisAuthStorage.getItem(verifierKey));
+    if(!client.auth.storageKey||typeof verifier!=='string'||verifier.length<43){
+      const missing=new Error('PKCE verifier unavailable in originating browser storage');
+      missing.code='verifier_missing';
+      throw missing;
+    }
     const response=await Promise.race([
       client.auth.exchangeCodeForSession(neisOAuthCallbackCode),
       new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('oauth_pkce_timeout')),15000)})
@@ -365,8 +374,36 @@ async function loadLiveData(){
 }
 async function googleSignIn(){
   if(!sb){setup();return}
-  const {error}=await sb.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname}});
-  if(error)toast(error.message)
+  try{
+    // Capture the authorization URL first, so the verifier is durably stored
+    // before leaving this exact browser origin for Google.
+    const {data,error}=await sb.auth.signInWithOAuth({
+      provider:"google",
+      options:{redirectTo:location.origin+location.pathname,skipBrowserRedirect:true}
+    });
+    if(error)throw error;
+    const url=new URL(data?.url||'');
+    if(url.protocol!=='https:'||url.hostname!=='supabase.neiscircle.site'||url.pathname!=='/auth/v1/authorize'){
+      const unsafe=new Error('OAuth authorization URL invalid');
+      unsafe.code='authorize_url_invalid';
+      throw unsafe;
+    }
+    const verifierKey=String(sb.auth.storageKey||'')+'-code-verifier';
+    const verifier=await Promise.resolve(neisAuthStorage.getItem(verifierKey));
+    if(!sb.auth.storageKey||typeof verifier!=='string'||verifier.length<43){
+      const missing=new Error('OAuth PKCE verifier did not persist');
+      missing.code='verifier_not_saved';
+      throw missing;
+    }
+    location.assign(url.href);
+  }catch(error){
+    const raw=String(error?.code||'');
+    const reason=/^[a-z_]{1,48}$/.test(raw)?raw:'authorize_failed';
+    window.__NEISOAuthRecoveryReason='oauth_'+reason;
+    window.__NEISOAuthRecoveryFailed=true;
+    if(typeof authScreen==='function')authScreen();
+    if(typeof toast==='function')toast('Google sign-in could not start ('+window.__NEISOAuthRecoveryReason+').');
+  }
 }
 document.addEventListener("click",async e=>{
   const n=e.target.closest("[data-nav]");if(n){nav(n.dataset.nav);return}
