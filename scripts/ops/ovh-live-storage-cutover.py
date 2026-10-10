@@ -20,8 +20,10 @@ def query(sql):
     p=run(base+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-Atqc",sql])
     if p.returncode:raise RuntimeError("STORAGE_CUTOVER=DB_QUERY_FAILED")
     return p.stdout.strip()
-if not candidate.is_dir() or candidate.is_symlink() or override.exists() or backup.exists():
+if not candidate.is_dir() or candidate.is_symlink() or override.exists():
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_PATH_ALREADY_SET")
+if backup.exists() and (not backup.is_dir() or not (backup/"mount_source.txt").is_file()):
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_INVALID_BACKUP")
 try:
     current_users=int(query("select count(*) from auth.users"))
     current_profiles=int(query("select count(*) from public.profiles"))
@@ -57,9 +59,13 @@ try:
     assert len(old)==1 and old[0]["type"]=="bind"
 except Exception:
     raise SystemExit("STORAGE_CUTOVER=UNEXPECTED_OLD_MOUNT")
-backup.mkdir(mode=0o700)
-(backup/"mount_source.txt").write_text(old[0]["source"])
-os.chmod(backup/"mount_source.txt",0o600)
+if backup.exists():
+    if (backup/"mount_source.txt").read_text()!=old[0]["source"]:
+        raise SystemExit("STORAGE_CUTOVER=BLOCKED_BACKUP_SOURCE_MISMATCH")
+else:
+    backup.mkdir(mode=0o700)
+    (backup/"mount_source.txt").write_text(old[0]["source"])
+    os.chmod(backup/"mount_source.txt",0o600)
 override.write_text("services:\n  storage:\n    volumes:\n      - type: bind\n        source: "+str(candidate)+"\n        target: /var/lib/storage\n        read_only: false\n")
 os.chmod(override,0o600)
 new=run(active+["config","--format","json"])
@@ -69,7 +75,11 @@ if new.returncode:
 try:
     svc=json.loads(new.stdout)["services"]["storage"]
     mount=[v for v in svc["volumes"] if v.get("target")=="/var/lib/storage"]
-    assert len(mount)==1 and mount[0]["source"]==str(candidate) and not mount[0]["read_only"]
+    source_ok=len(mount)==1 and mount[0].get("source")==str(candidate)
+    writable=len(mount)==1 and not mount[0].get("read_only",False)
+    print("STORAGE_COMPOSE_SOURCE_MATCH="+("YES" if source_ok else "NO"))
+    print("STORAGE_COMPOSE_WRITABLE="+("YES" if writable else "NO"))
+    assert source_ok and writable
 except Exception:
     override.unlink(missing_ok=True)
     raise SystemExit("STORAGE_CUTOVER=INVALID_NEW_MOUNT")
