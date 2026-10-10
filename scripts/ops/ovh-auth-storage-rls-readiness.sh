@@ -38,7 +38,6 @@ def q(base,sql):
  p=subprocess.run([*base,sql],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=40)
  if p.returncode:raise ValueError('database catalog query failed')
  return p.stdout.strip()
-if q([*docker,'inspect','-f'],'') if False else False:pass
 isol=subprocess.run([*docker,'inspect','-f','{{.HostConfig.NetworkMode}}','neis-restore-test'],capture_output=True,text=True,timeout=15)
 if isol.returncode or isol.stdout.strip()!='none':
  print('RUNTIME_AUDIT=STAGE_NOT_DISCONNECTED');sys.exit(1)
