@@ -1,0 +1,35 @@
+name: OVH Storage Candidate Runtime Permissions
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-storage-candidate-permissions.yml'
+      - 'scripts/ops/ovh-storage-candidate-permissions.sh'
+permissions:
+  contents: read
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/ops/ovh-storage-candidate-permissions.sh
+      - name: Pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Restrict candidate ownership to actual Storage service user
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-storage-candidate-permissions.sh
