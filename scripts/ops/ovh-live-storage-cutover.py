@@ -36,7 +36,11 @@ if current_users<204 or current_profiles<204 or current_objects!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_DATABASE_PARITY")
 live_names=set(query("select bucket_id||'/'||name from storage.objects order by bucket_id,name").splitlines())
 staged_names={p.relative_to(candidate).as_posix() for p in candidate.rglob("*") if p.is_file()}
-if live_names!=staged_names or len(staged_names)!=104:
+missing=live_names-staged_names
+extra=staged_names-live_names
+print("STORAGE_LIVE_PATHS_MISSING_FROM_STAGE="+str(len(missing)))
+print("STORAGE_STAGE_PATHS_NOT_IN_LIVE_METADATA="+str(len(extra)))
+if missing or extra or len(staged_names)!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_OBJECT_PATH_DRIFT")
 print("STORAGE_LIVE_METADATA_PATHS_MATCH_STAGE=YES")
 p=run(["sudo","-n","find",str(candidate),"-type","f"])
