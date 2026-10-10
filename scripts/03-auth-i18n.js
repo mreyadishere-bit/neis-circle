@@ -276,16 +276,18 @@ signOut=async function(){const signingOutUserId=authUser?.id||'';try{await windo
 document.addEventListener('click',e=>{const a=e.target.closest('[data-action="language"]');if(a)setTimeout(()=>{state.articleLanguage=state.lang;syncChrome();render()},0)},false);
 function hasPersistedSupabaseSession(){
   try{
-    return Object.keys(localStorage).some(key=>
-      key.startsWith('sb-')&&key.endsWith('-auth-token')&&!!localStorage.getItem(key)
-    );
+    // Ignore tokens from the former Cloud project. Only the current OVH
+    // project storage key is eligible for a session recovery attempt.
+    const host=new URL(window.NEIS_CONFIG.supabaseUrl).hostname.split('.')[0];
+    const key='sb-'+host+'-auth-token';
+    return !!(localStorage.getItem(key)||sessionStorage.getItem(key));
   }catch(_){
     return false;
   }
 }
 async function resolveInitialSession(){
   const first=await sb.auth.getSession();
-  if(first.error||first.data?.session||!hasPersistedSupabaseSession())return first;
+  if(first.error||first.data?.session||!(window.__NEISOAuthCallbackPending||hasPersistedSupabaseSession()))return first;
   let subscription=null;
   const restored=await new Promise(resolve=>{
     let finished=false;
@@ -299,9 +301,20 @@ async function resolveInitialSession(){
       if(session?.user&&['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(event))finish(session);
     });
     subscription=authListener?.data?.subscription||null;
-    setTimeout(()=>finish(null),1800);
+    setTimeout(()=>finish(null),6500);
   });
-  return {data:{session:restored},error:null};
+  if(restored?.user)return {data:{session:restored},error:null};
+  // If Google returned during initialization, do not mistake a transient
+  // empty session for a rejected login; retry after the callback settles.
+  if(window.__NEISOAuthCallbackPending){
+    const retry=await sb.auth.getSession();
+    if(retry.data?.session?.user){
+      window.__NEISOAuthCallbackPending=false;
+      return retry;
+    }
+    if(retry.error)return retry;
+  }
+  return {data:{session:null},error:null};
 }
 
 async function v4Init(){
