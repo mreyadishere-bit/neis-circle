@@ -12,6 +12,9 @@ jobs:
     runs-on: ubuntu-24.04
     environment: ovh-staging
     timeout-minutes: 40
+    concurrency:
+      group: neis-ovh-private-cloud-backup
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - name: Configure pinned SSH
@@ -71,6 +74,14 @@ jobs:
             exit 1
           fi
           test -s /tmp/neis-private-backup/cloud.dump
+          # Verify that the custom archive is readable before private transfer.
+          if ! docker run --rm --network none --user "$(id -u):$(id -g)" \
+            -v /tmp/neis-private-backup:/backup:ro postgres:17 \
+            pg_restore --list /backup/cloud.dump >/dev/null 2>&1; then
+            echo "BACKUP=INVALID_CUSTOM_ARCHIVE"
+            exit 1
+          fi
+          echo "BACKUP_ARCHIVE=VALIDATED"
           sha256sum /tmp/neis-private-backup/cloud.dump | awk '{print $1}' > /tmp/neis-private-backup/cloud.sha256
           BDIR="cloud-import-$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_RUN_ID}"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "umask 077; mkdir -p /home/ubuntu/neis-backups/$BDIR"
