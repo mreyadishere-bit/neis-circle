@@ -118,8 +118,9 @@ try:
     for n in ("schema","data","verify"):
         cmd(DOCKER+["cp",str(work/(n+".sql")),live_id+":/tmp/neis-live-"+n+".sql"],"OVH_LIVE_IMPORT=COPY_SQL_FAILED")
     print("OVH_LIVE_IMPORT_PREFLIGHT=PASS_91_TABLES")
-    cmd(COMPOSE+["stop","-t","30","functions","realtime","storage","rest","auth"],"OVH_LIVE_IMPORT=STOP_APIS_FAILED",timeout=100)
+    # Even a partially failed stop must trigger a restart attempt.
     stopped=True
+    cmd(COMPOSE+["stop","-t","30","functions","realtime","storage","rest","auth"],"OVH_LIVE_IMPORT=STOP_APIS_FAILED",timeout=100)
     print("OVH_LIVE_WRITER_APIS=STOPPED")
     args=COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","--single-transaction",
       "-c","TRUNCATE TABLE auth.audit_log_entries, auth.flow_state, auth.identities, auth.mfa_amr_claims, auth.refresh_tokens, auth.sessions, auth.users RESTART IDENTITY CASCADE",
@@ -140,10 +141,14 @@ try:
     print("OVH_LIVE_STORAGE_METADATA=104")
     print("GITHUB_PAGES=MAINTENANCE")
 finally:
+    restart_failed=False
     if stopped:
         r=run(COMPOSE+["up","-d","--no-deps","auth","rest","realtime","storage","functions"],timeout=180)
-        print("OVH_BACKEND_RESTART="+("SUCCESS" if r.returncode==0 else "FAILED_MANUAL_REVIEW"))
+        restart_failed=r.returncode!=0
+        print("OVH_BACKEND_RESTART="+("SUCCESS" if not restart_failed else "FAILED_MANUAL_REVIEW"))
     if live_id:
         for n in ("schema","data","verify"):
             run(DOCKER+["exec",live_id,"rm","-f","/tmp/neis-live-"+n+".sql"],timeout=20)
     shutil.rmtree(work,ignore_errors=True)
+    if restart_failed:
+        raise RuntimeError("OVH_BACKEND_RESTART=FAILED_MANUAL_REVIEW")
