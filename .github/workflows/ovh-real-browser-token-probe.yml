@@ -1,0 +1,27 @@
+name: OVH Real Browser Auth Token Probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-real-token-negative-browser.mjs'
+      - '.github/workflows/ovh-real-browser-token-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check negative probe source
+        run: node --check qa/ovh-real-token-negative-browser.mjs
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Query real production token endpoint using invalid synthetic codes, never real users
+        run: node qa/ovh-real-token-negative-browser.mjs
