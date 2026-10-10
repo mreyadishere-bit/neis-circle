@@ -24,10 +24,10 @@ def count(stage,table):
  else:
   cmd=[*base,'compose','-f','docker-compose.yml','-f','docker-compose.security.yml','-f','docker-compose.caddy.yml','exec','-T','db','psql','-X','-U','postgres','-d','postgres','-Atqc']
  # Check existence in a separate query so missing tables do not fail SQL parsing.
- check=subprocess.run([*cmd,"select to_regclass('"+table+"') is not null"],capture_output=True,text=True,timeout=25)
+ check=subprocess.run([*cmd,"select to_regclass('"+table+"') is not null"],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=25)
  if check.returncode or check.stdout.strip() not in ('t','f'):raise RuntimeError('relation')
  if check.stdout.strip()=='f':return '-1'
- p=subprocess.run([*cmd,'select count(*) from '+table],capture_output=True,text=True,timeout=25)
+ p=subprocess.run([*cmd,'select count(*) from '+table],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=25)
  if p.returncode or not p.stdout.strip().isdigit():raise RuntimeError('count')
  return p.stdout.strip()
 tables={'AUTH_USERS':'auth.users','PROFILES':'public.profiles','POSTS':'public.posts','CIRCLES':'public.circles','MESSAGES':'public.messages','CIRCLE_MESSAGES':'public.circle_messages','NOTIFICATIONS':'public.notifications','STORAGE':'storage.objects'}
@@ -40,17 +40,19 @@ except Exception:
  sys.exit(1)
 print('OVH_SNAPSHOT_INVENTORY=COMPLETE_READ_ONLY')
 PY
+echo 'OVH_BACKUP_PHASE=INVENTORY_DONE'
 # Verify free disk capacity before writing backup files.
 free="$(df -B1 --output=avail /home/ubuntu/neis-backups | tail -1 | tr -d ' ')"
 (( free > 1073741824 )) || { echo 'OVH_BACKUP=BLOCKED_LOW_DISK'; exit 1; }
 umask 077
-if ! compose exec -T db pg_dump -U postgres -d postgres --format=custom --no-owner --no-acl >"$tmp/live.dump" 2>"$tmp/dump.err";then
+if ! compose exec -T db pg_dump -U postgres -d postgres --format=custom --no-owner --no-acl </dev/null >"$tmp/live.dump" 2>"$tmp/dump.err";then
  echo 'OVH_BACKUP=FAILED_PG_DUMP';exit 1
 fi
-if ! compose exec -T db pg_dumpall -U postgres --globals-only >"$tmp/globals.sql" 2>"$tmp/globals.err";then
+if ! compose exec -T db pg_dumpall -U postgres --globals-only </dev/null >"$tmp/globals.sql" 2>"$tmp/globals.err";then
  echo 'OVH_BACKUP=FAILED_GLOBAL_ROLES';exit 1
 fi
 [[ -s "$tmp/live.dump" && -s "$tmp/globals.sql" ]] || { echo 'OVH_BACKUP=BLOCKED_EMPTY_BACKUP';exit 1; }
+echo 'OVH_BACKUP_PHASE=ARCHIVES_CAPTURED'
 if ! compose exec -T db pg_restore --list <"$tmp/live.dump" >/dev/null 2>&1;then
  echo 'OVH_BACKUP=FAILED_ARCHIVE_VALIDATION';exit 1
 fi
@@ -62,6 +64,7 @@ fi
 rm -f "$tmp/dump.err" "$tmp/globals.err"
 chmod 600 "$tmp/live.dump" "$tmp/globals.sql" "$tmp/checksums.sha256"
 mv "$tmp" "$backup"
+echo 'OVH_BACKUP_PHASE=ARCHIVE_HASHES_VALIDATED'
 echo 'OVH_BACKUP=VERIFIED_PRIVATE_SNAPSHOT'
 echo 'OVH_ACTIVE_DB=UNCHANGED'
 echo 'SUPABASE_CLOUD=UNCHANGED'
