@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate OVH migration shell syntax
+        run: bash -n scripts/ops/ovh-cli-isolated-restore.sh
       - run: npm run qa:static
       - run: npm run qa:unit
 
