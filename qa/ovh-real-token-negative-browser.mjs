@@ -5,6 +5,7 @@ const browser=await chromium.launch({headless:true});
 let failures=0;
 try{
   for(const origin of origins){
+    let runtimeKey=null;
     const context=await browser.newContext({serviceWorkers:'block'});
     const page=await context.newPage();
     const http=[],failed=[],cors=[];
@@ -12,7 +13,17 @@ try{
       try{
         const url=new URL(req.url());
         if(url.hostname==='supabase.neiscircle.site'&&url.pathname==='/auth/v1/token')
-          http.push({kind:'request',method:req.method()});
+          {
+          const headers=req.headers();
+          http.push({
+            kind:'request',
+            method:req.method(),
+            apikeyHeader:!!headers.apikey,
+            authorizationHeader:!!headers.authorization,
+            apikeyMatchesRuntime:!!runtimeKey&&headers.apikey===runtimeKey,
+            bearerMatchesRuntime:!!runtimeKey&&headers.authorization==='Bearer '+runtimeKey
+          });
+        }
       }catch{}
     });
     page.on('response',res=>{
@@ -37,6 +48,15 @@ try{
       await page.goto(origin+'/?qa=real-token-negative',{waitUntil:'domcontentloaded',timeout:35000});
       await page.waitForFunction(()=>typeof sb!=='undefined'&&!!sb?.auth?.storageKey,{timeout:18000});
       await page.waitForTimeout(1000);
+      const runtime=await page.evaluate(()=>({
+        hasPageConfig:!!window.NEIS_CONFIG?.supabaseAnonKey,
+        keyMatchesClient:!!sb?.supabaseKey&&sb.supabaseKey===window.NEIS_CONFIG?.supabaseAnonKey,
+        apiUrlMatches:sb?.supabaseUrl==='https://supabase.neiscircle.site',
+        publicKey:window.NEIS_CONFIG?.supabaseAnonKey||null
+      }));
+      runtimeKey=runtime.publicKey;
+      console.log('RUNTIME_CLIENT_EQUALS_CONFIG='+runtime.keyMatchesClient);
+      console.log('RUNTIME_API_URL_MATCH='+runtime.apiUrlMatches);
       const result=await page.evaluate(async()=>{
         const auth=sb.auth;
         const key=auth.storageKey+'-code-verifier';
