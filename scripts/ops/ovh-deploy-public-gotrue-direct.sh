@@ -28,7 +28,7 @@ import os,re
 old=Path(os.environ['AUTH_DIRECT_CADDY_ORIGINAL'])
 new=Path(os.environ['AUTH_DIRECT_CADDY_UPDATED'])
 source=old.read_text()
-pattern=r'(?m)^([ \\t]*)@supabase_api[ \\t]+path[ \\t]+([^\\r\\n]+)$'
+pattern=r'(?m)^([ \t]*)@supabase_api[ \t]+path[ \t]+([^\r\n]+)$'
 matches=list(re.finditer(pattern,source))
 if len(matches)!=1:raise SystemExit('DIRECT_AUTH=BLOCKED_UNEXPECTED_CADDY_API_RULE')
 original_paths=matches[0].group(2).split()
@@ -42,9 +42,9 @@ if source.count('reverse_proxy api-gw:8000')!=1 or source.count('basic_auth')!=1
 if 'handle_path /auth/v1/*' in source or 'reverse_proxy auth:9999' in source:
  raise SystemExit('DIRECT_AUTH=BLOCKED_RULE_ALREADY_PRESENT')
 indent=matches[0].group(1)
-replacement=(indent+'@supabase_api path '+' '.join(other_paths)+'\\n'+
-             indent+'handle_path /auth/v1/* {\\n'+
-             indent+'    reverse_proxy auth:9999\\n'+
+replacement=(indent+'@supabase_api path '+' '.join(other_paths)+'\n'+
+             indent+'handle_path /auth/v1/* {\n'+
+             indent+'    reverse_proxy auth:9999\n'+
              indent+'}')
 updated=source[:matches[0].start()]+replacement+source[matches[0].end():]
 assert updated.count('basic_auth')==1
