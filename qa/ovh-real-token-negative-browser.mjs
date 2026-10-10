@@ -30,7 +30,7 @@ try{
       try{
         const url=new URL(res.url());
         if(url.hostname==='supabase.neiscircle.site'&&url.pathname==='/auth/v1/token')
-          http.push({kind:'response',status:res.status(),cors:res.headers()['access-control-allow-origin']||'absent'});
+          http.push({kind:'response',status:res.status(),cors:res.headers()['access-control-allow-origin']||'absent',contentType:(res.headers()['content-type']||'absent').split(';')[0],serverClass:/envoy/i.test(res.headers()['server']||'')?'envoy':/caddy/i.test(res.headers()['server']||'')?'caddy':'other'});
       }catch{}
     });
     page.on('requestfailed',req=>{
@@ -90,6 +90,37 @@ try{
       console.log('TOKEN_REQUEST_FAILED='+JSON.stringify(failed));
       console.log('BROWSER_ERROR_CLASSES='+JSON.stringify([...new Set(cors)]));
       console.log('UNEXPECTED_SYNTHETIC_LOGIN='+!!result.hasUser);
+      const direct=await page.evaluate(async()=>{
+        const key=window.NEIS_CONFIG?.supabaseAnonKey;
+        const base=window.NEIS_CONFIG?.supabaseUrl;
+        if(!key||!base)return {status:0,issue:'missing_config'};
+        const classify=async response=>{
+          const type=(response.headers.get('content-type')||'').split(';')[0];
+          let kind='OTHER';
+          try{
+            const body=await response.json();
+            if(body&&typeof body==='object'){
+              const message=['msg','error','error_code','message','code'].map(k=>String(body[k]||'')).join(' ').toLowerCase();
+              if(/invalid.api.key|invalid_apikey/.test(message))kind='INVALID_APIKEY';
+              else if(/auth.code|invalid.grant|invalid.code/.test(message))kind='INVALID_AUTH_CODE';
+              else if(/unauthoriz/.test(message))kind='UNAUTHORIZED';
+              else kind='JSON_'+Object.keys(body).sort().filter(x=>/^[a-z_]{2,30}$/i.test(x)).slice(0,4).join('_');
+            }
+          }catch{kind='NON_JSON'}
+          return {status:response.status,type,kind};
+        };
+        try{
+          const response=await fetch(base+'/auth/v1/token?grant_type=pkce',{
+            method:'POST',
+            headers:{'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+            body:JSON.stringify({auth_code:'neis-invalid-synthetic-for-browser-direct-test',code_verifier:'A'.repeat(64)})
+          });
+          const token=await classify(response);
+          const settings=await fetch(base+'/auth/v1/settings',{headers:{apikey:key}});
+          return {token,settingsStatus:settings.status};
+        }catch(e){return{errorClass:String(e?.name||'unknown').replace(/[^a-z]/gi,'').slice(0,35)}}
+      });
+      console.log('DIRECT_BROWSER_AUTH='+JSON.stringify(direct));
       if(result.hasUser||http.filter(e=>e.kind==='request').length===0)failures++;
     }catch(e){
       console.log('ORIGIN='+new URL(origin).hostname);
