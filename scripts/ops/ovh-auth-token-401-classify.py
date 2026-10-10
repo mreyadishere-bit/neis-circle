@@ -66,4 +66,21 @@ if anon:
  test('TOKEN_WITH_ANON','/auth/v1/token?grant_type=pkce',True)
  test('TOKEN_WITH_ANON_BEARER','/auth/v1/token?grant_type=pkce',True,True)
  test('AUTH_SETTINGS_ANON','/auth/v1/settings',True)
+ def get_variant(label,extra_headers):
+  headers={'Origin':'https://neiscircle.site','apikey':anon,'authorization':'Bearer '+anon,'User-Agent':'NEIS-Origin-Check'}
+  headers.update(extra_headers)
+  req=urllib.request.Request(base+'/auth/v1/settings',headers=headers)
+  try:response=urllib.request.urlopen(req,timeout=12)
+  except urllib.error.HTTPError as e:response=e
+  except Exception:
+   print('AUTH_VARIANT_'+label+'_NETWORK=FAILED');return
+  with response:
+   print('AUTH_VARIANT_'+label+'_HTTP='+str(response.status))
+   print('AUTH_VARIANT_'+label+'_TYPE='+(response.headers.get('Content-Type','').split(';')[0] or 'NONE'))
+ get_variant('BASE',{})
+ get_variant('BROWSER_USER_AGENT',{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/154.0.0.0 Safari/537.36'})
+ get_variant('PUBLIC_CLIENT_IP',{'X-Forwarded-For':'198.51.100.42'})
+ get_variant('X_REAL_IP',{'X-Real-IP':'198.51.100.42'})
+ get_variant('FETCH_METADATA',{'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'cors','Accept':'*/*'})
+ get_variant('EXTERNAL_ORIGIN',{'Origin':'https://www.neiscircle.site'})
  print('AUTH_PROBE=NO_VALID_USERS_NO_SECRETS')
