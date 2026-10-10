@@ -1,0 +1,71 @@
+name: OVH Restore Original Web Push VAPID
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-restore-original-vapid.sh'
+      - '.github/workflows/ovh-restore-original-vapid.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-vapid-restore
+  cancel-in-progress: false
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate restore script and protected secret against existing public key
+        env:
+          NEIS_VAPID_PRIVATE_KEY: ${{ secrets.NEIS_VAPID_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          bash -n scripts/ops/ovh-restore-original-vapid.sh
+          node - <<'NODE'
+          const crypto=require('node:crypto');
+          const fs=require('node:fs');
+          const secret=String(process.env.NEIS_VAPID_PRIVATE_KEY||'').trim();
+          if(!/^[A-Za-z0-9_-]{43}$/.test(secret)){
+            console.error('VAPID_RESTORE=BLOCKED_GITHUB_SECRET_MISSING_OR_INVALID');
+            process.exit(1);
+          }
+          const source=fs.readFileSync('scripts/pwa-install-v117.js','utf8');
+          const pub=source.match(/VAPID_PUBLIC_KEY=['"]([A-Za-z0-9_-]{85,90})['"]/);
+          if(!pub){console.error('VAPID_RESTORE=PUBLIC_KEY_ABSENT');process.exit(1);}
+          const ecdh=crypto.createECDH('prime256v1');
+          ecdh.setPrivateKey(Buffer.from(secret,'base64url'));
+          const derived=ecdh.getPublicKey('base64url','uncompressed');
+          if(derived!==pub[1]){
+            console.error('VAPID_RESTORE=BLOCKED_KEY_PAIR_MISMATCH');
+            process.exit(1);
+          }
+          console.log('VAPID_RESTORE=ORIGINAL_PAIR_MATCH_VERIFIED');
+          NODE
+      - name: Configure pinned SSH with existing OVH secrets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Restore original matching VAPID keys into OVH database Vault
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          NEIS_VAPID_PRIVATE_KEY: ${{ secrets.NEIS_VAPID_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          set +x
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-restore-original-vapid.sh "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-restore-original-vapid.sh"
+          printf '%s\n' "$NEIS_VAPID_PRIVATE_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash /home/ubuntu/neis-backups/ovh-restore-original-vapid.sh'
