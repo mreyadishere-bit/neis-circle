@@ -80,7 +80,10 @@ process.stdout.write('VERSIONED_STAGE_OBJECTS_COPIED=104\n');
 process.stdout.write('VERSIONED_STAGE_SHA256_VERIFIED=104\n');
 """
 parent.mkdir(mode=0o700)
-building.mkdir(mode=0o755)
+building.mkdir(mode=0o700)
+# Docker may use user-namespace remapping; allow the isolated helper to write
+# only this disposable staging mount. The parent remains private (0700).
+os.chmod(building,0o777)
 try:
     args=[*d,'run','--rm','-i','--network','none','--pull','never','--read-only',
           '--cap-drop','ALL','--security-opt','no-new-privileges',
@@ -108,6 +111,9 @@ try:
         print('VERSIONED_STAGE_PERMISSION_LOCATION='+denied)
         raise RuntimeError('candidate conversion failed')
     building.rename(candidate)
+    # This copy is staging only. Revoke temporary world-write permissions
+    # before retaining it as an immutable candidate for further checks.
+    os.chmod(candidate,0o755)
     print('VERSIONED_STAGE_OBJECTS_COPIED=104')
     print('VERSIONED_STAGE_SHA256_VERIFIED=104')
     print('VERSIONED_STAGE=READY_ISOLATED_CANDIDATE')
