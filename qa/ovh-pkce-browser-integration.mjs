@@ -29,9 +29,9 @@ try {
     const provider=u.searchParams.get('provider');
     console.log('PKCE_AUTHORIZE_PROVIDER_GOOGLE='+String(provider==='google'));
     console.log('PKCE_AUTHORIZE_CHALLENGE_PRESENT='+String(!!challenge));
-    console.log('PKCE_AUTHORIZE_METHOD='+(/^(S256|plain)$/.test(method||'')?method:'MISSING_OR_UNKNOWN'));
+    console.log('PKCE_AUTHORIZE_METHOD='+(/^(s256|S256|plain)$/.test(method||'')?method.toUpperCase():'MISSING_OR_UNKNOWN'));
     console.log('PKCE_AUTHORIZE_QUERY_KEY_NAMES='+[...u.searchParams.keys()].filter(k=>/^(provider|redirect_to|code_challenge|code_challenge_method|scopes|flow_type)$/.test(k)).sort().join(','));
-    if(!challenge||method!=='S256'||provider!=='google')stats.badUrls++;
+    if(!challenge||String(method).toLowerCase()!=='s256'||provider!=='google')stats.badUrls++;
     stats.authorize++;
     await route.fulfill({status:302,headers:{location:origin+'/?code=synthetic-neis-pkce-code'}});
   });
