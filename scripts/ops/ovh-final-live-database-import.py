@@ -137,7 +137,7 @@ try:
     stopped=True
     cmd(COMPOSE+["stop","-t","30","functions","realtime","storage","rest","auth"],"OVH_LIVE_IMPORT=STOP_APIS_FAILED",timeout=100)
     print("OVH_LIVE_WRITER_APIS=STOPPED")
-    args=COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","--single-transaction",
+    args=COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-v","VERBOSITY=verbose","--single-transaction",
       "-c","TRUNCATE TABLE auth.audit_log_entries, auth.flow_state, auth.identities, auth.mfa_amr_claims, auth.refresh_tokens, auth.sessions, auth.users RESTART IDENTITY CASCADE",
       "-f","/tmp/neis-live-schema.sql",
       "-c","ALTER TABLE auth.one_time_tokens ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone",
