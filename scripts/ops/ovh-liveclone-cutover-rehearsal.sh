@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# Restore SUPABASE CLI filtered schema/data on top of actual OVH bootstrap schema,
+# Restore fresh 2026-10-10 maintenance Supabase CLI export on the exact OVH baseline clone.
 # only inside network-disconnected neis-restore-test container.
-source=/home/ubuntu/neis-backups/cloud-cli-import-38047355178
+source=/home/ubuntu/neis-backups/cloud-cli-import-38052670098
 backup=/home/ubuntu/neis-backups/ovh-destination-precrossover-20261010
 container=neis-restore-test
-database=neis_cli_liveclone_20261010_v1
+database=neis_cli_liveclone_20261010_v2
 dock() { sudo -n /usr/bin/docker "$@"; }
 [[ "$(dock inspect -f '{{.HostConfig.NetworkMode}}' "$container")" == none ]] || { echo 'CLI_RESTORE=BLOCKED_NETWORK'; exit 1; }
 [[ "$(dock inspect -f '{{.State.Running}}' "$container")" == true ]] || { echo 'CLI_RESTORE=BLOCKED_CONTAINER'; exit 1; }
