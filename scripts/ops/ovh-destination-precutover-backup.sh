@@ -23,10 +23,12 @@ def count(stage,table):
   cmd=[*base,'exec','neis-restore-test','psql','-X','-U','supabase_admin','-d','neis_fresh_archive_20261010','-Atqc']
  else:
   cmd=[*base,'compose','-f','docker-compose.yml','-f','docker-compose.security.yml','-f','docker-compose.caddy.yml','exec','-T','db','psql','-X','-U','postgres','-d','postgres','-Atqc']
- # Report 0 if table doesn't exist; otherwise count. Never retrieve rows.
- sql="select CASE WHEN to_regclass('"+table+"') IS NULL THEN '-1' ELSE (SELECT count(*)::text FROM "+table+") END"
- p=subprocess.run([*cmd,sql],capture_output=True,text=True,timeout=25)
- if p.returncode or not p.stdout.strip().lstrip('-').isdigit():raise RuntimeError('query')
+ # Check existence in a separate query so missing tables do not fail SQL parsing.
+ check=subprocess.run([*cmd,"select to_regclass('"+table+"') is not null"],capture_output=True,text=True,timeout=25)
+ if check.returncode or check.stdout.strip() not in ('t','f'):raise RuntimeError('relation')
+ if check.stdout.strip()=='f':return '-1'
+ p=subprocess.run([*cmd,'select count(*) from '+table],capture_output=True,text=True,timeout=25)
+ if p.returncode or not p.stdout.strip().isdigit():raise RuntimeError('count')
  return p.stdout.strip()
 tables={'AUTH_USERS':'auth.users','PROFILES':'public.profiles','POSTS':'public.posts','CIRCLES':'public.circles','MESSAGES':'public.messages','CIRCLE_MESSAGES':'public.circle_messages','NOTIFICATIONS':'public.notifications','STORAGE':'storage.objects'}
 try:
