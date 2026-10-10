@@ -139,7 +139,10 @@ const neisOAuthCallbackTokens=(()=>{
     return access_token&&refresh_token?{access_token,refresh_token}:null;
   }catch(_){return null}
 })();
-window.__NEISOAuthCallbackPending=!!neisOAuthCallbackTokens || /(?:^\?|&)code=/.test(location.search);
+const neisOAuthCallbackCode=(()=>{
+  try{return new URL(location.href).searchParams.get('code')||null}catch(_){return null}
+})();
+window.__NEISOAuthCallbackPending=!!neisOAuthCallbackTokens || !!neisOAuthCallbackCode;
 
 function neisClearOAuthCallbackUrl(){
   try{
@@ -177,6 +180,41 @@ async function neisRecoverImplicitOAuth(client){
   neisClearOAuthCallbackUrl();
   window.__NEISOAuthRecoveryFailed=true;
   return null;
+}
+// The PKCE callback is deliberately consumed exactly once by this app.
+// Supabase automatic URL detection remains disabled only while ?code= exists.
+async function neisRecoverPKCEOAuth(client){
+  if(!neisOAuthCallbackCode)return null;
+  let timer;
+  try{
+    const response=await Promise.race([
+      client.auth.exchangeCodeForSession(neisOAuthCallbackCode),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('oauth_pkce_timeout')),15000)})
+    ]).finally(()=>clearTimeout(timer));
+    if(response?.error)throw response.error;
+    const session=response?.data?.session||null;
+    if(!session?.user)throw new Error('oauth_session_missing');
+    window.__NEISOAuthCallbackPending=false;
+    window.__NEISOAuthRecoveryFailed=false;
+    window.__NEISOAuthRecoveryReason='';
+    neisClearOAuthCallbackUrl();
+    return session;
+  }catch(error){
+    const raw=String(error?.code||'');
+    let category=/^[a-z_]{1,48}$/.test(raw)?raw:'exchange_failed';
+    // Never display OAuth codes, verifier contents, exception messages or URLs.
+    if(category==='exchange_failed'&&/code verifier|flow state|pkce/i.test(String(error?.message||'')))category='verifier_missing';
+    if(category==='exchange_failed'&&/oauth_pkce_timeout/.test(String(error?.message||'')))category='exchange_timeout';
+    const status=Number(error?.status);
+    window.__NEISOAuthRecoveryReason='oauth_'+category+(status>=400&&status<=599?'_'+status:'');
+    window.__NEISOAuthRecoveryFailed=true;
+    console.warn('[NEIS OAuth] PKCE exchange failed:',window.__NEISOAuthRecoveryReason);
+    return null;
+  }finally{
+    clearTimeout(timer);
+    window.__NEISOAuthCallbackPending=false;
+    neisClearOAuthCallbackUrl();
+  }
 }
 const NEIS_AUTH_STAY_KEY='neis-auth-stay-signed-in';
 function neisStaySignedIn(){
@@ -257,13 +295,15 @@ async function initSupabase(){
           // tokens in the address bar. Let supabase-js handle ?code= natively.
           // Keep one legacy implicit-fragment recovery path for in-flight logins.
           flowType:'pkce',
-          detectSessionInUrl:!neisOAuthCallbackTokens,
+          detectSessionInUrl:!neisOAuthCallbackTokens && !neisOAuthCallbackCode,
           storage:neisAuthStorage
         }
       });
       let oauthSession=null;
       if(neisOAuthCallbackTokens){
         oauthSession=await neisRecoverImplicitOAuth(sb);
+      }else if(neisOAuthCallbackCode){
+        oauthSession=await neisRecoverPKCEOAuth(sb);
       }else{
         const initial=await sb.auth.getSession();
         if(initial?.error)throw initial.error;

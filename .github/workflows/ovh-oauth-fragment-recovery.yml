@@ -1,13 +1,6 @@
 name: OVH OAuth Fragment Recovery Deploy
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/01-core.js'
-      - 'scripts/03-auth-i18n.js'
-      - 'scripts/ops/ovh-deploy-oauth-fragment-recovery.sh'
-      - '.github/workflows/ovh-oauth-fragment-recovery.yml'
 permissions:
   contents: read
 concurrency:

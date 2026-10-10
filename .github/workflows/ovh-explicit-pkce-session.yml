@@ -1,0 +1,86 @@
+name: OVH Explicit Google PKCE Session Recovery
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/01-core.js'
+      - 'scripts/identity-v15.js'
+      - 'scripts/ops/ovh-deploy-pkce-explicit.sh'
+      - 'scripts/ops/ovh-rollback-pkce-explicit.sh'
+      - 'qa/ovh-pkce-missing-verifier-browser.mjs'
+      - '.github/workflows/ovh-explicit-pkce-session.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-explicit-pkce-production
+  cancel-in-progress: false
+jobs:
+  deploy-verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate frontend source, legacy OAuth and isolated release scripts
+        run: |
+          node --check scripts/01-core.js
+          node --check scripts/identity-v15.js
+          node --check qa/ovh-pkce-missing-verifier-browser.mjs
+          node qa/oauth-fragment-recovery.test.mjs
+          node qa/google-only-auth-contract.mjs
+          bash -n scripts/ops/ovh-deploy-pkce-explicit.sh
+          bash -n scripts/ops/ovh-rollback-pkce-explicit.sh
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage and mount rollback-safe PKCE fix on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/ovh-pkce-explicit-20261010'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/01-core.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-pkce-explicit-20261010/01-core.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/identity-v15.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-pkce-explicit-20261010/identity-v15.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-deploy-pkce-explicit.sh
+      - name: Wait for public OVH HTTPS availability
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -fsS --max-time 5 https://neiscircle.site/ -o /dev/null 2>/dev/null; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - name: Verify a successful PKCE session in real Chromium on apex
+        env:
+          NEIS_TEST_ORIGIN: https://neiscircle.site
+        run: node qa/ovh-pkce-browser-integration.mjs
+      - name: Verify a successful PKCE session in real Chromium on www
+        env:
+          NEIS_TEST_ORIGIN: https://www.neiscircle.site
+        run: node qa/ovh-pkce-browser-integration.mjs
+      - name: Verify missing PKCE verifier fails visibly and safely
+        run: node qa/ovh-pkce-missing-verifier-browser.mjs
+      - name: Rollback ONLY this frontend release on failed validation
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-pkce-explicit.sh
+          fi
