@@ -1,15 +1,6 @@
 name: OVH Explicit Google PKCE Session Recovery
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/01-core.js'
-      - 'scripts/identity-v15.js'
-      - 'scripts/ops/ovh-deploy-pkce-explicit.sh'
-      - 'scripts/ops/ovh-rollback-pkce-explicit.sh'
-      - 'qa/ovh-pkce-missing-verifier-browser.mjs'
-      - '.github/workflows/ovh-explicit-pkce-session.yml'
 permissions:
   contents: read
 concurrency:
