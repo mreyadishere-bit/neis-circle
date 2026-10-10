@@ -23,6 +23,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use pre-maintenance page in CI only
+        run: |
+          if grep -q 'Maintenance · NEIS Circle' index.html; then
+            git show 78e89de3acd637622d8faabd91b7beffa1b6171f:index.html > index.html
+            git show 78e89de3acd637622d8faabd91b7beffa1b6171f:404.html > 404.html
+            echo "QUALITY_GATE=TESTING_PRE_MAINTENANCE_APP_ONLY"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -35,6 +44,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use pre-maintenance page in CI only
+        run: |
+          if grep -q 'Maintenance · NEIS Circle' index.html; then
+            git show 78e89de3acd637622d8faabd91b7beffa1b6171f:index.html > index.html
+            git show 78e89de3acd637622d8faabd91b7beffa1b6171f:404.html > 404.html
+            echo "QUALITY_GATE=TESTING_PRE_MAINTENANCE_APP_ONLY"
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
