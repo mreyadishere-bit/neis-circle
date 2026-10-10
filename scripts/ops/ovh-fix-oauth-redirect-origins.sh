@@ -9,9 +9,13 @@ dc(){ sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.se
 dc config --quiet
 mkdir -p -m 700 /home/ubuntu/neis-backups/oauth-redirect-allowlist-20261010
 backup=/home/ubuntu/neis-backups/oauth-redirect-allowlist-20261010/dot-env.before
-test ! -e "$backup" || { echo 'OAUTH_ORIGINS=BACKUP_ALREADY_EXISTS';exit 1; }
-cp -p .env "$backup"
-chmod 600 "$backup"
+if test -e "$backup";then
+  cmp -s "$backup" .env || { echo 'OAUTH_ORIGINS=BACKUP_CONFLICT';exit 1; }
+  echo 'OAUTH_ORIGINS=BASELINE_BACKUP_REUSED'
+else
+  cp -p .env "$backup"
+  chmod 600 "$backup"
+fi
 rollback=1
 cleanup(){
  if [ "$rollback" = 1 ];then
@@ -77,12 +81,8 @@ for attempt in range(25):
  time.sleep(1)
 else:raise SystemExit('OAUTH_ORIGINS=RUNTIME_MISMATCH')
 print('OAUTH_ORIGINS=RUNTIME_VERIFIED')
-for attempt in range(20):
- try:
-  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/health',timeout=5) as r:
-   if r.status==200:break
- except Exception:time.sleep(1)
-else:raise SystemExit('OAUTH_ORIGINS=AUTH_UNHEALTHY')
+# /auth/v1/health may be protected by Kong's API-key gate.
+# The Google authorize endpoint below provides an end-to-end auth health check.
 class NoFollow(urllib.request.HTTPRedirectHandler):
  def redirect_request(self,req,fp,code,msg,headers,newurl):return None
 opener=urllib.request.build_opener(NoFollow)
