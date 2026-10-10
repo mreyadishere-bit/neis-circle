@@ -67,7 +67,14 @@ python3 - "$source/schema.sql" "$temp/schema-pgcron-filtered.sql" <<'PY'
 from pathlib import Path
 import re,sys
 schema=Path(sys.argv[1]).read_text()
-pattern=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]* >"$temp/schema.log" 2>&1 </dev/null;then
+pattern=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*$'
+filtered,removed=re.subn(pattern,'-- pg_cron omitted in disconnected test',schema)
+print('CLI_CLOUD_SCHEMA_PGCRON_STATEMENTS='+str(removed))
+if removed!=1:raise SystemExit('CLI_RESTORE=BLOCKED_PGCRON_FILTER_MISMATCH')
+Path(sys.argv[2]).write_text(filtered)
+PY
+dock cp "$temp/schema-pgcron-filtered.sql" "$container:/tmp/neis-cli-cloud-schema.sql"
+if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose --single-transaction -f /tmp/neis-cli-cloud-schema.sql >"$temp/schema.log" 2>&1 </dev/null;then
  echo 'CLI_RESTORE=FAILED_CLOUD_SCHEMA'
  python3 - "$temp/schema.log" "$source/schema.sql" <<'PY'
 from pathlib import Path
