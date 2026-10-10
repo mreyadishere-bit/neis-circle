@@ -21,7 +21,7 @@ if not re.fullmatch(r"[A-Za-z0-9_-]{85,90}", public) or not re.fullmatch(r"[A-Za
 release=Path("/home/ubuntu/neis-frontend/releases/ovh-selfhosted-20261010-google-pkce")
 worker=(release/"neis-pwa-sw.js").read_text()
 push=(release/"scripts/pwa-install-v117.js").read_text()
-m=re.search(r'VAPID_PUBLIC_KEY\\s*=\\s*[\x27\x22]([A-Za-z0-9_-]+)[\x27\x22]',worker)
+m=re.search(r'VAPID_PUBLIC_KEY\s*=\s*[\x27\x22]([A-Za-z0-9_-]+)[\x27\x22]',worker)
 if not m or public!=m.group(1) or public not in push:
     raise SystemExit("VAPID_RESTORE=BLOCKED_FRONTEND_KEY_MISMATCH")
 print("VAPID_SOURCE_MATCHES_LIVE_FRONTEND=YES")
