@@ -1,0 +1,30 @@
+name: OVH Google PKCE Both-Origin Browser Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-pkce-both-origins-browser.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install real Chromium for synthetic Google login
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Same-origin PKCE callback at primary domain
+        env:
+          NEIS_TEST_ORIGIN: https://neiscircle.site
+        run: node qa/ovh-pkce-browser-integration.mjs
+      - name: Same-origin PKCE callback at www domain
+        env:
+          NEIS_TEST_ORIGIN: https://www.neiscircle.site
+        run: node qa/ovh-pkce-browser-integration.mjs
