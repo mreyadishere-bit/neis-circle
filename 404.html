@@ -1,22 +1,33 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="robots" content="noindex">
-  <title>NEIS Circle</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f5f7f5">
+<meta http-equiv="refresh" content="120">
+<title>Maintenance · NEIS Circle</title>
+<style>
+:root{color-scheme:light;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;min-height:100svh;background:#f7f9f6;color:#182b24;display:flex;align-items:center;justify-content:center;padding:24px}
+main{width:min(100%,540px);text-align:center}
+.brand{display:inline-flex;align-items:center;gap:10px;font-size:16px;font-weight:730;letter-spacing:-.4px;margin-bottom:44px}
+.mark{width:36px;height:36px;border-radius:12px;background:#09784a;color:white;display:grid;place-items:center;font-weight:790;font-size:19px}
+.indicator{width:56px;height:56px;margin:0 auto 24px;border-radius:20px;background:#e2ede5;display:grid;place-items:center}
+.indicator svg{width:26px;height:26px;stroke:#087348}
+h1{font-size:clamp(28px,5vw,40px);font-weight:750;letter-spacing:-1.4px;line-height:1.15;margin:0 0 18px}
+p{font-size:16px;line-height:1.75;color:#61756a;margin:0}
+.ar{direction:rtl;unicode-bidi:plaintext;margin-top:24px;font-size:16px;color:#394d42}
+footer{margin-top:42px;font-size:13px;color:#87958c}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark}body{background:#101913;color:#f2f7f2}.indicator{background:#203a2d}p{color:#b3c5b9}.ar{color:#d0ded4}footer{color:#899b8f}}
+</style>
 </head>
-<body>
-<script>
-(function(){
-  var path=(location.pathname||'/').replace(/^\/+/, '');
-  var search=location.search||'';
-  var hash=location.hash||'';
-  if(hash && hash.indexOf('#/')===0){
-    location.replace('/'+hash);
-    return;
-  }
-  location.replace('/#/'+path+search);
-})();
-</script>
-</body>
-</html>
+<body><main role="main" aria-labelledby="maintenance-title">
+<div class="brand"><span class="mark">N</span><span>NEIS Circle</span></div>
+<div class="indicator" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 6.3a5 5 0 0 0-6.2 6.2l-5.1 5.1a2 2 0 0 0 2.8 2.8l5.1-5.1a5 5 0 0 0 6.2-6.2l-3 3-3.3-.6-.6-3.3z"/></svg></div>
+<h1 id="maintenance-title">We'll be back soon.</h1>
+<p>NEIS Circle is temporarily unavailable while we're upgrading our infrastructure. Your account and content are being protected. Thank you for your patience.</p>
+<p class="ar" lang="ar">منصة NEIS Circle متوقفة مؤقتًا لإجراء صيانة وتحديثات على البنية التحتية. نعمل على إعادة الخدمة بأمان مع الحفاظ على حساباتكم ومحتواكم. شكرًا لتفهمكم.</p>
+<footer>Scheduled maintenance in progress · This page refreshes automatically.</footer>
+</main></body></html>
