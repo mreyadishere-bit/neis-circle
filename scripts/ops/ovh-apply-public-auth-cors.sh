@@ -4,8 +4,8 @@ umask 077
 cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
-baseline="$stage/public-auth.before-cors.Caddyfile"
-candidate="$stage/public-auth.with-cors-v2.Caddyfile"
+baseline="$stage/public-auth.before-cors-v3.Caddyfile"
+candidate="$stage/public-auth.with-cors-v3.Caddyfile"
 test -s "$mounted" && test -s "$stage/original.Caddyfile"
 test -f docker-compose.auth-public-direct.yml
 grep -Fq "$mounted" docker-compose.auth-public-direct.yml
@@ -35,7 +35,7 @@ route=(indent+'handle_path /auth/v1/* {\n'
   +nest+'handle @neis_auth_preflight {\n'
   +deeper+'header Access-Control-Allow-Origin "{http.request.header.Origin}"\n'
   +deeper+'header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"\n'
-  +deeper+'header Access-Control-Allow-Headers "apikey, authorization, content-type, x-client-info, accept"\n'
+  +deeper+'header Access-Control-Allow-Headers "apikey, authorization, content-type, x-client-info, x-supabase-api-version, accept"\n'
   +deeper+'header Access-Control-Max-Age "3600"\n'
   +deeper+'header Vary "Origin"\n'
   +deeper+'respond "" 204\n'
@@ -49,8 +49,8 @@ candidate.write_text(result)
 candidate.chmod(0o600)
 print('AUTH_CORS=CANDIDATE_BUILT_EXISTING_ROUTES_PRESERVED')
 PY
-sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-auth-cors-candidate-v2-20261010.Caddyfile
-sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-auth-cors-candidate-v2-20261010.Caddyfile >/dev/null
+sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-auth-cors-candidate-v3-20261011.Caddyfile
+sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-auth-cors-candidate-v3-20261011.Caddyfile >/dev/null
 echo 'AUTH_CORS=CADDY_VALIDATED'
 cp -p "$mounted" "$baseline"
 deployed=0
@@ -70,7 +70,7 @@ for attempt in range(18):
  headers={
   'Origin':'https://neiscircle.site',
   'Access-Control-Request-Method':'POST',
-  'Access-Control-Request-Headers':'apikey,authorization,content-type,x-client-info'
+  'Access-Control-Request-Headers':'apikey,authorization,content-type,x-client-info,x-supabase-api-version'
  }
  req=urllib.request.Request(base,headers=headers,method='OPTIONS')
  try:response=urllib.request.urlopen(req,timeout=6)
@@ -80,7 +80,7 @@ for attempt in range(18):
   acao=response.headers.get('Access-Control-Allow-Origin','')
   acam=response.headers.get('Access-Control-Allow-Methods','').lower()
   acah=response.headers.get('Access-Control-Allow-Headers','').lower()
-  ok=response.status==204 and acao=='https://neiscircle.site' and 'post' in acam and all(h in acah for h in ('apikey','authorization','content-type','x-client-info'))
+  ok=response.status==204 and acao=='https://neiscircle.site' and 'post' in acam and all(h in acah for h in ('apikey','authorization','content-type','x-client-info','x-supabase-api-version'))
   if ok:break
  time.sleep(1)
 print('AUTH_CORS=INTERNAL_PREFLIGHT_PASS' if ok else 'AUTH_CORS=INTERNAL_PREFLIGHT_FAILED')
