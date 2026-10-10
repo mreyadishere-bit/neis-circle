@@ -129,8 +129,50 @@ function loadSupabaseLibrary(){
   })().finally(()=>{window.__neisSupabaseLoader=null});
   return window.__neisSupabaseLoader;
 }
-// Only detect the presence of OAuth parameters: never persist URL credentials.
-window.__NEISOAuthCallbackPending=/(?:^#|[&#])(?:access_token|refresh_token|code)=/.test(location.hash) || /(?:^\?|&)code=/.test(location.search);
+// Preserve the callback in memory until Supabase finishes initialization;
+// never save access/refresh/provider tokens in logs or project data.
+const neisOAuthCallbackTokens=(()=>{
+  try{
+    const params=new URLSearchParams(location.hash.replace(/^#/,''));
+    const access_token=params.get('access_token');
+    const refresh_token=params.get('refresh_token');
+    return access_token&&refresh_token?{access_token,refresh_token}:null;
+  }catch(_){return null}
+})();
+window.__NEISOAuthCallbackPending=!!neisOAuthCallbackTokens || /(?:^\?|&)code=/.test(location.search);
+
+function neisClearOAuthCallbackUrl(){
+  try{
+    const url=new URL(location.href);
+    const keys=['access_token','refresh_token','provider_token','provider_refresh_token','token_type','expires_in','expires_at','sb','code'];
+    keys.forEach(key=>url.searchParams.delete(key));
+    if(neisOAuthCallbackTokens)url.hash='';
+    history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+  }catch(_){}
+}
+async function neisRecoverImplicitOAuth(client){
+  if(!neisOAuthCallbackTokens)return null;
+  try{
+    let timer;
+    const recovery=await Promise.race([
+      client.auth.setSession(neisOAuthCallbackTokens),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('oauth_recovery_timeout')),12000)})
+    ]).finally(()=>clearTimeout(timer));
+    if(recovery?.error)throw recovery.error;
+    const session=recovery?.data?.session||null;
+    if(session?.user){
+      window.__NEISOAuthCallbackPending=false;
+      neisClearOAuthCallbackUrl();
+      return session;
+    }
+  }catch(error){
+    console.warn('[NEIS OAuth] session recovery failed:',String(error?.name||'recovery_error'));
+  }
+  window.__NEISOAuthCallbackPending=false;
+  neisClearOAuthCallbackUrl();
+  window.__NEISOAuthRecoveryFailed=true;
+  return null;
+}
 const NEIS_AUTH_STAY_KEY='neis-auth-stay-signed-in';
 function neisStaySignedIn(){
   return localStorage.getItem(NEIS_AUTH_STAY_KEY)!=='0';
@@ -210,9 +252,20 @@ async function initSupabase(){
           storage:neisAuthStorage
         }
       });
-      const {data,error}=await sb.auth.getSession();
-      if(error)throw error;
-      authUser=data.session?.user||null;
+      let initial={data:{session:null},error:null};
+      try{initial=await sb.auth.getSession()}catch(error){initial={data:{session:null},error}}
+      let oauthSession=initial?.data?.session||null;
+      if(!oauthSession&&neisOAuthCallbackTokens){
+        oauthSession=await neisRecoverImplicitOAuth(sb);
+      }
+      if(initial?.error&&!oauthSession){
+        console.warn('[NEIS OAuth] initial session unavailable:',String(initial.error?.name||'session_error'));
+      }
+      authUser=oauthSession?.user||null;
+      if(oauthSession?.user&&neisOAuthCallbackTokens){
+        neisClearOAuthCallbackUrl();
+        window.__NEISOAuthCallbackPending=false;
+      }
       if(!supabaseAuthSubscription){
         const listener=sb.auth.onAuthStateChange((event,session)=>{
           // Auth callback must be synchronous. Awaiting a Supabase query here

@@ -336,6 +336,10 @@ async function v4Init(){
   authUser=data.session?.user||null;
   if(!authUser){
     authScreen();
+    if(window.__NEISOAuthRecoveryFailed){
+      window.__NEISOAuthRecoveryFailed=false;
+      toast(bi('Google returned, but your session could not be verified. Please sign in again.','رجعت من Google لكن تعذر تأكيد الجلسة. حاول تسجيل الدخول مرة أخرى.'));
+    }
     return;
   }
 
