@@ -127,23 +127,47 @@ try:
      "IF EXISTS (SELECT 1 FROM public.profiles p LEFT JOIN auth.users u ON u.id=p.id WHERE u.id IS NULL) THEN RAISE EXCEPTION 'orphan profile'; END IF;",
      "IF (SELECT count(*) FROM pg_policies WHERE schemaname='public') <> 138 THEN RAISE EXCEPTION 'RLS policy mismatch'; END IF;",
      "IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef) <> 120 THEN RAISE EXCEPTION 'definer function mismatch'; END IF;",
+     "IF (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND pg_get_userbyid(c.relowner)='postgres') <> 61 THEN RAISE EXCEPTION 'table ownership parity failure'; END IF;",
+     "IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND pg_get_userbyid(p.proowner)='postgres') <> 120 THEN RAISE EXCEPTION 'security definer owner parity failure'; END IF;",
      "END $NEIS$;"]
     (work/"verify.sql").write_text("\n".join(verify)+"\n")
+    # Match the source Cloud ownership of 61 public tables and 120
+    # SECURITY DEFINER routines; retain bootstrap Auth/Storage owners.
+    owner_sql="""DO $NEIS$
+    DECLARE r record;
+    BEGIN
+      FOR r IN
+        SELECT c.relname FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relkind IN ('r','p') AND NOT c.relispartition
+      LOOP
+        EXECUTE format('ALTER TABLE public.%I OWNER TO postgres',r.relname);
+      END LOOP;
+      FOR r IN
+        SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS args
+        FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.prosecdef
+      LOOP
+        EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO postgres',r.proname,r.args);
+      END LOOP;
+    END $NEIS$;"""
+    (work/"owner.sql").write_text(owner_sql)
     live_id=cmd(COMPOSE+["ps","-q","db"],"OVH_LIVE_IMPORT=DB_CONTAINER_MISSING")
-    for n in ("schema","data","verify"):
+    for n in ("schema","data","owner","verify"):
         cmd(DOCKER+["cp",str(work/(n+".sql")),live_id+":/tmp/neis-live-"+n+".sql"],"OVH_LIVE_IMPORT=COPY_SQL_FAILED")
     print("OVH_LIVE_IMPORT_PREFLIGHT=PASS_91_TABLES")
     # Even a partially failed stop must trigger a restart attempt.
     stopped=True
     cmd(COMPOSE+["stop","-t","30","functions","realtime","storage","rest","auth"],"OVH_LIVE_IMPORT=STOP_APIS_FAILED",timeout=100)
     print("OVH_LIVE_WRITER_APIS=STOPPED")
-    args=COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","-v","VERBOSITY=verbose","--single-transaction",
+    args=COMPOSE+["exec","-T","db","psql","-X","-U","supabase_admin","-d","postgres","-v","ON_ERROR_STOP=1","-v","VERBOSITY=verbose","--single-transaction",
       "-c","TRUNCATE TABLE auth.audit_log_entries, auth.flow_state, auth.identities, auth.mfa_amr_claims, auth.refresh_tokens, auth.sessions, auth.users RESTART IDENTITY CASCADE",
       "-f","/tmp/neis-live-schema.sql",
       "-c","ALTER TABLE auth.one_time_tokens ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone",
       "-c","SET session_replication_role = replica",
       "-f","/tmp/neis-live-data.sql",
       "-c","SET session_replication_role = origin",
+      "-f","/tmp/neis-live-owner.sql",
       "-f","/tmp/neis-live-verify.sql"]
     p=run(args,timeout=320)
     if p.returncode:
