@@ -42,7 +42,7 @@ for host in ('neiscircle.site','www.neiscircle.site'):
  try:
   req=urllib.request.Request('https://'+host+'/',headers={'Cache-Control':'no-cache','User-Agent':'NEIS-Safe-Auth-Diagnosis'})
   with urllib.request.urlopen(req,timeout=12) as res:html=res.read(400000).decode('utf8','replace')
-  scripts=re.findall(r'<script[^>]+src=[\\"\\']([^\\"\\']+)',html)
+  scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
   core=next((i for i,s in enumerate(scripts) if 'scripts/01-core.js' in s),-1)
   identity=next((i for i,s in enumerate(scripts) if 'scripts/identity-v15.js' in s),-1)
   auth=next((i for i,s in enumerate(scripts) if 'scripts/03-auth-i18n.js' in s),-1)
