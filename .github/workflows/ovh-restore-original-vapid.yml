@@ -1,0 +1,50 @@
+name: OVH Restore Original Web Push VAPID Keys
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-restore-original-vapid.py'
+      - '.github/workflows/ovh-restore-original-vapid.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-restore-original-vapid.py'
+      - '.github/workflows/ovh-restore-original-vapid.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-restore-original-vapid
+  cancel-in-progress: false
+jobs:
+  transfer:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate transfer script
+        run: python3 -m py_compile scripts/ops/ovh-restore-original-vapid.py
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Check cloud and live OVH key compatibility without writing
+        if: github.event_name == 'pull_request'
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          CLOUD_DATABASE_URL: ${{ secrets.CLOUD_DATABASE_URL }}
+        run: python3 scripts/ops/ovh-restore-original-vapid.py --check
+      - name: Restore matching original keys transactionally and verify
+        if: github.event_name == 'push'
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          CLOUD_DATABASE_URL: ${{ secrets.CLOUD_DATABASE_URL }}
+        run: python3 scripts/ops/ovh-restore-original-vapid.py --apply
