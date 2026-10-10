@@ -35,7 +35,9 @@ print("STORAGE_LIVE_OBJECTS="+str(current_objects))
 if current_users<204 or current_profiles<204 or current_objects!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_DATABASE_PARITY")
 live_names=set(query("select bucket_id||'/'||name from storage.objects order by bucket_id,name").splitlines())
-staged_names={p.relative_to(candidate).as_posix() for p in candidate.rglob("*") if p.is_file()}
+# Protected private backup directory is intentionally unreadable by ubuntu.
+# Reuse the already-verified sudo find output instead of silently seeing zero files.
+staged_names={Path(raw).relative_to(candidate).as_posix() for raw in p.stdout.splitlines()}
 missing=live_names-staged_names
 extra=staged_names-live_names
 print("STORAGE_LIVE_PATHS_MISSING_FROM_STAGE="+str(len(missing)))
