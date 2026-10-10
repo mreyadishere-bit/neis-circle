@@ -3,7 +3,7 @@ set -Eeuo pipefail
 cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
-backup="$stage/public-auth.before-rest-direct-20261011.Caddyfile"
+backup="$stage/public-auth.before-rest-direct-v2-20261011.Caddyfile"
 test -s "$backup" && test -s "$mounted"
 test -f docker-compose.auth-public-direct.yml
 grep -Fq "$mounted" docker-compose.auth-public-direct.yml
