@@ -21,6 +21,14 @@ if r.returncode:
  print('VAPID_DB_COMPARISON=QUERY_FAILED')
 else:
  print('VAPID_DB_COMPARISON='+r.stdout.strip())
+ details=subprocess.run(cmd[:-1]+["SELECT CASE WHEN EXISTS(SELECT 1 FROM public.get_web_push_vapid_keys() WHERE public_key IS NOT NULL AND length(public_key)>80) THEN 'YES' ELSE 'NO' END || ',' || CASE WHEN EXISTS(SELECT 1 FROM public.get_web_push_vapid_keys() WHERE private_key IS NOT NULL AND length(private_key)>30) THEN 'YES' ELSE 'NO' END;"],capture_output=True,text=True,timeout=25)
+ if details.returncode==0:
+  flags=details.stdout.strip().split(',')
+  if len(flags)==2 and set(flags)<=set(['YES','NO']):
+   print('VAPID_DB_PUBLIC_PRESENT='+flags[0])
+   print('VAPID_DB_PRIVATE_PRESENT='+flags[1])
+ else:print('VAPID_DB_KEY_PRESENCE=QUERY_FAILED')
+
 script_refs=re.findall(r'<script[^>]+src=[\x27\x22]([^\x27\x22]+)',app,re.I)
 styles=re.findall(r'<link[^>]+href=[\x27\x22]([^\x27\x22]+\.css[^\x27\x22]*)',app,re.I)
 js_files=list((release/'scripts').rglob('*.js'))
