@@ -33,8 +33,17 @@ if "flowType:'pkce'" not in source or "detectSessionInUrl:!neisOAuthCallbackToke
  raise SystemExit('PKCE_DEPLOY=BLOCKED_PKCE_FLOW_MISSING')
 if 'ydieijgynqlckaczalju.supabase.co' in source:
  raise SystemExit('PKCE_DEPLOY=BLOCKED_LEGACY_HOST')
-if new.exists() or Path(str(new)+'.building').exists():
- raise SystemExit('PKCE_DEPLOY=BLOCKED_EXISTING_RELEASE')
+if new.exists():
+ candidate=(new/'scripts/01-core.js')
+ html=(new/'index.html')
+ if not candidate.is_file() or candidate.read_text()!=source or not html.is_file() or 'auth=pkce-20261010v4' not in html.read_text():
+  raise SystemExit('PKCE_DEPLOY=BLOCKED_EXISTING_RELEASE_NOT_IDENTICAL')
+ if sum(p.is_file() for p in old.rglob('*'))!=sum(p.is_file() for p in new.rglob('*')):
+  raise SystemExit('PKCE_DEPLOY=BLOCKED_EXISTING_RELEASE_FILE_COUNT')
+ print('PKCE_RELEASE=REUSING_PREVIOUSLY_VERIFIED_BUILD')
+ raise SystemExit(0)
+if Path(str(new)+'.building').exists():
+ raise SystemExit('PKCE_DEPLOY=BLOCKED_INCOMPLETE_BUILD')
 if 'supabase.neiscircle.site' not in (old/'scripts/01-core.js').read_text():
  raise SystemExit('PKCE_DEPLOY=BLOCKED_OLD_NOT_SELFHOSTED')
 t=Path(str(new)+'.building')
