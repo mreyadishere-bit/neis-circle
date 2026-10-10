@@ -54,6 +54,19 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/ovh-google-pkce-20261010'
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/01-core.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-google-pkce-20261010/01-core.js"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-deploy-google-pkce.sh
+      - name: Wait for new OVH Caddy TLS listener to become ready
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 35); do
+            if curl --silent --fail --show-error --max-time 5 https://neiscircle.site/ -o /dev/null 2>/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          echo "PUBLIC_HTTPS_READY=$ready"
+          test "$ready" = 1
       - name: Confirm PKCE flow in real Chromium with synthetic Google session
         run: node qa/ovh-pkce-browser-integration.mjs
       - name: Roll back only this frontend release if any preceding step failed
