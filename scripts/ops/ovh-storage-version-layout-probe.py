@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read-only OVH Storage version layout probe. Never expose object names or secrets."""
-import json,subprocess
+import json,subprocess,re
 from pathlib import Path
 root=Path('/home/ubuntu/neis-supabase')
 source=Path('/home/ubuntu/neis-backups/storage-runtime-release-20261010/files')
@@ -17,6 +17,10 @@ print('LAYOUT_METADATA_COUNT='+str(len(records)))
 print('LAYOUT_NULL_VERSIONS='+str(sum(item['version'] is None for item in records)))
 print('LAYOUT_NONSTRING_VERSIONS='+str(sum(item['version'] is not None and not isinstance(item['version'],str) for item in records)))
 print('LAYOUT_EMPTY_VERSIONS='+str(sum(item['version']=='' for item in records)))
+print('LAYOUT_UUID_FORMAT_VERSIONS='+str(sum(isinstance(item['version'],str) and bool(re.fullmatch(r'[0-9a-f-]{36}',item['version'],flags=re.I)) for item in records)))
+print('LAYOUT_NON_UUID_VERSIONS='+str(sum(isinstance(item['version'],str) and not re.fullmatch(r'[0-9a-f-]{36}',item['version'],flags=re.I) for item in records)))
+print('LAYOUT_VERSION_CHARS_MIN='+str(min(len(str(item['version'])) for item in records)))
+print('LAYOUT_VERSION_CHARS_MAX='+str(max(len(str(item['version'])) for item in records)))
 p=run(compose+['ps','-q','storage'])
 if p.returncode or not p.stdout.strip():raise SystemExit('STORAGE_LAYOUT=BLOCKED_NO_STORAGE')
 p=run(docker+['inspect','--format','{{json .}}',p.stdout.strip()])
