@@ -8,6 +8,9 @@ if not stage.is_dir() or stage.is_symlink() or not stage.parent.is_dir():
  raise SystemExit('VERSIONED_PERMISSIONS=BLOCKED_STAGE')
 if stage.parent.stat().st_mode & 0o077:
  raise SystemExit('VERSIONED_PERMISSIONS=BLOCKED_PRIVATE_PARENT_REQUIRED')
+# Owner of private root is SSH ubuntu, not container UID.
+stage.chmod(0o777)
+print('VERSIONED_PRIVATE_ROOT=WRITABLE_FOR_CONTAINER')
 docker=['sudo','-n','/usr/bin/docker']
 base=docker+['compose','-f','docker-compose.yml','-f','docker-compose.security.yml','-f','docker-compose.caddy.yml']
 def run(args,stdin=None,timeout=65):
@@ -26,7 +29,7 @@ function walk(p){
  const stat=fs.lstatSync(p);
  if(stat.isSymbolicLink())throw Error('symlink forbidden');
  if(stat.isDirectory()){
-  fs.chmodSync(p,0o777);dirs++;
+  if(p!==root)fs.chmodSync(p,0o777);dirs++;
   for(const n of fs.readdirSync(p))walk(path.join(p,n));
  }else if(stat.isFile()){files++}
  else throw Error('unsupported inode');
@@ -39,6 +42,8 @@ console.log('VERSIONED_CHMOD_FILE_COUNT='+files);
 opts=['--rm','--network','none','--pull','never','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges']
 p=run(docker+['run',*opts,'--user','0','-v',str(stage)+':/dest:rw','--entrypoint','node',image,'-e',chmod],timeout=70)
 if p.returncode or 'VERSIONED_CHMOD_FILE_COUNT=104' not in p.stdout:
+ error=p.stderr.lower()
+ print('VERSIONED_STAGE_CHILD_CHMOD_ERROR='+('PERMISSION' if 'eperm' in error or 'eacces' in error or 'permission denied' in error else 'OTHER'))
  print('VERSIONED_PERMISSIONS=FAILED_PRIVATE_STAGE_ONLY')
  raise SystemExit(1)
 for line in p.stdout.splitlines():
