@@ -1,0 +1,69 @@
+name: OVH Stage Edge Integrations
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-stage-edge-integrations.sh'
+      - '.github/workflows/ovh-stage-edge-integrations.yml'
+permissions:
+  contents: read
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell
+        run: bash -n scripts/ops/ovh-stage-edge-integrations.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Validate and stage private Edge service configuration
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          EMAIL_WORKER_SECRET: ${{ secrets.EMAIL_WORKER_SECRET }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+          LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          NOTIFICATION_FROM_EMAIL: ${{ secrets.NOTIFICATION_FROM_EMAIL || vars.NOTIFICATION_FROM_EMAIL }}
+          NOTIFICATION_FROM_NAME: ${{ secrets.NOTIFICATION_FROM_NAME || vars.NOTIFICATION_FROM_NAME || 'NEIS Circle' }}
+          SITE_URL: ${{ secrets.SITE_URL || vars.SITE_URL || 'https://neiscircle.site' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          bundle="$(mktemp)"
+          trap 'rm -f "$bundle"' EXIT
+          python3 - "$bundle" <<'PY'
+          import json,os,sys
+          names=('BREVO_API_KEY','EMAIL_WORKER_SECRET','FIREBASE_SERVICE_ACCOUNT_JSON','LIVEKIT_API_KEY','LIVEKIT_API_SECRET','LIVEKIT_URL','NOTIFICATION_FROM_EMAIL','NOTIFICATION_FROM_NAME','SITE_URL')
+          values={k:os.getenv(k,'') for k in names}
+          if any(not x.strip() for x in values.values()):
+            print('GITHUB_EDGE_INTEGRATION_VALUES=BLOCKED_MISSING');sys.exit(1)
+          try:
+            j=json.loads(values['FIREBASE_SERVICE_ACCOUNT_JSON'])
+            assert j['type']=='service_account' and j.get('private_key') and j.get('client_email')
+          except Exception:
+            print('GITHUB_FIREBASE_JSON=INVALID');sys.exit(1)
+          with open(sys.argv[1],'w') as f:json.dump(values,f)
+          print('GITHUB_EDGE_BUNDLE=VALIDATED_NOT_DISCLOSED')
+          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" \
+            'umask 077; install -d -m 700 /home/ubuntu/neis-backups'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$bundle" \
+            "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/edge-private-integrations-20261010.json"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" \
+            'bash -s' < scripts/ops/ovh-stage-edge-integrations.sh
