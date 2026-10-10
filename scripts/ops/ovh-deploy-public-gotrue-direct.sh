@@ -12,7 +12,7 @@ overlay=docker-compose.auth-public-direct.yml
 old="$stage/original.Caddyfile"
 new="$stage/public-auth.Caddyfile"
 mkdir -p -m 700 "$stage"
-test ! -e "$overlay" && test ! -e "$new"
+test ! -e "$overlay"
 test -s docker-compose.frontend-public.yml
 compose config --quiet
 if [[ -e "$old" ]];then
@@ -51,6 +51,8 @@ assert updated.count('basic_auth')==1
 assert updated.count('reverse_proxy api-gw:8000')==1
 assert updated.count('handle_path /auth/v1/*')==1
 assert all(value in updated for value in other_paths)
+if new.exists() and new.read_text()!=updated:
+ raise SystemExit('DIRECT_AUTH=BLOCKED_EXISTING_CADDY_STAGE_DIFFERENT')
 new.write_text(updated)
 new.chmod(0o600)
 print('DIRECT_AUTH=CANDIDATE_STAGED_GOOGLE_PROVIDER_UNCHANGED')
@@ -67,10 +69,12 @@ services:
 YAML
 rollback(){
  rm -f "$overlay"
+ dc=(-f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml)
  compose up -d --no-deps caddy >/dev/null 2>&1 || true
  echo 'DIRECT_AUTH=ROLLED_BACK'
 }
 trap 'if [[ "${deployed:-0}" != 1 ]];then rollback;fi' EXIT
+dc+=(-f "$overlay")
 compose config --quiet
 compose -h >/dev/null
 compose up -d --no-deps caddy >/dev/null
