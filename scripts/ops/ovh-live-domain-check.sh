@@ -14,3 +14,5 @@ for host in ('neiscircle.site','www.neiscircle.site','supabase.neiscircle.site')
   except urllib.error.HTTPError as e:print('HTTP_'+host+'='+str(e.code))
   except Exception as e:print('HTTP_'+host+'=NETWORK_ERROR_'+type(e).__name__)
 PY
+
+# Post-Caddy-reload HTTPS check rerun.
