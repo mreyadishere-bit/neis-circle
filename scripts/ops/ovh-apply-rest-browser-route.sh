@@ -6,8 +6,8 @@ umask 077
 cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
-backup="$stage/public-auth.before-rest-direct-20261011.Caddyfile"
-candidate="$stage/public-auth.rest-direct-20261011.Caddyfile"
+backup="$stage/public-auth.before-rest-direct-v2-20261011.Caddyfile"
+candidate="$stage/public-auth.rest-direct-v2-20261011.Caddyfile"
 test -s "$mounted" && test -f docker-compose.auth-public-direct.yml
 grep -Fq "$mounted" docker-compose.auth-public-direct.yml
 test ! -e "$backup" && test ! -e "$candidate"
@@ -45,11 +45,11 @@ preflight=(indent+'handle_path /rest/v1/* {\n'
  +inner+'method OPTIONS\n'
  +inner+'header_regexp Origin '+origin_pattern+'\n'
  +nest+'}\n'
- +nest+'header @neis_rest_origin Access-Control-Allow-Origin "{http.request.header.Origin}"\n'
+ +nest+'header @neis_rest_origin >Access-Control-Allow-Origin "{http.request.header.Origin}"\n'
  +nest+'header @neis_rest_origin Access-Control-Allow-Methods "GET, POST, PATCH, PUT, DELETE, OPTIONS"\n'
  +nest+'header @neis_rest_origin Access-Control-Allow-Headers "apikey, authorization, content-type, x-client-info, x-supabase-api-version, prefer, accept, accept-profile, content-profile, range"\n'
- +nest+'header @neis_rest_origin Access-Control-Expose-Headers "Content-Range, Range-Unit"\n'
- +nest+'header @neis_rest_origin Vary "Origin"\n'
+ +nest+'header @neis_rest_origin >Access-Control-Expose-Headers "Content-Range, Range-Unit"\n'
+ +nest+'header @neis_rest_origin >Vary "Origin"\n'
  +nest+'handle @neis_rest_preflight {\n'
  +inner+'respond "" 204\n'
  +nest+'}\n'
@@ -66,8 +66,8 @@ path.write_text(updated)
 path.chmod(0o600)
 print('DIRECT_REST=CANDIDATE_STAGED_PROTECTED_ROUTES_PRESERVED')
 PY
-sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-rest-direct-candidate-20261011.Caddyfile
-sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-rest-direct-candidate-20261011.Caddyfile >/dev/null
+sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-rest-direct-candidate-v2-20261011.Caddyfile
+sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-rest-direct-candidate-v2-20261011.Caddyfile >/dev/null
 echo 'DIRECT_REST=CADDY_VALIDATE_PASS'
 cp -p "$mounted" "$backup"
 deployed=0
@@ -99,6 +99,34 @@ for i in range(15):
  time.sleep(1)
 print('DIRECT_REST=SERVER_PREFLIGHT_PASS' if ok else 'DIRECT_REST=SERVER_PREFLIGHT_FAILED')
 if not ok:raise SystemExit(1)
+PY
+python3 - <<'PY'
+import pathlib,re,urllib.request,urllib.error,time
+raw=pathlib.Path('/home/ubuntu/neis-supabase/.env').read_text()
+found=re.search(r'^ANON_KEY=(.*)
+,raw,re.M)
+key=found.group(1).strip().strip('"').strip("'") if found else ''
+if not key:raise SystemExit('DIRECT_REST=BLOCKED_KEY_MISSING')
+ok=True
+for origin in ('https://neiscircle.site','https://www.neiscircle.site'):
+ for table in ('profiles','posts'):
+  url='https://supabase.neiscircle.site/rest/v1/'+table+'?select=id&limit=1'
+  req=urllib.request.Request(url,headers={
+   'Origin':origin,'apikey':key,'Authorization':'Bearer '+key,
+   'User-Agent':'NEIS-REST-Actual-GET-CORS-Check'
+  })
+  try:r=urllib.request.urlopen(req,timeout=10)
+  except urllib.error.HTTPError as e:r=e
+  except Exception:
+   print('DIRECT_REST=ACTUAL_GET_NETWORK_FAILED')
+   ok=False
+   continue
+  with r:
+   allow=r.headers.get('Access-Control-Allow-Origin','')
+   match=r.status in (200,206) and allow==origin
+   print('DIRECT_REST=GET_'+table.upper()+'_'+('WWW' if 'www.' in origin else 'APEX')+'_CORS_'+str(match))
+   if not match:ok=False
+if not ok:raise SystemExit('DIRECT_REST=ACTUAL_GET_CORS_FAILED')
 PY
 deployed=1
 echo 'DIRECT_REST=LIVE_DEPLOY_SUCCESS_NO_DB_CHANGES'
