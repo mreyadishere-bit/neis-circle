@@ -104,6 +104,8 @@ try:
         print('VERSIONED_STAGE_FAILURE_CLASS='+reason)
         print('VERSIONED_STAGE_NODE_EXIT='+str(converted.returncode))
         print('VERSIONED_STAGE_NODE_STDERR_PRESENT='+str(bool(converted.stderr)).upper())
+        denied='SOURCE' if '/source/' in stderr else 'DESTINATION' if '/dest/' in stderr else 'OTHER'
+        print('VERSIONED_STAGE_PERMISSION_LOCATION='+denied)
         raise RuntimeError('candidate conversion failed')
     building.rename(candidate)
     print('VERSIONED_STAGE_OBJECTS_COPIED=104')
