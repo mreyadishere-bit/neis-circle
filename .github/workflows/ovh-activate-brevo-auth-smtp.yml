@@ -1,0 +1,57 @@
+name: OVH Activate Brevo Auth SMTP Safely
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-activate-brevo-auth-smtp.yml'
+      - 'scripts/ops/ovh-activate-brevo-auth-smtp.sh'
+permissions:
+  contents: read
+jobs:
+  activate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell
+        run: bash -n scripts/ops/ovh-activate-brevo-auth-smtp.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Safely stage and activate Brevo SMTP credentials
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          BREVO_SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
+          BREVO_SMTP_KEY: ${{ secrets.BREVO_SMTP_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$BREVO_SMTP_LOGIN" || -z "$BREVO_SMTP_KEY" ]]; then
+            echo "AUTH_SMTP=BLOCKED_GITHUB_SECRETS_MISSING"
+            exit 1
+          fi
+          umask 077
+          bundle="$(mktemp)"
+          trap 'rm -f "$bundle"' EXIT
+          python3 - "$bundle" <<'PY'
+          import json,os,sys
+          with open(sys.argv[1],'w') as f:
+           json.dump({x:os.environ[x] for x in ('BREVO_SMTP_LOGIN','BREVO_SMTP_KEY')},f)
+          PY
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" \
+            'umask 077; install -d -m 700 /home/ubuntu/neis-backups'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$bundle" \
+            "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-brevo-smtp-private-20261010.json"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" \
+            'bash -s' < scripts/ops/ovh-activate-brevo-auth-smtp.sh
