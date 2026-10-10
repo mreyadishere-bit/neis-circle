@@ -1,0 +1,56 @@
+name: Stage Original Google-Only Site on OVH
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-site-release-gate.py'
+      - 'scripts/ops/ovh-generate-original-site.py'
+      - '.github/workflows/ovh-stage-original-site.yml'
+permissions:
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 -m py_compile scripts/ops/ovh-site-release-gate.py scripts/ops/ovh-generate-original-site.py
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Generate safe static release branch only after backend is ready
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          OVH_PUBLIC_ANON_KEY="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-site-release-gate.py)"
+          test -n "$OVH_PUBLIC_ANON_KEY"
+          echo "::add-mask::$OVH_PUBLIC_ANON_KEY"
+          export OVH_PUBLIC_ANON_KEY
+          python3 scripts/ops/ovh-generate-original-site.py
+          node qa/google-only-auth-contract.mjs
+          git diff --check
+          branch="ops/ovh-site-ready-$GITHUB_RUN_ID"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html 404.html neis-pwa-sw.js
+          git commit -m "release: original Google-only NEIS Circle with OVH backend"
+          git push origin "HEAD:refs/heads/$branch"
+          echo "OVH_SITE_RELEASE_BRANCH=$branch"
+          echo "OVH_SITE_STAGE=PREPARED_REQUIRES_MERGE"
