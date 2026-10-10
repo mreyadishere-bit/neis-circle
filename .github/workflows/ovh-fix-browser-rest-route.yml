@@ -1,0 +1,102 @@
+name: OVH Fix Live Browser Data Visibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-apply-rest-browser-route.sh'
+      - 'scripts/ops/ovh-rollback-rest-browser-route.sh'
+      - '.github/workflows/ovh-fix-browser-rest-route.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-public-browser-rest
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the scoped Caddy scripts
+        run: |
+          bash -n scripts/ops/ovh-apply-rest-browser-route.sh
+          bash -n scripts/ops/ovh-rollback-rest-browser-route.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Apply only scoped authenticated REST forwarding
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-apply-rest-browser-route.sh
+      - name: Verify public REST from external network and CORS
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          for origin in ('https://neiscircle.site','https://www.neiscircle.site'):
+           label='WWW' if 'www.' in origin else 'APEX'
+           for table in ('profiles','posts'):
+            url='https://supabase.neiscircle.site/rest/v1/'+table+'?select=id&limit=1'
+            headers={'Origin':origin,'Access-Control-Request-Method':'GET',
+                     'Access-Control-Request-Headers':'apikey,authorization,x-client-info,prefer'}
+            request=urllib.request.Request(url,headers=headers,method='OPTIONS')
+            try:r=urllib.request.urlopen(request,timeout=13)
+            except urllib.error.HTTPError as e:r=e
+            with r:
+             ok=r.status==204 and r.headers.get('Access-Control-Allow-Origin')==origin and all(h in r.headers.get('Access-Control-Allow-Headers','').lower() for h in ('apikey','authorization','x-client-info'))
+             print('EXTERNAL_REST_'+table.upper()+'_'+label+'_CORS='+str(ok))
+             assert ok
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Chromium to test actual browser
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify complete 204 profiles and 109 posts load from real browser
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          set +x
+          NEIS_BROWSER_TEST_TOKEN="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-generate-fake-readonly-auth-jwt.py)"
+          test -n "$NEIS_BROWSER_TEST_TOKEN"
+          echo "::add-mask::$NEIS_BROWSER_TEST_TOKEN"
+          export NEIS_BROWSER_TEST_TOKEN
+          node qa/ovh-synthetic-chromium-feed-hydration.mjs
+      - name: Confirm OAuth and Studio protection preserved
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          base='https://supabase.neiscircle.site'
+          for p in ('/auth/v1/settings','/'):
+           request=urllib.request.Request(base+p,headers={'Origin':'https://neiscircle.site'})
+           try:r=urllib.request.urlopen(request,timeout=12)
+           except urllib.error.HTTPError as e:r=e
+           with r:
+            if p=='/':
+             ok=r.status==401 and r.headers.get('WWW-Authenticate','').lower().startswith('basic')
+             print('STUDIO_STILL_PRIVATE='+str(ok))
+            else:
+             ok=r.status==200
+             print('GOOGLE_AUTH_SETTINGS_STILL_OK='+str(ok))
+            assert ok
+          PY
+      - name: Rollback if any live browser or safety test failed
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-rest-browser-route.sh
+          fi
