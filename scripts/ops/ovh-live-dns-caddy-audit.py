@@ -80,6 +80,45 @@ def emit_safe_caddy_structure(data):
     print('CADDY_SAFE_LINE_'+str(i)+'='+' '.join(safe))
   else:print('CADDY_SAFE_LINE_'+str(i)+'=OTHER_DIRECTIVE')
 
+def audit_caddy_active():
+ p=run('exec','supabase-caddy','sh','-c','wget -q -O - http://127.0.0.1:2019/config/ 2>/dev/null')
+ if not p or p.returncode!=0:
+  print('CADDY_ADMIN_CONFIG=UNAVAILABLE')
+  return
+ try:config=json.loads(p.stdout)
+ except Exception:
+  print('CADDY_ADMIN_CONFIG=NON_JSON')
+  return
+ print('CADDY_ADMIN_CONFIG=AVAILABLE')
+ servers=(((config.get('apps') or {}).get('http') or {}).get('servers') or {})
+ print('ACTIVE_CADDY_HTTP_SERVER_COUNT='+str(len(servers)))
+ def flatten_handlers(node):
+  out=[]
+  if isinstance(node,dict):
+   if isinstance(node.get('handler'),str):out.append(node['handler'])
+   for v in node.values():out+=flatten_handlers(v)
+  elif isinstance(node,list):
+   for v in node:out+=flatten_handlers(v)
+  return out
+ for server_name,server in servers.items():
+  for i,route in enumerate(server.get('routes') or []):
+   paths=[]
+   def walk_match(x):
+    if isinstance(x,dict):
+     for k,v in x.items():
+      if k=='path' and isinstance(v,list):paths.extend(str(p) for p in v if isinstance(p,str))
+      else:walk_match(v)
+    elif isinstance(x,list):
+     for value in x:walk_match(value)
+   walk_match(route.get('match') or [])
+   handlers=flatten_handlers(route.get('handle') or [])
+   label='PUBLIC_AUTH_MATCH' if any('/auth/v1' in p for p in paths) else 'OTHER'
+   print('ACTIVE_CADDY_ROUTE_'+str(i)+'_TYPE='+label)
+   print('ACTIVE_CADDY_ROUTE_'+str(i)+'_BASIC_AUTH='+str('authentication' in handlers))
+   print('ACTIVE_CADDY_ROUTE_'+str(i)+'_PROXY='+str('reverse_proxy' in handlers))
+   print('ACTIVE_CADDY_ROUTE_'+str(i)+'_API_PATH='+str(any('/auth/v1' in p for p in paths)))
+ print('ACTIVE_CADDY_BASIC_AUTH_HANDLER_COUNT='+str(flatten_handlers(config).count('authentication')))
+
 for name in ('supabase-caddy','supabase-envoy'):
  meta=inspect(name)
  print(name.replace('-','_').upper()+'_RUNNING='+str(meta.get('State',{}).get('Running',False)))
@@ -101,4 +140,5 @@ for name in ('supabase-caddy','supabase-envoy'):
  if name=='supabase-envoy':
   p=run('exec',name,'cat','/etc/envoy/envoy.yaml')
   if p and p.returncode==0 and len(p.stdout)<250000:classify('ENVOY_LIVE',p.stdout)
+audit_caddy_active()
 print('AUDIT=SAFE_READ_ONLY')

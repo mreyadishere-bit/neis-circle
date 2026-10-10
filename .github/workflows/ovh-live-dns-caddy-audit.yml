@@ -29,6 +29,30 @@ jobs:
           except Exception:
            print('EXTERNAL_DNS_RESOLUTION=FAILED')
           PY
+      - name: Classify external Auth response authentication challenge
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,re
+          u='https://supabase.neiscircle.site/auth/v1/settings'
+          try:
+           source=urllib.request.urlopen('https://neiscircle.site/scripts/01-core.js?policy-qa=1',timeout=15).read(90000).decode()
+           m=re.search(r'supabaseAnonKey\\s*:\\s*"([^"]+)"',source)
+           key=m.group(1) if m else ''
+          except Exception:key=''
+          print('PUBLIC_KEY_DISCOVERED='+str(bool(key)))
+          for name,hdr in [('NONE',{}),('PUBLIC_ANON',{'apikey':key})]:
+           req=urllib.request.Request(u,headers={'Origin':'https://neiscircle.site',**hdr})
+           try:r=urllib.request.urlopen(req,timeout=12)
+           except urllib.error.HTTPError as e:r=e
+           except Exception:
+            print('EXT_SETTINGS_'+name+'_NETWORK=FAIL');continue
+           with r:
+            auth=r.headers.get('WWW-Authenticate','')
+            srv=r.headers.get('Server','')
+            print('EXT_SETTINGS_'+name+'_HTTP='+str(r.status))
+            print('EXT_SETTINGS_'+name+'_WWW_AUTH_CLASS='+('BASIC' if auth.lower().startswith('basic') else 'BEARER' if auth.lower().startswith('bearer') else 'OTHER' if auth else 'NONE'))
+            print('EXT_SETTINGS_'+name+'_SERVER_CLASS='+('CADDY' if 'caddy' in srv.lower() else 'ENVOY' if 'envoy' in srv.lower() else 'NGINX' if 'nginx' in srv.lower() else 'OTHER'))
+          PY
       - name: Configure pinned SSH
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
