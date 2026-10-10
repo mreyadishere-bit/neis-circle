@@ -32,4 +32,16 @@ jobs:
       - name: Snapshot destination DB and compare isolated source inventory
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
-        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-destination-precutover-backup.sh
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! report="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-destination-precutover-backup.sh)"; then
+            printf '%s\n' "$report"
+            echo 'OVH_BACKUP_JOB=FAILED_REMOTE'
+            exit 1
+          fi
+          printf '%s\n' "$report"
+          if ! grep -qx 'OVH_BACKUP=VERIFIED_PRIVATE_SNAPSHOT' <<<"$report"; then
+            echo 'OVH_BACKUP_JOB=FAILED_MISSING_VERIFICATION_MARKER'
+            exit 1
+          fi
