@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/01-core.js'
       - 'scripts/03-auth-i18n.js'
+      - 'qa/oauth-fragment-recovery.test.mjs'
       - 'scripts/ops/ovh-deploy-oauth-singleowner.sh'
       - '.github/workflows/ovh-oauth-singleowner.yml'
 permissions:
