@@ -31,6 +31,8 @@ try{
  console.log('MISSING_VERIFIER_CALLBACK_PENDING='+snapshot.pending);
  console.log('MISSING_VERIFIER_TOKEN_REQUESTS='+tokenRequests);
  assert.equal(snapshot.loggedIn,false);
+ assert.equal(snapshot.reason,'oauth_verifier_missing','Show root cause when callback has no original PKCE verifier');
+ assert.equal(tokenRequests,0,'Never send a code without its PKCE verifier to the backend');
  assert.match(snapshot.reason,/^oauth_[a-z_]+(?:_[45][0-9]{2})?$/);
  assert.equal(snapshot.urlClean,true);
  assert.equal(snapshot.errorVisible,true);
