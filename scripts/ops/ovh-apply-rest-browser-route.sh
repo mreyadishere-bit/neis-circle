@@ -13,10 +13,12 @@ grep -Fq "$mounted" docker-compose.auth-public-direct.yml
 test ! -e "$backup" && test ! -e "$candidate"
 # Restrict the change to the exact running Caddyfile; do not recreate services or containers.
 sudo -n /usr/bin/docker exec supabase-caddy grep -q 'handle_path /auth/v1/\*' /etc/caddy/Caddyfile
-if ! sudo -n /usr/bin/docker exec supabase-caddy wget -q -S -O /dev/null --timeout=7 http://rest:3000/ >/dev/null 2>&1;then
+rest_probe="$(sudo -n /usr/bin/docker exec supabase-caddy wget -S -O /dev/null -T 7 http://rest:3000/ 2>&1 || true)"
+if [[ "$rest_probe" != *"HTTP/"* ]];then
  echo 'DIRECT_REST=BLOCKED_UPSTREAM_UNREACHABLE'
  exit 1
 fi
+echo 'DIRECT_REST=PRIVATE_UPSTREAM_HTTP_REACHABLE'
 export NEIS_REST_CADDY_SOURCE="$mounted" NEIS_REST_CADDY_TARGET="$candidate"
 python3 - <<'PY'
 from pathlib import Path
