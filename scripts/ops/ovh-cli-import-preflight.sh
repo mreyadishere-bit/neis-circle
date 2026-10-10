@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 # Read-only audit for the CLI-format source and bootstrapped self-hosted OVH destination.
+# Runs while the public website is in owner-approved maintenance mode.
 cd /home/ubuntu/neis-supabase
 backup=/home/ubuntu/neis-backups/ovh-destination-precrossover-20261010
 source=/home/ubuntu/neis-backups/cloud-cli-import-38047355178
