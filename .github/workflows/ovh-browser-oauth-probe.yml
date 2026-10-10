@@ -1,0 +1,21 @@
+name: OVH Browser OAuth Synthetic Probe
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-public-oauth-probe.mjs'
+      - '.github/workflows/ovh-browser-oauth-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - run: node qa/ovh-public-oauth-probe.mjs
