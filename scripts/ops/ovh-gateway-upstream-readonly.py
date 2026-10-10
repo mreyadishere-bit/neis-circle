@@ -23,8 +23,19 @@ for cname,path in [('supabase-caddy','/etc/caddy/Caddyfile'),('supabase-envoy','
    up=target.lower()
    kind=next((x.upper() for x in ('envoy','kong','nginx','auth','gateway','caddy','traefik') if x in up),'OTHER')
    print('CADDY_REVERSE_PROXY_LINE_'+str(i+1)+'_TARGET_CLASS='+kind)
+   parsed=target.replace('http://','').replace('https://','').split('/')[0]
+   if re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]{0,48}:[0-9]{2,5}',parsed):
+    print('CADDY_REVERSE_PROXY_LINE_'+str(i+1)+'_UPSTREAM='+parsed)
+   else:print('CADDY_REVERSE_PROXY_LINE_'+str(i+1)+'_UPSTREAM=REDACTED')
   if cname=='supabase-envoy' and any(x in clean.lower() for x in ('cluster:','cluster_name:','name: envoy.filters','load_assignment','socket_address','address:','port_value:')):
    kind=next((x.upper() for x in ('kong','auth','gateway','envoy','nginx','http','tcp_proxy','hcm','rbac') if x in clean.lower()),'OTHER')
    print('ENVOY_CONFIG_LINE_'+str(i+1)+'_CLASS='+kind)
+   m=re.match(r'^(?:address|cluster|name|port_value):\s*([A-Za-z0-9_.-]+)
+ print(cname.replace('-','_').upper()+'_LINES='+str(len(lines)))
+print('GATEWAY_TOPOLOGY_AUDIT=SAFE_READ_ONLY')
+,clean)
+   if m:
+    val=m.group(1)
+    if len(val)<55:print('ENVOY_SAFE_CONFIG_VALUE_'+str(i+1)+'='+val)
  print(cname.replace('-','_').upper()+'_LINES='+str(len(lines)))
 print('GATEWAY_TOPOLOGY_AUDIT=SAFE_READ_ONLY')
