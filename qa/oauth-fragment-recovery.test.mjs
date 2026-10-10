@@ -41,3 +41,11 @@ const run=async(success)=>{
 await run(true);
 await run(false);
 console.log('OAuth callback recovery tests passed (synthetic credentials only)');
+
+const core=fs.readFileSync('scripts/01-core.js','utf8');
+const callbackPos=core.indexOf('if(neisOAuthCallbackTokens){\\n        oauthSession=await neisRecoverImplicitOAuth(sb)');
+const fallbackGetSessionPos=core.indexOf('const initial=await sb.auth.getSession()',callbackPos);
+assert(callbackPos>=0 && fallbackGetSessionPos>callbackPos,'OAuth callback should be handled before a regular getSession');
+assert(core.includes('detectSessionInUrl:!neisOAuthCallbackTokens'),'Avoid processing implicit OAuth URL twice');
+assert(!core.includes('detectSessionInUrl:true'),'Prevent duplicate implicit OAuth processing');
+console.log('Single-owner OAuth recovery contract passed');

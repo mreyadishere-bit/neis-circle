@@ -166,7 +166,12 @@ async function neisRecoverImplicitOAuth(client){
       return session;
     }
   }catch(error){
-    console.warn('[NEIS OAuth] session recovery failed:',String(error?.name||'recovery_error'));
+    // Status/code only; never log a callback token or any OAuth URL.
+    const code=String(error?.code||'');
+    const safe=/^[a-z_]{1,48}$/.test(code)?code:'unknown';
+    const status=Number(error?.status);
+    window.__NEISOAuthRecoveryReason='oauth_'+safe+(status>=400&&status<=599?'_'+status:'');
+    console.warn('[NEIS OAuth] session recovery failed:',window.__NEISOAuthRecoveryReason);
   }
   window.__NEISOAuthCallbackPending=false;
   neisClearOAuthCallbackUrl();
@@ -248,18 +253,20 @@ async function initSupabase(){
         auth:{
           persistSession:true,
           autoRefreshToken:true,
-          detectSessionInUrl:true,
+          // For implicit Google OAuth, our callback handler is the *only*
+          // consumer of the refresh token. Avoid Supabase auto-consuming the
+          // same URL first and invalidating a second setSession attempt.
+          detectSessionInUrl:!neisOAuthCallbackTokens,
           storage:neisAuthStorage
         }
       });
-      let initial={data:{session:null},error:null};
-      try{initial=await sb.auth.getSession()}catch(error){initial={data:{session:null},error}}
-      let oauthSession=initial?.data?.session||null;
-      if(!oauthSession&&neisOAuthCallbackTokens){
+      let oauthSession=null;
+      if(neisOAuthCallbackTokens){
         oauthSession=await neisRecoverImplicitOAuth(sb);
-      }
-      if(initial?.error&&!oauthSession){
-        console.warn('[NEIS OAuth] initial session unavailable:',String(initial.error?.name||'session_error'));
+      }else{
+        const initial=await sb.auth.getSession();
+        if(initial?.error)throw initial.error;
+        oauthSession=initial?.data?.session||null;
       }
       authUser=oauthSession?.user||null;
       if(oauthSession?.user&&neisOAuthCallbackTokens){
