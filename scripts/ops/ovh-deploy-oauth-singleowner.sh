@@ -50,7 +50,7 @@ shutil.copytree(old,temp)
 (temp/'scripts/03-auth-i18n.js').write_text(auth)
 html=(temp/'index.html').read_text()
 for path in ('scripts/01-core.js','scripts/03-auth-i18n.js'):
- old_src=path+'?oauthsingle=20261010v3'
+ old_src=path+'?oauthrecover=20261010v2'
  if html.count(old_src)!=1:
   shutil.rmtree(temp)
   raise SystemExit('OAUTH_RECOVERY=BLOCKED_HTML_SCRIPT_REFERENCE')
