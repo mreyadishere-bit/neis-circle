@@ -100,20 +100,20 @@ building.mkdir(mode=0o700)
 os.chmod(building,0o777)
 try:
  args=docker+['run','--rm','-i','--network','none','--pull','never','--read-only',
- '--cap-drop','ALL','--security-opt','no-new-privileges',
- '--user','0','-v',str(src)+':/source:ro',
- '-v',str(building)+':/dest:rw','--entrypoint','node',image,
- '-e',node]
-p=run(args,stdin=json.dumps({'objects':objects,'storageRoot':storage_root,'tenant':tenant}))
-if p.returncode or 'LOCATOR_HASHES_VERIFIED=104' not in p.stdout:
- err=p.stderr.lower()
- kind='PERMISSION' if 'eacces' in err or 'eperm' in err else 'SOURCE_MISSING' if 'enoent' in err else 'XATTR' if 'xattr' in err else 'OTHER'
- print('LOCATOR_BUILD_ERROR_CLASS='+kind)
- raise RuntimeError('cannot build')
+  '--cap-drop','ALL','--security-opt','no-new-privileges',
+  '--user','0','-v',str(src)+':/source:ro',
+  '-v',str(building)+':/dest:rw','--entrypoint','node',image,
+  '-e',node]
+ p=run(args,stdin=json.dumps({'objects':objects,'storageRoot':storage_root,'tenant':tenant}))
+ if p.returncode or 'LOCATOR_HASHES_VERIFIED=104' not in p.stdout:
+  err=p.stderr.lower()
+  kind='PERMISSION' if 'eacces' in err or 'eperm' in err else 'SOURCE_MISSING' if 'enoent' in err else 'XATTR' if 'xattr' in err else 'OTHER'
+  print('LOCATOR_BUILD_ERROR_CLASS='+kind)
+  raise RuntimeError('cannot build')
  building.rename(candidate)
  os.chmod(candidate,0o777)
  for line in p.stdout.splitlines():
-  if re.fullmatch(r'LOCATOR_(?:COPIED|HASHES_VERIFIED|MIMETYPE_ATTRS)=\d+',line):print(line)
+  if re.fullmatch(r'LOCATOR_(?:COPIED|HASHES_VERIFIED|MIMETYPE_ATTRS)=\\d+',line):print(line)
  print('LOCATOR_STAGE=VERIFIED_ISOLATED')
  print('STORAGE_LIVE_MOUNT=UNCHANGED')
 except Exception:
