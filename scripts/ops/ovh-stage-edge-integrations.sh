@@ -4,6 +4,7 @@ set -Eeuo pipefail
 # No container restart here. Never prints secret material or docker compose config output.
 root=/home/ubuntu/neis-supabase
 bundle=/home/ubuntu/neis-backups/edge-private-integrations-20261010.json
+trap 'rm -f "$bundle"' EXIT
 overlay="$root/docker-compose.edge-integrations.yml"
 test -d "$root" && test -f "$bundle"
 umask 077
