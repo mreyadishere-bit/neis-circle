@@ -7,7 +7,7 @@ import json, os, re, shutil, subprocess, sys, urllib.error, urllib.parse, urllib
 from pathlib import Path
 
 root=Path("/home/ubuntu/neis-supabase")
-candidate=Path("/home/ubuntu/neis-backups/storage-versioned-release-20261010/files")
+candidate=Path("/home/ubuntu/neis-backups/storage-locator-release-20261010/files")
 override=root/"docker-compose.storage-cutover.yml"
 backup=Path("/home/ubuntu/neis-backups/storage-cutover-prev-20261010")
 docker=["sudo","-n","/usr/bin/docker"]
@@ -36,7 +36,27 @@ print("STORAGE_LIVE_OBJECTS="+str(current_objects))
 # Accounts and profiles may increase after cutover; the 104-file snapshot may NOT.
 if current_users<204 or current_profiles<204 or current_objects!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_DATABASE_PARITY")
-live_names=set(query("select bucket_id||'/'||name||'/'||version from storage.objects order by bucket_id,name").splitlines())
+# Storage v1.74 resolves media under storageRoot/tenant/bucket/key/version.
+# Resolve non-secret, sanitized path prefix from the *running* storage image,
+# rather than guessing the physical directory layout.
+storage_id=run(base+["ps","-q","storage"]).stdout.strip()
+if not storage_id:raise SystemExit("STORAGE_CUTOVER=BLOCKED_STORAGE_NOT_RUNNING")
+env_result=run(docker+["inspect","--format","{{json .Config.Env}}",storage_id])
+if env_result.returncode:raise SystemExit("STORAGE_CUTOVER=BLOCKED_STORAGE_INSPECT")
+try:
+    config_env=dict(v.split("=",1) for v in json.loads(env_result.stdout) if "=" in v)
+    storage_root=config_env.get("STORAGE_S3_BUCKET") or config_env.get("GLOBAL_S3_BUCKET")
+    tenant=config_env.get("TENANT_ID")
+    if not storage_root or not tenant:
+        raise ValueError("missing storage prefix")
+    if not all(re.fullmatch(r"[A-Za-z0-9._-]{1,150}",v) for v in (storage_root,tenant)):
+        raise ValueError("unsafe storage prefix")
+    if config_env.get("STORAGE_BACKEND")!="file" or config_env.get("FILE_STORAGE_BACKEND_PATH")!="/var/lib/storage":
+        raise ValueError("different storage backend")
+except Exception:
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_RUNTIME_LAYOUT_UNEXPECTED")
+live_names={storage_root+"/"+tenant+"/"+x for x in
+    query("select bucket_id||'/'||name||'/'||version from storage.objects order by bucket_id,name").splitlines()}
 p=run(["sudo","-n","find",str(candidate),"-type","f"])
 links=run(["sudo","-n","find",str(candidate),"-type","l","-print","-quit"])
 if p.returncode or links.returncode or links.stdout.strip() or len(p.stdout.splitlines())!=104:
@@ -51,6 +71,7 @@ print("STORAGE_STAGE_PATHS_NOT_IN_LIVE_METADATA="+str(len(extra)))
 if missing or extra or len(staged_names)!=104:
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_OBJECT_PATH_DRIFT")
 print("STORAGE_LIVE_METADATA_PATHS_MATCH_STAGE=YES")
+print("STORAGE_LAYOUT=STORAGEROOT_TENANT_BUCKET_KEY_VERSION")
 # Probe read AND write permissions as the running Storage image user against
 # only a disposable isolated candidate file. Never touch production files.
 container_id=run(base+["ps","-q","storage"]).stdout.strip()
@@ -172,4 +193,4 @@ if code not in (200,206):
     sys.exit(1)
 print("STORAGE_CUTOVER=PASS_LIVE_SERVICE")
 print("OVH_DATABASE=USER_RECORDS_UNCHANGED")
-print("GITHUB_PAGES=MAINTENANCE")
+print("STORAGE_CUTOVER=OVH_STORAGE_RUNTIME_ACTIVE")
