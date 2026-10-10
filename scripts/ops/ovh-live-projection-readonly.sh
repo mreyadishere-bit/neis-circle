@@ -25,6 +25,8 @@ jwt=raw+'.'+sig
 routes=[
  ('PROFILE_LIST','profiles','id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete'),
  ('POST_LIST','posts','id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type'),
+ ('EXACT_HOME_POSTS','posts','id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)'),
+ ('EXACT_HOME_PROFILE','profiles','id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete'),
  ('LEGACY_POST_JOIN','posts','id,kind,title,body,tags,created_at,author_id,profiles!posts_author_id_fkey(full_name,grade,campus)'),
  ('COMMENT_COUNTS','comments','post_id'),
  ('REACTIONS','reactions','post_id,user_id,reaction'),
