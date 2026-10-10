@@ -6,8 +6,8 @@ umask 077
 cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
-backup="$stage/public-auth.before-rest-direct-v2-20261011.Caddyfile"
-candidate="$stage/public-auth.rest-direct-v2-20261011.Caddyfile"
+backup="$stage/public-auth.before-rest-direct-v3-20261011.Caddyfile"
+candidate="$stage/public-auth.rest-direct-v3-20261011.Caddyfile"
 test -s "$mounted" && test -f docker-compose.auth-public-direct.yml
 grep -Fq "$mounted" docker-compose.auth-public-direct.yml
 test ! -e "$backup" && test ! -e "$candidate"
@@ -66,8 +66,8 @@ path.write_text(updated)
 path.chmod(0o600)
 print('DIRECT_REST=CANDIDATE_STAGED_PROTECTED_ROUTES_PRESERVED')
 PY
-sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-rest-direct-candidate-v2-20261011.Caddyfile
-sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-rest-direct-candidate-v2-20261011.Caddyfile >/dev/null
+sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-rest-direct-candidate-v3-20261011.Caddyfile
+sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-rest-direct-candidate-v3-20261011.Caddyfile >/dev/null
 echo 'DIRECT_REST=CADDY_VALIDATE_PASS'
 cp -p "$mounted" "$backup"
 deployed=0
@@ -103,9 +103,8 @@ PY
 python3 - <<'PY'
 import pathlib,re,urllib.request,urllib.error,time
 raw=pathlib.Path('/home/ubuntu/neis-supabase/.env').read_text()
-found=re.search(r'^ANON_KEY=(.*)
-,raw,re.M)
-key=found.group(1).strip().strip('"').strip("'") if found else ''
+values=[line.partition('=')[2].strip().strip('"').strip("'") for line in raw.splitlines() if line.startswith('ANON_KEY=')]
+key=values[-1] if values else ''
 if not key:raise SystemExit('DIRECT_REST=BLOCKED_KEY_MISSING')
 ok=True
 for origin in ('https://neiscircle.site','https://www.neiscircle.site'):
