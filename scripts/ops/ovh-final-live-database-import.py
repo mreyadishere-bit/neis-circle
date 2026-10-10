@@ -6,6 +6,7 @@ import json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 BASE=Path("/home/ubuntu/neis-supabase")
+os.chdir(BASE)
 ROOT=Path("/home/ubuntu/neis-backups")
 RUN=sys.argv[1] if len(sys.argv)>1 else ""
 if not re.fullmatch(r"[0-9]+", RUN):
@@ -17,7 +18,7 @@ DOCKER=["sudo","-n","/usr/bin/docker"]
 COMPOSE=DOCKER+["compose"]+[v for f in FILES for v in ("-f",f)]
 EXPECTED={"auth.users":204,"public.profiles":204,"public.posts":109,
           "public.messages":515,"public.circle_messages":2370,
-          "public.notifications":9540,"storage.objects":104}
+          "public.notifications":9541,"storage.objects":104}
 OMIT={"auth.mfa_recovery_code_sets","auth.mfa_recovery_codes","auth.scim_tokens","auth.scim_users"}
 def run(args, **kw):
     return subprocess.run(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=kw.pop("timeout",90),**kw)
@@ -35,7 +36,6 @@ def cmd(args, label, timeout=120):
     return p.stdout.strip()
 if not SOURCE.is_dir() or SOURCE.is_symlink() or BACKUP.exists():
     raise SystemExit("OVH_LIVE_IMPORT=BLOCKED_SOURCE_OR_BACKUP")
-if cmd(["sha256sum","--status","-c","SHA256SUMS"],"SOURCE_HASH_FAILED") if False else False:pass
 p=run(["sha256sum","--status","-c","SHA256SUMS"],cwd=str(SOURCE))
 if p.returncode:raise SystemExit("OVH_LIVE_IMPORT=BLOCKED_CLOUD_HASH")
 if sql("select count(*) from auth.users")!="1" or sql("select count(*) from storage.objects")!="0" or sql("select to_regclass('public.profiles') is null")!="t":
@@ -53,8 +53,6 @@ try:
     backupdump=work/"prelive.dump"
     pgfile(["pg_dump","-U","postgres","-d","postgres","--format=custom","--no-owner","--no-acl"],backupdump)
     pgfile(["pg_dumpall","-U","postgres","--globals-only"],work/"globals.sql")
-    if not run(COMPOSE+["exec","-T","db","pg_restore","--list"],timeout=30, input=None).returncode==0 if False else False:pass
-    check=run(COMPOSE+["exec","-T","db","pg_restore","--list"],timeout=30)
     # pg_restore list must be given the archive on stdin (not printed).
     with backupdump.open("rb") as fd:
         check=subprocess.run(COMPOSE+["exec","-T","db","pg_restore","--list"],stdin=fd,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=60)
@@ -67,7 +65,24 @@ try:
         shutil.move(str(work/file),str(BACKUP/file))
         os.chmod(BACKUP/file,0o600)
     print("OVH_LIVE_ROLLBACK_BACKUP=VERIFIED_PRIVATE")
-    original=(SOURCE/"schema.sql").read_text()
+    # The fresh Cloud export may include temporary maintenance-freeze triggers.
+    # Use the verified pre-freeze schema while keeping the newest Cloud data.
+    original_schema=Path("/home/ubuntu/neis-backups/cloud-cli-import-38052670098")
+    checksum=run(["sha256sum","--status","-c","SHA256SUMS"],cwd=str(original_schema))
+    if checksum.returncode:
+        raise RuntimeError("OVH_LIVE_IMPORT=BLOCKED_PRE_FREEZE_SCHEMA_HASH")
+    original=(original_schema/"schema.sql").read_text()
+    latest=(SOURCE/"schema.sql").read_text()
+    if "neis_cloud_maintenance_reject_writes" in original:
+        raise RuntimeError("OVH_LIVE_IMPORT=PRE_FREEZE_SCHEMA_INVALID")
+    # Fail closed if legitimate table/function definitions changed during maintenance.
+    objpat=r'(?im)^CREATE (?:OR REPLACE )?(?:TABLE|FUNCTION|PROCEDURE)\s+([\w."]+)'
+    def objects(x):return set(re.findall(objpat,x))
+    newest=objects(latest)
+    newest={n for n in newest if "neis_cloud_maintenance_reject_writes" not in n}
+    if newest!=objects(original):
+        raise RuntimeError("OVH_LIVE_IMPORT=UNEXPECTED_SCHEMA_CHANGE_DURING_MAINTENANCE")
+    print("OVH_LIVE_SCHEMA=HASH_VERIFIED_PRE_FREEZE")
     reg=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*$'
     schema,removed=re.subn(reg,"-- pg_cron preserved from OVH bootstrap",original)
     old="https://ydieijgynqlckaczalju.supabase.co/functions/v1/"
