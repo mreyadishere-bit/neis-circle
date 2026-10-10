@@ -18,6 +18,7 @@ try{
           http.push({
             kind:'request',
             method:req.method(),
+            headerNames:Object.keys(headers).map(x=>x.toLowerCase()).sort(),
             apikeyHeader:!!headers.apikey,
             authorizationHeader:!!headers.authorization,
             apikeyMatchesRuntime:!!runtimeKey&&headers.apikey===runtimeKey,
