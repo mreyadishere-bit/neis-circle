@@ -40,7 +40,7 @@ try{
       const result=await page.evaluate(async()=>{
         const auth=sb.auth;
         const key=auth.storageKey+'-code-verifier';
-        const verifier='abcdefghijklmnopqrstuvwxABCDEFGHIJKLMNOPQRSTUVWX0123456789-._~';
+        // Let the actual SDK generate and store the verifier, without navigating to Google.
         const safeError=e=>({
           name:String(e?.name||'none').replace(/[^A-Za-z0-9_]/g,'').slice(0,50),
           code:String(e?.code||'none').replace(/[^A-Za-z0-9_]/g,'').slice(0,65),
@@ -48,7 +48,12 @@ try{
         });
         let result={error:{name:'not_run',code:'none',status:0}};
         try{
-          await auth.storage.setItem(key,verifier);
+          const started=await auth.signInWithOAuth({provider:'google',options:{
+            redirectTo:location.origin+location.pathname,skipBrowserRedirect:true
+          }});
+          if(started?.error)throw started.error;
+          const saved=await auth.storage.getItem(key);
+          result.verifierStored=typeof saved==='string'&&saved.length>=43;
           const live=await Promise.race([
             auth.exchangeCodeForSession('synthetic-invalid-non-user-test-only'),
             new Promise((_,reject)=>setTimeout(()=>reject(new Error('probe_timeout')),14000))
@@ -59,6 +64,7 @@ try{
         return result;
       });
       console.log('ORIGIN='+new URL(origin).hostname);
+      console.log('VERIFIER_STORED_BY_SDK='+String(result.verifierStored===true));
       console.log('SDK_ERROR='+JSON.stringify(result.error));
       console.log('TOKEN_NETWORK='+JSON.stringify(http));
       console.log('TOKEN_REQUEST_FAILED='+JSON.stringify(failed));
