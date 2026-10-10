@@ -118,6 +118,31 @@ def audit_caddy_active():
    print('ACTIVE_CADDY_ROUTE_'+str(i)+'_PROXY='+str('reverse_proxy' in handlers))
    print('ACTIVE_CADDY_ROUTE_'+str(i)+'_API_PATH='+str(any('/auth/v1' in p for p in paths)))
  print('ACTIVE_CADDY_BASIC_AUTH_HANDLER_COUNT='+str(flatten_handlers(config).count('authentication')))
+ # Caddyfile is adapted into nested subroutes: inspect matcher paths at every depth.
+ seen=0
+ def visit(x,level=0):
+  nonlocal seen
+  if seen>=65:return
+  if isinstance(x,dict):
+   if 'match' in x and 'handle' in x and isinstance(x.get('match'),list):
+    matches=x.get('match') or []
+    found_paths=[]
+    for group in matches:
+     if isinstance(group,dict) and isinstance(group.get('path'),list):
+      found_paths.extend(str(v) for v in group['path'] if isinstance(v,str))
+    hs=[v.get('handler') for v in x.get('handle',[]) if isinstance(v,dict)]
+    important=any('/auth/v1' in p for p in found_paths)
+    if important or 'authentication' in hs or 'reverse_proxy' in hs:
+     seen+=1
+     print('ACTIVE_CADDY_NESTED_'+str(seen)+'_LEVEL='+str(level))
+     print('ACTIVE_CADDY_NESTED_'+str(seen)+'_PUBLIC_AUTH_PATH='+str(important))
+     print('ACTIVE_CADDY_NESTED_'+str(seen)+'_BASIC_AUTH='+str('authentication' in hs))
+     print('ACTIVE_CADDY_NESTED_'+str(seen)+'_REVERSE_PROXY='+str('reverse_proxy' in hs))
+   for val in x.values():visit(val,level+1)
+  elif isinstance(x,list):
+   for val in x:visit(val,level+1)
+ visit(config)
+
 
 for name in ('supabase-caddy','supabase-envoy'):
  meta=inspect(name)
