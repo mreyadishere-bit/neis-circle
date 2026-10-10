@@ -1,0 +1,41 @@
+name: OVH Live Push and Frontend Performance Verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-push-compatibility-audit.sh'
+      - 'scripts/ops/ovh-frontend-timing-audit.py'
+      - '.github/workflows/ovh-live-push-performance.yml'
+permissions:
+  contents: read
+jobs:
+  public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/ops/ovh-frontend-timing-audit.py
+  ovh:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/ops/ovh-push-compatibility-audit.sh
+      - name: SSH setup
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Verify VAPID parity and disk categories
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-push-compatibility-audit.sh
