@@ -33,6 +33,9 @@ for container,path in (('supabase-caddy','/etc/caddy/Caddyfile'),('supabase-envo
   if container=='supabase-envoy' and any(term in clean.lower() for term in ('cluster:','cluster_name:','name: envoy.filters','load_assignment','socket_address','address:','port_value:')):
    category=next((term.upper() for term in ('kong','auth','gateway','envoy','nginx','http','tcp_proxy','hcm','rbac') if term in clean.lower()),'OTHER')
    print('ENVOY_CONFIG_LINE_'+str(number)+'_CLASS='+category)
+   if 'socket_address' in clean or 'address:' in clean:
+    for found in re.finditer(r'(?:address|port_value):[ ]*([A-Za-z0-9_.-]{1,55})',clean):
+     print('ENVOY_INLINE_VALUE_'+str(number)+'='+found.group(1))
    parts=clean.split(':',1)
    if len(parts)==2 and parts[0] in ('address','cluster','name','port_value'):
     value=parts[1].strip().strip('"').strip("'")
