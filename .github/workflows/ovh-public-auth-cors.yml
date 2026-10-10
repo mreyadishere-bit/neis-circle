@@ -1,0 +1,101 @@
+name: OVH Browser Google Auth CORS Fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-apply-public-auth-cors.sh'
+      - 'scripts/ops/ovh-rollback-public-auth-cors.sh'
+      - '.github/workflows/ovh-public-auth-cors.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-public-auth-cors-production
+  cancel-in-progress: false
+jobs:
+  deploy-validate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scoped Caddy CORS change scripts
+        run: |
+          bash -n scripts/ops/ovh-apply-public-auth-cors.sh
+          bash -n scripts/ops/ovh-rollback-public-auth-cors.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Apply browser CORS preflight to Auth route only
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-apply-public-auth-cors.sh
+      - name: Verify actual public browser CORS preflights on apex and www
+        run: |
+          python3 qa/ovh-public-auth-cors-preflight.py | tee /tmp/neis-auth-cors.out
+          python3 - <<'PY'
+          from pathlib import Path
+          data=Path('/tmp/neis-auth-cors.out').read_text()
+          for host in ('NEISCIRCLE_SITE','WWW_NEISCIRCLE_SITE'):
+           for label in ('TOKEN_POST','SETTINGS_GET','AUTHORIZE_GET'):
+            prefix='PREFLIGHT_'+host+'_'+label+'_'
+            assert prefix+'HTTP=204' in data,prefix+'HTTP'
+            for flag in ('ORIGIN_ALLOWED','METHOD_ALLOWED','HEADERS_ALLOWED'):
+             assert prefix+flag+'=True' in data,prefix+flag
+          print('AUTH_BROWSER_PREFLIGHT_EXTERNAL=PASS')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Verify real SDK token endpoint from browser without authenticating users
+        run: |
+          node qa/ovh-real-token-negative-browser.mjs | tee /tmp/neis-real-token-browser.out
+          python3 - <<'PY'
+          from pathlib import Path
+          log=Path('/tmp/neis-real-token-browser.out').read_text()
+          assert log.count('"kind":"response","status":404')==2,'Browser must receive two direct GoTrue error responses'
+          assert 'REAL_TOKEN_NEGATIVE_PROBES_COMPLETED=2/2' in log
+          assert 'net::ERR_FAILED' not in log and '"CORS"' not in log,'Browser CORS must not block requests'
+          print('GOOGLE_AUTH_REAL_BROWSER_NETWORK=PASS')
+          PY
+      - name: Preserve Studio protection and Google provider routing
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,urllib.parse
+          base='https://supabase.neiscircle.site'
+          class NoFollow(urllib.request.HTTPRedirectHandler):
+           def redirect_request(self,req,fp,code,msg,headers,newurl):return None
+          opener=urllib.request.build_opener(NoFollow)
+          for p in ['/auth/v1/settings','/']:
+           try:r=opener.open(base+p,timeout=15)
+           except urllib.error.HTTPError as e:r=e
+           with r:
+            if p=='/':
+             ok=r.status==401 and r.headers.get('WWW-Authenticate','').lower().startswith('basic')
+             print('STUDIO_STILL_PROTECTED='+str(ok))
+            else:
+             ok=r.status==200
+             print('GOOGLE_AUTH_SETTINGS_PUBLIC='+str(ok))
+            assert ok
+          PY
+      - name: Roll back only this CORS edit if any validation fails
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-public-auth-cors.sh
+          fi
