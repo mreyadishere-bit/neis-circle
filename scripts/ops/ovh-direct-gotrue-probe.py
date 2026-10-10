@@ -40,4 +40,31 @@ for name,container,port in [('GOTRUE','supabase-auth',9999),('GATEWAY','supabase
  body=json.dumps({'auth_code':'synthetic-not-valid','code_verifier':'A'*64}).encode()
  path='/token?grant_type=pkce' if name=='GOTRUE' else '/auth/v1/token?grant_type=pkce'
  probe(name+'_INVALID_PKCE',base+path,'POST',body)
+# Compare public anon-key access across the private API gateway, including
+# simulated externally forwarded IP. Never print or persist key values.
+from pathlib import Path
+key=''
+for line in Path('/home/ubuntu/neis-supabase/.env').read_text().splitlines():
+ if line.startswith('ANON_KEY='):
+  key=line.partition('=')[2].strip().strip('"').strip("'")
+if key:
+ gateway=ip_for('supabase-envoy')
+ if gateway:
+  origin='http://'+gateway+':8000'
+  for label,extra in (
+   ('VALID_KEY',{}),
+   ('X_FORWARDED_PUBLIC_IP',{'X-Forwarded-For':'198.51.100.25'}),
+   ('X_REAL_PUBLIC_IP',{'X-Real-IP':'198.51.100.25'}),
+   ('FORWARDED_PUBLIC_IP',{'Forwarded':'for=198.51.100.25'}),
+  ):
+   hdr={'apikey':key,'authorization':'Bearer '+key,'Origin':'https://neiscircle.site','User-Agent':'NEIS-PrivateGateway-IpAudit'}
+   hdr.update(extra)
+   req=urllib.request.Request(origin+'/auth/v1/settings',headers=hdr)
+   try:response=urllib.request.urlopen(req,timeout=9)
+   except urllib.error.HTTPError as e:response=e
+   except Exception:
+    print('GATEWAY_'+label+'_NETWORK=FAILED');continue
+   with response:
+    print('GATEWAY_'+label+'_HTTP='+str(response.status))
+    print('GATEWAY_'+label+'_CONTENT_TYPE='+(response.headers.get('Content-Type','').split(';')[0] or 'OTHER'))
 print('DIRECT_AUTH_PROBE=NO_VALID_CODES_NO_IDENTIFIERS')
