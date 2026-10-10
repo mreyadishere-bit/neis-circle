@@ -6,6 +6,7 @@ import json, os, re, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
 BASE=Path("/home/ubuntu/neis-supabase")
+os.chdir(BASE)
 ROOT=Path("/home/ubuntu/neis-backups")
 RUN=sys.argv[1] if len(sys.argv)>1 else ""
 if not re.fullmatch(r"[0-9]+", RUN):
@@ -17,7 +18,7 @@ DOCKER=["sudo","-n","/usr/bin/docker"]
 COMPOSE=DOCKER+["compose"]+[v for f in FILES for v in ("-f",f)]
 EXPECTED={"auth.users":204,"public.profiles":204,"public.posts":109,
           "public.messages":515,"public.circle_messages":2370,
-          "public.notifications":9540,"storage.objects":104}
+          "public.notifications":9541,"storage.objects":104}
 OMIT={"auth.mfa_recovery_code_sets","auth.mfa_recovery_codes","auth.scim_tokens","auth.scim_users"}
 def run(args, **kw):
     return subprocess.run(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=kw.pop("timeout",90),**kw)
@@ -35,7 +36,6 @@ def cmd(args, label, timeout=120):
     return p.stdout.strip()
 if not SOURCE.is_dir() or SOURCE.is_symlink() or BACKUP.exists():
     raise SystemExit("OVH_LIVE_IMPORT=BLOCKED_SOURCE_OR_BACKUP")
-if cmd(["sha256sum","--status","-c","SHA256SUMS"],"SOURCE_HASH_FAILED") if False else False:pass
 p=run(["sha256sum","--status","-c","SHA256SUMS"],cwd=str(SOURCE))
 if p.returncode:raise SystemExit("OVH_LIVE_IMPORT=BLOCKED_CLOUD_HASH")
 if sql("select count(*) from auth.users")!="1" or sql("select count(*) from storage.objects")!="0" or sql("select to_regclass('public.profiles') is null")!="t":
@@ -53,8 +53,6 @@ try:
     backupdump=work/"prelive.dump"
     pgfile(["pg_dump","-U","postgres","-d","postgres","--format=custom","--no-owner","--no-acl"],backupdump)
     pgfile(["pg_dumpall","-U","postgres","--globals-only"],work/"globals.sql")
-    if not run(COMPOSE+["exec","-T","db","pg_restore","--list"],timeout=30, input=None).returncode==0 if False else False:pass
-    check=run(COMPOSE+["exec","-T","db","pg_restore","--list"],timeout=30)
     # pg_restore list must be given the archive on stdin (not printed).
     with backupdump.open("rb") as fd:
         check=subprocess.run(COMPOSE+["exec","-T","db","pg_restore","--list"],stdin=fd,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=60)
@@ -67,8 +65,109 @@ try:
         shutil.move(str(work/file),str(BACKUP/file))
         os.chmod(BACKUP/file,0o600)
     print("OVH_LIVE_ROLLBACK_BACKUP=VERIFIED_PRIVATE")
-    original=(SOURCE/"schema.sql").read_text()
-    reg=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*$'
+    # The fresh Cloud export may include temporary maintenance-freeze triggers.
+    # Use the verified pre-freeze schema while keeping the newest Cloud data.
+    original_schema=Path("/home/ubuntu/neis-backups/cloud-cli-import-38052670098")
+    checksum=run(["sha256sum","--status","-c","SHA256SUMS"],cwd=str(original_schema))
+    if checksum.returncode:
+        raise RuntimeError("OVH_LIVE_IMPORT=BLOCKED_PRE_FREEZE_SCHEMA_HASH")
+    original=(original_schema/"schema.sql").read_text()
+    latest=(SOURCE/"schema.sql").read_text()
+    if "neis_cloud_maintenance_reject_writes" in original:
+        raise RuntimeError("OVH_LIVE_IMPORT=PRE_FREEZE_SCHEMA_INVALID")
+    # Fail closed if legitimate table/function definitions changed during maintenance.
+    objpat=r'(?im)^CREATE (?:OR REPLACE )?(?:TABLE|FUNCTION|PROCEDURE)\\s+([\\w."]+)'
+    def objects(x):return set(re.findall(objpat,x))
+    newest=objects(latest)
+    newest={n for n in newest if "neis_cloud_maintenance_reject_writes" not in n}
+    if newest!=objects(original):
+        raise RuntimeError("OVH_LIVE_IMPORT=UNEXPECTED_SCHEMA_CHANGE_DURING_MAINTENANCE")
+    print("OVH_LIVE_SCHEMA=HASH_VERIFIED_PRE_FREEZE")
+    reg=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*
+    schema,removed=re.subn(reg,"-- pg_cron preserved from OVH bootstrap",original)
+    old="https://ydieijgynqlckaczalju.supabase.co/functions/v1/"
+    schema,replaced=re.subn(re.escape(old),"https://supabase.neiscircle.site/functions/v1/",schema)
+    if removed!=1 or replaced!=2:raise RuntimeError("OVH_LIVE_IMPORT=SCHEMA_FILTER_MISMATCH")
+    (work/"schema.sql").write_text(schema)
+    names={}
+    seen=set()
+    active=None
+    with (SOURCE/"data.sql").open() as inp,(work/"data.sql").open("w") as dest:
+        for line in inp:
+            if active is None and line.startswith("COPY "):
+                match=re.match(r'^COPY\s+(?:"?([a-zA-Z_][a-zA-Z_0-9]*)"?\.)?"?([a-zA-Z_][a-zA-Z_0-9]*)"?\s+\(',line)
+                if not match:raise RuntimeError("OVH_LIVE_IMPORT=INVALID_COPY_HEADER")
+                active=(match.group(1) or "public")+"."+match.group(2)
+                if active in names:raise RuntimeError("OVH_LIVE_IMPORT=DUPLICATE_COPY")
+                names[active]=0
+                if active in OMIT:seen.add(active)
+                else:dest.write(line)
+            elif active is not None:
+                if line.strip()==r'\.':
+                    if active in OMIT and names[active]:raise RuntimeError("OVH_LIVE_IMPORT=NONEMPTY_UNSUPPORTED_AUTH")
+                    if active not in OMIT:dest.write(line)
+                    active=None
+                else:
+                    names[active]+=1
+                    if active not in OMIT:dest.write(line)
+            else:dest.write(line)
+    if active is not None or len(names)!=95 or seen!=OMIT:
+        raise RuntimeError("OVH_LIVE_IMPORT=INCOMPLETE_SOURCE")
+    for k,v in EXPECTED.items():
+        if names.get(k)!=v:raise RuntimeError("OVH_LIVE_IMPORT=STALE_OR_UNEXPECTED_DATA")
+    remaining={k:v for k,v in names.items() if k not in OMIT}
+    if len(remaining)!=91:raise RuntimeError("OVH_LIVE_IMPORT=TABLE_COUNT_INVALID")
+    verify=["DO $NEIS$ BEGIN"]
+    for name,count in sorted(remaining.items()):
+        if not re.fullmatch(r"[a-z_][a-z_0-9]*\.[a-z_][a-z_0-9]*",name):
+            raise RuntimeError("OVH_LIVE_IMPORT=UNSAFE_TABLE_IDENTIFIER")
+        verify.append("IF (SELECT count(*) FROM "+name+") <> "+str(count)+" THEN RAISE EXCEPTION 'row parity failed "+name+"'; END IF;")
+    verify+=["IF (SELECT count(*) FROM auth.identities WHERE provider='google') <> 204 THEN RAISE EXCEPTION 'Google identity mismatch'; END IF;",
+     "IF EXISTS (SELECT 1 FROM auth.identities i LEFT JOIN auth.users u ON u.id=i.user_id WHERE u.id IS NULL) THEN RAISE EXCEPTION 'orphan identity'; END IF;",
+     "IF EXISTS (SELECT 1 FROM public.profiles p LEFT JOIN auth.users u ON u.id=p.id WHERE u.id IS NULL) THEN RAISE EXCEPTION 'orphan profile'; END IF;",
+     "IF (SELECT count(*) FROM pg_policies WHERE schemaname='public') <> 138 THEN RAISE EXCEPTION 'RLS policy mismatch'; END IF;",
+     "IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef) <> 120 THEN RAISE EXCEPTION 'definer function mismatch'; END IF;",
+     "END $NEIS$;"]
+    (work/"verify.sql").write_text("\n".join(verify)+"\n")
+    live_id=cmd(COMPOSE+["ps","-q","db"],"OVH_LIVE_IMPORT=DB_CONTAINER_MISSING")
+    for n in ("schema","data","verify"):
+        cmd(DOCKER+["cp",str(work/(n+".sql")),live_id+":/tmp/neis-live-"+n+".sql"],"OVH_LIVE_IMPORT=COPY_SQL_FAILED")
+    print("OVH_LIVE_IMPORT_PREFLIGHT=PASS_91_TABLES")
+    # Even a partially failed stop must trigger a restart attempt.
+    stopped=True
+    cmd(COMPOSE+["stop","-t","30","functions","realtime","storage","rest","auth"],"OVH_LIVE_IMPORT=STOP_APIS_FAILED",timeout=100)
+    print("OVH_LIVE_WRITER_APIS=STOPPED")
+    args=COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-v","ON_ERROR_STOP=1","--single-transaction",
+      "-c","TRUNCATE TABLE auth.audit_log_entries, auth.flow_state, auth.identities, auth.mfa_amr_claims, auth.refresh_tokens, auth.sessions, auth.users RESTART IDENTITY CASCADE",
+      "-f","/tmp/neis-live-schema.sql",
+      "-c","ALTER TABLE auth.one_time_tokens ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone",
+      "-c","SET session_replication_role = replica",
+      "-f","/tmp/neis-live-data.sql",
+      "-c","SET session_replication_role = origin",
+      "-f","/tmp/neis-live-verify.sql"]
+    p=run(args,timeout=320)
+    if p.returncode:
+        # PostgreSQL --single-transaction rolls back all changes.
+        code=re.search(r"ERROR:\s*([A-Z0-9]{5})",p.stderr)
+        print("OVH_LIVE_IMPORT_SQLSTATE="+(code.group(1) if code else "UNKNOWN"))
+        raise RuntimeError("OVH_LIVE_IMPORT=SQL_TRANSACTION_ROLLED_BACK")
+    print("OVH_LIVE_IMPORT=PASS_ATOMIC_91_TABLES")
+    print("OVH_LIVE_AUTH_GOOGLE_USERS=204")
+    print("OVH_LIVE_STORAGE_METADATA=104")
+    print("GITHUB_PAGES=MAINTENANCE")
+finally:
+    restart_failed=False
+    if stopped:
+        r=run(COMPOSE+["up","-d","--no-deps","auth","rest","realtime","storage","functions"],timeout=180)
+        restart_failed=r.returncode!=0
+        print("OVH_BACKEND_RESTART="+("SUCCESS" if not restart_failed else "FAILED_MANUAL_REVIEW"))
+    if live_id:
+        for n in ("schema","data","verify"):
+            run(DOCKER+["exec",live_id,"rm","-f","/tmp/neis-live-"+n+".sql"],timeout=20)
+    shutil.rmtree(work,ignore_errors=True)
+    if restart_failed:
+        raise RuntimeError("OVH_BACKEND_RESTART=FAILED_MANUAL_REVIEW")
+
     schema,removed=re.subn(reg,"-- pg_cron preserved from OVH bootstrap",original)
     old="https://ydieijgynqlckaczalju.supabase.co/functions/v1/"
     schema,replaced=re.subn(re.escape(old),"https://supabase.neiscircle.site/functions/v1/",schema)
