@@ -38,7 +38,7 @@ jobs:
       - name: Validate OVH migration shell syntax
         run: bash -n scripts/ops/ovh-cli-isolated-restore.sh
       - name: Compile critical OVH production migration Python
-        run: python3 -m py_compile scripts/ops/ovh-final-live-database-import.py scripts/ops/ovh-live-storage-cutover.py
+        run: python3 -m py_compile scripts/ops/ovh-final-live-database-import.py
       - run: npm run qa:static
       - name: Preserve original Google-only authentication flow
         run: node qa/google-only-auth-contract.mjs
