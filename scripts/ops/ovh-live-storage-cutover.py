@@ -113,14 +113,24 @@ if not obj or "\n" in obj:
 path=urllib.parse.quote(obj,safe="/")
 url="https://supabase.neiscircle.site/storage/v1/object/public/community-media/"+path
 req=urllib.request.Request(url,headers={"Range":"bytes=0-15","User-Agent":"NEIS-OVH-Storage-Migration-Smoke/1.0"})
-try:
-    with urllib.request.urlopen(req,timeout=22) as response:
-        response.read(16)
-        code=response.status
-except urllib.error.HTTPError as e:
-    code=e.code
-except Exception:
-    code=0
+# Caddy and Storage may need a few seconds after container recreation.
+# Retry temporary 5xx/network failures; do not retry permanent 401/403/404.
+import time
+code=0
+for attempt in range(1,13):
+    try:
+        with urllib.request.urlopen(req,timeout=8) as response:
+            response.read(16)
+            code=response.status
+    except urllib.error.HTTPError as e:
+        code=e.code
+    except Exception:
+        code=0
+    if code in (200,206) or code in (400,401,403,404,405):
+        break
+    if attempt<12:
+        time.sleep(2)
+print("STORAGE_PUBLIC_READ_ATTEMPTS="+str(attempt))
 print("STORAGE_PUBLIC_SAMPLE_HTTP="+str(code))
 if code not in (200,206):
     print("STORAGE_CUTOVER=FAILED_PUBLIC_OBJECT_READ")
