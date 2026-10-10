@@ -30,7 +30,21 @@ def probe(obj):
   with urllib.request.urlopen(request,timeout=15) as response:
    response.read(16)
    return (visibility,response.status)
- except urllib.error.HTTPError as ex:return (visibility,ex.code)
+ except urllib.error.HTTPError as ex:
+  if ex.code==416:
+   # A valid object may be empty: a 0-15 Range cannot be satisfied.
+   # Retry as a normal authenticated GET before classifying it as missing.
+   try:
+    plain_headers={'User-Agent':'NEIS-OVH-Private-ReadOnly-Media-Smoke',
+      'apikey':anon,'authorization':'Bearer '+key}
+    plain=urllib.request.Request('https://supabase.neiscircle.site/storage/v1/'+endpoint,headers=plain_headers)
+    with urllib.request.urlopen(plain,timeout=15) as full:
+     full.read(16)
+     if full.status==200:return (visibility,200)
+     return (visibility,full.status)
+   except urllib.error.HTTPError as retry_error:return (visibility,retry_error.code)
+   except Exception:return (visibility,0)
+  return (visibility,ex.code)
  except Exception:return (visibility,0)
 with concurrent.futures.ThreadPoolExecutor(max_workers=7) as pool:
  results=list(pool.map(probe,objects))
