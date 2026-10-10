@@ -12,10 +12,14 @@ overlay=docker-compose.auth-public-direct.yml
 old="$stage/original.Caddyfile"
 new="$stage/public-auth.Caddyfile"
 mkdir -p -m 700 "$stage"
-test ! -e "$overlay" && test ! -e "$new" && test ! -e "$old"
+test ! -e "$overlay" && test ! -e "$new"
 test -s docker-compose.frontend-public.yml
 compose config --quiet
-"${docker[@]}" exec supabase-caddy cat /etc/caddy/Caddyfile > "$old"
+if [[ -e "$old" ]];then
+  "${docker[@]}" exec supabase-caddy cat /etc/caddy/Caddyfile | cmp -s - "$old" || { echo 'DIRECT_AUTH=BLOCKED_EXISTING_BACKUP_MISMATCH';exit 1; }
+else
+  "${docker[@]}" exec supabase-caddy cat /etc/caddy/Caddyfile > "$old"
+fi
 test -s "$old"
 export AUTH_DIRECT_CADDY_ORIGINAL="$old" AUTH_DIRECT_CADDY_UPDATED="$new"
 python3 - <<'PY'
@@ -24,22 +28,29 @@ import os,re
 old=Path(os.environ['AUTH_DIRECT_CADDY_ORIGINAL'])
 new=Path(os.environ['AUTH_DIRECT_CADDY_UPDATED'])
 source=old.read_text()
-pattern=r'(?m)^([ \t]*)@supabase_api[ \t]+path[ \t]+/auth/v1/\*[ \t]+/rest/v1/\*[ \t]+/graphql/v1[ \t]*$'
+pattern=r'(?m)^([ \\t]*)@supabase_api[ \\t]+path[ \\t]+([^\\r\\n]+)$'
 matches=list(re.finditer(pattern,source))
 if len(matches)!=1:raise SystemExit('DIRECT_AUTH=BLOCKED_UNEXPECTED_CADDY_API_RULE')
+original_paths=matches[0].group(2).split()
+if '/auth/v1/*' not in original_paths or len(original_paths)<2:
+ raise SystemExit('DIRECT_AUTH=BLOCKED_PUBLIC_AUTH_PATH_MISSING')
+other_paths=[value for value in original_paths if value!='/auth/v1/*']
+if not all(value.startswith('/') for value in other_paths):
+ raise SystemExit('DIRECT_AUTH=BLOCKED_UNEXPECTED_API_MATCHER_SYNTAX')
 if source.count('reverse_proxy api-gw:8000')!=1 or source.count('basic_auth')!=1:
  raise SystemExit('DIRECT_AUTH=BLOCKED_UNEXPECTED_PROXY_OR_STUDIO_GUARD')
 if 'handle_path /auth/v1/*' in source or 'reverse_proxy auth:9999' in source:
  raise SystemExit('DIRECT_AUTH=BLOCKED_RULE_ALREADY_PRESENT')
 indent=matches[0].group(1)
-replacement=(indent+'@supabase_api path /rest/v1/* /graphql/v1\n'+
-             indent+'handle_path /auth/v1/* {\n'+
-             indent+'    reverse_proxy auth:9999\n'+
-             indent+'}\n')
+replacement=(indent+'@supabase_api path '+' '.join(other_paths)+'\\n'+
+             indent+'handle_path /auth/v1/* {\\n'+
+             indent+'    reverse_proxy auth:9999\\n'+
+             indent+'}')
 updated=source[:matches[0].start()]+replacement+source[matches[0].end():]
 assert updated.count('basic_auth')==1
 assert updated.count('reverse_proxy api-gw:8000')==1
 assert updated.count('handle_path /auth/v1/*')==1
+assert all(value in updated for value in other_paths)
 new.write_text(updated)
 new.chmod(0o600)
 print('DIRECT_AUTH=CANDIDATE_STAGED_GOOGLE_PROVIDER_UNCHANGED')
