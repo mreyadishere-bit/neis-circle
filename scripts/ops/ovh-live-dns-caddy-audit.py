@@ -166,4 +166,19 @@ for name in ('supabase-caddy','supabase-envoy'):
   p=run('exec',name,'cat','/etc/envoy/envoy.yaml')
   if p and p.returncode==0 and len(p.stdout)<250000:classify('ENVOY_LIVE',p.stdout)
 audit_caddy_active()
+def check_local_public_paths():
+ import urllib.request,urllib.error
+ for name,path in [('OAUTH_TEST','/oauth-test/'),('AUTH_SETTINGS','/auth/v1/settings'),('RANDOM','/neis-health-test-nonexistent')]:
+  req=urllib.request.Request('https://supabase.neiscircle.site'+path,headers={'User-Agent':'NEIS-Local-Route-Audit','Origin':'https://neiscircle.site'})
+  try:r=urllib.request.urlopen(req,timeout=10)
+  except urllib.error.HTTPError as e:r=e
+  except Exception:
+   print('LOCAL_'+name+'_NETWORK=FAILED');continue
+  with r:
+   text=r.read(256).decode('utf8','replace').strip().lower()
+   typ='UNAUTHORIZED' if text in ('unauthorized','401 unauthorized','unauthorised') else 'ACCESS_DENIED' if 'access denied' in text else 'HTML' if text.startswith('<') else 'OTHER'
+   print('LOCAL_'+name+'_HTTP='+str(r.status))
+   print('LOCAL_'+name+'_BODY_CLASS='+typ)
+   print('LOCAL_'+name+'_WWW_AUTH_BASIC='+str(r.headers.get('WWW-Authenticate','').lower().startswith('basic')))
+check_local_public_paths()
 print('AUDIT=SAFE_READ_ONLY')
