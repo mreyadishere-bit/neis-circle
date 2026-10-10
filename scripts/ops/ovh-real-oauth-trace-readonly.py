@@ -3,7 +3,8 @@
 
 Never prints log lines, request URLs, user identifiers, tokens or credentials.
 """
-import json,re,subprocess,urllib.request,urllib.error
+import json,re,subprocess,urllib.request,urllib.error,os
+os.chdir('/home/ubuntu/neis-supabase')
 from collections import Counter
 def run(cmd,timeout=25):
     try:return subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
