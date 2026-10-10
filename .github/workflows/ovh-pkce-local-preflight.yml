@@ -1,0 +1,55 @@
+name: OVH PKCE Local Browser Preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-pkce-browser-integration.mjs'
+      - '.github/workflows/ovh-pkce-local-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Setup pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Copy candidate public static release for local browser test
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/neis-pkce-static
+          scp -q -r -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST:/home/ubuntu/neis-frontend/releases/ovh-selfhosted-20261010-google-pkce/." /tmp/neis-pkce-static
+          test -s /tmp/neis-pkce-static/index.html
+          grep -q 'pkce-20261010v4' /tmp/neis-pkce-static/index.html
+      - name: Browser test on local copy, no production mutation
+        env:
+          NEIS_TEST_ORIGIN: http://127.0.0.1:4173
+        run: |
+          set -euo pipefail
+          cd /tmp/neis-pkce-static
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/neis-pkce-http.log 2>&1 &
+          sleep 2
+          cd "$GITHUB_WORKSPACE"
+          node qa/ovh-pkce-browser-integration.mjs
