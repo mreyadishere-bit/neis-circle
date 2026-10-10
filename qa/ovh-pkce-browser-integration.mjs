@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 
-const origin = 'https://neiscircle.site';
+const origin = process.env.NEIS_TEST_ORIGIN || 'https://neiscircle.site';
 const now = Math.floor(Date.now() / 1000);
 const b64 = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
 const jwt = [b64({alg:'HS256',typ:'JWT'}),b64({
@@ -24,11 +24,14 @@ try {
   page.on('pageerror',e=>errors.push((e.name||'Error').slice(0,32)));
   await page.route('**/auth/v1/authorize**',async route=>{
     const u=new URL(route.request().url());
-    if(!u.searchParams.get('code_challenge')||
-       u.searchParams.get('code_challenge_method')!=='S256'||
-       u.searchParams.get('provider')!=='google'){
-      stats.badUrls++;throw new Error('Missing PKCE code challenge in Google authorize redirect');
-    }
+    const challenge=u.searchParams.get('code_challenge');
+    const method=u.searchParams.get('code_challenge_method');
+    const provider=u.searchParams.get('provider');
+    console.log('PKCE_AUTHORIZE_PROVIDER_GOOGLE='+String(provider==='google'));
+    console.log('PKCE_AUTHORIZE_CHALLENGE_PRESENT='+String(!!challenge));
+    console.log('PKCE_AUTHORIZE_METHOD='+(/^(S256|plain)$/.test(method||'')?method:'MISSING_OR_UNKNOWN'));
+    console.log('PKCE_AUTHORIZE_QUERY_KEY_NAMES='+[...u.searchParams.keys()].filter(k=>/^(provider|redirect_to|code_challenge|code_challenge_method|scopes|flow_type)$/.test(k)).sort().join(','));
+    if(!challenge||method!=='S256'||provider!=='google')stats.badUrls++;
     stats.authorize++;
     await route.fulfill({status:302,headers:{location:origin+'/?code=synthetic-neis-pkce-code'}});
   });
@@ -57,6 +60,7 @@ try {
   await page.goto(origin+'/?qa=pkce-20261010',{waitUntil:'domcontentloaded',timeout:35000});
   const button=page.locator('[data-auth-google]').first();
   await button.waitFor({state:'visible',timeout:20000});
+  console.log('PKCE_CLIENT_CONFIGURED_FLOW='+String(await page.evaluate(()=>typeof sb!=='undefined' ? String(sb?.auth?.flowType||'UNKNOWN') : 'CLIENT_MISSING')));
   await button.click();
   await page.waitForTimeout(13000);
   const snapshot=await page.evaluate(()=>({
