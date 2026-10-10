@@ -39,4 +39,14 @@ for container,path in (('supabase-caddy','/etc/caddy/Caddyfile'),('supabase-envo
     if len(value)<55 and re.fullmatch('[A-Za-z0-9_.-]+',value):
      print('ENVOY_SAFE_CONFIG_VALUE_'+str(number)+'='+value)
  print(container.replace('-','_').upper()+'_LINES='+str(len(lines)))
+# Classify running Docker service images without exposing images tags or runtime environment.
+ps2=cmd('ps','--format','{{.Names}}|{{.Image}}')
+if ps2 and ps2.returncode==0:
+ for line in ps2.stdout.splitlines():
+  pieces=line.split('|',1)
+  if len(pieces)!=2:continue
+  name,image=pieces
+  if not name.startswith('supabase-'):continue
+  cls=next((w.upper() for w in ('kong','envoy','caddy','traefik','nginx','postgres','gotrue','postgrest','studio','realtime','storage') if w in image.lower()),'OTHER')
+  print('DOCKER_CONTAINER_CLASS_'+name.replace('-','_').upper()+'='+cls)
 print('GATEWAY_TOPOLOGY_AUDIT=SAFE_READ_ONLY')
