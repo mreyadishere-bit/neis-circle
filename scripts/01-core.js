@@ -129,6 +129,8 @@ function loadSupabaseLibrary(){
   })().finally(()=>{window.__neisSupabaseLoader=null});
   return window.__neisSupabaseLoader;
 }
+// Only detect the presence of OAuth parameters: never persist URL credentials.
+window.__NEISOAuthCallbackPending=/(?:^#|[&#])(?:access_token|refresh_token|code)=/.test(location.hash) || /(?:^\?|&)code=/.test(location.search);
 const NEIS_AUTH_STAY_KEY='neis-auth-stay-signed-in';
 function neisStaySignedIn(){
   return localStorage.getItem(NEIS_AUTH_STAY_KEY)!=='0';
@@ -212,13 +214,25 @@ async function initSupabase(){
       if(error)throw error;
       authUser=data.session?.user||null;
       if(!supabaseAuthSubscription){
-        const listener=sb.auth.onAuthStateChange(async(event,session)=>{
-          authUser=session?.user||null;
+        const listener=sb.auth.onAuthStateChange((event,session)=>{
+          // Auth callback must be synchronous. Awaiting a Supabase query here
+          // deadlocks auth initialization and can cause repeated Google sign-ins.
+          if(session?.user){
+            authUser=session.user;
+            window.__NEISOAuthCallbackPending=false;
+          }else if(event==='SIGNED_OUT'){
+            authUser=null;
+          }
           if(event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED')return;
           if(authUser&&(event==='SIGNED_IN'||event==='USER_UPDATED')){
-            try{await loadLiveData()}catch(error){console.error('[NEIS] auth refresh failed',error)}
+            setTimeout(()=>{
+              Promise.resolve().then(()=>loadLiveData()).then(()=>{
+                if(typeof render==='function')render();
+              }).catch(error=>console.error('[NEIS] deferred auth hydration failed',error));
+            },0);
+          }else if(typeof render==='function'){
+            setTimeout(()=>render(),0);
           }
-          render();
         });
         supabaseAuthSubscription=listener?.data?.subscription||true;
       }
