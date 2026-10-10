@@ -53,6 +53,25 @@ jobs:
             print('EXT_SETTINGS_'+name+'_WWW_AUTH_CLASS='+('BASIC' if auth.lower().startswith('basic') else 'BEARER' if auth.lower().startswith('bearer') else 'OTHER' if auth else 'NONE'))
             print('EXT_SETTINGS_'+name+'_SERVER_CLASS='+('CADDY' if 'caddy' in srv.lower() else 'ENVOY' if 'envoy' in srv.lower() else 'NGINX' if 'nginx' in srv.lower() else 'OTHER'))
           PY
+      - name: Compare public API paths from external network
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          origin='https://supabase.neiscircle.site'
+          for name,path in [('OAUTH_TEST','/oauth-test/'),('AUTH_SETTINGS','/auth/v1/settings'),('RANDOM','/neis-health-test-nonexistent')]:
+           req=urllib.request.Request(origin+path,headers={'User-Agent':'NEIS-Public-Route-Audit','Origin':'https://neiscircle.site'})
+           try:r=urllib.request.urlopen(req,timeout=14)
+           except urllib.error.HTTPError as e:r=e
+           except Exception:
+            print('EXTERNAL_'+name+'_NETWORK=FAILED');continue
+           with r:
+            header=r.headers.get('WWW-Authenticate','').lower()
+            body=r.read(256).decode('utf8','replace').strip().lower()
+            category='UNAUTHORIZED' if body in ('unauthorized','401 unauthorized','unauthorised') else 'ACCESS_DENIED' if 'access denied' in body else 'HTML' if body.startswith('<') else 'OTHER'
+            print('EXTERNAL_'+name+'_HTTP='+str(r.status))
+            print('EXTERNAL_'+name+'_BODY_CLASS='+category)
+            print('EXTERNAL_'+name+'_WWW_AUTH_BASIC='+str(header.startswith('basic')))
+          PY
       - name: Configure pinned SSH
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
