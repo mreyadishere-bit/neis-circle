@@ -22,8 +22,23 @@ def query(sql):
     return p.stdout.strip()
 if not candidate.is_dir() or candidate.is_symlink() or override.exists() or backup.exists():
     raise SystemExit("STORAGE_CUTOVER=BLOCKED_PATH_ALREADY_SET")
-if query("select count(*) from auth.users")!="204" or query("select count(*) from storage.objects")!="104" or query("select count(*) from public.profiles")!="204":
-    raise SystemExit("STORAGE_CUTOVER=BLOCKED_UNRESTORED_DATABASE")
+try:
+    current_users=int(query("select count(*) from auth.users"))
+    current_profiles=int(query("select count(*) from public.profiles"))
+    current_objects=int(query("select count(*) from storage.objects"))
+except ValueError:
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_INVALID_COUNTS")
+print("STORAGE_LIVE_USERS="+str(current_users))
+print("STORAGE_LIVE_PROFILES="+str(current_profiles))
+print("STORAGE_LIVE_OBJECTS="+str(current_objects))
+# Accounts and profiles may increase after cutover; the 104-file snapshot may NOT.
+if current_users<204 or current_profiles<204 or current_objects!=104:
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_DATABASE_PARITY")
+live_names=set(query("select bucket_id||'/'||name from storage.objects order by bucket_id,name").splitlines())
+staged_names={p.relative_to(candidate).as_posix() for p in candidate.rglob("*") if p.is_file()}
+if live_names!=staged_names or len(staged_names)!=104:
+    raise SystemExit("STORAGE_CUTOVER=BLOCKED_OBJECT_PATH_DRIFT")
+print("STORAGE_LIVE_METADATA_PATHS_MATCH_STAGE=YES")
 p=run(["sudo","-n","find",str(candidate),"-type","f"])
 links=run(["sudo","-n","find",str(candidate),"-type","l","-print","-quit"])
 if p.returncode or links.returncode or links.stdout.strip() or len(p.stdout.splitlines())!=104:
