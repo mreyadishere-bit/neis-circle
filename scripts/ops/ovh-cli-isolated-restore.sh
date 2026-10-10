@@ -22,7 +22,16 @@ cleanup() {
 }
 trap cleanup EXIT
 exist="$(dock exec "$container" psql -X -U supabase_admin -d postgres -Atqc "select count(*) from pg_database where datname='$database'" </dev/null)"
-[[ "$exist" == 0 ]] || { echo 'CLI_RESTORE=BLOCKED_DB_ALREADY_PRESENT';exit 1; }
+if [[ "$exist" == 1 ]]; then
+  # Previous cloud schema import was transactional; reuse only if no data was loaded.
+  empty_users="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc 'select count(*) from auth.users' </dev/null)"
+  empty_storage="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc 'select count(*) from storage.objects' </dev/null)"
+  profiles_absent="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "select to_regclass('public.profiles') IS NULL" </dev/null)"
+  [[ "$empty_users" == 0 && "$empty_storage" == 0 && "$profiles_absent" == t ]] || { echo 'CLI_RESTORE=BLOCKED_NONEMPTY_STAGE';exit 1; }
+  echo 'CLI_STAGE_DATABASE=REUSE_EMPTY_NETWORK_DISCONNECTED'
+elif [[ "$exist" != 0 ]]; then
+  echo 'CLI_RESTORE=BLOCKED_UNEXPECTED_EXISTENCE';exit 1
+fi
 dock cp "$backup/live.dump" "$container:/tmp/neis-cli-live-bootstrap.dump"
 dock exec "$container" pg_restore --list /tmp/neis-cli-live-bootstrap.dump >"$temp/base.list" </dev/null
 python3 - "$temp/base.list" "$temp/filtered.list" <<'PY'
@@ -38,6 +47,7 @@ Path(sys.argv[2]).write_text(''.join(out))
 print('CLI_BASE_EXTENSION_ENTRIES_SKIPPED='+str(skipped))
 PY
 dock cp "$temp/filtered.list" "$container:/tmp/neis-cli-bootstrap-filtered.list"
+if [[ "$exist" == 0 ]]; then
 dock exec "$container" psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE $database WITH TEMPLATE template0 OWNER supabase_admin" >/dev/null </dev/null
 echo 'CLI_STAGE_DATABASE=CREATED_NETWORK_DISCONNECTED'
 if ! dock exec "$container" pg_restore --schema-only --no-owner --no-acl --exit-on-error -U supabase_admin -d "$database" -L /tmp/neis-cli-bootstrap-filtered.list /tmp/neis-cli-live-bootstrap.dump >"$temp/bootstrap.log" 2>&1 </dev/null;then
@@ -49,14 +59,28 @@ if ! dock exec "$container" pg_restore --schema-only --no-owner --no-acl --exit-
  exit 1
 fi
 echo 'CLI_STAGE_BOOTSTRAP_SCHEMA=IMPORTED'
+fi
 dock cp "$source/schema.sql" "$container:/tmp/neis-cli-cloud-schema.sql"
-if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 --single-transaction -f /tmp/neis-cli-cloud-schema.sql >"$temp/schema.log" 2>&1 </dev/null;then
+if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose --single-transaction -f /tmp/neis-cli-cloud-schema.sql >"$temp/schema.log" 2>&1 </dev/null;then
  echo 'CLI_RESTORE=FAILED_CLOUD_SCHEMA'
- if grep -Eqi 'already exists' "$temp/schema.log";then echo 'CLI_RESTORE_FAILURE_CLASS=ALREADY_EXISTS'
- elif grep -Eqi 'does not exist' "$temp/schema.log";then echo 'CLI_RESTORE_FAILURE_CLASS=DEPENDENCY'
- elif grep -Eqi 'permission denied|must be owner' "$temp/schema.log";then echo 'CLI_RESTORE_FAILURE_CLASS=PERMISSION'
- elif grep -Eqi 'pg_cron|extension' "$temp/schema.log";then echo 'CLI_RESTORE_FAILURE_CLASS=EXTENSION'
- else echo 'CLI_RESTORE_FAILURE_CLASS=OTHER';fi
+ python3 - "$temp/schema.log" "$source/schema.sql" <<'PY'
+from pathlib import Path
+import re,sys
+log=Path(sys.argv[1]).read_text(errors='replace')
+schema=Path(sys.argv[2]).read_text(errors='replace')
+codes=re.findall(r'ERROR:\s*([0-9A-Z]{5}):',log)
+print('CLI_SCHEMA_ERROR_SQLSTATE='+str(codes[0] if codes else 'UNAVAILABLE'))
+last=next((x for x in log.splitlines() if 'ERROR:' in x), '')
+k='UNKNOWN'
+if 'pg_cron' in last:k='PG_CRON'
+elif 'extension' in last.lower():k='EXTENSION'
+elif 'already exists' in last:k='DUPLICATE'
+elif 'does not exist' in last:k='DEPENDENCY'
+elif 'permission denied' in last:k='PERMISSION'
+print('CLI_SCHEMA_ERROR_KIND='+k)
+print('CLI_SCHEMA_REFERENCES_PG_CRON='+str('pg_cron' in schema).upper())
+print('CLI_SCHEMA_DIAGNOSTIC_PRIVATE=YES')
+PY
  exit 1
 fi
 echo 'CLI_STAGE_CLOUD_SCHEMA=IMPORTED_TRANSACTIONALLY'
