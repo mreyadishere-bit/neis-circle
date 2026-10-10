@@ -18,10 +18,17 @@ r=run(docker+['inspect','--format','{{json .}}',cid])
 if r.returncode:raise SystemExit('FILE_READ=INSPECT_FAILED')
 data=json.loads(r.stdout)
 image=data['Config']['Image'];user=data['Config'].get('User','')
+backend_etag=data['Config'].get('Env',[])
+alg=next((entry.split('=',1)[1] for entry in backend_etag if entry.startswith('FILE_STORAGE_ETAG_ALGORITHM=')),'UNSET')
+print('STORAGE_ETAG_CONFIG='+str(alg if alg in ('mtime','md5') else 'UNSET_OR_OTHER'))
 js=r"""
 const fs=require('node:fs'),path=require('node:path');
 const records=JSON.parse(fs.readFileSync(0,'utf8'));
 const root='/var/lib/storage';
+let attrs;
+try { attrs=require('fs-xattr') } catch(e) { attrs=null }
+let xattrSupported=0,xattrMissing=0,xattrUnsupported=0,xattrPermission=0,xattrOther=0;
+
 let good=0,missing=0,denied=0,other=0,dirs=0,badLength=0,bytes=0;
 for(const o of records){
  const f=path.resolve(root,o.bucket,o.name,o.version);
@@ -36,6 +43,17 @@ for(const o of records){
   bytes+=n;
   if(st.size>0&&n===0)badLength++;
   good++;
+  if(attrs){
+   try{
+    attrs.getAttributeSync(f,'user.supabase.content-type');
+    xattrSupported++;
+   }catch(e){
+    if(e.code==='ENODATA'||e.code==='ENOATTR')xattrMissing++;
+    else if(e.code==='ENOTSUP'||e.code==='EOPNOTSUPP')xattrUnsupported++;
+    else if(e.code==='EACCES'||e.code==='EPERM')xattrPermission++;
+    else xattrOther++;
+   }
+  }
  }catch(err){if(err.code==='ENOENT')missing++;else if(err.code==='EACCES'||err.code==='EPERM')denied++;else other++}
 }
 console.log('FILE_READ_OK='+good);
@@ -45,6 +63,12 @@ console.log('FILE_READ_UNEXPECTED_DIRECTORY='+dirs);
 console.log('FILE_READ_OTHER_ERROR='+other);
 console.log('FILE_READ_BAD_LENGTH='+badLength);
 console.log('FILE_READ_PROBED_BYTES='+bytes);
+console.log('FILE_XATTR_MODULE='+ (attrs?'AVAILABLE':'MISSING'));
+console.log('FILE_XATTR_PRESENT='+xattrSupported);
+console.log('FILE_XATTR_MISSING_EXPECTED='+xattrMissing);
+console.log('FILE_XATTR_UNSUPPORTED='+xattrUnsupported);
+console.log('FILE_XATTR_PERMISSION='+xattrPermission);
+console.log('FILE_XATTR_OTHER='+xattrOther);
 if(good!==records.length||missing||denied||dirs||other||badLength)process.exitCode=1;
 """
 args=docker+['run','--rm','-i','--network','none','--pull','never','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','-v',str(stage)+':/var/lib/storage:ro']
@@ -52,7 +76,7 @@ if user:args+=['--user',user]
 args+=['--entrypoint','node',image,'-e',js]
 q=run(args,stdin=json.dumps(rows))
 for line in q.stdout.splitlines():
- if line.startswith('FILE_READ_') and line.split('=',1)[1].isdigit():print(line)
+ if line.startswith(('FILE_READ_','FILE_XATTR_')) and (line.split('=',1)[1].isdigit() or line.startswith('FILE_XATTR_MODULE=')):print(line)
 if q.returncode:raise SystemExit('FILE_READ=FAILED_RUNTIME_ISOLATED')
 print('FILE_READ=PASS_RUNTIME_USER_104_OF_104')
 print('LIVE_STORAGE_MOUNT=UNCHANGED')
