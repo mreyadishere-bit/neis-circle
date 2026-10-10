@@ -1,0 +1,49 @@
+name: OVH Real Browser Data Hydration Diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-synthetic-chromium-feed-hydration.mjs'
+      - 'scripts/ops/ovh-generate-fake-readonly-auth-jwt.py'
+      - '.github/workflows/ovh-synthetic-chromium-feed-hydration.yml'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate browser diagnostic syntax
+        run: node --check qa/ovh-synthetic-chromium-feed-hydration.mjs
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Run actual Chromium with short-lived fake authenticated token
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          set +x
+          NEIS_BROWSER_TEST_TOKEN="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-generate-fake-readonly-auth-jwt.py)"
+          test -n "$NEIS_BROWSER_TEST_TOKEN"
+          echo "::add-mask::$NEIS_BROWSER_TEST_TOKEN"
+          export NEIS_BROWSER_TEST_TOKEN
+          node qa/ovh-synthetic-chromium-feed-hydration.mjs
