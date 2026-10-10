@@ -4,7 +4,7 @@ set -Eeuo pipefail
 cd /home/ubuntu/neis-supabase
 python3 - <<'PY'
 from pathlib import Path
-import urllib.request,urllib.error,sys
+import urllib.request,urllib.error,urllib.parse,base64,secrets,sys
 key=''
 for line in Path('.env').read_text().splitlines():
  if line.startswith('ANON_KEY='):
@@ -16,7 +16,6 @@ origin='https://supabase.neiscircle.site'
 routes={
  'AUTH_HEALTH':'/auth/v1/health',
  'REST_ROOT':'/rest/v1/',
- 'REALTIME_ROOT':'/realtime/v1/',
  'STORAGE_BUCKETS':'/storage/v1/bucket',
 }
 functions=(
@@ -47,6 +46,26 @@ for label,path in routes.items():
  print(label+'_HTTP='+str(code if code is not None else 'NETWORK_ERROR'))
  if code is None or code>=500 or code==404:
   all_ok=False
+# Realtime is a websocket endpoint; /realtime/v1/ itself is not a valid route.
+websocket_path='/realtime/v1/websocket?'+urllib.parse.urlencode({'apikey':key,'vsn':'1.0.0'})
+websocket_key=base64.b64encode(secrets.token_bytes(16)).decode('ascii')
+websocket_req=urllib.request.Request(origin+websocket_path,headers={
+ 'User-Agent':'NEIS-Circle-OVH-Staging-ReadOnly/1.1',
+ 'apikey':key,
+ 'Authorization':'Bearer '+key,
+ 'Connection':'Upgrade',
+ 'Upgrade':'websocket',
+ 'Sec-WebSocket-Version':'13',
+ 'Sec-WebSocket-Key':websocket_key,
+ 'Origin':'https://neiscircle.site',
+})
+try:
+ with urllib.request.urlopen(websocket_req,timeout=15) as response: websocket_http=response.status
+except urllib.error.HTTPError as error:websocket_http=error.code
+except Exception:websocket_http=None
+print('REALTIME_WEBSOCKET_HTTP='+str(websocket_http if websocket_http is not None else 'NETWORK_ERROR'))
+print('REALTIME_WEBSOCKET_CLASS='+('UPGRADE_VERIFIED' if websocket_http==101 else 'PROTECTED_OR_REJECTED' if websocket_http in (400,401,403,405,426) else 'UNVERIFIED'))
+if websocket_http not in (101,400,401,403,405,426):all_ok=False
 function_ok=0
 for slug in functions:
  path='/functions/v1/'+slug
@@ -60,6 +79,7 @@ for slug in functions:
  if not good:all_ok=False
 print('OVH_EDGE_FUNCTION_ROUTES_RESPONDING='+str(function_ok)+'/8')
 print('OVH_HTTP_READ_ONLY=YES')
+print('OVH_REALTIME_CHANNEL_DELIVERY_VALIDATED=NO')
 print('OVH_FUNCTIONAL_AUTH_RLS_PUSH_EMAIL_VALIDATED=NO')
 print('OVH_ROUTE_SMOKE='+('PASS_ROUTES_ONLY' if all_ok else 'FAIL'))
 sys.exit(0 if all_ok else 1)
