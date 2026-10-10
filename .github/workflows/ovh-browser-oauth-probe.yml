@@ -18,4 +18,9 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-save playwright && npx playwright install --with-deps chromium
-      - run: node qa/ovh-public-oauth-probe.mjs
+      - name: Verify rejection of invalid token
+        run: node qa/ovh-public-oauth-probe.mjs
+      - name: Verify successful session hydration with synthetic User API
+        env:
+          NEIS_MOCK_USER: '1'
+        run: node qa/ovh-public-oauth-probe.mjs
