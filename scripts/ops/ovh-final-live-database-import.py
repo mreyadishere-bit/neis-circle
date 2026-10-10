@@ -76,14 +76,14 @@ try:
     if "neis_cloud_maintenance_reject_writes" in original:
         raise RuntimeError("OVH_LIVE_IMPORT=PRE_FREEZE_SCHEMA_INVALID")
     # Fail closed if legitimate table/function definitions changed during maintenance.
-    objpat=r'(?im)^CREATE (?:OR REPLACE )?(?:TABLE|FUNCTION|PROCEDURE)\\s+([\\w."]+)'
+    objpat=r'(?im)^CREATE (?:OR REPLACE )?(?:TABLE|FUNCTION|PROCEDURE)\s+([\w."]+)'
     def objects(x):return set(re.findall(objpat,x))
     newest=objects(latest)
     newest={n for n in newest if "neis_cloud_maintenance_reject_writes" not in n}
     if newest!=objects(original):
         raise RuntimeError("OVH_LIVE_IMPORT=UNEXPECTED_SCHEMA_CHANGE_DURING_MAINTENANCE")
     print("OVH_LIVE_SCHEMA=HASH_VERIFIED_PRE_FREEZE")
-    reg=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*
+    reg=r'(?im)^[ \t]*CREATE EXTENSION IF NOT EXISTS "?pg_cron"? WITH SCHEMA "?[a-z_]+"?;[ \t]*$'
     schema,removed=re.subn(reg,"-- pg_cron preserved from OVH bootstrap",original)
     old="https://ydieijgynqlckaczalju.supabase.co/functions/v1/"
     schema,replaced=re.subn(re.escape(old),"https://supabase.neiscircle.site/functions/v1/",schema)
