@@ -1,0 +1,42 @@
+name: OVH Deploy Push Permission Fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/pwa-install-v117.js'
+      - 'scripts/ops/ovh-deploy-push-fix.sh'
+      - '.github/workflows/ovh-deploy-push-fix.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-pushfix-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          node --check scripts/pwa-install-v117.js
+          bash -n scripts/ops/ovh-deploy-push-fix.sh
+      - name: Configure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Release OVH push UI fix
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/pwa-pushfix-20261010.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-deploy-push-fix.sh
