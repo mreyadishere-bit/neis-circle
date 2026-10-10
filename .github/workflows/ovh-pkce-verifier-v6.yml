@@ -9,7 +9,7 @@ on:
       - 'scripts/ops/ovh-deploy-pkce-verifier-v6.sh'
       - 'scripts/ops/ovh-rollback-pkce-verifier-v6.sh'
       - 'qa/ovh-pkce-missing-verifier-browser.mjs'
-      - '.github/workflows/ovh-explicit-pkce-session.yml'
+      - '.github/workflows/ovh-pkce-verifier-v6.yml'
 permissions:
   contents: read
 concurrency:
