@@ -107,6 +107,29 @@ echo 'CLI_STAGE_CLOUD_SCHEMA=IMPORTED_TRANSACTIONALLY'
 else
  echo 'CLI_STAGE_CLOUD_SCHEMA=REUSED_COMPLETE_EMPTY_STAGE'
 fi
+# The Cloud/Auth version mismatch was audited across all 95 COPY targets:
+# exactly one missing column, auth.one_time_tokens.expires_at (timestamptz).
+# Add it only to the disposable, disconnected test DB.
+source_col="$(dock exec "$container" psql -X -U supabase_admin -d neis_fresh_archive_20261010 -AtF '|' -c \
+"select pg_catalog.format_type(a.atttypid,a.atttypmod),a.attnotnull,(d.oid is not null) from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace left join pg_attrdef d on d.adrelid=c.oid and d.adnum=a.attnum where n.nspname='auth' and c.relname='one_time_tokens' and a.attname='expires_at' and a.attnum>0 and not a.attisdropped" </dev/null)"
+[[ "$source_col" == "timestamp with time zone|t|f" || "$source_col" == "timestamp with time zone|f|f" ]] || { echo 'CLI_RESTORE=BLOCKED_SOURCE_COLUMN_DEFINITION';exit 1; }
+target_col="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc \
+"select count(*) from information_schema.columns where table_schema='auth' and table_name='one_time_tokens' and column_name='expires_at'" </dev/null)"
+if [[ "$target_col" == 0 ]];then
+  if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -c \
+    "ALTER TABLE auth.one_time_tokens ADD COLUMN expires_at timestamp with time zone" >/dev/null 2>&1 </dev/null;then
+    echo 'CLI_RESTORE=FAILED_ISOLATED_AUTH_COLUMN_ADD';exit 1
+  fi
+  if [[ "$source_col" == "timestamp with time zone|t|f" ]];then
+    if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -c \
+      "ALTER TABLE auth.one_time_tokens ALTER COLUMN expires_at SET NOT NULL" >/dev/null 2>&1 </dev/null;then
+      echo 'CLI_RESTORE=FAILED_ISOLATED_AUTH_COLUMN_NULLABILITY';exit 1
+    fi
+  fi
+elif [[ "$target_col" != 1 ]];then
+  echo 'CLI_RESTORE=BLOCKED_INVALID_AUTH_COLUMN_STATE';exit 1
+fi
+echo 'CLI_STAGE_AUTH_ONE_TIME_TOKENS_EXPIRES_AT=COMPATIBLE'
 # Cloud Auth has four newer platform-only tables that this OVH Auth
 # bootstrap does not include. Skip their COPY blocks *only if empty*.
 # SHA-verified source remains unchanged; produce a disposable test copy.
