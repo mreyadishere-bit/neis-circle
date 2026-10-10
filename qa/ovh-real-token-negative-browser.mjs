@@ -30,7 +30,7 @@ try{
       try{
         const url=new URL(res.url());
         if(url.hostname==='supabase.neiscircle.site'&&url.pathname==='/auth/v1/token')
-          http.push({kind:'response',status:res.status(),cors:res.headers()['access-control-allow-origin']||'absent',contentType:(res.headers()['content-type']||'absent').split(';')[0],serverClass:/envoy/i.test(res.headers()['server']||'')?'envoy':/caddy/i.test(res.headers()['server']||'')?'caddy':'other'});
+          http.push({kind:'response',status:res.status(),cors:res.headers()['access-control-allow-origin']||'absent',contentType:(res.headers()['content-type']||'absent').split(';')[0],serverClass:/envoy/i.test(res.headers()['server']||'')?'envoy':/caddy/i.test(res.headers()['server']||'')?'caddy':/cloudflare/i.test(res.headers()['server']||'')?'cloudflare':'other',cfRay:!!res.headers()['cf-ray'],envoyHeader:!!res.headers()['x-envoy-upstream-service-time']});
       }catch{}
     });
     page.on('requestfailed',req=>{
@@ -121,6 +121,19 @@ try{
         }catch(e){return{errorClass:String(e?.name||'unknown').replace(/[^a-z]/gi,'').slice(0,35)}}
       });
       console.log('DIRECT_BROWSER_AUTH='+JSON.stringify(direct));
+      try{
+        const url='https://supabase.neiscircle.site/auth/v1/settings';
+        const fromRunner=await fetch(url,{
+          headers:{apikey:runtimeKey,origin}
+        });
+        const header=fromRunner.headers.get('server')||'';
+        console.log('RUNNER_NODE_AUTH_SETTINGS='+JSON.stringify({
+          status:fromRunner.status,
+          type:(fromRunner.headers.get('content-type')||'absent').split(';')[0],
+          server:/envoy/i.test(header)?'envoy':/caddy/i.test(header)?'caddy':/cloudflare/i.test(header)?'cloudflare':'other',
+          cfRay:!!fromRunner.headers.get('cf-ray')
+        }));
+      }catch(e){console.log('RUNNER_NODE_AUTH_SETTINGS_ERROR='+String(e?.name||'unknown').replace(/[^a-z]/gi,''));}
       if(result.hasUser||http.filter(e=>e.kind==='request').length===0)failures++;
     }catch(e){
       console.log('ORIGIN='+new URL(origin).hostname);
