@@ -1,0 +1,88 @@
+name: OVH Restore Public Google Auth Route
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-deploy-public-gotrue-direct.sh'
+      - 'scripts/ops/ovh-rollback-public-gotrue-direct.sh'
+      - '.github/workflows/ovh-public-gotrue-direct.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-public-auth-direct-fix
+  cancel-in-progress: false
+jobs:
+  deploy-validate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate narrow auth route scripts
+        run: |
+          bash -n scripts/ops/ovh-deploy-public-gotrue-direct.sh
+          bash -n scripts/ops/ovh-rollback-public-gotrue-direct.sh
+      - name: Configure secure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Deploy scoped GoTrue route via immutable Caddyfile overlay
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-deploy-public-gotrue-direct.sh
+      - name: Verify Auth API is publicly reachable from external GitHub runner
+        run: |
+          python3 - <<'PY'
+          import json,time,urllib.request,urllib.error,urllib.parse
+          base='https://supabase.neiscircle.site'
+          class NoFollow(urllib.request.HTTPRedirectHandler):
+           def redirect_request(self,req,fp,code,msg,headers,newurl):return None
+          opener=urllib.request.build_opener(NoFollow)
+          def request(path,post=None):
+           req=urllib.request.Request(base+path,headers={'Origin':'https://neiscircle.site','Content-Type':'application/json','User-Agent':'NEIS-Auth-External-Smoke'},data=post,method='POST' if post else 'GET')
+           try:r=opener.open(req,timeout=16)
+           except urllib.error.HTTPError as e:r=e
+           with r:
+            return r.status,r.headers.get('Content-Type','').split(';')[0],r.headers.get('Location',''),r.headers.get('WWW-Authenticate',''),r.headers.get('Access-Control-Allow-Origin','')
+          settings=None
+          for attempt in range(25):
+           try:
+            settings=request('/auth/v1/settings')
+            if settings[0]==200:break
+           except Exception:pass
+           time.sleep(1)
+          print('PUBLIC_AUTH_SETTINGS_HTTP='+str(settings[0] if settings else 0))
+          assert settings and settings[0]==200 and settings[1]=='application/json'
+          assert settings[4] in ('*','https://neiscircle.site')
+          invalid=json.dumps({'auth_code':'synthetic-nonuser-invalid-code','code_verifier':'A'*64}).encode()
+          status,typ,_,_,cors=request('/auth/v1/token?grant_type=pkce',invalid)
+          print('PUBLIC_AUTH_INVALID_PKCE_HTTP='+str(status))
+          print('PUBLIC_AUTH_INVALID_PKCE_JSON='+str(typ=='application/json'))
+          assert status in (400,404,422) and typ=='application/json'
+          params=urllib.parse.urlencode({'provider':'google','redirect_to':'https://neiscircle.site/','code_challenge':'A'*43,'code_challenge_method':'s256'})
+          status,typ,where,_,_=request('/auth/v1/authorize?'+params)
+          google=urllib.parse.urlsplit(where).hostname=='accounts.google.com'
+          print('PUBLIC_AUTH_GOOGLE_AUTHORIZE='+str(status==302 and google))
+          assert status==302 and google
+          status,_,_,challenge,_=request('/')
+          print('STUDIO_PROTECTED='+str(status==401 and challenge.lower().startswith('basic')))
+          assert status==401 and challenge.lower().startswith('basic')
+          print('PUBLIC_GOOGLE_AUTH_EXTERNAL_SMOKE=PASS')
+          PY
+      - name: Roll back only the public auth route if external checks failed
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-public-gotrue-direct.sh
+          fi
