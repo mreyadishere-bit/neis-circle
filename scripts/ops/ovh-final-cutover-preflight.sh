@@ -49,9 +49,15 @@ try:
  auth=services['auth'].get('environment') or {}
  if not all(auth.get(n) for n in ('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID','GOTRUE_EXTERNAL_GOOGLE_SECRET')):raise RuntimeError('Google creds')
  print('OVH_GOOGLE_PROVIDER_CONFIGURED=YES')
- files=[f for f in storage.rglob('*') if f.is_file()]
- if len(files)!=104 or any(f.is_symlink() for f in storage.rglob('*')):raise RuntimeError('storage candidate contents')
- print('OVH_STORAGE_RUNTIME_FILE_COUNT='+str(len(files)))
+ # Candidate was intentionally chmod 0700 and chowned to the Storage runtime UID.
+ # Inspect only file counts/types as root; don't weaken owner-only permissions.
+ find=subprocess.run(['sudo','-n','find',str(storage),'-type','f'],capture_output=True,text=True,timeout=30)
+ link=subprocess.run(['sudo','-n','find',str(storage),'-type','l','-print','-quit'],capture_output=True,text=True,timeout=30)
+ if find.returncode or link.returncode or link.stdout.strip():raise RuntimeError('storage candidate inspect')
+ # Do not emit private object paths.
+ discovered=[v for v in find.stdout.splitlines() if v]
+ if len(discovered)!=104:raise RuntimeError('storage candidate expected count')
+ print('OVH_STORAGE_RUNTIME_FILE_COUNT='+str(len(discovered)))
  text={n:(source/n).read_text(errors='replace') for n in ('schema.sql','roles.sql')}
  old='ydieijgynqlckaczalju.supabase.co'
  for name,s in text.items():
