@@ -26,8 +26,14 @@ if [[ "$exist" == 1 ]]; then
   # Previous cloud schema import was transactional; reuse only if no data was loaded.
   empty_users="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc 'select count(*) from auth.users' </dev/null)"
   empty_storage="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc 'select count(*) from storage.objects' </dev/null)"
-  profiles_absent="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "select to_regclass('public.profiles') IS NULL" </dev/null)"
-  [[ "$empty_users" == 0 && "$empty_storage" == 0 && "$profiles_absent" == t ]] || { echo 'CLI_RESTORE=BLOCKED_NONEMPTY_STAGE';exit 1; }
+  profile_state="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "select to_regclass('public.profiles') is not null" </dev/null)"
+  if [[ "$profile_state" == t ]]; then
+    profile_rows="$(dock exec "$container" psql -X -U supabase_admin -d "$database" -Atqc "select count(*) from public.profiles" </dev/null)"
+    [[ "$profile_rows" == 0 ]] || { echo 'CLI_RESTORE=BLOCKED_NONEMPTY_PROFILE';exit 1; }
+  elif [[ "$profile_state" != f ]]; then
+    echo 'CLI_RESTORE=BLOCKED_INVALID_SCHEMA_STATE';exit 1
+  fi
+  [[ "$empty_users" == 0 && "$empty_storage" == 0 ]] || { echo 'CLI_RESTORE=BLOCKED_NONEMPTY_STAGE';exit 1; }
   echo 'CLI_STAGE_DATABASE=REUSE_EMPTY_NETWORK_DISCONNECTED'
 elif [[ "$exist" != 0 ]]; then
   echo 'CLI_RESTORE=BLOCKED_UNEXPECTED_EXISTENCE';exit 1
@@ -74,6 +80,7 @@ if removed!=1:raise SystemExit('CLI_RESTORE=BLOCKED_PGCRON_FILTER_MISMATCH')
 Path(sys.argv[2]).write_text(filtered)
 PY
 dock cp "$temp/schema-pgcron-filtered.sql" "$container:/tmp/neis-cli-cloud-schema.sql"
+if [[ "$exist" == 0 || "${profile_state:-f}" == f ]];then
 if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose --single-transaction -f /tmp/neis-cli-cloud-schema.sql >"$temp/schema.log" 2>&1 </dev/null;then
  echo 'CLI_RESTORE=FAILED_CLOUD_SCHEMA'
  python3 - "$temp/schema.log" "$source/schema.sql" <<'PY'
@@ -97,6 +104,9 @@ PY
  exit 1
 fi
 echo 'CLI_STAGE_CLOUD_SCHEMA=IMPORTED_TRANSACTIONALLY'
+else
+ echo 'CLI_STAGE_CLOUD_SCHEMA=REUSED_COMPLETE_EMPTY_STAGE'
+fi
 # Cloud Auth has four newer platform-only tables that this OVH Auth
 # bootstrap does not include. Skip their COPY blocks *only if empty*.
 # SHA-verified source remains unchanged; produce a disposable test copy.
@@ -135,8 +145,19 @@ print('CLI_NEW_AUTH_EMPTY_COPY_BLOCKS_SKIPPED=4')
 print('CLI_SOURCE_SQL_UNMODIFIED=YES')
 PY
 dock cp "$temp/data-compatible.sql" "$container:/tmp/neis-cli-cloud-data.sql"
-if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 --single-transaction -c "SET session_replication_role = replica" -f /tmp/neis-cli-cloud-data.sql >"$temp/data.log" 2>&1 </dev/null;then
+if ! dock exec "$container" psql -X -U supabase_admin -d "$database" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose --single-transaction -c "SET session_replication_role = replica" -f /tmp/neis-cli-cloud-data.sql >"$temp/data.log" 2>&1 </dev/null;then
  echo 'CLI_RESTORE=FAILED_CLOUD_DATA'
+ python3 - "$temp/data.log" <<'PY'
+from pathlib import Path
+import re,sys
+data=Path(sys.argv[1]).read_text(errors='replace')
+codes=re.findall(r'ERROR:\s*([0-9A-Z]{5}):',data)
+print('CLI_DATA_SQLSTATE='+str(codes[0] if codes else 'UNAVAILABLE'))
+# PostgreSQL catalog identifier only, never log data or SQL statements.
+m=re.search(r'(?i)(?:relation|sequence) "(?P<name>[a-z_][a-z_0-9]*(?:\.[a-z_][a-z_0-9]*)?)" does not exist',data)
+print('CLI_DATA_MISSING_OBJECT='+(m.group('name') if m else 'UNAVAILABLE'))
+print('CLI_PRIVATE_DATA_LOG_DISCLOSED=NO')
+PY
  if grep -Eqi 'does not exist' "$temp/data.log";then echo 'CLI_RESTORE_FAILURE_CLASS=MISSING_RELATION'
  elif grep -Eqi 'duplicate key|unique constraint' "$temp/data.log";then echo 'CLI_RESTORE_FAILURE_CLASS=DUPLICATES'
  elif grep -Eqi 'foreign key' "$temp/data.log";then echo 'CLI_RESTORE_FAILURE_CLASS=FOREIGN_KEY'
