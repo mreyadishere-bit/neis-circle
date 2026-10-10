@@ -253,9 +253,10 @@ async function initSupabase(){
         auth:{
           persistSession:true,
           autoRefreshToken:true,
-          // For implicit Google OAuth, our callback handler is the *only*
-          // consumer of the refresh token. Avoid Supabase auto-consuming the
-          // same URL first and invalidating a second setSession attempt.
+          // PKCE exchanges a short-lived one-time authorization code, not
+          // tokens in the address bar. Let supabase-js handle ?code= natively.
+          // Keep one legacy implicit-fragment recovery path for in-flight logins.
+          flowType:'pkce',
           detectSessionInUrl:!neisOAuthCallbackTokens,
           storage:neisAuthStorage
         }
@@ -269,9 +270,11 @@ async function initSupabase(){
         oauthSession=initial?.data?.session||null;
       }
       authUser=oauthSession?.user||null;
-      if(oauthSession?.user&&neisOAuthCallbackTokens){
-        neisClearOAuthCallbackUrl();
+      if(oauthSession?.user){
         window.__NEISOAuthCallbackPending=false;
+        if(neisOAuthCallbackTokens)neisClearOAuthCallbackUrl();
+        // The PKCE callback is resolved during client initialization.
+        // Do not initiate another code exchange.
       }
       if(!supabaseAuthSubscription){
         const listener=sb.auth.onAuthStateChange((event,session)=>{
