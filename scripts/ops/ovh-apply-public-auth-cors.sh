@@ -5,7 +5,7 @@ cd /home/ubuntu/neis-supabase
 stage=/home/ubuntu/neis-backups/ovh-public-gotrue-direct-20261010
 mounted="$stage/public-auth.Caddyfile"
 baseline="$stage/public-auth.before-cors.Caddyfile"
-candidate="$stage/public-auth.with-cors.Caddyfile"
+candidate="$stage/public-auth.with-cors-v2.Caddyfile"
 test -s "$mounted" && test -s "$stage/original.Caddyfile"
 test -f docker-compose.auth-public-direct.yml
 grep -Fq "$mounted" docker-compose.auth-public-direct.yml
@@ -30,7 +30,7 @@ deeper=nest+'    '
 route=(indent+'handle_path /auth/v1/* {\n'
   +nest+'@neis_auth_preflight {\n'
   +deeper+'method OPTIONS\n'
-  +deeper+'header Origin https://neiscircle.site https://www.neiscircle.site\n'
+  +deeper+'header_regexp Origin ^https://(www\\.)?neiscircle\\.site$\n'
   +nest+'}\n'
   +nest+'handle @neis_auth_preflight {\n'
   +deeper+'header Access-Control-Allow-Origin "{http.request.header.Origin}"\n'
@@ -49,8 +49,8 @@ candidate.write_text(result)
 candidate.chmod(0o600)
 print('AUTH_CORS=CANDIDATE_BUILT_EXISTING_ROUTES_PRESERVED')
 PY
-sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-auth-cors-candidate-20261010.Caddyfile
-sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-auth-cors-candidate-20261010.Caddyfile >/dev/null
+sudo -n /usr/bin/docker cp "$candidate" supabase-caddy:/tmp/neis-auth-cors-candidate-v2-20261010.Caddyfile
+sudo -n /usr/bin/docker exec supabase-caddy caddy validate --config /tmp/neis-auth-cors-candidate-v2-20261010.Caddyfile >/dev/null
 echo 'AUTH_CORS=CADDY_VALIDATED'
 cp -p "$mounted" "$baseline"
 deployed=0
