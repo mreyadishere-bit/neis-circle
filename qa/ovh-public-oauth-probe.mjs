@@ -6,6 +6,14 @@ const browser=await chromium.launch({headless:true});
 try{
  const context=await browser.newContext({serviceWorkers:'block'});
  const page=await context.newPage();
+ if(process.env.NEIS_MOCK_USER==='1'){
+   const user={id:'00000000-0000-4000-8000-000000000001',aud:'authenticated',role:'authenticated',
+      email:'synthetic-auth-test@invalid.example',app_metadata:{provider:'google',providers:['google']},
+      user_metadata:{full_name:'Synthetic OAuth Test'},created_at:'2026-10-10T00:00:00Z',updated_at:'2026-10-10T00:00:00Z'};
+   await page.route('**/auth/v1/user',async route=>{
+     await route.fulfill({status:200,headers:{'Content-Type':'application/json','Access-Control-Allow-Origin':'https://neiscircle.site'},body:JSON.stringify(user)});
+   });
+ }
  const reqEvents=[];
  const errors=[];
  const checks=[];
@@ -32,6 +40,7 @@ try{
   stateUser:typeof authUser!=='undefined'&&!!authUser,
   sdkLoaded:typeof window.supabase?.createClient==='function'
  }));
+ console.log('PROBE_MOCK_USER='+String(process.env.NEIS_MOCK_USER==='1'));
  console.log('PROBE_DURATION_SECONDS='+((Date.now()-t)/1000).toFixed(1));
  console.log('PROBE_SDK_LOADED='+p.sdkLoaded);
  console.log('PROBE_CLIENT_AVAILABLE='+p.sbAvailable);
@@ -44,6 +53,7 @@ try{
  console.log('PROBE_NETWORK_PATHS='+[...new Set(reqEvents)].join(','));
  console.log('PROBE_PAGE_ERROR_TYPES='+[...new Set(errors)].join(','));
  // A fake token MUST NOT authenticate a user
- if(p.stateUser)throw new Error('Synthetic invalid token unexpectedly authenticated');
+ if(process.env.NEIS_MOCK_USER==='1' && !p.stateUser)throw new Error('Synthetic successful user response did not establish session');
+ if(process.env.NEIS_MOCK_USER!=='1' && p.stateUser)throw new Error('Invalid token unexpectedly authenticated');
  await context.close();
 } finally {await browser.close()}
