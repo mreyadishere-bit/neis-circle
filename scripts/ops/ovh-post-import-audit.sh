@@ -10,6 +10,24 @@ for n in supabase-auth supabase-rest supabase-realtime supabase-storage supabase
  v="$(sudo -n /usr/bin/docker inspect -f '{{.State.Running}}' "$n" 2>/dev/null || true)"
  echo "CONTAINER_${n}=${v:-NOT_FOUND}"
 done
+echo '=== Compose Realtime service status ==='
+for service in realtime functions auth rest storage; do
+ id="$("${D[@]}" ps -q "$service" 2>/dev/null || true)"
+ if [ -z "$id" ]; then echo "COMPOSE_${service}=NOT_FOUND"; continue; fi
+ running="$(sudo -n /usr/bin/docker inspect -f '{{.State.Running}}' "$id")"
+ echo "COMPOSE_${service}=${running}"
+done
+echo '=== Edge running integration presence ==='
+python3 - <<'PY'
+import json,subprocess
+x=subprocess.run(['sudo','-n','/usr/bin/docker','inspect','supabase-edge-functions','--format','{{json .Config.Env}}'],capture_output=True,text=True)
+if x.returncode:
+ print('EDGE_RUNNING_ENV=UNKNOWN')
+else:
+ env=dict(y.split('=',1) for y in json.loads(x.stdout) if '=' in y)
+ needed=['BREVO_API_KEY','FIREBASE_SERVICE_ACCOUNT_JSON','LIVEKIT_API_KEY','LIVEKIT_API_SECRET','LIVEKIT_URL']
+ print('EDGE_RUNNING_INTEGRATIONS_PRESENT='+str(sum(bool(env.get(k)) for k in needed))+'/5')
+PY
 echo '=== Edge integration readiness, names only ==='
 python3 - <<'PY'
 from pathlib import Path
