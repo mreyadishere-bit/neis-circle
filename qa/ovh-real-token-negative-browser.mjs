@@ -54,7 +54,7 @@ try{
             new Promise((_,reject)=>setTimeout(()=>reject(new Error('probe_timeout')),14000))
           ]);
           result={error:safeError(live?.error),hasUser:!!live?.data?.user};
-        }catch(e){result={error:safeError(e),hasUser:false}};
+        }catch(e){result={error:safeError(e),hasUser:false}}
         finally{try{await auth.storage.removeItem(key)}catch{}}
         return result;
       });
