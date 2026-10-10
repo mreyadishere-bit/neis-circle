@@ -9,6 +9,22 @@
   let authPushHookInstalled=false;
   let pushHealthPromise=null;
   let lastPushHealthAt=0;
+  let lastPushHealthFailedAt=0;
+  function pushWithTimeout(promise,label,ms=10000){
+    let timer;
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('push_'+label+'_timeout')),ms);})
+    ]).finally(()=>clearTimeout(timer));
+  }
+  function pushFailure(error,notify){
+    console.warn('[NEIS web push]',error?.message||error);
+    if(notify&&typeof toast==='function')toast(lang(
+      'Could not connect notifications. Try again or check site permissions.',
+      'تعذر توصيل الإشعارات. حاول مرة أخرى أو راجع أذونات الموقع.'
+    ));
+  }
+
 
   const lang=(en,arText)=>{
     try{return typeof state!=='undefined'&&state.lang==='ar'?arText:en}catch(_){return en}
@@ -63,7 +79,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await navigator.serviceWorker.register('/neis-pwa-sw.js?v=10',{scope:'/'});
+      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=12',{scope:'/'}),'worker_register',10000);
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
@@ -136,7 +152,7 @@
 
   async function serverSubscriptionStatus(subscription){
     if(!subscription||!(typeof sb!=='undefined'?sb:null))return 'unknown';
-    const {data,error}=await sb.rpc('get_web_push_subscription_status',{endpoint_input:subscription.endpoint});
+    const {data,error}=await pushWithTimeout(sb.rpc('get_web_push_subscription_status',{endpoint_input:subscription.endpoint}),'subscription_status_rpc',8000);
     if(error){
       console.warn('[NEIS web push status]',error);
       return 'unknown';
@@ -147,12 +163,12 @@
   async function registerSubscriptionWithServer(subscription){
     if(!subscription||!(typeof sb!=='undefined'?sb:null))return false;
     const json=subscription.toJSON();
-    const {error}=await sb.rpc('register_web_push_subscription',{
+    const {error}=await pushWithTimeout(sb.rpc('register_web_push_subscription',{
       endpoint_input:subscription.endpoint,
       p256dh_input:json.keys?.p256dh||'',
       auth_input:json.keys?.auth||'',
       user_agent_input:navigator.userAgent||''
-    });
+    }),'register_rpc',10000);
     if(error){
       console.error('[NEIS web push registration]',error);
       return false;
@@ -161,11 +177,12 @@
     // Restore this browser's own settings when a push endpoint is registered/refreshed.
     const local=localDevicePushSettings();
     if(Object.keys(local).length){
-      await sb.rpc('set_web_push_device_preferences',{endpoint_input:subscription.endpoint,preferences_input:local});
+      await pushWithTimeout(sb.rpc('set_web_push_device_preferences',{endpoint_input:subscription.endpoint,preferences_input:local}),'push_preferences',7000).catch(error=>console.warn('[NEIS push settings]',error));
     }
     lastPushHealthAt=Date.now();
     return true;
   }
+
 
   async function ensureWebPush(requestPermission){
     if(!('Notification' in window)||!('PushManager' in window)||!('serviceWorker' in navigator)){
@@ -176,65 +193,64 @@
       if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
       return false;
     }
-    let session=null;
-    try{
-      session=(await sb.auth.getSession())?.data?.session||null;
-    }catch(error){
-      console.warn('[NEIS web push session]',error);
-    }
-    if(!session?.user){
-      if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
-      return false;
-    }
 
+    // Keep the browser's transient user activation: do not await Auth or
+    // Service Worker registration BEFORE requesting permission in this click.
     let permission=Notification.permission;
-    if(permission==='default'&&requestPermission){
-      permission=await Notification.requestPermission();
-    }
-    if(permission!=='granted'){
-      if(requestPermission&&typeof toast==='function'){
-        toast(permission==='denied'
-          ?lang('Notifications are blocked. Enable them from your browser/site settings.','الإشعارات محظورة. فعّلها من إعدادات الموقع في المتصفح.')
-          :lang('Allow notifications to receive alerts when NEIS Circle is closed.','اسمح بالإشعارات لاستقبال التنبيهات حتى عند إغلاق NEIS Circle.'));
+    try{
+      if(permission==='default'&&requestPermission){
+        permission=await pushWithTimeout(Notification.requestPermission(),'browser_permission',20000);
       }
-      return false;
-    }
-
-    const registration=serviceWorkerRegistration||await registerServiceWorker();
-    if(!registration?.pushManager)return false;
-
-    let subscription=await registration.pushManager.getSubscription();
-    if(subscription){
-      const serverStatus=await serverSubscriptionStatus(subscription);
-      if(serverStatus==='disabled'){
-        try{await subscription.unsubscribe()}catch(_){}
-        subscription=null;
-      }
-    }
-    if(!subscription){
-      try{
-        subscription=await registration.pushManager.subscribe({
-          userVisibleOnly:true,
-          applicationServerKey:base64UrlToUint8Array(VAPID_PUBLIC_KEY)
-        });
-      }catch(error){
-        console.error('[NEIS web push subscribe]',error);
-        if(requestPermission&&typeof toast==='function')toast(lang('Could not enable notifications. Please try again.','تعذر تفعيل الإشعارات. حاول مرة أخرى.'));
+      if(permission!=='granted'){
+        if(requestPermission&&typeof toast==='function')toast(permission==='denied'
+          ?lang('Notifications are blocked. Enable them from browser settings.','الإشعارات محظورة. فعّلها من إعدادات المتصفح.')
+          :lang('Allow notifications to receive alerts.','اسمح بالإشعارات لاستقبال التنبيهات.'));
         return false;
       }
+      const {data}=await pushWithTimeout(sb.auth.getSession(),'auth_session',7000);
+      if(!data?.session?.user){
+        if(requestPermission&&typeof toast==='function')toast(lang('Sign in first to enable notifications.','سجّل الدخول أولًا لتفعيل الإشعارات.'));
+        return false;
+      }
+      const registration=serviceWorkerRegistration||await pushWithTimeout(registerServiceWorker(),'worker_ready',12000);
+      if(!registration?.pushManager)throw new Error('push_worker_unavailable');
+      let subscription=await pushWithTimeout(registration.pushManager.getSubscription(),'get_subscription',8000);
+      if(subscription){
+        const serverStatus=await serverSubscriptionStatus(subscription);
+        if(serverStatus==='disabled'){
+          await pushWithTimeout(subscription.unsubscribe(),'unsubscribe',6000).catch(()=>{});
+          subscription=null;
+        }
+      }
+      if(!subscription){
+        subscription=await pushWithTimeout(registration.pushManager.subscribe({
+          userVisibleOnly:true,
+          applicationServerKey:base64UrlToUint8Array(VAPID_PUBLIC_KEY)
+        }),'browser_subscribe',15000);
+      }
+      const registered=await pushWithTimeout(registerSubscriptionWithServer(subscription),'save_subscription',12000);
+      if(!registered){
+        if(requestPermission&&typeof toast==='function')toast(lang('Could not save notification subscription. Please retry.','تعذر حفظ اشتراك الإشعارات. حاول مجددًا.'));
+        return false;
+      }
+      lastPushHealthAt=Date.now();
+      lastPushHealthFailedAt=0;
+      if(requestPermission&&typeof toast==='function')toast(lang('Notifications enabled.','تم تفعيل الإشعارات.'));
+      return true;
+    }catch(error){
+      lastPushHealthFailedAt=Date.now();
+      pushFailure(error,requestPermission);
+      return false;
     }
-
-    const registered=await registerSubscriptionWithServer(subscription);
-    if(registered&&requestPermission&&typeof toast==='function'){
-      toast(lang('Notifications enabled.','تم تفعيل الإشعارات.'));
-    }
-    return registered;
   }
 
   async function ensurePushHealth(force=false){
-    if(!force&&lastPushHealthAt&&Date.now()-lastPushHealthAt<15000)return true;
+    if(!('Notification' in window)||Notification.permission!=='granted')return false;
+    const now=Date.now();
+    if(!force&&lastPushHealthAt&&now-lastPushHealthAt<60000)return true;
+    if(!force&&lastPushHealthFailedAt&&now-lastPushHealthFailedAt<120000)return false;
     if(pushHealthPromise)return pushHealthPromise;
-    pushHealthPromise=Promise.resolve().then(()=>ensureWebPush(false)).finally(()=>{pushHealthPromise=null});
+    pushHealthPromise=ensureWebPush(false).finally(()=>{pushHealthPromise=null});
     return pushHealthPromise;
   }
 
@@ -378,8 +394,9 @@
     const permissionButton=document.querySelector('[data-pwa-notification-permission]');
     if(permissionButton)permissionButton.onclick=async()=>{
       permissionButton.disabled=true;
-      await ensureWebPush(true);
-      permissionButton.disabled=false;
+      try{await pushWithTimeout(ensureWebPush(true),'settings_button',35000)}
+      catch(error){pushFailure(error,true)}
+      finally{permissionButton.disabled=false}
       permissionButton.textContent=('Notification' in window&&Notification.permission==='granted')?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات');
     };
 
@@ -528,16 +545,20 @@
     const enable=document.querySelector('[data-pwa-onboarding-enable]');
     if(enable)enable.onclick=async()=>{
       enable.disabled=true;
-      const ok=await ensureWebPush(true);
-      enable.disabled=false;
+      let ok=false;
+      try{ok=await pushWithTimeout(ensureWebPush(true),'onboarding_button',35000)}
+      catch(error){pushFailure(error,true)}
+      finally{enable.disabled=false}
       if(ok)try{closeModal()}catch(_){}
     };
 
     const retry=document.querySelector('[data-pwa-onboarding-retry]');
     if(retry)retry.onclick=async()=>{
       retry.disabled=true;
-      const ok=await ensurePushHealth(true);
-      retry.disabled=false;
+      let ok=false;
+      try{ok=await pushWithTimeout(ensurePushHealth(true),'retry_button',35000)}
+      catch(error){pushFailure(error,true)}
+      finally{retry.disabled=false}
       if(ok){
         if(typeof toast==='function')toast(lang('Notifications are connected on this device.','تم توصيل الإشعارات على هذا الجهاز.'));
         try{closeModal()}catch(_){}
