@@ -1,0 +1,19 @@
+name: OVH REST Browser CORS Preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'qa/ovh-rest-browser-cors-preflight.py'
+      - '.github/workflows/ovh-rest-browser-cors-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile qa/ovh-rest-browser-cors-preflight.py
+      - name: Trace production REST API CORS GET preflights
+        run: python3 qa/ovh-rest-browser-cors-preflight.py
