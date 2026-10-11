@@ -9,6 +9,7 @@ on:
       - 'neis-pwa-sw.js'
       - 'scripts/ops/ovh-deploy-notification-sound.py'
       - 'scripts/ops/ovh-rollback-notification-sound.py'
+      - 'scripts/ops/ovh-retry-notification-sound.py'
       - '.github/workflows/ovh-notification-sound-recovery.yml'
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
           node --check scripts/pwa-install-v117.js
           node --check neis-pwa-sw.js
           node qa/notification-sound-device.test.mjs
-          python3 -m py_compile scripts/ops/ovh-deploy-notification-sound.py scripts/ops/ovh-rollback-notification-sound.py
+          python3 -m py_compile scripts/ops/ovh-deploy-notification-sound.py scripts/ops/ovh-rollback-notification-sound.py scripts/ops/ovh-retry-notification-sound.py
       - name: Configure secured SSH credentials
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -57,16 +58,26 @@ jobs:
       - name: Deploy isolated notification assets without touching Auth REST or data
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
-        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-deploy-notification-sound.py
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-retry-notification-sound.py
       - name: Check live browser assets plus Google and REST routes
         run: |
           python3 - <<'PY'
           import urllib.request,urllib.error
           base='https://neiscircle.site'
-          def fetch(path):
-           r=urllib.request.urlopen(urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'}),timeout=15)
-           return r.read().decode('utf8','replace')
-          html=fetch('/')
+          import time
+          def fetch(path,expected=None):
+           last=None
+           for attempt in range(45):
+            try:
+             r=urllib.request.urlopen(urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'}),timeout=10)
+             text=r.read().decode('utf8','replace')
+             if expected is None or expected in text:return text
+             last='content_not_updated'
+            except Exception as exc:
+             last=type(exc).__name__
+            time.sleep(2)
+           raise AssertionError('External site did not become ready: '+str(last))
+          html=fetch('/',expected='&sound=20261011')
           sound=fetch('/scripts/social/notifications-v174.js?notification-sound=20261011')
           pwa=fetch('/scripts/pwa-install-v117.js?notification-sound=20261011')
           sw=fetch('/neis-pwa-sw.js?v=13')
