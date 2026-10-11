@@ -1,16 +1,6 @@
-name: OVH Notification Audio and Login Reminder V2
+name: OVH Previous Notification Audio and Login Reminder (Manual Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-reminder-v2.py'
-      - 'scripts/ops/ovh-rollback-notification-reminder-v2.py'
-      - 'scripts/ops/ovh-deploy-notification-reminder-v2.py'
-      - '.github/workflows/ovh-notification-audio-login-reminder-v2.yml'
 permissions:
   contents: read
 concurrency:
