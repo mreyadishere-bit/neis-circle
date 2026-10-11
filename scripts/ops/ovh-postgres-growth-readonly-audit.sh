@@ -34,10 +34,8 @@ where c.relkind='r' and n.nspname='auth';
 with points as (
  select collected_at,(snapshot->>'database_bytes')::bigint as bytes
  from public.neis_private_server_usage_samples
- where snapshot ? 'database_bytes' and (snapshot->>'database_bytes') ~ '^[0-9]{1,15}
-rollback;
-SQL
-), sample_limits as (
+ where snapshot ? 'database_bytes' and (snapshot->>'database_bytes') ~ '^[0-9]{1,15}$'
+), bounds as (
  select (select bytes from points order by collected_at asc limit 1) as first_bytes,
         (select collected_at from points order by collected_at asc limit 1) as first_time,
         (select bytes from points order by collected_at desc limit 1) as last_bytes,
@@ -47,14 +45,12 @@ select 'HISTORY_DATABASE_FIRST_MIB='||round(first_bytes::numeric/1048576,3)||
  ';LAST_MIB='||round(last_bytes::numeric/1048576,3)||
  ';DELTA_KIB='||round((last_bytes-first_bytes)::numeric/1024,1)||
  ';DURATION_H='||round(extract(epoch from (last_time-first_time))::numeric/3600,2)
-from sample_limits;
+from bounds;
 with points as (
  select collected_at,(snapshot->>'database_bytes')::bigint as bytes
  from public.neis_private_server_usage_samples
  where collected_at>=now()-interval '2 hours' and snapshot ? 'database_bytes'
- and (snapshot->>'database_bytes') ~ '^[0-9]{1,15}
-rollback;
-SQL
+ and (snapshot->>'database_bytes') ~ '^[0-9]{1,15}$'
 )
 select 'HISTORY_LAST_2H_CHANGE_KIB='||
   round(((select bytes from points order by collected_at desc limit 1)-
