@@ -1,16 +1,6 @@
-name: OVH Incoming Notification Chime V3
+name: OVH Previous Incoming Chime V3 (Manual Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-chime-v3.py'
-      - 'scripts/ops/ovh-rollback-notification-chime-v3.py'
-      - 'scripts/ops/ovh-deploy-notification-chime-v3.py'
-      - '.github/workflows/ovh-notification-incoming-chime-v3.yml'
 permissions:
   contents: read
 concurrency:
