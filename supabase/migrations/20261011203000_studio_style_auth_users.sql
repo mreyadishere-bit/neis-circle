@@ -184,3 +184,4 @@ revoke all on function public.main_admin_auth_users(text,text,text,integer,integ
 grant execute on function public.main_admin_auth_users(text,text,text,integer,integer,text,text)
   to authenticated;
 commit;
+notify pgrst, 'reload schema';
