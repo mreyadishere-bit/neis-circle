@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'scripts/pwa-install-v117.js'
       - 'scripts/ops/ovh-deploy-push-fix.sh'
       - '.github/workflows/ovh-deploy-push-fix.yml'
 permissions:
