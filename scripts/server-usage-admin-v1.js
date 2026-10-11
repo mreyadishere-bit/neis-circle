@@ -105,6 +105,7 @@
   }
   function estimateTrend(points,key){
     const source=(Array.isArray(points)?points:[])
+      .filter(p=>p&&p[key]!=null)
       .map(p=>({day:Date.parse(p?.at)/86400000,y:Number(p?.[key])}))
       .filter(p=>Number.isFinite(p.day)&&Number.isFinite(p.y)&&p.y>=0)
       .sort((a,b)=>a.day-b.day);
