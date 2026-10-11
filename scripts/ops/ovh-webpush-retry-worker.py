@@ -41,7 +41,7 @@ try:
         headers:='{"Content-Type":"application/json"}'::jsonb,
         timeout_milliseconds:=7000
       ) as request_id from due
-    ) select count(*) from queued""")
+    ) select count(request_id) from queued""")
     if not submitted.isdigit() or int(submitted)>20:
         raise RuntimeError("WEBPUSH_RETRY=QUEUE_COUNT_INVALID")
     print("WEBPUSH_RETRY=QUEUED_"+submitted)
