@@ -12,7 +12,7 @@
   let overview=null, data=null, detailsId=null, detailsGeneration=0;
   const selected=new Set();
   const available=[
-    ['user_id','UID'],['display_name','Display name'],['email','Email'],['phone','Phone'],
+    ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
     ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
     ['last_sign_in_at','Last sign in at'],['status','Status'],['branch','Branch'],
     ['grade','Grade'],['role','Role']
@@ -170,7 +170,7 @@
   }
   function colClass(k){
     return ['user_id'].includes(k)?'st-uid':
-      k==='display_name'?'st-name':k==='email'?'st-mail':
+      k==='display_name'?'st-name':k==='profile'?'st-other':k==='email'?'st-mail':
       k==='phone'?'st-phone':k==='providers'?'st-provider':
       k==='provider_type'?'st-provider-type':
       ['created_at','last_sign_in_at'].includes(k)?'st-datetime':'st-other';
@@ -179,7 +179,7 @@
   function addCell(tr,k,u){
     const td=el('td');td.className=colClass(k);td.title='';
     const val=u[k];
-    if(k==='user_id'||k==='email'||k==='display_name'){
+    if(k==='profile'){const b=el('button','st-link',u.has_profile?'Profile ↗':'No profile');b.disabled=!u.has_profile;b.type='button';b.dataset.stGoProfile=u.user_id;td.appendChild(b)}else if(k==='user_id'||k==='email'||k==='display_name'){
       const b=el('button','st-link',k==='user_id'?u.user_id||'—':
         k==='email'?u.email||'—':u.display_name||'—');
       b.type='button';b.dataset.stDetail=u.user_id;b.title='Open user details';
@@ -398,6 +398,7 @@
     const root=e.target?.closest?.('#neisAuthStudio');if(!root)return;
     const button=e.target?.closest?.('button');if(!button)return;
     if(button.dataset.stDetail){void showDetail(button.dataset.stDetail);return}
+    if(button.dataset.stGoProfile){if(typeof routeTo==='function')routeTo('profile/'+button.dataset.stGoProfile);return}
     if(button.dataset.stCopyUid){copyText(button.dataset.stCopyUid);return}
     if(button.dataset.stSort){
       const k=button.dataset.stSort;
