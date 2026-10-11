@@ -1,17 +1,6 @@
-name: OVH Incoming Chat Realtime Sound V6
+name: OVH Previous Chat Sound V6 (Manual Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/05-social.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-chime-v6.py'
-      - 'scripts/ops/ovh-rollback-notification-chime-v6.py'
-      - 'scripts/ops/ovh-deploy-notification-chime-v6.py'
-      - '.github/workflows/ovh-incoming-chat-realtime-sound-v6.yml'
 permissions:
   contents: read
 concurrency:
