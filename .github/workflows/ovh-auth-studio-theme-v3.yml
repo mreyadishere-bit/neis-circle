@@ -1,0 +1,78 @@
+name: OVH Auth Studio Theme V3
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/auth-studio-follow-site-theme-20261011]
+    paths:
+      - 'scripts/main-admin-auth-studio-v3.js'
+      - 'scripts/ops/ovh-deploy-auth-studio-theme-v3.py'
+      - '.github/workflows/ovh-auth-studio-theme-v3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-auth-studio-theme-v3
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify theme bindings and authorization are preserved
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-auth-studio-v3.js
+          python3 -m py_compile scripts/ops/ovh-deploy-auth-studio-theme-v3.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/main-admin-auth-studio-v3.js').read_text()
+          base=Path('scripts/main-admin-auth-studio-v2.js').read_text()
+          site=Path('styles/app.css').read_text()
+          assert "html[data-theme=dark]" in site
+          for theme in ("--ink","--card","--soft","--paper","--line","--muted","--accent","--accent2"):
+            assert theme+':' in site, theme
+          for key in ("--st-bg:var(--card)","--st-fg:var(--ink)",
+                      "--st-secondary:var(--muted)","--st-border:var(--line)","--st-hover:var(--soft)"):
+            assert key in s,key
+          for old in ("--st-bg:#101111","background:#111212","background:#181919",
+                      "background:#171818","background:#242626"):
+            assert old not in s,old
+          for code in ("MAIN_ADMIN","isOwner()","main_admin_auth_users",
+                       "main_admin_auth_overview","main_admin_auth_user_detail",
+                       "Unified search","All columns","data-st-action","copy-invite"):
+            assert code in s,code
+          # No behavior changes: the original JS from the first statement after CSS must match.
+          delimiter="  const shell="
+          assert s.split(delimiter,1)[1]==base.split(delimiter,1)[1], "Non-CSS UI behavior changed"
+          print("AUTH_STUDIO_THEME_STATIC=PASS")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Install theme-aware UI in current live OVH frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/auth-studio-theme-v3-20261011
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v3.js "$target:$stage/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-auth-studio-theme-v3.py
