@@ -280,9 +280,6 @@
       if(!root.isConnected||!isOwner()||seq!==nonce)return;
       data=responses[0].data;if(responses[1])overview=responses[1].data;
       if(tag)tag.textContent='● OVH connected';
-      const values=Array.isArray(data?.users)?data.users:[];
-      const valid=new Set(values.map(u=>u.user_id));
-      for(const id of selected){if(!valid.has(id))selected.delete(id);}
       render();
     }catch(e){
       if(root.isConnected){
@@ -297,7 +294,7 @@
     search=$('Query')?.value?.slice(0,100)||'';
     searchField=$('Field')?.value||'all';filter=$('Filter')?.value||'all';
     provider=$('Provider')?.value||'all';sort=$('Sort')?.value||'created_desc';
-    currentPage=0;selected.clear();void load(true);
+    currentPage=0;clearSelection();void load(true);
   }
   function field(container,label,value){
     const box=el('div','st-field'),dt=el('dt','',label),dd=el('dd');
@@ -388,13 +385,19 @@
     }
     if(e.target?.dataset?.stSelect){
       const id=e.target.dataset.stSelect;
-      if(e.target.checked)selected.add(id);else selected.delete(id);
+      if(selectAllMatching){
+        if(e.target.checked)excludedIds.delete(id);else excludedIds.add(id);
+      }else if(e.target.checked){
+        selected.add(id);
+        const user=(data?.users||[]).find(u=>u.user_id===id);
+        if(user)selectedRows.set(id,user);
+      }else{selected.delete(id);selectedRows.delete(id)}
       render();return;
     }
     if(e.target?.dataset?.stSelectAll){
-      for(const u of data?.users||[]){
-        if(e.target.checked)selected.add(u.user_id);else selected.delete(u.user_id);
-      }
+      if(e.target.checked){
+        selectAllMatching=true;excludedIds.clear();selected.clear();selectedRows.clear();
+      }else clearSelection();
       render();return;
     }
     if(['naStudioField','naStudioFilter','naStudioProvider','naStudioSort'].includes(e.target?.id))
@@ -414,14 +417,14 @@
       if(k==='email')sort=sort==='email_asc'?'email_desc':'email_asc';
       if(k==='display_name')sort='name_asc';
       const select=$('Sort');if(select)select.value=sort;
-      currentPage=0;selected.clear();void load(true);return;
+      currentPage=0;clearSelection();void load(true);return;
     }
     switch(button.dataset.stAction){
       case 'refresh':overview=null;void load(true);break;
-      case 'prev':if(currentPage>0){currentPage--;selected.clear();void load(true)}break;
+      case 'prev':if(currentPage>0){currentPage--;void load(true)}break;
       case 'next':if((currentPage+1)*pageSize<(Number(data?.total)||0)){
-        currentPage++;selected.clear();void load(true)}break;
-      case 'clear-selection':selected.clear();render();break;
+        currentPage++;void load(true)}break;
+      case 'clear-selection':clearSelection();render();break;
       case 'copy-ids':copyText([...selected].join('\n'));break;
       case 'export-selected':exportSelected();break;
       case 'copy-invite':copyText('https://neiscircle.site/');break;
