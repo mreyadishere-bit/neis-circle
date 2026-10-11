@@ -1,0 +1,53 @@
+name: OVH One-Time VAPID Transfer Public Key
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-vapid-transfer-public-key.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-vapid-secure-transfer
+  cancel-in-progress: false
+jobs:
+  create-public-key:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Generate ephemeral RSA-3072 on OVH and publish ONLY modulus
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          set +x
+          umask 077
+          dir=/home/ubuntu/neis-backups/vapid-secure-transfer-20261011
+          mkdir -p -m 700 "$dir"
+          if [ ! -f "$dir/ephemeral-rsa-private.pem" ]; then
+            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$dir/ephemeral-rsa-private.pem" >/dev/null 2>&1
+          fi
+          chmod 600 "$dir/ephemeral-rsa-private.pem"
+          openssl pkey -in "$dir/ephemeral-rsa-private.pem" -pubout -out "$dir/ephemeral-rsa-public.pem" 2>/dev/null
+          chmod 644 "$dir/ephemeral-rsa-public.pem"
+          openssl rsa -pubin -in "$dir/ephemeral-rsa-public.pem" -text -noout 2>/dev/null | grep -q 'Exponent: 65537'
+          modulus="$(openssl rsa -pubin -in "$dir/ephemeral-rsa-public.pem" -modulus -noout 2>/dev/null | cut -d= -f2)"
+          [ "${#modulus}" -eq 768 ] || { echo 'VAPID_RSA_TRANSFER=BAD_PUBLIC_MODULUS';exit 1; }
+          echo "VAPID_RSA_TRANSFER_MODULUS_HEX=$modulus"
+          echo 'VAPID_RSA_TRANSFER_PUBLIC_EXPONENT=65537'
+          echo 'VAPID_RSA_TRANSFER_PRIVATE_KEY_STORED_ON_OVH_ONLY'
+          REMOTE
