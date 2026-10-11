@@ -11,6 +11,8 @@
   let baselineLoaded=false;
   const chimedIds=new Set();
   const inflightChimes=new Set();
+  const chimedMessageActivities=new Set();
+  const inflightMessageActivities=new Set();
   // The unread-tab counter is the final common output of every notification
   // code path. Reconcile its actual IDs here, not only in selected handlers.
   let badgeKnownIds=null;
@@ -164,19 +166,38 @@
     }catch{return false}
   }
 
+  // Notifications and the chat Realtime channel report the same message.
+  // Deduplicate by message identity, not a global timing window that can
+  // wrongly silence the next different message.
+  function messageActivityKey(row){
+    const kind=String(row?.type||row?.entity_type||'');
+    const id=row?.entity_id;
+    if(id==null||String(id)==='')return '';
+    if(kind==='message')return 'direct:'+String(id);
+    if(kind==='circle_message')return 'circle:'+String(id);
+    return '';
+  }
+
   async function chimeOnce(row){
     if(!row)return false;
     if(row.read_at){noteChime('already-read');return false}
     if(row.silent===true){noteChime('silent-by-event');return false}
     if(!soundEnabledOnThisDevice()){noteChime('device-sound-disabled');return false}
     const id=String(row.id||'');
+    const activityKey=messageActivityKey(row);
     if(id&&(chimedIds.has(id)||inflightChimes.has(id)))return false;
+    if(activityKey&&(chimedMessageActivities.has(activityKey)||inflightMessageActivities.has(activityKey)))return false;
     if(id)inflightChimes.add(id);
+    if(activityKey)inflightMessageActivities.add(activityKey);
     incomingAttemptCount++;
     try{
       const played=await playSound();
       if(played){
         noteChime('played');
+        if(activityKey){
+          chimedMessageActivities.add(activityKey);
+          if(chimedMessageActivities.size>200)chimedMessageActivities.delete(chimedMessageActivities.values().next().value);
+        }
         if(id){
           chimedIds.add(id);
           if(chimedIds.size>150)chimedIds.delete(chimedIds.values().next().value);
@@ -191,6 +212,7 @@
       return false;
     }finally{
       if(id)inflightChimes.delete(id);
+      if(activityKey)inflightMessageActivities.delete(activityKey);
     }
   }
 
@@ -206,13 +228,9 @@
       if(prefs?.[key]===false){noteChime('message-category-disabled');return false}
     }catch{}
     lastIncomingMessageSignalAt=Date.now();
-    const row={id:'incoming-'+scope+'-'+String(id),read_at:null,silent:false};
-    // If the database notification event just chimed, suppress the second
-    // chime for the same incoming activity, while preserving the message ID.
-    if(lastChimeResult==='played'&&Date.now()-lastChimeAt<1250){
-      chimedIds.add(String(row.id));
-      return false;
-    }
+    const kind=scope==='circle'?'circle_message':'message';
+    const row={id:'incoming-'+scope+'-'+String(id),type:kind,
+      entity_id:String(id),read_at:null,silent:false};
     return chimeOnce(row);
   }
 
@@ -336,6 +354,8 @@
     badgeKnownIds=null;
     chimedIds.clear();
     inflightChimes.clear();
+    chimedMessageActivities.clear();
+    inflightMessageActivities.clear();
     pendingChime=null;
     hydrateCache(uid);
     realtimeStatus='CONNECTING';
@@ -364,6 +384,8 @@
     badgeKnownIds=null;
     chimedIds.clear();
     inflightChimes.clear();
+    chimedMessageActivities.clear();
+    inflightMessageActivities.clear();
     pendingChime=null;
     if(channel&&sb){
       try{await sb.removeChannel(channel)}catch(_){}
@@ -374,7 +396,7 @@
 
   function snapshot(){
     return {
-      version:'174.12',
+      version:'174.13',
       lastChimeResult,
       lastChimeAt,
       incomingAttemptCount,
@@ -417,7 +439,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.12',
+    version:'174.13',
     unlockSound,
     playSound,
     applyRows,

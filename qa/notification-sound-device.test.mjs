@@ -133,7 +133,7 @@ store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:tr
 
 // The notification badge remains intact.
 assert.equal(context.document.title,'(8) NEIS Circle');
-assert.equal(nt.snapshot().version,'174.12');
+assert.equal(nt.snapshot().version,'174.13');
 // Check the same incoming chime pathway as live notifications, not the
 // separate Test Sound which intentionally bypasses sound preferences.
 store.set('neis-local-notification-sound-v1:synthetic-test-id','off');
@@ -156,7 +156,7 @@ assert.match(pwa,/NEISNotificationRuntime\?\.setDeviceSoundEnabled/);
 const chatSource=fs.readFileSync('scripts/05-social.js','utf8');
 assert.match(chatSource,/notificationRuntime\.signalIncomingMessage\?\.\(\{\s*id:incoming\.id,senderId:incoming\.sender_id,scope:'direct'/);
 assert.match(chatSource,/notificationRuntime\.signalIncomingMessage\?\.\(\{\s*id:incoming\.id,senderId,scope:'circle'/);
-assert.equal(nt.snapshot().version,'174.12');
+assert.equal(nt.snapshot().version,'174.13');
 const beforeRealDm=audible;
 await new Promise(resolve=>setTimeout(resolve,1350));
 assert.equal(await nt.signalIncomingMessage({id:'real-incoming-id',senderId:'other-student',scope:'direct'}),true);
@@ -174,4 +174,37 @@ assert.equal(audible,afterRealDm,'muted category does not ring');
 store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({circle_messages:true}));
 assert.equal(await nt.signalIncomingMessage({id:'circle-message',senderId:'other-student',scope:'circle'}),true);
 assert.ok(audible>afterRealDm,'incoming Circle message must ring when enabled');
+// Regression for production complaint: a first incoming message chimes, then
+// user marks all notifications read, and two more arrive within 1.25 seconds.
+const sourceMarkAll=chatSource;
+assert.match(sourceMarkAll,/\.eq\('user_id',authUser\.id\)\.in\('id',unreadIds\)/,
+  'Mark all read must target a snapshot of IDs owned by the current account');
+assert.doesNotMatch(sourceMarkAll,/\.update\(\{read_at:readAt\}\)\.is\('read_at',null\)/,
+  'Mark all read must not capture a freshly arriving notification');
+context.state.notifications.forEach(n=>{if(!n.read_at)n.read_at=new Date().toISOString();});
+nt.updateTabBadge();
+assert.equal(context.document.title,'NEIS Circle',
+  'Mark all read clears unread tab brackets');
+const beforeAfterRead=audible;
+const rapid1={...row('post-read-1'),type:'message',entity_id:'new-chat-msg-1'};
+nt.applyRealtime({eventType:'INSERT',new:rapid1});
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>beforeAfterRead,'first incoming message after Mark all read must ring');
+const afterRapid1=audible;
+assert.equal(await nt.signalIncomingMessage({
+ id:'new-chat-msg-1',senderId:'other-student',scope:'direct'
+}),false,'notification and chat event for same message must ring only once');
+assert.equal(audible,afterRapid1);
+const rapid2={...row('post-read-2'),type:'message',entity_id:'new-chat-msg-2'};
+nt.applyRealtime({eventType:'INSERT',new:rapid2});
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>afterRapid1,
+  'different incoming message must ring even inside previous 1250ms window');
+const afterRapid2=audible;
+assert.equal(await nt.signalIncomingMessage({
+ id:'new-chat-msg-2',senderId:'other-student',scope:'direct'
+}),false,'do not ring same message twice across both channels');
+assert.equal(audible,afterRapid2);
+assert.equal(context.document.title,'(2) NEIS Circle');
+console.log('POST_MARK_ALL_READ_INCOMING_SOUND=PASS');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');
