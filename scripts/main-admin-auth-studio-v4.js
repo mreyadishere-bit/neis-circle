@@ -11,6 +11,10 @@
   let provider='all', sort='created_desc', busy=false, pending=false, nonce=0, loadedRoot=null;
   let overview=null, data=null, detailsId=null, detailsGeneration=0;
   const selected=new Set();
+  const selectedRows=new Map();
+  let selectAllMatching=false;
+  const excludedIds=new Set();
+  const LIMIT_FULL_EXPORT=10000;
   const available=[
     ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
     ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
@@ -159,6 +163,9 @@
     if(!u.has_profile)return ['No profile','warn'];
     return ['Confirmed',''];
   }
+  function checked(u){return selectAllMatching?!excludedIds.has(u.user_id):selected.has(u.user_id)}
+  function countSelected(){return selectAllMatching?Math.max(0,(Number(data?.total)||0)-excludedIds.size):selected.size}
+  function clearSelection(){selectAllMatching=false;excludedIds.clear();selected.clear();selectedRows.clear()}
   function showColumns(){
     const m=$('ColumnsMenu');if(!m)return;m.replaceChildren();
     for(const [key,title] of available){
@@ -207,9 +214,9 @@
     const all=el('th','st-choose'),allCheck=el('input');allCheck.type='checkbox';
     allCheck.dataset.stSelectAll='1';
     const users=Array.isArray(data?.users)?data.users:[];
-    allCheck.checked=users.length>0&&users.every(u=>selected.has(u.user_id));
-    allCheck.indeterminate=users.some(u=>selected.has(u.user_id))&&!allCheck.checked;
-    allCheck.setAttribute('aria-label','Select all users on this page');
+    allCheck.checked=users.length>0&&users.every(u=>checked(u));
+    allCheck.indeterminate=users.some(u=>checked(u))&&!allCheck.checked;
+    allCheck.setAttribute('aria-label','Select all matching users on every page');
     all.appendChild(allCheck);htr.appendChild(all);
     for(const [key,title] of shown()){
       const th=el('th',colClass(key)),sortKey={
@@ -228,9 +235,9 @@
       cell.colSpan=shown().length+1;row.appendChild(cell);body.appendChild(row);
     }
     for(const u of users){
-      const tr=el('tr',selected.has(u.user_id)?'st-checked':'');
+      const tr=el('tr',checked(u)?'st-checked':'');
       const checkCell=el('td','st-choose'),ch=el('input');
-      ch.type='checkbox';ch.dataset.stSelect=u.user_id;ch.checked=selected.has(u.user_id);
+      ch.type='checkbox';ch.dataset.stSelect=u.user_id;ch.checked=checked(u);
       ch.setAttribute('aria-label','Select '+(u.display_name||u.email||'account'));
       checkCell.appendChild(ch);tr.appendChild(checkCell);
       for(const [key] of shown())addCell(tr,key,u);
@@ -250,8 +257,8 @@
   }
   function renderSelection(){
     const bar=$('SelectedBar'),count=$('SelectedCount');
-    if(bar)bar.hidden=selected.size===0;
-    if(count)count.textContent=selected.size+' selected (current page)';
+    if(bar)bar.hidden=countSelected()===0;
+    if(count)count.textContent=countSelected()+' / '+(Number(data?.total)||0)+' matching users selected across all pages';
   }
   async function load(force=false){
     const root=document.getElementById(rootId);
