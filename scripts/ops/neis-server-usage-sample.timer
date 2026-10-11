@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule private OVH usage measurements
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Persistent=true
+Unit=neis-server-usage-sample.service
+
+[Install]
+WantedBy=timers.target
