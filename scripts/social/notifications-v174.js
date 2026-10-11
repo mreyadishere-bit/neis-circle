@@ -8,6 +8,8 @@
   let lastFullSyncAt=0;
   let audioContext=null;
   let soundUnlocked=false;
+  let baselineLoaded=false;
+  const chimedIds=new Set();
   const DEFAULT_TAB_TITLE='NEIS Circle';
   const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
   const CACHE_PREFIX='neis-notifications-v174:';
@@ -55,6 +57,14 @@
     if(state.view==='notifications')render();
   };
 
+  function soundEnabledOnThisDevice(){
+    try{
+      const uid=String((typeof authUser!=='undefined'&&authUser?.id)||'guest');
+      const value=JSON.parse(localStorage.getItem('neis-device-push-prefs-v1:'+uid)||'{}');
+      return value?.sound!==false;
+    }catch{return true}
+  }
+
   async function unlockSound(){
     try{
       const AudioCtx=window.AudioContext||window.webkitAudioContext;
@@ -89,9 +99,10 @@
     }
   }
 
-  async function playSound(){
+  async function playSound(test=false){
     try{
-      if(!await unlockSound())return;
+      if(!test&&!soundEnabledOnThisDevice())return false;
+      if(!await unlockSound())return false;
       const ctx=audioContext,now=ctx.currentTime,master=ctx.createGain();
       master.gain.setValueAtTime(.0001,now);
       master.gain.exponentialRampToValueAtTime(.34,now+.012);
@@ -109,7 +120,19 @@
         osc.start(now+delay);
         osc.stop(now+delay+duration+.04);
       });
-    }catch{}
+      return true;
+    }catch{return false}
+  }
+
+  function chimeOnce(row){
+    if(!row||row.read_at||row.silent===true||!soundEnabledOnThisDevice())return;
+    const id=String(row.id||'');
+    if(id&&chimedIds.has(id))return;
+    if(id){
+      chimedIds.add(id);
+      if(chimedIds.size>150)chimedIds.delete(chimedIds.values().next().value);
+    }
+    playSound().catch(()=>{});
   }
 
   function applyRows(rows,{soundForNew=false}={}){
@@ -119,7 +142,10 @@
     state.notifications=next;
     writeCache();
     renderNotificationsIfVisible();
-    if(soundForNew&&fresh.some(n=>!n.read_at))playSound();
+    if(soundForNew&&baselineLoaded){
+      fresh.filter(n=>!n.read_at).forEach(n=>chimeOnce(n));
+    }
+    baselineLoaded=true;
   }
 
   function ingestPush(payload){
@@ -141,7 +167,7 @@
     }else{
       updateTabBadge();
     }
-    if(row.silent!==true)playSound();
+    chimeOnce(row);
   }
 
   function applyRealtime(payload){
@@ -153,7 +179,7 @@
       writeCache();
       renderNotificationsIfVisible();
       if(!row.read_at){
-        playSound();
+        chimeOnce(row);
         showSystemNotification(row);
       }
       return;
@@ -220,6 +246,8 @@
       updateBadges();
     }
     channelUid=uid;
+    baselineLoaded=false;
+    chimedIds.clear();
     hydrateCache(uid);
     realtimeStatus='CONNECTING';
     channel=sb.channel(`neis-notifications-${uid}`)
@@ -243,6 +271,8 @@
     lastFullSyncAt=0;
     channelUid='';
     realtimeStatus='CLOSED';
+    baselineLoaded=false;
+    chimedIds.clear();
     if(channel&&sb){
       try{await sb.removeChannel(channel)}catch(_){}
     }
@@ -257,16 +287,21 @@
       realtimeStatus,
       lastFullSyncAt,
       refreshing:!!refreshPromise,
-      soundUnlocked
+      soundUnlocked,
+      soundEnabled:soundEnabledOnThisDevice(),
+      baselineLoaded
     };
   }
 
-  const primeNotificationSound=()=>{
+  function primeNotificationSound(){
+    if(soundUnlocked&&audioContext?.state==='running')return;
+    // Keep trying on user gestures: a one-shot listener can run before the
+    // browser permits audio, leaving all future notification chimes muted.
     unlockSound().catch(()=>{});
-  };
+  }
   if(typeof document!=='undefined'){
-    document.addEventListener('pointerdown',primeNotificationSound,{capture:true,once:true});
-    document.addEventListener('keydown',primeNotificationSound,{capture:true,once:true});
+    document.addEventListener('pointerdown',primeNotificationSound,{capture:true});
+    document.addEventListener('keydown',primeNotificationSound,{capture:true});
   }
 
   window.NEISNotificationRuntime={
@@ -280,6 +315,7 @@
     reset,
     snapshot,
     updateTabBadge,
-    ingestPush
+    ingestPush,
+    soundEnabledOnThisDevice
   };
 })();

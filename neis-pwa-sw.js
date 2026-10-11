@@ -1,9 +1,9 @@
-const VERSION = "neis-pwa-v10";
-const STATIC_CACHE = "neis-static-v10";
+const VERSION = "neis-pwa-ovh-v13";
+const STATIC_CACHE = "neis-static-ovh-v13";
 
 
 const VAPID_PUBLIC_KEY = "BKPTZrkpcjMsJHXVOCnZHW-ht94oEPCIvZ8HMu65tQEnfjhoi5-HdBODDt1iNVBFIgsZoyMwXQxQJLJ62ZQoWYw";
-const PUSH_REFRESH_URL = "https://ydieijgynqlckaczalju.supabase.co/functions/v1/refresh-web-push-subscription";
+const PUSH_REFRESH_URL = "https://supabase.neiscircle.site/functions/v1/refresh-web-push-subscription";
 const PUSH_DB = "neis-push-meta";
 const PUSH_STORE = "kv";
 

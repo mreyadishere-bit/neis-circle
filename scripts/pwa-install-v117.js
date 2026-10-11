@@ -79,7 +79,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=12',{scope:'/'}),'worker_register',10000);
+      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=13',{scope:'/'}),'worker_register',10000);
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
@@ -256,7 +256,7 @@
 
   function refreshNotificationsNow(){
     try{
-      window.NEISNotificationRuntime?.refresh?.(false,{force:true});
+      window.NEISNotificationRuntime?.refresh?.(true,{force:true});
     }catch(_){}
   }
 
@@ -356,6 +356,7 @@
       </div>
       <div class="modal-actions pwa-notification-actions">
         <button type="button" class="secondary" data-pwa-toggle-all></button>
+        <button type="button" class="secondary" data-test-notification-sound>${lang('Test sound','اختبار الصوت')}</button>
         <button type="button" class="secondary" data-pwa-notification-permission>${notificationPermission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
         <button type="button" class="primary" data-save-pwa-push>${lang('Save','حفظ')}</button>
       </div>
@@ -390,6 +391,14 @@
     if(toggleAllButton)toggleAllButton.onclick=()=>persistAllPreferences(toggleAllButton.dataset.enableAll==='1');
     preferenceInputs().forEach(input=>input.addEventListener('change',syncToggleAllLabel));
     syncToggleAllLabel();
+
+    const testSoundButton=document.querySelector('[data-test-notification-sound]');
+    if(testSoundButton)testSoundButton.onclick=async()=>{
+      const ok=await window.NEISNotificationRuntime?.playSound?.(true);
+      if(typeof toast==='function')toast(ok
+        ?lang('Test sound played.','تم تشغيل صوت الاختبار.')
+        :lang('Browser sound is blocked. Check site audio permissions and device volume.','صوت المتصفح محظور. راجع إذن الصوت ومستوى صوت الجهاز.'));
+    };
 
     const permissionButton=document.querySelector('[data-pwa-notification-permission]');
     if(permissionButton)permissionButton.onclick=async()=>{

@@ -691,7 +691,7 @@ if (fs.existsSync(notificationTabCountRuntimePath)) {
 
 const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=12'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=13'",
   "rememberSubscriptionInWorker",
   "ensurePushHealth",
   "window.addEventListener('focus'",
@@ -706,7 +706,7 @@ const pwaSwPath = path.join(root, 'neis-pwa-sw.js');
 if (fs.existsSync(pwaSwPath)) {
   const pwaSwSource = fs.readFileSync(pwaSwPath, 'utf8');
   for (const token of [
-    'const VERSION = "neis-pwa-v10"',
+    'const VERSION = "neis-pwa-ovh-v13"',
     'pushsubscriptionchange',
     'refresh-web-push-subscription',
     'NEIS_PUSH_SUBSCRIPTION',
@@ -802,11 +802,11 @@ else {
   if (notificationResetSection.includes('audioContext=null')) failures.push('Notification reset must preserve the unlocked AudioContext.');
   if (notificationResetSection.includes('soundUnlocked=false')) failures.push('Notification reset must preserve sound unlock state.');
 }
-if (!notificationSoundSource.includes('async function playSound()')) failures.push('Notification sound function is missing.');
+if (!notificationSoundSource.includes('async function playSound(test=false)')) failures.push('Notification sound function is missing.');
 
 const pushTabSyncSwSource = fs.readFileSync(path.join(root, 'neis-pwa-sw.js'), 'utf8');
 for (const token of [
-  'const VERSION = "neis-pwa-v10"',
+  'const VERSION = "neis-pwa-ovh-v13"',
   'NEIS_PUSH_NOTIFICATION',
   'self.clients.matchAll({ type: "window", includeUncontrolled: true })',
   'client.postMessage(payload)'
@@ -821,7 +821,7 @@ for (const token of ['function ingestPush(payload)','renderNotificationsIfVisibl
 
 const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=12'",
+  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=13'",
   "event.data?.type==='NEIS_PUSH_NOTIFICATION'",
   "NEISNotificationRuntime?.ingestPush"
 ]) {
