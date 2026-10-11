@@ -910,7 +910,11 @@ async function handleMessageRealtime(payload){
   // Chat Realtime can precede or outlive the notifications-table channel.
   // Ring directly for genuine incoming inserts, even if hydration already
   // fetched this message and messageState decides no UI patch is necessary.
-  if(event==='INSERT'&&visible&&incoming.id&&incoming.sender_id&&
+  // The Supabase Realtime INSERT itself is already RLS-scoped to the
+  // signed-in participant. Do not suppress sound just because a conversation
+  // is still hydrating, was temporarily missing from local state, or is not
+  // currently rendered in the chat UI.
+  if(event==='INSERT'&&incoming.id&&incoming.sender_id&&
       !same(incoming.sender_id,authUser?.id)){
     Promise.resolve(notificationRuntime.signalIncomingMessage?.({
       id:incoming.id,senderId:incoming.sender_id,scope:'direct'
@@ -3517,7 +3521,24 @@ function bindV6(root=document){
   root.querySelectorAll('[data-clear-global-search]').forEach(el=>el.onclick=()=>{state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null;const input=$('#globalSearch');if(input){input.value='';input.focus()}routeTo('discover')});
   root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));if(item)item.read_at=readAt;updateBadges();const {error}=await sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification);if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}routeTo(notificationTargetRoute(item)||el.dataset.route||'notifications')});
   setTimeout(()=>markVisibleLocationNotificationsRead(),120);
-  root.querySelectorAll('[data-mark-all-read]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString();state.notifications.forEach(n=>{if(!n.read_at)n.read_at=readAt});updateBadges();render();const {error}=await sb.from('notifications').update({read_at:readAt}).is('read_at',null);if(error){console.error('[NEIS notifications mark all]',error);refreshNotificationsOnly()}});
+  root.querySelectorAll('[data-mark-all-read]').forEach(el=>el.onclick=async()=>{
+    const unreadIds=(state.notifications||[]).filter(n=>!n.read_at&&n.id!=null).map(n=>n.id);
+    if(!unreadIds.length||!authUser?.id)return;
+    const readAt=new Date().toISOString();
+    const readSet=new Set(unreadIds.map(id=>String(id)));
+    state.notifications.forEach(n=>{if(readSet.has(String(n.id)))n.read_at=readAt});
+    updateBadges();
+    render();
+    // Mark only the IDs that were unread at click-time. An unscoped
+    // is('read_at',null) update can consume an incoming notification that
+    // arrived during this request, hiding its normal audio and badge flow.
+    const {error}=await sb.from('notifications').update({read_at:readAt})
+      .eq('user_id',authUser.id).in('id',unreadIds);
+    if(error){
+      console.error('[NEIS notifications mark all]',error);
+      refreshNotificationsOnly(true,{force:true}).catch(()=>{});
+    }
+  });
   root.querySelectorAll('[data-report-target]').forEach(el=>el.onclick=e=>{e.stopPropagation();openReport(el.dataset.reportTarget,el.dataset.reportId)});
   root.querySelectorAll('[data-report-status]').forEach(el=>el.onchange=async()=>{const report=state.reports.find(r=>same(r.id,el.dataset.reportStatus)),previous=report?.status||'open',next=normalizedReportStatus(el.value);el.disabled=true;const {data,error}=await sb.rpc('admin_update_report_status',{report_id_input:el.dataset.reportStatus,status_input:next});if(error||!data){el.value=previous;el.disabled=false;toast(error?safeError(error,'update this report'):t('This report could not be updated.','تعذر تحديث هذا البلاغ.'));return}if(report)report.status=next;render();await handleReportRealtime();toast(t('Report status updated.','تم تحديث حالة البلاغ.'))});
   root.querySelectorAll('[data-admin-open-content]').forEach(el=>{
