@@ -1,0 +1,36 @@
+name: OVH Postgres Growth Readonly Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [audit/ovh-postgres-growth-20261011]
+    paths:
+      - 'scripts/ops/ovh-postgres-growth-readonly-audit.sh'
+      - '.github/workflows/ovh-postgres-growth-readonly-audit.yml'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check script syntax
+        run: bash -n scripts/ops/ovh-postgres-growth-readonly-audit.sh
+      - name: Configure SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Aggregate DB table sizes without reading user records or changing database
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o StrictHostKeyChecking=yes ubuntu@"$HOST" 'bash -s' < scripts/ops/ovh-postgres-growth-readonly-audit.sh
