@@ -1,0 +1,51 @@
+name: OVH Remove Temporary VAPID Transport Key
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-remove-temporary-vapid-transport-key.yml'
+permissions:
+  contents: read
+jobs:
+  cleanup:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Verify Vault is restored and remove unused temporary RSA keys
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          set +x
+          cd /home/ubuntu/neis-supabase
+          cmd=(sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml)
+          ready="$("${cmd[@]}" exec -T db psql -X -U postgres -d postgres -Atqc "SELECT EXISTS(SELECT 1 FROM public.get_web_push_vapid_keys() WHERE length(public_key)>80 AND length(private_key)>30);" </dev/null)"
+          if [ "$ready" != t ];then
+            echo "VAPID_TEMP_CLEANUP=BLOCKED_VAULT_NOT_READY"
+            exit 1
+          fi
+          dir=/home/ubuntu/neis-backups/vapid-secure-transfer-20261011
+          for filename in ephemeral-rsa-private.pem ephemeral-rsa-public.pem;do
+            if [ -f "$dir/$filename" ];then
+              rm -f -- "$dir/$filename"
+            fi
+            test ! -e "$dir/$filename"
+          done
+          rmdir "$dir" 2>/dev/null || true
+          echo "VAPID_TEMP_CLEANUP=SUCCESS_TEMP_RSA_KEYS_REMOVED"
+          echo "VAPID_TEMP_CLEANUP=ORIGINAL_VAULT_KEYS_REMAIN_VALID"
+          REMOTE
