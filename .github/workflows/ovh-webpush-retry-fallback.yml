@@ -1,0 +1,61 @@
+name: OVH Web Push Retry Fallback
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-webpush-retry-worker.py'
+      - 'scripts/ops/ovh-install-webpush-retry-cron.sh'
+      - 'scripts/ops/ovh-rollback-webpush-retry-cron.sh'
+      - '.github/workflows/ovh-webpush-retry-fallback.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-webpush-retry-fallback
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check minimal retry and rollback scripts
+        run: |
+          python3 -m py_compile scripts/ops/ovh-webpush-retry-worker.py
+          bash -n scripts/ops/ovh-install-webpush-retry-cron.sh
+          bash -n scripts/ops/ovh-rollback-webpush-retry-cron.sh
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage nonsecret retry worker and install safe one-minute cron
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-webpush-retry-worker.py "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/ovh-webpush-retry-v1.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-install-webpush-retry-cron.sh
+      - name: Verify fallback installed and database untouched
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'test "$(crontab -l | grep -Fc "# NEIS_WEBPUSH_RETRY_V1")" = 1 && python3 /home/ubuntu/neis-backups/ovh-webpush-retry-v1.py'
+          echo 'WEBPUSH_CRON_EXTERNAL_CHECK=PASS'
+      - name: Roll back managed cron on a failed deploy
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -s ~/.ssh/id_ed25519 ];then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-rollback-webpush-retry-cron.sh
+          fi
