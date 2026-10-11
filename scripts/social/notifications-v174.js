@@ -11,6 +11,9 @@
   let baselineLoaded=false;
   const chimedIds=new Set();
   const inflightChimes=new Set();
+  // The unread-tab counter is the final common output of every notification
+  // code path. Reconcile its actual IDs here, not only in selected handlers.
+  let badgeKnownIds=null;
   let pendingChime=null;
   const DEFAULT_TAB_TITLE='NEIS Circle';
   const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
@@ -50,7 +53,21 @@
 
   function updateTabBadge(){
     if(typeof document==='undefined')return;
-    const unread=(state.notifications||[]).filter(n=>!n.read_at).length;
+    const rows=state.notifications||[];
+    const newRows=badgeKnownIds===null?[]:rows.filter(n=>
+      !n.read_at && n.silent!==true &&
+      !badgeKnownIds.has(String(n.id)) &&
+      n.id != null
+    );
+    // Initial render is only a baseline; cached rows are also a baseline.
+    // Subsequent new IDs must ring even if a different module updated state
+    // and only called updateBadges()/updateTabBadge().
+    badgeKnownIds=new Set(rows.filter(n=>n.id!=null).map(n=>String(n.id)));
+    if(baselineLoaded&&newRows.length){
+      const latest=newRows[0];
+      chimeOnce(latest).catch(()=>{});
+    }
+    const unread=rows.filter(n=>!n.read_at).length;
     const label=unread>99?'99+':String(unread);
     document.title=unread?'('+label+') '+DEFAULT_TAB_TITLE:DEFAULT_TAB_TITLE;
   }
@@ -270,6 +287,7 @@
     }
     channelUid=uid;
     baselineLoaded=false;
+    badgeKnownIds=null;
     chimedIds.clear();
     inflightChimes.clear();
     pendingChime=null;
@@ -297,6 +315,7 @@
     channelUid='';
     realtimeStatus='CLOSED';
     baselineLoaded=false;
+    badgeKnownIds=null;
     chimedIds.clear();
     inflightChimes.clear();
     pendingChime=null;
@@ -309,7 +328,7 @@
 
   function snapshot(){
     return {
-      version:'174.9',
+      version:'174.10',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -317,6 +336,7 @@
       soundUnlocked,
       soundEnabled:soundEnabledOnThisDevice(),
       baselineLoaded,
+      badgeKnownCount:badgeKnownIds?.size||0,
       audioState:audioContext?.state||'not-created',
       pendingSound:!!pendingChime
     };
@@ -339,7 +359,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.9',
+    version:'174.10',
     unlockSound,
     playSound,
     applyRows,
