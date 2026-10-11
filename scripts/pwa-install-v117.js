@@ -79,7 +79,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=12',{scope:'/'}),'worker_register',10000);
+      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=13',{scope:'/'}),'worker_register',10000);
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
