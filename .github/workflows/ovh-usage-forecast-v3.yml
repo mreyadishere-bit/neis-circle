@@ -1,0 +1,76 @@
+name: OVH Usage Forecast V3
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/ovh-usage-forecast-stable-deploy-20261011]
+    paths:
+      - 'scripts/ops/ovh-deploy-usage-forecast-v3.py'
+      - 'scripts/ops/ovh-primary-admin-usage-sample.py'
+      - 'scripts/server-usage-admin-v1.js'
+      - 'supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql'
+      - '.github/workflows/ovh-usage-forecast-v3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-usage-forecast-v3-deploy
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify deploy, security and forecast
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-usage-forecast-v3.py scripts/ops/ovh-primary-admin-usage-sample.py
+          node --check scripts/server-usage-admin-v1.js
+          python3 - <<'PY'
+          from pathlib import Path
+          d=Path('scripts/ops/ovh-deploy-usage-forecast-v3.py').read_text()
+          a=Path('scripts/ops/ovh-primary-admin-usage-sample.py').read_text()
+          s=Path('supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql').read_text()
+          ui=Path('scripts/server-usage-admin-v1.js').read_text()
+          assert 'Capacity Forecast' in ui and 'estimateTrend' in ui and 'DiskETA' in ui
+          assert "interval '30 days'" in a
+          assert 'DOCKER_READINGS_MISSING' in d and 'POSTGRES_READINGS_MISSING' in d
+          assert 'FORECAST_V3_FRONTEND_ROLLED_BACK' in d and 'FORECAST_V3_AGENT_ROLLED_BACK' in d
+          assert 'set role anon;' in d
+          assert "u.id='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid" in s
+          assert "p.role='admin'" in s and 'auth.uid()' in s
+          assert 'from public, anon' in s
+          assert not any(x in d for x in ('alter system','DROP DATABASE','TRUNCATE TABLE'))
+          print("FORECAST_V3_STATIC=PASS")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Apply verified owner-only trend and safe frontend release
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/server-usage-forecast-20261011-v3
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql "$target:$stage/migration.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-primary-admin-usage-sample.py "$target:$stage/agent.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/server-usage-admin-v1.js "$target:$stage/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-usage-forecast-v3.py

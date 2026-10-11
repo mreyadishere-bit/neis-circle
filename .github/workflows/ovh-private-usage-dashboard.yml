@@ -1,13 +1,6 @@
 name: OVH Private Usage Dashboard
 on:
   workflow_dispatch:
-  push:
-    branches: [main, feature/private-vps-usage-dashboard-20261011]
-    paths:
-      - 'scripts/ops/ovh-private-usage-dashboard.py'
-      - 'scripts/ops/ovh-install-private-usage-dashboard.sh'
-      - 'scripts/ops/neis-private-monitor.service'
-      - '.github/workflows/ovh-private-usage-dashboard.yml'
 permissions:
   contents: read
 concurrency:
