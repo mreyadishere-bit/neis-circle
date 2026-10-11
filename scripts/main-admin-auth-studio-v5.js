@@ -12,6 +12,7 @@
   let overview=null, data=null, detailsId=null, detailsGeneration=0;
   const selected=new Set();
   const selectedRows=new Map();
+  const moderationPending=new Set();
   let selectAllMatching=false;
   const excludedIds=new Set();
   const LIMIT_FULL_EXPORT=10000;
@@ -19,7 +20,7 @@
     ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
     ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
     ['last_sign_in_at','Last sign in at'],['status','Status'],['branch','Branch'],
-    ['grade','Grade'],['role','Role']
+    ['grade','Grade'],['role','Role'],['actions','Actions']
   ];
   let columns=new Set(available.map(x=>x[0]));
   const when=(raw,long=false)=>{
@@ -83,6 +84,11 @@
     '#neisAuthStudio .st-other{width:145px;min-width:145px}',
     '#neisAuthStudio .st-link{color:var(--ink);text-align:left;border:0;background:none;padding:0;white-space:nowrap;font-weight:620;max-width:100%;overflow:hidden;text-overflow:ellipsis}',
     '#neisAuthStudio .st-link:hover{color:var(--accent);text-decoration:underline}',
+    '#neisAuthStudio .st-moderation{display:inline-flex;gap:6px;align-items:center}',
+    '#neisAuthStudio .st-moderation button{border:1px solid var(--line);border-radius:7px;padding:7px 10px;background:var(--soft);color:var(--ink);font-size:11px;white-space:nowrap}',
+    '#neisAuthStudio .st-moderation .st-unblock{color:var(--accent)}',
+    '#neisAuthStudio .st-moderation .st-block{color:var(--coral)}',
+    '#neisAuthStudio .st-moderation button:disabled{cursor:not-allowed;opacity:.45}',
     '#neisAuthStudio .st-avatar{width:25px;height:25px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;background:var(--violet);color:var(--ink)}',
     '#neisAuthStudio .st-provider-label{display:inline-flex;align-items:center;gap:7px}',
     '#neisAuthStudio .st-google{display:inline-grid;place-items:center;width:24px;height:24px;background:var(--soft);border-radius:50%;border:1px solid var(--line);font-size:15px;font-weight:850;color:#4285f4}',
@@ -178,7 +184,7 @@
   }
   function colClass(k){
     return ['user_id'].includes(k)?'st-uid':
-      k==='display_name'?'st-name':k==='profile'?'st-other':k==='email'?'st-mail':
+      k==='display_name'?'st-name':k==='profile'?'st-other':k==='actions'?'st-other':k==='email'?'st-mail':
       k==='phone'?'st-phone':k==='providers'?'st-provider':
       k==='provider_type'?'st-provider-type':
       ['created_at','last_sign_in_at'].includes(k)?'st-datetime':'st-other';
@@ -187,7 +193,28 @@
   function addCell(tr,k,u){
     const td=el('td');td.className=colClass(k);td.title='';
     const val=u[k];
-    if(k==='profile'){const b=el('button','st-link',u.has_profile?'Profile ↗':'No profile');b.disabled=!u.has_profile;b.type='button';b.dataset.stGoProfile=u.user_id;td.appendChild(b)}else if(k==='user_id'||k==='email'||k==='display_name'){
+    if(k==='profile'){
+      if(u.has_profile&&/^[a-f0-9-]{36}$/i.test(String(u.user_id||''))){
+        const link=el('a','st-link','Profile ↗');
+        // Native URL hash is reliable even if the app's routeTo is scoped elsewhere.
+        link.href='#/profile/'+encodeURIComponent(u.user_id);
+        link.title='Open student profile';
+        td.appendChild(link);
+      }else td.textContent='No profile';
+    }else if(k==='actions'){
+      const wrap=el('span','st-moderation');
+      if(u.user_id===MAIN_ADMIN)wrap.textContent='Protected owner';
+      else{
+        const blocked=!!u.banned||u.account_status==='blocked';
+        const button=el('button',blocked?'st-unblock':'st-block',blocked?'Unblock':'Block');
+        button.type='button';button.dataset.stModerate=u.user_id;
+        button.dataset.stBlock=blocked?'false':'true';
+        button.disabled=moderationPending.has(u.user_id);
+        button.setAttribute('aria-label',(blocked?'Unblock ':'Block ')+(u.display_name||u.email||'account'));
+        wrap.appendChild(button);
+      }
+      td.appendChild(wrap);
+    }else if(k==='user_id'||k==='email'||k==='display_name'){
       const b=el('button','st-link',k==='user_id'?u.user_id||'—':
         k==='email'?u.email||'—':u.display_name||'—');
       b.type='button';b.dataset.stDetail=u.user_id;b.title='Open user details';
@@ -458,7 +485,7 @@
     const root=e.target?.closest?.('#neisAuthStudio');if(!root)return;
     const button=e.target?.closest?.('button');if(!button)return;
     if(button.dataset.stDetail){void showDetail(button.dataset.stDetail);return}
-    if(button.dataset.stGoProfile){if(typeof routeTo==='function')routeTo('profile/'+button.dataset.stGoProfile);return}
+    // Profile uses a native #/profile/<uid> link, handled by app hash routing.
     if(button.dataset.stCopyUid){copyText(button.dataset.stCopyUid);return}
     if(button.dataset.stSort){
       const k=button.dataset.stSort;
