@@ -18,6 +18,7 @@
   let lastChimeResult='none';
   let lastChimeAt=0;
   let incomingAttemptCount=0;
+  let lastIncomingMessageSignalAt=0;
   const DEFAULT_TAB_TITLE='NEIS Circle';
   const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
   const CACHE_PREFIX='neis-notifications-v174:';
@@ -193,6 +194,28 @@
     }
   }
 
+  async function signalIncomingMessage({id,senderId,scope='direct'}={}){
+    // Call this from the real incoming chat event, not from a reloaded
+    // notification record. A DM can arrive before the related notification
+    // INSERT, or while the notification channel is reconnecting.
+    if(!id||!authUser?.id||!senderId||same(senderId,authUser.id))return false;
+    const key=scope==='circle'?'circle_messages':'direct_messages';
+    try{
+      const uid=String(authUser.id);
+      const prefs=JSON.parse(localStorage.getItem('neis-device-push-prefs-v1:'+uid)||'{}');
+      if(prefs?.[key]===false){noteChime('message-category-disabled');return false}
+    }catch{}
+    lastIncomingMessageSignalAt=Date.now();
+    const row={id:'incoming-'+scope+'-'+String(id),read_at:null,silent:false};
+    // If the database notification event just chimed, suppress the second
+    // chime for the same incoming activity, while preserving the message ID.
+    if(lastChimeResult==='played'&&Date.now()-lastChimeAt<1250){
+      chimedIds.add(String(row.id));
+      return false;
+    }
+    return chimeOnce(row);
+  }
+
   function applyRows(rows,{soundForNew=false}={}){
     const previousIds=new Set((state.notifications||[]).map(n=>String(n.id)));
     const next=Array.isArray(rows)?rows:[];
@@ -351,10 +374,11 @@
 
   function snapshot(){
     return {
-      version:'174.11',
+      version:'174.12',
       lastChimeResult,
       lastChimeAt,
       incomingAttemptCount,
+      lastIncomingMessageSignalAt,
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -393,7 +417,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.11',
+    version:'174.12',
     unlockSound,
     playSound,
     applyRows,
@@ -406,6 +430,7 @@
     ingestPush,
     soundEnabledOnThisDevice,
     setDeviceSoundEnabled,
-    testIncomingAlert
+    testIncomingAlert,
+    signalIncomingMessage
   };
 })();
