@@ -460,15 +460,33 @@
     if(authPushHookInstalled||!(typeof sb!=='undefined'?sb:null)?.auth?.onAuthStateChange)return;
     authPushHookInstalled=true;
     sb.auth.onAuthStateChange((event,session)=>{
+      if(event==='SIGNED_OUT'){
+        notificationOnboardingShown=false;
+        notificationPromptUid='';
+        return;
+      }
       if(!session?.user)return;
+      if(['INITIAL_SESSION','SIGNED_IN'].includes(event)){
+        const uid=String(session.user.id||'');
+        if(uid&&notificationPromptUid!==uid){
+          notificationPromptUid=uid;
+          notificationOnboardingShown=false;
+          scheduleNotificationOnboarding();
+        }
+      }
       if(!('Notification' in window)||Notification.permission!=='granted')return;
       if(['INITIAL_SESSION','SIGNED_IN','TOKEN_REFRESHED','USER_UPDATED'].includes(event)){
         setTimeout(()=>ensurePushHealth(true).catch(()=>{}),0);
       }
     });
     sb.auth.getSession().then(({data})=>{
-      if(data?.session?.user&&('Notification' in window)&&Notification.permission==='granted'){
-        ensurePushHealth(true).catch(()=>{});
+      if(data?.session?.user){
+        const uid=String(data.session.user.id||'');
+        if(uid&&!notificationPromptUid){
+          notificationPromptUid=uid;
+          scheduleNotificationOnboarding();
+        }
+        if(('Notification' in window)&&Notification.permission==='granted')ensurePushHealth(true).catch(()=>{});
       }
     }).catch(()=>{});
   }
@@ -485,6 +503,8 @@
 
   let notificationOnboardingTimer=null;
   let notificationOnboardingShown=false;
+  let notificationPromptUid='';
+  let notificationPromptRetries=0;
   let notificationHiddenAt=0;
 
   function notificationOnboardingMarkup(mode='permission'){
@@ -494,6 +514,15 @@
         title:lang('Notifications unavailable','الإشعارات غير متاحة'),
         body:lang('This browser does not support web push notifications.','المتصفح الحالي لا يدعم إشعارات الويب.'),
         action:''
+      };
+    }
+    if(mode==='sound-muted'||mode==='sound-check'){
+      return {
+        title:lang('Enable notification sound','تفعيل صوت الإشعارات'),
+        body:mode==='sound-muted'
+          ?lang('Sound is turned off for this device. Enable it to hear new alerts.','الصوت متوقف على الجهاز ده. فعّله لسماع التنبيهات الجديدة.')
+          :lang('Tap to enable sound in this browser. If you hear nothing, unmute the tab and check device volume.','اضغط لتفعيل الصوت في المتصفح. لو مسمعتش حاجة، ألغِ كتم التاب وراجع صوت الجهاز.'),
+        action:'<button type="button" class="primary" data-pwa-onboarding-sound>'+lang('Enable & test sound','تفعيل واختبار الصوت')+'</button>'
       };
     }
     if(mode==='push-health'){
@@ -526,14 +555,19 @@
     let mode='permission';
     if(Notification.permission==='granted'){
       const healthy=await ensurePushHealth(true).catch(()=>false);
-      if(healthy)return;
-      mode='push-health';
+      if(!healthy)mode='push-health';
+      else if(window.NEISNotificationRuntime?.soundEnabledOnThisDevice?.()===false)mode='sound-muted';
+      else if(window.NEISNotificationRuntime?.snapshot?.()?.soundUnlocked!==true)mode='sound-check';
+      else return;
     }
-    if(notificationOnboardingShown)return;
+    if(notificationOnboardingShown||typeof openModal!=='function')return;
+    if(document.querySelector('#modalRoot .modal')){
+      if(notificationPromptRetries++<10)scheduleNotificationOnboarding(1700);
+      return;
+    }
     notificationOnboardingShown=true;
-
+    notificationPromptRetries=0;
     const copy=notificationOnboardingMarkup(mode);
-    if(typeof openModal!=='function')return;
     openModal(`
       <div class="modal-head">
         <div>
@@ -548,6 +582,20 @@
       </div>
     `);
 
+    const soundButton=document.querySelector('[data-pwa-onboarding-sound]');
+    if(soundButton)soundButton.onclick=async()=>{
+      soundButton.disabled=true;
+      const played=await window.NEISNotificationRuntime?.playSound?.(true);
+      try{
+        if(played){
+          const local=localDevicePushSettings();
+          if(local.sound===false)await saveDevicePushSettings({...local,sound:true});
+          if(typeof toast==='function')toast(lang('Test sound played. If you heard nothing, unmute this tab and device.','تم تشغيل اختبار الصوت. لو مسمعتش حاجة، ألغِ كتم التاب والجهاز.'));
+          closeModal();
+        }else if(typeof toast==='function')toast(lang('Browser audio is blocked. Check the sound permission.','المتصفح يمنع الصوت. راجع إعدادات صوت الموقع.'));
+      }catch(error){pushFailure(error,true)}
+      finally{soundButton.disabled=false}
+    };
     const notNow=document.querySelector('[data-pwa-not-now]');
     if(notNow)notNow.onclick=()=>{try{closeModal()}catch(_){}};
 
@@ -577,9 +625,10 @@
     };
   }
 
-  function scheduleNotificationOnboarding(){
+  function scheduleNotificationOnboarding(delay=700){
+    if(notificationOnboardingShown)return;
     clearTimeout(notificationOnboardingTimer);
-    notificationOnboardingTimer=setTimeout(()=>showNotificationOnboarding().catch(()=>{}),700);
+    notificationOnboardingTimer=setTimeout(()=>showNotificationOnboarding().catch(()=>{}),delay);
   }
 
   function hookLiveData(){
@@ -664,10 +713,10 @@
     }
     if(('Notification' in window)&&Notification.permission!=='granted'&&
        notificationHiddenAt&&Date.now()-notificationHiddenAt>4000){
-      notificationOnboardingShown=false;
-      scheduleNotificationOnboarding();
+      if(!notificationOnboardingShown)scheduleNotificationOnboarding();
     }else{
       recoverNotificationDelivery(true);
+      if(!notificationOnboardingShown)scheduleNotificationOnboarding(1000);
     }
   });
   window.addEventListener('focus',()=>recoverNotificationDelivery(false),{passive:true});

@@ -7,13 +7,17 @@ const pwa=fs.readFileSync('scripts/pwa-install-v117.js','utf8');
 assert.match(sw,/PUSH_REFRESH_URL = "https:\/\/supabase\.neiscircle\.site\/functions\/v1\/refresh-web-push-subscription"/);
 assert.match(pwa,/neis-pwa-sw\.js\?v=13/);
 assert.match(pwa,/data-test-notification-sound/);
+assert.match(pwa,/data-pwa-onboarding-sound/);
+assert.match(pwa,/event==='SIGNED_OUT'/);
+assert.match(pwa,/\['INITIAL_SESSION','SIGNED_IN'\]\.includes\(event\)/);
 assert.match(pwa,/NEISNotificationRuntime\?\.refresh\?\.\(true,\{force:true\}\)/);
 
 const actions={};
 const store=new Map();
 let audible=0,gestureAllowed=false,attempts=0;
+let latestAudioContext=null;
 class MockAudioContext {
-  constructor(){this.state='suspended';this.currentTime=0;this.destination={};}
+  constructor(){this.state='suspended';this.currentTime=0;this.destination={};latestAudioContext=this;}
   async resume(){attempts++;if(gestureAllowed)this.state='running';}
   createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}
   createOscillator(){audible++;return {type:'',frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}};}
@@ -65,6 +69,23 @@ assert.equal(audible,afterFirst,'device-local sound setting must mute chimes');
 assert.equal(nt.soundEnabledOnThisDevice(),false);
 assert.equal(await nt.playSound(true),true,'manual test-sound must work even when alerts muted');
 assert.ok(audible>afterFirst,'sound test is audible');
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:true}));
+gestureAllowed=false;
+latestAudioContext.state='suspended';
+const beforeBlocked=audible;
+nt.ingestPush(row('blocked'));
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(audible,beforeBlocked,'a blocked browser must not claim to play audio');
+assert.equal(nt.snapshot().pendingSound,true,'blocked notification must remain pending');
+gestureAllowed=true;
+actions.pointerdown();
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>beforeBlocked,'pending notification rings after trusted gesture');
+assert.equal(nt.snapshot().pendingSound,false);
+const playedOnce=audible;
+nt.ingestPush(row('blocked'));
+await Promise.resolve();await Promise.resolve();
+assert.equal(audible,playedOnce,'retries must not duplicate a successfully played notification');
 // The notification badge remains intact.
-assert.equal(context.document.title,'(3) NEIS Circle');
+assert.equal(context.document.title,'(4) NEIS Circle');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');

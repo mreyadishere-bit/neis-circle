@@ -10,6 +10,8 @@
   let soundUnlocked=false;
   let baselineLoaded=false;
   const chimedIds=new Set();
+  const inflightChimes=new Set();
+  let pendingChime=null;
   const DEFAULT_TAB_TITLE='NEIS Circle';
   const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
   const CACHE_PREFIX='neis-notifications-v174:';
@@ -124,15 +126,28 @@
     }catch{return false}
   }
 
-  function chimeOnce(row){
-    if(!row||row.read_at||row.silent===true||!soundEnabledOnThisDevice())return;
+  async function chimeOnce(row){
+    if(!row||row.read_at||row.silent===true||!soundEnabledOnThisDevice())return false;
     const id=String(row.id||'');
-    if(id&&chimedIds.has(id))return;
-    if(id){
-      chimedIds.add(id);
-      if(chimedIds.size>150)chimedIds.delete(chimedIds.values().next().value);
+    if(id&&(chimedIds.has(id)||inflightChimes.has(id)))return false;
+    if(id)inflightChimes.add(id);
+    try{
+      const played=await playSound();
+      if(played){
+        if(id){
+          chimedIds.add(id);
+          if(chimedIds.size>150)chimedIds.delete(chimedIds.values().next().value);
+        }
+        if(pendingChime?.id===id)pendingChime=null;
+        return true;
+      }
+      // The browser may block Web Audio until the next trusted user gesture.
+      // Do not mark the notification as played when nothing was audible.
+      pendingChime={id,row,expires:Date.now()+60000};
+      return false;
+    }finally{
+      if(id)inflightChimes.delete(id);
     }
-    playSound().catch(()=>{});
   }
 
   function applyRows(rows,{soundForNew=false}={}){
@@ -248,6 +263,8 @@
     channelUid=uid;
     baselineLoaded=false;
     chimedIds.clear();
+    inflightChimes.clear();
+    pendingChime=null;
     hydrateCache(uid);
     realtimeStatus='CONNECTING';
     channel=sb.channel(`neis-notifications-${uid}`)
@@ -273,6 +290,8 @@
     realtimeStatus='CLOSED';
     baselineLoaded=false;
     chimedIds.clear();
+    inflightChimes.clear();
+    pendingChime=null;
     if(channel&&sb){
       try{await sb.removeChannel(channel)}catch(_){}
     }
@@ -282,22 +301,29 @@
 
   function snapshot(){
     return {
-      version:'174.7',
+      version:'174.8',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
       refreshing:!!refreshPromise,
       soundUnlocked,
       soundEnabled:soundEnabledOnThisDevice(),
-      baselineLoaded
+      baselineLoaded,
+      audioState:audioContext?.state||'not-created',
+      pendingSound:!!pendingChime
     };
   }
 
   function primeNotificationSound(){
-    if(soundUnlocked&&audioContext?.state==='running')return;
-    // Keep trying on user gestures: a one-shot listener can run before the
-    // browser permits audio, leaving all future notification chimes muted.
-    unlockSound().catch(()=>{});
+    // Resume AudioContext inside a user gesture even if the first attempt failed.
+    unlockSound().then(ok=>{
+      if(!ok||!pendingChime)return;
+      const pending=pendingChime;
+      pendingChime=null;
+      if(pending.expires>Date.now()&&soundEnabledOnThisDevice()){
+        chimeOnce(pending.row).catch(()=>{});
+      }
+    }).catch(()=>{});
   }
   if(typeof document!=='undefined'){
     document.addEventListener('pointerdown',primeNotificationSound,{capture:true});
@@ -305,7 +331,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.7',
+    version:'174.8',
     unlockSound,
     playSound,
     applyRows,
