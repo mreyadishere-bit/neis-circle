@@ -51,7 +51,14 @@ select 'RECENT_MANUAL_ERROR_CLASS='||case
  else 'OTHER' end||';COUNT='||count(*)
 from public.email_notification_outbox
 where event_key like 'manual-content:%' and status='failed'
-group by 1 order by 1;
+group by case
+ when last_error ilike '%capacity%' or last_error ilike '%limit%' then 'LIMIT_OR_CAPACITY'
+ when last_error ilike '%401%' or last_error ilike '%403%' then 'AUTH_PROVIDER_REJECTED'
+ when last_error ilike '%sender%' then 'SENDER_CONFIGURATION'
+ when last_error ilike '%recipient%' then 'RECIPIENT_INELIGIBLE'
+ when last_error ilike '%Brevo rejected%' then 'BREVO_REJECTED'
+ when last_error is null then 'NONE'
+ else 'OTHER' end order by 1;
 SQL
 python3 - <<'PY'
 import json,subprocess,urllib.request,urllib.error
