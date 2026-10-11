@@ -133,4 +133,22 @@ store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:tr
 
 // The notification badge remains intact.
 assert.equal(context.document.title,'(8) NEIS Circle');
+assert.equal(nt.snapshot().version,'174.11');
+// Check the same incoming chime pathway as live notifications, not the
+// separate Test Sound which intentionally bypasses sound preferences.
+store.set('neis-local-notification-sound-v1:synthetic-test-id','off');
+const beforeMutedIncoming=audible;
+assert.equal(await nt.testIncomingAlert(),false);
+assert.equal(nt.snapshot().lastChimeResult,'device-sound-disabled');
+assert.equal(audible,beforeMutedIncoming);
+store.set('neis-local-notification-sound-v1:synthetic-test-id','on');
+assert.equal(await nt.testIncomingAlert(),true);
+assert.equal(nt.snapshot().lastChimeResult,'played');
+assert.ok(audible>beforeMutedIncoming);
+assert.equal(nt.soundEnabledOnThisDevice(),true);
+// Remote preference must not override the explicit device-local sound value.
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:false}));
+assert.equal(nt.soundEnabledOnThisDevice(),true);
+assert.match(pwa,/data-test-incoming-alert/);
+assert.match(pwa,/NEISNotificationRuntime\?\.setDeviceSoundEnabled/);
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');

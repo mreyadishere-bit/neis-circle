@@ -15,6 +15,9 @@
   // code path. Reconcile its actual IDs here, not only in selected handlers.
   let badgeKnownIds=null;
   let pendingChime=null;
+  let lastChimeResult='none';
+  let lastChimeAt=0;
+  let incomingAttemptCount=0;
   const DEFAULT_TAB_TITLE='NEIS Circle';
   const NOTIFICATION_FIELDS='id,type,title,body,entity_type,entity_id,route,read_at,created_at';
   const CACHE_PREFIX='neis-notifications-v174:';
@@ -82,9 +85,23 @@
   function soundEnabledOnThisDevice(){
     try{
       const uid=String((typeof authUser!=='undefined'&&authUser?.id)||'guest');
+      // In-app sound is device-local; background Push API synchronisation must
+      // never silently overwrite an explicitly chosen local sound preference.
+      const localSound=localStorage.getItem('neis-local-notification-sound-v1:'+uid);
+      if(localSound==='on')return true;
+      if(localSound==='off')return false;
       const value=JSON.parse(localStorage.getItem('neis-device-push-prefs-v1:'+uid)||'{}');
       return value?.sound!==false;
     }catch{return true}
+  }
+  function setDeviceSoundEnabled(enabled){
+    const uid=String((typeof authUser!=='undefined'&&authUser?.id)||'guest');
+    try{localStorage.setItem('neis-local-notification-sound-v1:'+uid,enabled?'on':'off')}catch{}
+    return soundEnabledOnThisDevice();
+  }
+  function noteChime(result){
+    lastChimeResult=result;
+    lastChimeAt=Date.now();
   }
 
   async function unlockSound(){
@@ -147,13 +164,18 @@
   }
 
   async function chimeOnce(row){
-    if(!row||row.read_at||row.silent===true||!soundEnabledOnThisDevice())return false;
+    if(!row)return false;
+    if(row.read_at){noteChime('already-read');return false}
+    if(row.silent===true){noteChime('silent-by-event');return false}
+    if(!soundEnabledOnThisDevice()){noteChime('device-sound-disabled');return false}
     const id=String(row.id||'');
     if(id&&(chimedIds.has(id)||inflightChimes.has(id)))return false;
     if(id)inflightChimes.add(id);
+    incomingAttemptCount++;
     try{
       const played=await playSound();
       if(played){
+        noteChime('played');
         if(id){
           chimedIds.add(id);
           if(chimedIds.size>150)chimedIds.delete(chimedIds.values().next().value);
@@ -163,6 +185,7 @@
       }
       // The browser may block Web Audio until the next trusted user gesture.
       // Do not mark the notification as played when nothing was audible.
+      noteChime('browser-audio-blocked');
       pendingChime={id,row,expires:Date.now()+60000};
       return false;
     }finally{
@@ -328,7 +351,10 @@
 
   function snapshot(){
     return {
-      version:'174.10',
+      version:'174.11',
+      lastChimeResult,
+      lastChimeAt,
+      incomingAttemptCount,
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -358,8 +384,16 @@
     document.addEventListener('keydown',primeNotificationSound,{capture:true});
   }
 
+  async function testIncomingAlert(){
+    // Same sound path as a real notification, but never writes notifications,
+    // sends a message, changes the unread badge, or calls a backend service.
+    const row={id:'local-test-'+Date.now()+'-'+Math.floor(Math.random()*100000),
+      read_at:null,silent:false};
+    return chimeOnce(row);
+  }
+
   window.NEISNotificationRuntime={
-    version:'174.10',
+    version:'174.11',
     unlockSound,
     playSound,
     applyRows,
@@ -370,6 +404,8 @@
     snapshot,
     updateTabBadge,
     ingestPush,
-    soundEnabledOnThisDevice
+    soundEnabledOnThisDevice,
+    setDeviceSoundEnabled,
+    testIncomingAlert
   };
 })();
