@@ -41,6 +41,9 @@
     const rows=readCache(uid);
     if(!rows.length)return false;
     state.notifications=rows;
+    // A cached set of notification IDs is a real baseline. Compare the first
+    // server result against it rather than silently discarding missed events.
+    baselineLoaded=true;
     renderNotificationsIfVisible();
     return true;
   }
@@ -157,8 +160,13 @@
     state.notifications=next;
     writeCache();
     renderNotificationsIfVisible();
-    if(soundForNew&&baselineLoaded){
-      fresh.filter(n=>!n.read_at).forEach(n=>chimeOnce(n));
+    // The first uncached hydration is intentionally quiet. After that, a new
+    // unread ID must chime whether it came from Realtime, focus, or a background
+    // refresh. Older callers pass soundForNew=false during routine sync: that
+    // flag must not suppress *new* messages while still changing the tab count.
+    if(baselineLoaded){
+      const latestUnread=fresh.find(n=>!n.read_at&&n.silent!==true);
+      if(latestUnread)chimeOnce(latestUnread).catch(()=>{});
     }
     baselineLoaded=true;
   }
@@ -301,7 +309,7 @@
 
   function snapshot(){
     return {
-      version:'174.8',
+      version:'174.9',
       channelUid,
       realtimeStatus,
       lastFullSyncAt,
@@ -331,7 +339,7 @@
   }
 
   window.NEISNotificationRuntime={
-    version:'174.8',
+    version:'174.9',
     unlockSound,
     playSound,
     applyRows,

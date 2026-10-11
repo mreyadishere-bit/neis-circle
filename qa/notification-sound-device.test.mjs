@@ -62,13 +62,35 @@ nt.ingestPush({...row('new'),silent:false});
 await Promise.resolve();
 assert.equal(audible,afterFirst,'same push and poll notification must not chime twice');
 
+// Reproduce the reported bug: unread tab brackets increase from a routine
+// refresh(false) after initial hydration, while the browser audio is unlocked.
+const audioBeforeCountRefresh=audible;
+nt.applyRows([row('dm-poll'),...context.state.notifications],{soundForNew:false});
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>audioBeforeCountRefresh,'new DM detected by silent routine refresh must ring');
+assert.equal(context.document.title,'(3) NEIS Circle');
+const audioAfterCountRefresh=audible;
+nt.applyRows([...context.state.notifications],{soundForNew:false});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(audible,audioAfterCountRefresh,'identical routine refresh must be silent');
+
+// Realtime and polling must share the same de-duplication for one notification.
+nt.applyRealtime({eventType:'INSERT',new:row('dm-realtime')});
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>audioAfterCountRefresh,'incoming realtime DM must ring');
+const audioAfterRealtime=audible;
+nt.applyRows([...context.state.notifications],{soundForNew:false});
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(audible,audioAfterRealtime,'same realtime DM on subsequent poll must not ring twice');
+assert.equal(context.document.title,'(4) NEIS Circle');
+
 store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:false}));
 nt.ingestPush(row('muted'));
 await Promise.resolve();
-assert.equal(audible,afterFirst,'device-local sound setting must mute chimes');
+assert.equal(audible,audioAfterRealtime,'device-local sound setting must mute chimes');
 assert.equal(nt.soundEnabledOnThisDevice(),false);
 assert.equal(await nt.playSound(true),true,'manual test-sound must work even when alerts muted');
-assert.ok(audible>afterFirst,'sound test is audible');
+assert.ok(audible>audioAfterRealtime,'sound test is audible');
 store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:true}));
 gestureAllowed=false;
 latestAudioContext.state='suspended';
@@ -87,5 +109,5 @@ nt.ingestPush(row('blocked'));
 await Promise.resolve();await Promise.resolve();
 assert.equal(audible,playedOnce,'retries must not duplicate a successfully played notification');
 // The notification badge remains intact.
-assert.equal(context.document.title,'(4) NEIS Circle');
+assert.equal(context.document.title,'(6) NEIS Circle');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');
