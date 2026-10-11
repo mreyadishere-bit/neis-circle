@@ -1,16 +1,6 @@
 name: OVH Main Admin Server Usage
 on:
   workflow_dispatch:
-  push:
-    branches: [main, feature/main-admin-ovh-usage-20261011]
-    paths:
-      - 'supabase/migrations/20261011164000_primary_admin_ovh_server_usage.sql'
-      - 'scripts/server-usage-admin-v1.js'
-      - 'scripts/ops/ovh-primary-admin-usage-sample.py'
-      - 'scripts/ops/ovh-deploy-main-admin-server-usage.py'
-      - 'scripts/ops/neis-server-usage-sample.service'
-      - 'scripts/ops/neis-server-usage-sample.timer'
-      - '.github/workflows/ovh-main-admin-server-usage.yml'
 permissions:
   contents: read
 concurrency:
