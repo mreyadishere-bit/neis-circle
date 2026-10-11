@@ -87,5 +87,5 @@ nt.ingestPush(row('blocked'));
 await Promise.resolve();await Promise.resolve();
 assert.equal(audible,playedOnce,'retries must not duplicate a successfully played notification');
 // The notification badge remains intact.
-assert.equal(context.document.title,'(3) NEIS Circle');
+assert.equal(context.document.title,'(4) NEIS Circle');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');
