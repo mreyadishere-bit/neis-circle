@@ -395,8 +395,13 @@
     const testSoundButton=document.querySelector('[data-test-notification-sound]');
     if(testSoundButton)testSoundButton.onclick=async()=>{
       const ok=await window.NEISNotificationRuntime?.playSound?.(true);
+      // Test Sound deliberately bypasses the mute preference. Clarify that a
+      // successful test does NOT mean actual notifications can ring.
+      const muted=document.querySelector('[data-pwa-push-pref="sound"]')?.checked===false;
       if(typeof toast==='function')toast(ok
-        ?lang('Test sound played.','تم تشغيل صوت الاختبار.')
+        ?muted
+          ?lang('Test sound works, but Notification sound is OFF. Turn it on and press Save to hear messages.','صوت الاختبار يعمل لكن صوت الإشعارات مقفول. فعّله واضغط حفظ لسماع الرسائل.')
+          :lang('Test sound played. Keep Notification sound enabled to hear new messages.','تم تشغيل صوت الاختبار. اترك صوت الإشعارات مفعّلًا لسماع الرسائل الجديدة.')
         :lang('Browser sound is blocked. Check site audio permissions and device volume.','صوت المتصفح محظور. راجع إذن الصوت ومستوى صوت الجهاز.'));
     };
 
