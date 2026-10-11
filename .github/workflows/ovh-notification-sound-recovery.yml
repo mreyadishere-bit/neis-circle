@@ -1,16 +1,6 @@
-name: OVH Notification Sound and PWA Recovery
+name: OVH Previous Notification Sound Release (Manual Rollback Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-sound.py'
-      - 'scripts/ops/ovh-rollback-notification-sound.py'
-      - 'scripts/ops/ovh-retry-notification-sound.py'
-      - '.github/workflows/ovh-notification-sound-recovery.yml'
 permissions:
   contents: read
 concurrency:
