@@ -29,6 +29,13 @@
     '#neisServerUsage td,#neisServerUsage th{text-align:left;padding:9px 6px;border-bottom:1px solid var(--border,rgba(128,128,128,.2))}'+
     '#neisServerUsage th{opacity:.7;font-weight:550}'+
     '#neisServerUsage button[data-neis-usage-refresh]{border:1px solid var(--border,rgba(128,128,128,.3));border-radius:8px;background:transparent;color:inherit;padding:6px 11px;cursor:pointer}'+
+    '#neisServerUsage .neis-forecast{margin-top:18px;border-top:1px solid var(--border,rgba(128,128,128,.2));padding-top:18px}'+
+    '#neisServerUsage .neis-forecast h3{font-size:16px;margin:0 0 5px}'+
+    '#neisServerUsage .neis-forecast-head{display:flex;gap:10px;justify-content:space-between;align-items:start;flex-wrap:wrap;margin-bottom:14px}'+
+    '#neisServerUsage .neis-usage-alert{padding:12px 14px;margin-top:12px;border-radius:10px;border:1px solid var(--border,rgba(128,128,128,.3));background:rgba(128,128,128,.06);font-size:13px;line-height:1.65}'+
+    '#neisServerUsage .neis-usage-alert.warn{border-color:#d49a41;background:rgba(212,154,65,.09)}'+
+    '#neisServerUsage .neis-usage-alert.danger{border-color:#dc6175;background:rgba(220,97,117,.10)}'+
+    '#neisServerUsage .neis-usage-alert ul{margin:6px 0 0;padding-left:20px}'+
     '@media(max-width:750px){#neisServerUsage{padding:16px}#neisServerUsage .neis-usage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#neisServerUsage .neis-usage-lower{grid-template-columns:1fr}}'+
     '</style>';
   const card=(key,label,progress=false)=>
@@ -49,6 +56,13 @@
     '<div class="neis-usage-muted">● CPU (blue) &nbsp; ● RAM (green) · Last 120 samples</div></div>'+
     '<div class="neis-usage-card"><b>Service breakdown</b><div style="overflow:auto"><table><thead><tr><th>Service</th><th>State</th><th>CPU</th><th>Memory</th></tr></thead>'+
     '<tbody id="neisUsageServices"><tr><td colspan="4">Loading…</td></tr></tbody></table></div></div></div>'+
+    '<div class="neis-forecast"><div class="neis-forecast-head"><div><h3>Capacity Forecast</h3>'+
+    '<div class="neis-usage-muted">Based on actual server measurements · 30-day history · no assumed growth rate</div></div>'+
+    '<div id="neisUsageForecastConfidence" class="neis-usage-pill">Gathering baseline</div></div>'+
+    '<div class="neis-usage-grid">'+card('DiskGrowth','Disk growth per day')+
+    card('DiskETA','Time until 80% disk usage')+card('DBGrowth','Database growth per day')+'</div>'+
+    '<div class="neis-usage-alert" id="neisUsageAlerts" aria-live="polite">Checking resource thresholds…</div>'+
+    '<p class="neis-usage-muted">Forecasts appear once at least 3 days of consistent data are collected. They are estimates, not storage limits or promises. Database size is already included in total disk use; never add them together. Concurrent-user capacity requires separate load testing.</p></div>'+
     '<p class="neis-usage-muted" id="neisUsageUpdated">Updates automatically each minute. Restricted by authenticated server-side permissions.</p></section>';
   const oldAdmin=admin;
   admin=function(){
@@ -89,6 +103,88 @@
       svg.appendChild(el);
     }
   }
+  function estimateTrend(points,key){
+    const source=(Array.isArray(points)?points:[])
+      .filter(p=>p&&p[key]!=null)
+      .map(p=>({day:Date.parse(p?.at)/86400000,y:Number(p?.[key])}))
+      .filter(p=>Number.isFinite(p.day)&&Number.isFinite(p.y)&&p.y>=0)
+      .sort((a,b)=>a.day-b.day);
+    if(source.length<10)return {status:'collecting',days:0};
+    const last=source[source.length-1].day;
+    const data=source.filter(p=>p.day>=last-14);
+    const span=data[data.length-1].day-data[0].day;
+    if(data.length<10||span<3)return {status:'collecting',days:Math.max(0,span)};
+    const count=data.length;
+    const meanX=data.reduce((a,p)=>a+p.day,0)/count,meanY=data.reduce((a,p)=>a+p.y,0)/count;
+    let sxx=0,sxy=0,syy=0;
+    for(const p of data){let dx=p.day-meanX,dy=p.y-meanY;sxx+=dx*dx;sxy+=dx*dy;syy+=dy*dy;}
+    if(sxx<=0)return {status:'collecting',days:span};
+    const slope=sxy/sxx;
+    const r2=syy>0?Math.max(0,Math.min(1,sxy*sxy/(sxx*syy))):1;
+    return {status:slope<=0?'stable':r2<.3?'variable':'growing',
+      slope:slope,days:span,r2:r2,points:count,
+      confidence:span>=14&&r2>=.8?'Higher':span>=7&&r2>=.5?'Medium':'Early'};
+  }
+  function capacityForecast(payload){
+    const d=payload.current||{},disk=d.disk||{};
+    const trend=estimateTrend(payload.trends,'disk_used_gib');
+    const db=estimateTrend((payload.trends||[]).map(p=>({
+      at:p.at,
+      db_gib:p.database_bytes==null?null:Number(p.database_bytes)/1073741824
+    })),'db_gib');
+    const diskPct=Number(disk.percent);
+    const free=Number(disk.total_gib)-Number(disk.used_gib);
+    const confident=get('ForecastConfidence');
+    if(confident)confident.textContent=trend.status==='collecting'?'Gathering baseline · 3+ days':
+      (trend.confidence||'Early')+' confidence · '+trend.days.toFixed(1)+' days';
+    let label='Not enough history',eta='Need 3+ days of data';
+    if(trend.status==='stable'){label='Stable or decreasing';eta='No growth-based date';}
+    if(trend.status==='variable'){label='Fluctuating usage';eta='Trend too irregular';}
+    if(trend.status==='growing'&&Number.isFinite(trend.slope)){
+      label=fmt(trend.slope*1024,1)+' MiB/day';
+      const at80=Number(disk.total_gib)*.8-Number(disk.used_gib);
+      if(at80<=0)eta='Threshold reached';
+      else{
+        const days=at80/trend.slope;
+        eta=days>3650?'Over 10 years':days>=365?fmt(days/365,1)+' years':
+          days>=30?fmt(days/30.44,1)+' months':fmt(days,0)+' days';
+      }
+    }
+    fill('DiskGrowth',label,'Sampled disk growth · last 14 days');
+    fill('DiskETA',eta,'Estimated until 80% full · '+fmt(free,1)+' GiB free');
+    const databaseValue=db.status==='collecting'?'Not enough history':
+      db.status==='stable'?'Stable or decreasing':
+      db.status==='variable'?'Fluctuating usage':fmt(db.slope*1024,1)+' MiB/day';
+    fill('DBGrowth',databaseValue,'PostgreSQL growth tracked separately');
+    const alerts=get('Alerts');if(!alerts)return;
+    alerts.replaceChildren();
+    const issues=[];
+    const push=(kind,message)=>issues.push({kind,message});
+    const cpu=Number(d.cpu),ram=Number(d.memory?.percent);
+    if(Number.isFinite(diskPct)&&diskPct>=90)push('danger','Disk storage is 90%+ full. Free space and backups need urgent review.');
+    else if(Number.isFinite(diskPct)&&diskPct>=80)push('warn','Disk storage has reached 80%. Plan additional storage.');
+    if(Number.isFinite(ram)&&ram>=90)push('danger','RAM above 90% in the latest sample.');
+    else if(Number.isFinite(ram)&&ram>=80)push('warn','RAM above 80% in the latest sample.');
+    if(Number.isFinite(cpu)&&cpu>=90)push('warn','CPU above 90% in the latest sample. Check whether high load persists.');
+    else if(Number.isFinite(cpu)&&cpu>=80)push('warn','CPU above 80% in the latest sample.');
+    if(d.docker?.error||d.docker?.running==null)push('warn','Docker readings unavailable; check server monitoring.');
+    if(d.database_bytes==null)push('warn','PostgreSQL size could not be read.');
+    const sampleAge=Date.now()-Date.parse(d.at);
+    if(!Number.isFinite(sampleAge)||sampleAge>180000)push('warn','Monitor readings are over three minutes old.');
+    alerts.className='neis-usage-alert'+(issues.some(x=>x.kind==='danger')?' danger':issues.length?' warn':'');
+    const strong=document.createElement('b');
+    strong.textContent=issues.length?issues.length+' monitoring alert(s)':'✓ No current resource threshold alerts';
+    alerts.appendChild(strong);
+    if(issues.length){
+      const list=document.createElement('ul');
+      issues.forEach(issue=>{const li=document.createElement('li');li.textContent=issue.message;list.appendChild(li)});
+      alerts.appendChild(list);
+    }else{
+      const p=document.createElement('p');p.className='neis-usage-muted';
+      p.textContent='Alerts appear here at CPU/RAM 80% and disk 80% / 90%. These are in-dashboard alerts, not push notifications.';
+      alerts.appendChild(p);
+    }
+  }
   function render(payload){
     const root=document.getElementById('neisServerUsage');
     if(!root||!isOwner())return;
@@ -117,6 +213,7 @@
       }
     }
     plot(payload.history);
+    capacityForecast(payload);
   }
   async function loadUsage(force=false){
     const root=document.getElementById('neisServerUsage');
