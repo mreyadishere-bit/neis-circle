@@ -33,6 +33,7 @@
   const styles=[
     '#neisAuthStudio{--st-bg:#101111;--st-panel:#151616;--st-border:#303232;--st-hover:#1e2020;--st-fg:#f5f5f5;--st-secondary:#a2a4a4;--st-green:#07894f;--st-warn:#ce9662;background:var(--st-bg)!important;border:1px solid var(--st-border)!important;color:var(--st-fg)!important;border-radius:14px;padding:0!important;margin:20px 0;overflow:hidden;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif}',
     '#neisAuthStudio *{box-sizing:border-box}',
+    '#neisAuthStudio [hidden]{display:none!important}',
     '#neisAuthStudio .st-title{padding:21px 25px 16px;border-bottom:1px solid var(--st-border);display:flex;align-items:center;justify-content:space-between;gap:12px}',
     '#neisAuthStudio h2{font-size:19px;margin:0;color:var(--st-fg);font-weight:650}',
     '#neisAuthStudio h3{font-size:16px;margin:0}',
