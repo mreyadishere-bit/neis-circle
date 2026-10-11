@@ -1,0 +1,106 @@
+name: OVH Auth Studio V2
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/supabase-style-auth-console-20261011]
+    paths:
+      - 'supabase/migrations/20261011203000_studio_style_auth_users.sql'
+      - 'scripts/main-admin-auth-studio-v2.js'
+      - 'scripts/ops/ovh-auth-studio-v2-dryrun.py'
+      - 'scripts/ops/ovh-deploy-auth-studio-v2.py'
+      - '.github/workflows/ovh-auth-studio-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-auth-studio-v2
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static syntax and authorization checks
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-auth-studio-v2.js
+          python3 -m py_compile scripts/ops/ovh-auth-studio-v2-dryrun.py scripts/ops/ovh-deploy-auth-studio-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('supabase/migrations/20261011203000_studio_style_auth_users.sql').read_text()
+          ui=Path('scripts/main-admin-auth-studio-v2.js').read_text()
+          ops=Path('scripts/ops/ovh-deploy-auth-studio-v2.py').read_text()
+          assert "auth.role() <> 'authenticated'" in s
+          assert "'25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid" in s
+          assert "owner_profile.role='admin'" in s
+          assert "coalesce(owner_profile.account_status,'active')='active'" in s
+          assert "revoke all on function public.main_admin_auth_users" in s
+          assert 'notify pgrst' in s
+          for word in ('Unified search','All columns','Add user','p_search_field','p_provider',
+                       'export-selected','data-st-select','Copy sign-up link'):
+            assert word in ui,word
+          assert "isOwner()" in ui and "textContent" in ui and "MAIN_ADMIN" in ui
+          assert 'OWNERSHIP_CHANGED' not in ops
+          assert 'ANON_RPC_PERMISSION' in ops and 'NON_OWNER_NOT_BLOCKED' in ops
+          assert 'ROLLED_BACK' in ops and 'AUTH_STUDIO_V2_FRONTEND=LIVE' in ops
+          print('AUTH_STUDIO_V2_STATIC=PASS')
+          PY
+  dryrun:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned SSH setup
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Dry-run owner authenticated RPC then rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest=/home/ubuntu/neis-backups/auth-studio-v2-20261011
+          target="ubuntu@$OVH_HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $dest"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261011203000_studio_style_auth_users.sql "$target:$dest/schema.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-auth-studio-v2-dryrun.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dryrun
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned SSH setup
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage release and activate private auth console
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          dest=/home/ubuntu/neis-backups/auth-studio-v2-20261011
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v2.js "$target:$dest/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-auth-studio-v2.py
