@@ -713,10 +713,10 @@
     }
     if(('Notification' in window)&&Notification.permission!=='granted'&&
        notificationHiddenAt&&Date.now()-notificationHiddenAt>4000){
-      notificationOnboardingShown=false;
-      scheduleNotificationOnboarding();
+      if(!notificationOnboardingShown)scheduleNotificationOnboarding();
     }else{
       recoverNotificationDelivery(true);
+      if(!notificationOnboardingShown)scheduleNotificationOnboarding(1000);
     }
   });
   window.addEventListener('focus',()=>recoverNotificationDelivery(false),{passive:true});
