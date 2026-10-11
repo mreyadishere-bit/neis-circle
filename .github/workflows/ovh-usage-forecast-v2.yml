@@ -35,7 +35,7 @@ jobs:
           for token in ('auth.uid()', "u.id='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid",
                         "p.role='admin'",'account_status','security definer',
                         'revoke all on function public.main_admin_server_usage() from public, anon',
-                        'date_bin','interval \\'30 days\\''):
+                        'date_bin','30 days'):
             assert token in sql,token
           assert "interval '30 days'" in agent
           assert 'sudo","-n","/usr/bin/docker","stats"' in agent
