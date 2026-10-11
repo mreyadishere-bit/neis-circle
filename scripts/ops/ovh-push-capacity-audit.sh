@@ -23,8 +23,18 @@ UNION ALL SELECT 'PUSH_PG_CRON_LOADED='||exists(SELECT 1 FROM pg_extension WHERE
 UNION ALL SELECT 'PUSH_PG_NET_LOADED='||exists(SELECT 1 FROM pg_extension WHERE extname='pg_net')::text
 UNION ALL SELECT 'PUSH_DISPATCH_TRIGGER_ON='||exists(SELECT 1 FROM pg_trigger WHERE tgname='web_push_outbox_dispatch' AND tgenabled<>'D')::text
 UNION ALL SELECT 'PUSH_ENQUEUE_TRIGGER_ON='||exists(SELECT 1 FROM pg_trigger WHERE tgname='notifications_enqueue_web_push' AND tgenabled<>'D')::text
+UNION ALL SELECT 'PUSH_OUTBOX_SENT_TOTAL='||count(*) FROM public.web_push_outbox WHERE status='sent'
+UNION ALL SELECT 'PUSH_SENT_LAST_20M='||count(*) FROM public.web_push_outbox WHERE status='sent' AND sent_at>=now()-interval '20 minutes'
+UNION ALL SELECT 'PUSH_SENT_LAST_5M='||count(*) FROM public.web_push_outbox WHERE status='sent' AND sent_at>=now()-interval '5 minutes'
+UNION ALL SELECT 'PUSH_FAILED_TOTAL='||count(*) FROM public.web_push_outbox WHERE status='failed'
+UNION ALL SELECT 'PUSH_SENDING_STUCK_10M='||count(*) FROM public.web_push_outbox WHERE status='sending' AND created_at<now()-interval '10 minutes'
+UNION ALL SELECT 'PUSH_ATTEMPTS_EXHAUSTED='||count(*) FROM public.web_push_outbox WHERE status IN ('pending','failed') AND attempts>=5
+UNION ALL SELECT 'PUSH_SENT_OK_WITHOUT_ERRORS_20M='||count(*) FROM public.web_push_outbox WHERE status='sent' AND last_error IS NULL AND sent_at>=now()-interval '20 minutes'
+UNION ALL SELECT 'PUSH_SENT_WITH_DELIVERY_FAILURES_20M='||count(*) FROM public.web_push_outbox WHERE status='sent' AND last_error LIKE 'webpush_%' AND sent_at>=now()-interval '20 minutes'
+UNION ALL SELECT 'PUSH_LAST_ERROR_'||regexp_replace(coalesce(last_error,'none'),'[^a-zA-Z0-9_]+','_','g')||'='||count(*) FROM public.web_push_outbox WHERE status='failed' AND created_at>=now()-interval '1 day' GROUP BY regexp_replace(coalesce(last_error,'none'),'[^a-zA-Z0-9_]+','_','g')
 UNION ALL SELECT 'PUSH_OUTBOX_PENDING='||count(*) FROM public.web_push_outbox WHERE status IN ('pending','failed')
 UNION ALL SELECT 'PUSH_RPC_'||proname||'=EXISTS' FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND proname IN ('register_web_push_subscription','get_web_push_subscription_status','get_web_push_vapid_keys')
 ORDER BY 1;" </dev/null
 command -v crontab >/dev/null 2>&1 && echo 'SYSTEM_CRONTAB_AVAILABLE=YES' || echo 'SYSTEM_CRONTAB_AVAILABLE=NO'
+echo "HOST_WEBPUSH_RETRY_CRON_INSTALLED=$( (crontab -l 2>/dev/null || true) | grep -Fc '# NEIS_WEBPUSH_RETRY_V1' || true)"
 echo 'PRIVATE_VALUES_LOGGED=NO'
