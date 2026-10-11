@@ -48,7 +48,7 @@ jobs:
                        "Database Storage Breakdown","Daily database history",
                        "index_bytes","daily_change_bytes","--","owner()"):
             assert term in ui,term
-          assert "html+shell" in ui and "textContent" in ui
+          assert "markup+shell" in ui and "textContent" in ui
           assert "OnCalendar=hourly" in timer
           assert "OVH_RETENTION_DETAIL_ROWS_PRUNED" in worker
           for term in ("NON_OWNER_NOT_DENIED","DB_PERMISSIONS_UNSAFE",
