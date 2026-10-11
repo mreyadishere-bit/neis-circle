@@ -1,0 +1,80 @@
+name: OVH Auth Studio V4 Full Profiles
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/auth-studio-all-profiles-20261011]
+    paths:
+      - 'scripts/main-admin-auth-studio-v4.js'
+      - 'scripts/ops/ovh-deploy-auth-studio-v4.py'
+      - '.github/workflows/ovh-auth-studio-v4.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-auth-studio-v4
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static checks and ensure select-all behavior
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-auth-studio-v4.js
+          python3 -m py_compile scripts/ops/ovh-deploy-auth-studio-v4.py
+          python3 - <<'PY'
+          from pathlib import Path
+          v4=Path('scripts/main-admin-auth-studio-v4.js').read_text()
+          v3=Path('scripts/main-admin-auth-studio-v3.js').read_text()
+          dep=Path('scripts/ops/ovh-deploy-auth-studio-v4.py').read_text()
+          assert "['profile','Profile']" in v4
+          assert "dataset.stGoProfile=u.user_id" in v4
+          assert "routeTo('profile/'+button.dataset.stGoProfile)" in v4
+          assert "const checked" not in v4 or "function checked(u)" in v4
+          assert "selectAllMatching=true" in v4
+          assert "excludedIds" in v4 and "selectedRows" in v4
+          assert "countSelected()" in v4
+          assert "getEveryMatching" in v4 and "LIMIT_FULL_EXPORT=10000" in v4
+          assert "const users=await getSelectedAccounts()" in v4
+          assert "case 'copy-ids':void copySelectedUids()" in v4
+          assert "case 'next':if(!viewAll" in v4
+          assert "naStudioPageSize" in v4 and "'All'" not in v4
+          assert "selected.clear();void load(true)}break" not in v4
+          assert "--st-bg:var(--card)" in v4 and "--st-fg:var(--ink)" in v4
+          assert "if(!isOwner())return" in v4
+          assert "RPC_ACCESS_NOT_LOCKED" in dep and "NON_OWNER_NOT_DENIED" in dep
+          assert "AUTH_STUDIO_V4_ROLLBACK=FRONTEND_RESTORED" in dep
+          assert "authstudio=20261011v4" in dep
+          print("AUTH_STUDIO_V4_STATIC_CHECK=PASS")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy full account selection to current OVH frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/auth-studio-v4-20261011
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v4.js "$target:$stage/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-auth-studio-v4.py
