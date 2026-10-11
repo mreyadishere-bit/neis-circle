@@ -372,6 +372,43 @@
     }catch(e){if(gen===detailsGeneration&&pane.isConnected)pane.replaceChildren(
       el('p','st-sub','Could not load details: '+(e?.message||'Retry')))}
   }
+  async function setAccountBlock(id,block){
+    if(!isOwner()||!id||id===MAIN_ADMIN||moderationPending.has(id))return;
+    const row=(data?.users||[]).find(u=>u.user_id===id);
+    if(!row)return;
+    const target=row.display_name||row.email||'this account';
+    let reason=null;
+    if(block){
+      const input=window.prompt('Reason for blocking '+target+' (recorded in moderation log):',
+        'Violation of community rules');
+      if(input===null)return;
+      reason=input.trim().slice(0,200);
+      if(!reason){message('A block reason is required.');return}
+    }
+    if(!window.confirm((block?'Block ':'Unblock ')+target+
+      (block?'\nThe student will lose access to NEIS Circle.':'\nRestore access to this account?')))return;
+    moderationPending.add(id);
+    render();message((block?'Blocking ':'Unblocking ')+target+'…');
+    try{
+      const result=await sb.rpc('main_admin_auth_set_block',
+        {p_user_id:id,p_block:block,p_reason:reason});
+      if(result.error)throw result.error;
+      if(!isOwner())return;
+      if(!!result.data?.blocked===!!block){
+        clearSelection();overview=null;message(target+(block?' blocked.':' unblocked.'));
+        await load(true);
+      }else{
+        message('Account status still restricted by a separate authentication setting. Review in Studio.');
+        overview=null;await load(true);
+      }
+    }catch(error){
+      message('Unable to '+(block?'block':'unblock')+' account: '+
+        (error?.message||'Please retry.'));
+    }finally{
+      moderationPending.delete(id);
+      if(document.getElementById(rootId)&&isOwner())render();
+    }
+  }
   function copyText(text){
     if(!text)return;
     if(navigator.clipboard?.writeText){
@@ -484,6 +521,10 @@
     if(!isOwner())return;
     const root=e.target?.closest?.('#neisAuthStudio');if(!root)return;
     const button=e.target?.closest?.('button');if(!button)return;
+    if(button.dataset.stModerate){
+      void setAccountBlock(button.dataset.stModerate,button.dataset.stBlock==='true');
+      return;
+    }
     if(button.dataset.stDetail){void showDetail(button.dataset.stDetail);return}
     // Profile uses a native #/profile/<uid> link, handled by app hash routing.
     if(button.dataset.stCopyUid){copyText(button.dataset.stCopyUid);return}
