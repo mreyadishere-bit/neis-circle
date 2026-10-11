@@ -1,15 +1,6 @@
 name: OVH Usage Forecast V2
 on:
   workflow_dispatch:
-  push:
-    branches: [main, fix/ovh-usage-forecast-20261011]
-    paths:
-      - 'scripts/ops/neis-private-monitor.service'
-      - 'scripts/ops/ovh-primary-admin-usage-sample.py'
-      - 'scripts/server-usage-admin-v1.js'
-      - 'scripts/ops/ovh-deploy-usage-forecast-v2.py'
-      - 'supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql'
-      - '.github/workflows/ovh-usage-forecast-v2.yml'
 permissions:
   contents: read
 concurrency:
