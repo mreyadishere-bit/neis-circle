@@ -1,0 +1,85 @@
+name: OVH Usage Forecast V2
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/ovh-usage-forecast-20261011]
+    paths:
+      - 'scripts/ops/neis-private-monitor.service'
+      - 'scripts/ops/ovh-primary-admin-usage-sample.py'
+      - 'scripts/server-usage-admin-v1.js'
+      - 'scripts/ops/ovh-deploy-usage-forecast-v2.py'
+      - 'supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql'
+      - '.github/workflows/ovh-usage-forecast-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-usage-forecast-v2
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax, security guard and chart regression tests
+        run: |
+          set -euo pipefail
+          node --check scripts/server-usage-admin-v1.js
+          python3 -m py_compile scripts/ops/ovh-primary-admin-usage-sample.py scripts/ops/ovh-deploy-usage-forecast-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path('supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql').read_text()
+          agent=Path('scripts/ops/ovh-primary-admin-usage-sample.py').read_text()
+          monitor=Path('scripts/ops/neis-private-monitor.service').read_text()
+          ui=Path('scripts/server-usage-admin-v1.js').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-usage-forecast-v2.py').read_text()
+          for token in ('auth.uid()', "u.id='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid",
+                        "p.role='admin'",'account_status','security definer',
+                        'revoke all on function public.main_admin_server_usage() from public, anon',
+                        'date_bin','interval \\'30 days\\''):
+            assert token in sql,token
+          assert "interval '30 days'" in agent
+          assert 'sudo","-n","/usr/bin/docker","stats"' in agent
+          assert 'NoNewPrivileges=no' in monitor and 'CapabilityBoundingSet=' not in monitor
+          for token in ('Capacity Forecast','disk_used_gib','DiskETA','estimateTrend',
+                        'neisUsageAlerts','server-usage-admin-v1.js'):
+            assert token in ui or token in deploy,token
+          for token in ('ANONYMOUS_RPC_NOT_DENIED','DOCKER_DATA_UNAVAILABLE',
+                        'SAMPLE_MISSING_DOCKER_OR_DB','FRONTEND_ROLLBACK',
+                        'SERVER_USAGE_DEPLOY','ORIGINAL_ROUTE_MISSING'):
+            assert token in deploy or token=='SERVER_USAGE_DEPLOY',token
+          print("FORECAST_V2_STATIC_GUARDS=PASS")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy safe forecasts to OVH VPS
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/server-usage-forecast-20261011
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/neis-private-monitor.service "$target:$stage/monitor.service"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261011180000_ovh_usage_capacity_forecast.sql "$target:$stage/migration.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-primary-admin-usage-sample.py "$target:$stage/agent.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/server-usage-admin-v1.js "$target:$stage/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-usage-forecast-v2.py
