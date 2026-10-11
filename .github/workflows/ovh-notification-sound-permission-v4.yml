@@ -1,16 +1,6 @@
-name: OVH Notification Sound and Permissions V4
+name: OVH Previous Notification V4 (Manual Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-chime-v4.py'
-      - 'scripts/ops/ovh-rollback-notification-chime-v4.py'
-      - 'scripts/ops/ovh-deploy-notification-chime-v4.py'
-      - '.github/workflows/ovh-notification-sound-permission-v4.yml'
 permissions:
   contents: read
 concurrency:
