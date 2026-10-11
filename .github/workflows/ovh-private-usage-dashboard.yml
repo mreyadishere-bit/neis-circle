@@ -1,0 +1,67 @@
+name: OVH Private Usage Dashboard
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/private-vps-usage-dashboard-20261011]
+    paths:
+      - 'scripts/ops/ovh-private-usage-dashboard.py'
+      - 'scripts/ops/ovh-install-private-usage-dashboard.sh'
+      - 'scripts/ops/neis-private-monitor.service'
+      - '.github/workflows/ovh-private-usage-dashboard.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-private-monitor-deploy
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check syntax and loopback-only behavior
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-private-usage-dashboard.py
+          bash -n scripts/ops/ovh-install-private-usage-dashboard.sh
+          grep -q '^HOST = "127.0.0.1"$' scripts/ops/ovh-private-usage-dashboard.py
+          python3 -B scripts/ops/ovh-private-usage-dashboard.py &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 12); do
+            if curl -fsS http://127.0.0.1:8765/health > /dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8765/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["ready"]'
+          curl -fsS http://127.0.0.1:8765/api/metrics | python3 -c 'import json,sys; x=json.load(sys.stdin); assert 0<=x["memory"]["percent"]<=100 and x["docker"]["running"] is None'
+          curl -fsS http://127.0.0.1:8765/ | grep -q 'Server overview'
+          test "$(curl -s -o /dev/null -w '%{http_code}' --header 'Host: remote.example' http://127.0.0.1:8765/health)" = 403
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Install private dashboard on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'test -d /home/ubuntu && test -x /usr/bin/python3'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-private-usage-dashboard.py "ubuntu@$OVH_HOST:/home/ubuntu/neis-private-monitor-20261011.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/neis-private-monitor.service "ubuntu@$OVH_HOST:/home/ubuntu/neis-private-monitor-20261011.service"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -s' < scripts/ops/ovh-install-private-usage-dashboard.sh
