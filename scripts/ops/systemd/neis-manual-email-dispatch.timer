@@ -1,0 +1,12 @@
+[Unit]
+Description=Process manually queued NEIS Circle emails without automatic broadcasts
+
+[Timer]
+OnBootSec=90sec
+OnUnitInactiveSec=2min
+AccuracySec=15sec
+Unit=neis-manual-email-dispatch.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target

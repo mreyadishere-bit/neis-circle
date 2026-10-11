@@ -1,0 +1,112 @@
+name: OVH Manual Email Dispatcher
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/ovh-manual-email-dispatcher-20261011]
+    paths:
+      - 'scripts/ops/ovh-manual-email-dispatch.py'
+      - 'scripts/ops/ovh-deploy-manual-email-dispatcher.py'
+      - 'scripts/ops/systemd/neis-manual-email-dispatch.service'
+      - 'scripts/ops/systemd/neis-manual-email-dispatch.timer'
+      - '.github/workflows/ovh-manual-email-dispatcher.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-manual-email-dispatcher
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and manual-only safeguards
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-manual-email-dispatch.py scripts/ops/ovh-deploy-manual-email-dispatcher.py
+          python3 - <<'PY'
+          from pathlib import Path
+          w=Path('scripts/ops/ovh-manual-email-dispatch.py').read_text()
+          d=Path('scripts/ops/ovh-deploy-manual-email-dispatcher.py').read_text()
+          svc=Path('scripts/ops/systemd/neis-manual-email-dispatch.service').read_text()
+          timer=Path('scripts/ops/systemd/neis-manual-email-dispatch.timer').read_text()
+          for token in ("manual-content:%","UNEXPECTED_NONMANUAL_JOBS",
+                        "AUTO_EMAIL_GUARD_MISSING","EMAIL_WORKER_SECRET",
+                        "flock(lock","MANUAL_MAIL_ACCEPTED_BY_PROVIDER"):
+            assert token in w,token
+          assert "OnUnitInactiveSec=2min" in timer
+          assert "User=ubuntu" in svc
+          assert "invalid-audit-secret" in d
+          assert "FIRST_BATCH_FAILED" in d
+          assert "OVH_EMAIL_AUTO_NOTIFICATIONS=STILL_DISABLED" in d
+          assert "No new recipient creation" in w
+          assert "smtp/email" not in w
+          print('MANUAL_EMAIL_DISPATCHER_STATIC=PASS')
+          PY
+  dryrun:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage files and check server readiness without sending
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          dst=/home/ubuntu/neis-backups/manual-email-dispatch-20261011
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-manual-email-dispatch.py "$target:$dst/worker.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/systemd/neis-manual-email-dispatch.service "$target:$dst/service.unit"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/systemd/neis-manual-email-dispatch.timer "$target:$dst/timer.unit"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' <<'PY'
+          from pathlib import Path
+          import subprocess
+          stage=Path("/home/ubuntu/neis-backups/manual-email-dispatch-20261011")
+          assert all((stage/f).is_file() for f in ("worker.py","service.unit","timer.unit"))
+          subprocess.run(["python3","-m","py_compile",str(stage/"worker.py")],check=True)
+          s=(stage/"worker.py").read_text()
+          assert "manual-content:%" in s and "UNEXPECTED_NONMANUAL_JOBS" in s
+          assert "invalid-audit-secret" not in s
+          print("OVH_MAIL_DRYRUN=SAFE_NO_MAIL_SENT")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dryrun
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          test -n "$HOST"
+      - name: Install limited timer and verify provider acceptance on first original queue batch
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-deploy-manual-email-dispatcher.py
