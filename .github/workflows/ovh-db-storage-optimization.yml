@@ -1,0 +1,122 @@
+name: OVH Database Storage Optimization
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/ovh-storage-optimization-v1-20261011]
+    paths:
+      - 'supabase/migrations/20261011225000_ovh_database_retention_and_breakdown.sql'
+      - 'scripts/main-admin-db-storage-v1.js'
+      - 'scripts/ops/ovh-db-retention-worker.py'
+      - 'scripts/ops/ovh-db-optimization-dryrun.py'
+      - 'scripts/ops/ovh-deploy-db-optimization-v1.py'
+      - 'scripts/ops/systemd/neis-db-retention.service'
+      - 'scripts/ops/systemd/neis-db-retention.timer'
+      - '.github/workflows/ovh-db-storage-optimization.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-db-storage-optimization
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate SQL contracts, client code and deploy tools
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-db-storage-v1.js
+          python3 -m py_compile scripts/ops/ovh-db-retention-worker.py scripts/ops/ovh-db-optimization-dryrun.py scripts/ops/ovh-deploy-db-optimization-v1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path('supabase/migrations/20261011225000_ovh_database_retention_and_breakdown.sql').read_text()
+          ui=Path('scripts/main-admin-db-storage-v1.js').read_text()
+          worker=Path('scripts/ops/ovh-db-retention-worker.py').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-db-optimization-v1.py').read_text()
+          timer=Path('scripts/ops/systemd/neis-db-retention.timer').read_text()
+          for term in ("24 hours","90 days","30 days","status='sent'",
+                       "processed_at is not null","session_user <> 'postgres'",
+                       "neis_private_storage_daily","neis_private_usage_daily",
+                       "pg_total_relation_size","neis_private_server_usage_samples",
+                       "neis_maintenance_storage_retention",
+                       "main_admin_database_storage",
+                       "auth.role()<>'authenticated'",
+                       "grant execute on function public.main_admin_database_storage() to authenticated",
+                       "revoke all on function public.neis_maintenance_storage_retention()"):
+            assert term in sql,term
+          for term in ("OWNER","isAdmin","main_admin_database_storage",
+                       "Database Storage Breakdown","Daily database history",
+                       "index_bytes","daily_change_bytes","--","owner()"):
+            assert term in ui,term
+          assert "html+shell" in ui and "textContent" in ui
+          assert "OnCalendar=hourly" in timer
+          assert "OVH_RETENTION_DETAIL_ROWS_PRUNED" in worker
+          for term in ("NON_OWNER_NOT_DENIED","DB_PERMISSIONS_UNSAFE",
+                       "FRONTEND=ROLLED_BACK","dbstorage=20261011v1",
+                       "MAINTENANCE_TIMER_NOT_ENABLED"):
+            assert term in deploy,term
+          print('DB_OPTIMIZATION_STATIC=PASS')
+          PY
+  dryrun:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Check migration against live OVH in a rollback-only transaction
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/db-optimization-20261011-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261011225000_ovh_database_retention_and_breakdown.sql "$target:$stage/migration.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-db-optimization-dryrun.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dryrun
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Install hourly retention and live main-admin storage dashboard
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/db-optimization-20261011-v1
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-db-storage-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-db-retention-worker.py "$target:$stage/worker.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/systemd/neis-db-retention.service "$target:$stage/service.unit"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/systemd/neis-db-retention.timer "$target:$stage/timer.unit"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-db-optimization-v1.py
