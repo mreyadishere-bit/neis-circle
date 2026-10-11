@@ -7,7 +7,7 @@
   if(typeof admin!=='function')return;
   const rootId='neisAuthStudio';
   const $=(suffix)=>document.getElementById('naStudio'+suffix);
-  let currentPage=0, pageSize=20, search='', searchField='all', filter='all';
+  let currentPage=0, pageSize=20, viewAll=false, search='', searchField='all', filter='all';
   let provider='all', sort='created_desc', busy=false, pending=false, nonce=0, loadedRoot=null;
   let overview=null, data=null, detailsId=null, detailsGeneration=0;
   const selected=new Set();
@@ -145,6 +145,7 @@
     '<div class="st-foot"><div class="st-meta"><span id="naStudioPage">Loading…</span>'+
       '<span id="naStudioSummary">Self-hosted Auth</span></div>'+
       '<div style="display:flex;align-items:center;gap:8px"><span id="naStudioToast" class="st-toast" aria-live="polite"></span>'+
+        '<label>Rows <select id="naStudioPageSize" aria-label="Rows per page"><option value="20">20</option><option value="50">50</option><option value="all">All</option></select></label>'+
         '<button class="st-btn" type="button" data-st-action="prev">← Previous</button>'+
         '<button class="st-btn" type="button" data-st-action="next">Next →</button></div></div>'+
     '<div id="naStudioDetail" class="st-detail" hidden></div>'+
@@ -243,16 +244,16 @@
       for(const [key] of shown())addCell(tr,key,u);
       body.appendChild(tr);
     }
-    const total=Number(data?.total)||0,offset=currentPage*pageSize;
+    const total=Number(data?.total)||0,offset=viewAll?0:currentPage*pageSize;
     const label=$('Page');if(label)label.textContent=total?
-      (offset+1)+'–'+(offset+users.length)+' of '+total+' users':'0 users';
+      (viewAll?'All '+users.length+' of '+total+' users':(offset+1)+'–'+(offset+users.length)+' of '+total+' users'):'0 users';
     const summary=$('Summary');if(summary&&overview)summary.textContent=
       String(overview.confirmed||0)+' confirmed · '+
       String(overview.google||0)+' Google · '+String(overview.signed_in_30d||0)+' signed in (30d)';
     const prev=document.querySelector('#neisAuthStudio [data-st-action="prev"]');
     const next=document.querySelector('#neisAuthStudio [data-st-action="next"]');
-    if(prev)prev.disabled=currentPage===0;
-    if(next)next.disabled=offset+users.length>=total;
+    if(prev)prev.disabled=viewAll||currentPage===0;
+    if(next)next.disabled=viewAll||offset+users.length>=total;
     renderSelection();
   }
   function renderSelection(){
@@ -269,16 +270,17 @@
     const tag=$('Status');if(tag)tag.textContent='● Loading…';
     showColumns();
     try{
-      const requests=[sb.rpc('main_admin_auth_users',{
-        p_search:search,p_filter:filter,p_sort:sort,p_limit:pageSize,
-        p_offset:currentPage*pageSize,p_search_field:searchField,p_provider:provider
-      })];
+      const requests=[sb.rpc('main_admin_auth_users',argsAt(viewAll?0:currentPage*pageSize,viewAll?50:pageSize))];
       if(!overview||force)requests.push(sb.rpc('main_admin_auth_overview'));
       const responses=await Promise.all(requests);
       if(responses[0].error)throw responses[0].error;
       if(responses[1]?.error)throw responses[1].error;
       if(!root.isConnected||!isOwner()||seq!==nonce)return;
       data=responses[0].data;if(responses[1])overview=responses[1].data;
+      if(viewAll&&Number(data?.total)>50){
+        data={...data,users:await getEveryMatching(Number(data.total),2000)};
+      }
+      if(!root.isConnected||!isOwner()||seq!==nonce)return;
       if(tag)tag.textContent='● OVH connected';
       render();
     }catch(e){
@@ -444,6 +446,10 @@
       }else clearSelection();
       render();return;
     }
+    if(e.target?.id==='naStudioPageSize'){
+      viewAll=e.target.value==='all';pageSize=e.target.value==='50'?50:20;
+      currentPage=0;clearSelection();void load(true);return;
+    }
     if(['naStudioField','naStudioFilter','naStudioProvider','naStudioSort'].includes(e.target?.id))
       newQuery();
   });
@@ -465,8 +471,8 @@
     }
     switch(button.dataset.stAction){
       case 'refresh':overview=null;void load(true);break;
-      case 'prev':if(currentPage>0){currentPage--;void load(true)}break;
-      case 'next':if((currentPage+1)*pageSize<(Number(data?.total)||0)){
+      case 'prev':if(!viewAll&&currentPage>0){currentPage--;void load(true)}break;
+      case 'next':if(!viewAll&&(currentPage+1)*pageSize<(Number(data?.total)||0)){
         currentPage++;void load(true)}break;
       case 'clear-selection':clearSelection();render();break;
       case 'copy-ids':void copySelectedUids();break;
