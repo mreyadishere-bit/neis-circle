@@ -133,7 +133,7 @@ store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:tr
 
 // The notification badge remains intact.
 assert.equal(context.document.title,'(8) NEIS Circle');
-assert.equal(nt.snapshot().version,'174.11');
+assert.equal(nt.snapshot().version,'174.12');
 // Check the same incoming chime pathway as live notifications, not the
 // separate Test Sound which intentionally bypasses sound preferences.
 store.set('neis-local-notification-sound-v1:synthetic-test-id','off');
@@ -151,4 +151,27 @@ store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:fa
 assert.equal(nt.soundEnabledOnThisDevice(),true);
 assert.match(pwa,/data-test-incoming-alert/);
 assert.match(pwa,/NEISNotificationRuntime\?\.setDeviceSoundEnabled/);
+// Incoming chat events must chime without waiting for notifications-table
+// Realtime or a badge refresh; ignore self-messages and duplicates.
+const chatSource=fs.readFileSync('scripts/05-social.js','utf8');
+assert.match(chatSource,/notificationRuntime\.signalIncomingMessage\?\.\(\{\s*id:incoming\.id,senderId:incoming\.sender_id,scope:'direct'/);
+assert.match(chatSource,/notificationRuntime\.signalIncomingMessage\?\.\(\{\s*id:incoming\.id,senderId,scope:'circle'/);
+assert.equal(nt.snapshot().version,'174.12');
+const beforeRealDm=audible;
+await new Promise(resolve=>setTimeout(resolve,1350));
+assert.equal(await nt.signalIncomingMessage({id:'real-incoming-id',senderId:'other-student',scope:'direct'}),true);
+assert.ok(audible>beforeRealDm,'actual incoming DM must play a chime');
+assert.ok(nt.snapshot().lastIncomingMessageSignalAt>0);
+const afterRealDm=audible;
+assert.equal(await nt.signalIncomingMessage({id:'real-incoming-id',senderId:'other-student',scope:'direct'}),false);
+assert.equal(audible,afterRealDm,'duplicate Realtime message must not chime again');
+assert.equal(await nt.signalIncomingMessage({id:'self-sent',senderId:'synthetic-test-id',scope:'direct'}),false);
+assert.equal(audible,afterRealDm,'own messages never chime');
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({circle_messages:false}));
+await new Promise(resolve=>setTimeout(resolve,1350));
+assert.equal(await nt.signalIncomingMessage({id:'muted-circle',senderId:'other-student',scope:'circle'}),false);
+assert.equal(audible,afterRealDm,'muted category does not ring');
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({circle_messages:true}));
+assert.equal(await nt.signalIncomingMessage({id:'circle-message',senderId:'other-student',scope:'circle'}),true);
+assert.ok(audible>afterRealDm,'incoming Circle message must ring when enabled');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');

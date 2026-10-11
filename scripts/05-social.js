@@ -907,6 +907,15 @@ async function handleMessageRealtime(payload){
   if(!visible&&candidateConversationId&&event!=='DELETE'){
     visible=await hydrateConversation(candidateConversationId);
   }
+  // Chat Realtime can precede or outlive the notifications-table channel.
+  // Ring directly for genuine incoming inserts, even if hydration already
+  // fetched this message and messageState decides no UI patch is necessary.
+  if(event==='INSERT'&&visible&&incoming.id&&incoming.sender_id&&
+      !same(incoming.sender_id,authUser?.id)){
+    Promise.resolve(notificationRuntime.signalIncomingMessage?.({
+      id:incoming.id,senderId:incoming.sender_id,scope:'direct'
+    })).catch(()=>{});
+  }
   const result=messageState.applyDirectMessage(state,payload,{visible});
   if(!result.changed)return;
   const {id,conversationId}=result;
@@ -936,6 +945,12 @@ async function handleCircleMessageRealtime(payload){
   const allowed=state.isAdmin||(state.circleMembers||[]).some(member=>same(member.circle_id,circleId)&&same(member.user_id,authUser?.id)&&['active','muted'].includes(member.status));
   if(!allowed)return;
   const senderId=incoming.sender_id||previous?.sender_id;
+  if(event==='INSERT'&&incoming.id&&senderId&&
+      !same(senderId,authUser?.id)){
+    Promise.resolve(notificationRuntime.signalIncomingMessage?.({
+      id:incoming.id,senderId,scope:'circle'
+    })).catch(()=>{});
+  }
   const profile=event==='DELETE'?previous?.profile:(previous?.profile||(senderId?profileData(senderId):null));
   const result=messageState.applyCircleMessage(state,payload,{allowed,profile});
   if(!result.changed)return;

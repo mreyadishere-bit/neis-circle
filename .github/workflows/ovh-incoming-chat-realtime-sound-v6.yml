@@ -1,0 +1,113 @@
+name: OVH Incoming Chat Realtime Sound V6
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/social/notifications-v174.js'
+      - 'scripts/05-social.js'
+      - 'scripts/pwa-install-v117.js'
+      - 'neis-pwa-sw.js'
+      - 'scripts/ops/ovh-deploy-notification-chime-v6.py'
+      - 'scripts/ops/ovh-rollback-notification-chime-v6.py'
+      - 'scripts/ops/ovh-deploy-notification-chime-v6.py'
+      - '.github/workflows/ovh-incoming-chat-realtime-sound-v6.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-notification-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 19
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify sound semantics and assets
+        run: |
+          set -euo pipefail
+          node --check scripts/social/notifications-v174.js
+          node --check scripts/05-social.js
+          node --check scripts/pwa-install-v117.js
+          node --check neis-pwa-sw.js
+          node qa/notification-sound-device.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-notification-chime-v6.py scripts/ops/ovh-rollback-notification-chime-v6.py scripts/ops/ovh-deploy-notification-chime-v6.py
+      - name: Configure secured SSH credentials
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage notification assets privately on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/notification-chime-v6-20261011'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v6-20261011/notifications-v174.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v6-20261011/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v6-20261011/pwa-install-v117.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes neis-pwa-sw.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v6-20261011/neis-pwa-sw.js"
+      - name: Deploy isolated notification assets without touching Auth REST or data
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-deploy-notification-chime-v6.py
+      - name: Check live browser assets plus Google and REST routes
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          base='https://neiscircle.site'
+          import time
+          def fetch(path,expected=None):
+           last=None
+           for attempt in range(45):
+            try:
+             r=urllib.request.urlopen(urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'}),timeout=10)
+             text=r.read().decode('utf8','replace')
+             if expected is None or expected in text:return text
+             last='content_not_updated'
+            except Exception as exc:
+             last=type(exc).__name__
+            time.sleep(2)
+           raise AssertionError('External site did not become ready: '+str(last))
+          html=fetch('/',expected='&sound=v6-20261011')
+          sound=fetch('/scripts/social/notifications-v174.js?notification-sound=20261011')
+          social=fetch('/scripts/05-social.js?incoming-chime=20261011')
+          pwa=fetch('/scripts/pwa-install-v117.js?notification-sound=20261011')
+          sw=fetch('/neis-pwa-sw.js?v=13')
+          assert '&sound=v6-20261011' in html
+          assert 'signalIncomingMessage' in sound and 'lastIncomingMessageSignalAt' in sound
+          assert "scope:'direct'" in social and "scope:'circle'" in social
+          assert 'data-test-incoming-alert' in pwa and 'neis-local-notification-sound-v1' in pwa
+          assert 'https://supabase.neiscircle.site/functions/v1/refresh-web-push-subscription' in sw
+          assert 'neis-pwa-ovh-v13' in sw
+          print('NOTIFICATION_ASSETS_EXTERNAL=PASS')
+          api='https://supabase.neiscircle.site'
+          for path,expected in [('/auth/v1/settings',200),('/rest/v1/profiles?select=id&limit=0',200),('/',401)]:
+           req=urllib.request.Request(api+path,headers={'Origin':base})
+           try:r=urllib.request.urlopen(req,timeout=15)
+           except urllib.error.HTTPError as e:r=e
+           with r:
+            good=r.status==expected or (expected==200 and r.status==206)
+            if path=='/':good=good and r.headers.get('WWW-Authenticate','').lower().startswith('basic')
+            assert good
+          print('NOTIFICATION_RELEASE_PRODUCTION_SMOKE=PASS')
+          PY
+      - name: Roll back sound assets only if deployment or tests failed
+        if: failure()
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -s ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-rollback-notification-chime-v6.py
+          fi
