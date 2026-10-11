@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+import re
 import urllib.request
 
 URL="http://127.0.0.1:8765/api/metrics"
@@ -36,6 +37,39 @@ def main():
             "memory":str(s.get("memory",""))[:64],
         } for s in docker.get("services",[])[:50] if isinstance(s,dict)]
     }
+    # Use the already approved server Docker CLI as a fallback if systemd's
+    # private monitor cannot elevate. No containers or DB rows are modified.
+    if allowed["docker"]["error"] or allowed["docker"]["running"] is None:
+        try:
+            cmd=subprocess.run(["sudo","-n","/usr/bin/docker","ps","--format","{{.Names}}|{{.Status}}"],
+                               capture_output=True,text=True,timeout=8,check=True)
+            stats=subprocess.run(["sudo","-n","/usr/bin/docker","stats","--no-stream",
+                                  "--format","{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}"],
+                                 capture_output=True,text=True,timeout=12,check=True)
+            states=dict(line.split("|",1) for line in cmd.stdout.splitlines() if "|" in line)
+            services=[]
+            for line in stats.stdout.splitlines():
+                parts=line.split("|",2)
+                if len(parts)!=3 or not parts[0].startswith(("neis-","supabase-")):
+                    continue
+                name,cpu,mem=parts
+                services.append({"name":name[:80],"status":states.get(name,"Unknown")[:80],
+                                 "cpu":cpu[:24],"memory":mem[:64]})
+            allowed["docker"]={"running":len(states),"error":False,
+                              "services":sorted(services,key=lambda item:item["name"])[:50]}
+        except (OSError,subprocess.SubprocessError,ValueError):
+            pass
+    if not isinstance(allowed["database_bytes"],int) or allowed["database_bytes"]<0:
+        try:
+            size=subprocess.run(COMPOSE+["exec","-T","db","psql","-X","-v","ON_ERROR_STOP=1",
+                                       "-U","postgres","-d","postgres","-Atqc",
+                                       "select pg_database_size(current_database())"],
+                                cwd="/home/ubuntu/neis-supabase",capture_output=True,
+                                text=True,timeout=15,check=True)
+            value=size.stdout.strip()
+            allowed["database_bytes"]=int(value) if re.fullmatch(r"\d{1,15}",value) else None
+        except (OSError,ValueError,subprocess.SubprocessError):
+            allowed["database_bytes"]=None
     snapshot=json.dumps(allowed,separators=(",",":"),allow_nan=False)
     # Snapshot is JSON-encoded and quoted as a single SQL string literal.
     quoted=snapshot.replace("'","''")
@@ -43,7 +77,7 @@ def main():
          f"VALUES (now(),'{quoted}'::jsonb) "
          "ON CONFLICT (collected_at) DO NOTHING; "
          "DELETE FROM public.neis_private_server_usage_samples "
-         "WHERE collected_at < now() - interval '48 hours'; "
+         "WHERE collected_at < now() - interval '30 days'; "
          "SELECT 'SERVER_SAMPLER_OK='||count(*) FROM public.neis_private_server_usage_samples;")
     result=subprocess.run(COMPOSE+["exec","-T","db","psql","-X","-v","ON_ERROR_STOP=1",
                                       "-U","postgres","-d","postgres","-Atq"],
