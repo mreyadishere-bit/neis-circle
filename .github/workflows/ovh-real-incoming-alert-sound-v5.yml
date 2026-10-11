@@ -1,16 +1,6 @@
-name: OVH Real Incoming Alert Sound V5
+name: OVH Previous Real Incoming Alert V5 (Manual Only)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/social/notifications-v174.js'
-      - 'scripts/pwa-install-v117.js'
-      - 'neis-pwa-sw.js'
-      - 'scripts/ops/ovh-deploy-notification-chime-v5.py'
-      - 'scripts/ops/ovh-rollback-notification-chime-v5.py'
-      - 'scripts/ops/ovh-deploy-notification-chime-v5.py'
-      - '.github/workflows/ovh-real-incoming-alert-sound-v5.yml'
 permissions:
   contents: read
 concurrency:
