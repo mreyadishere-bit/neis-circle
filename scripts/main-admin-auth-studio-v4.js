@@ -350,22 +350,66 @@
         .catch(()=>message('Clipboard access is unavailable'));
     }else message('Clipboard access is unavailable in this browser');
   }
-  function exportSelected(){
-    const users=(data?.users||[]).filter(u=>selected.has(u.user_id));
-    if(!users.length)return;
-    const headings=['UID','Display name','Email','Phone','Providers','Created at','Last sign in at'];
-    const fields=u=>[u.user_id,u.display_name,u.email,u.phone,(u.providers||[]).join(';'),
-      u.created_at,u.last_sign_in_at];
-    // Excel-safe CSV: prevent spreadsheet formula injection.
-    const cell=v=>{
-      const str=String(v??'').replace(/^[\s]*[=+\-@]/,x=>"'"+x);
-      return '"'+str.replace(/"/g,'""')+'"';
-    };
-    const body=[headings.map(cell).join(','),...users.map(u=>fields(u).map(cell).join(','))].join('\r\n');
-    const blob=new Blob(['\ufeff'+body],{type:'text/csv;charset=utf-8'});
-    const url=URL.createObjectURL(blob);const a=document.createElement('a');
-    a.href=url;a.download='neis-selected-users.csv';document.body.appendChild(a);a.click();a.remove();
-    URL.revokeObjectURL(url);message('Exported '+users.length+' selected users');
+  function argsAt(offset,limit){
+    return {p_search:search,p_filter:filter,p_sort:sort,p_limit:limit,p_offset:offset,
+      p_search_field:searchField,p_provider:provider};
+  }
+  async function getEveryMatching(total,limit){
+    if(total>limit)throw new Error('This operation is limited to '+limit+
+      ' accounts. Narrow the filter to reduce the number.');
+    const output=[];
+    // Server enforces 50 rows per request. Small parallel batches keep OVH load low.
+    for(let start=0;start<total;start+=150){
+      if(!isOwner()||!document.getElementById(rootId))throw new Error('Admin session ended');
+      const offsets=[];
+      for(let off=start;off<Math.min(start+150,total);off+=50)offsets.push(off);
+      const replies=await Promise.all(offsets.map(n=>sb.rpc('main_admin_auth_users',argsAt(n,50))));
+      for(const reply of replies){
+        if(reply.error)throw reply.error;
+        if(Number(reply.data?.total)!==total)throw new Error('User count changed. Refresh and try again.');
+        output.push(...(reply.data?.users||[]));
+      }
+      message('Processing '+Math.min(output.length,total)+' / '+total+' accounts');
+    }
+    if(output.length!==total)throw new Error('The complete account list was not retrieved.');
+    return output;
+  }
+  async function getSelectedAccounts(){
+    if(!selectAllMatching)return [...selectedRows.values()];
+    const all=await getEveryMatching(Number(data?.total)||0,LIMIT_FULL_EXPORT);
+    return all.filter(u=>!excludedIds.has(u.user_id));
+  }
+  async function exportSelected(){
+    if(exporting||!countSelected())return;
+    exporting=true;
+    try{
+      const users=await getSelectedAccounts();
+      if(!isOwner())return;
+      const headings=['UID','Display name','Email','Phone','Providers','Created at','Last sign in at'];
+      const fields=u=>[u.user_id,u.display_name,u.email,u.phone,(u.providers||[]).join(';'),
+        u.created_at,u.last_sign_in_at];
+      // Excel formula injection protection.
+      const cell=v=>{
+        const str=String(v??'').replace(/^[\s]*[=+\-@]/,x=>"'"+x);
+        return '"'+str.replace(/"/g,'""')+'"';
+      };
+      const body=[headings.map(cell).join(','),...users.map(u=>fields(u).map(cell).join(','))].join('\r\n');
+      const blob=new Blob(['\ufeff'+body],{type:'text/csv;charset=utf-8'});
+      const url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='neis-selected-users.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1200);
+      message('Exported '+users.length+' selected accounts');
+    }catch(e){message('Export could not finish: '+(e?.message||'Retry'))}
+    finally{exporting=false}
+  }
+  async function copySelectedUids(){
+    if(exporting||!countSelected())return;
+    exporting=true;
+    try{
+      const users=await getSelectedAccounts();
+      if(isOwner())copyText(users.map(u=>u.user_id).join('\n'));
+    }catch(e){message('Could not copy UIDs: '+(e?.message||'Retry'))}
+    finally{exporting=false}
   }
   let searchTimer;
   document.addEventListener('input',e=>{
@@ -425,8 +469,8 @@
       case 'next':if((currentPage+1)*pageSize<(Number(data?.total)||0)){
         currentPage++;void load(true)}break;
       case 'clear-selection':clearSelection();render();break;
-      case 'copy-ids':copyText([...selected].join('\n'));break;
-      case 'export-selected':exportSelected();break;
+      case 'copy-ids':void copySelectedUids();break;
+      case 'export-selected':void exportSelected();break;
       case 'copy-invite':copyText('https://neiscircle.site/');break;
       case 'close-detail':detailsId=null;detailsGeneration++;
         if($('Detail')){$('Detail').hidden=true;$('Detail').replaceChildren()}break;
