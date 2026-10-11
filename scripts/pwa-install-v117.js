@@ -552,19 +552,15 @@
   }
 
   async function showNotificationOnboarding(){
-    if(!('Notification' in window))return;
+    if(!('Notification' in window)||Notification.permission==='granted')return;
+    // Permission is a browser-level choice, independent from background Push
+    // delivery and the Web Audio autoplay state. Never nag an already
+    // permission-granted device just because VAPID, Push or audio is unhealthy.
     let session=null;
     try{session=(await sb?.auth?.getSession?.())?.data?.session||null}catch(_){}
     if(!session?.user)return;
 
-    let mode='permission';
-    if(Notification.permission==='granted'){
-      const healthy=await ensurePushHealth(true).catch(()=>false);
-      if(!healthy)mode='push-health';
-      else if(window.NEISNotificationRuntime?.soundEnabledOnThisDevice?.()===false)mode='sound-muted';
-      else if(window.NEISNotificationRuntime?.snapshot?.()?.soundUnlocked!==true)mode='sound-check';
-      else return;
-    }
+    const mode='permission';
     if(notificationOnboardingShown||typeof openModal!=='function')return;
     if(document.querySelector('#modalRoot .modal')){
       if(notificationPromptRetries++<10)scheduleNotificationOnboarding(1700);
@@ -631,6 +627,10 @@
   }
 
   function scheduleNotificationOnboarding(delay=700){
+    if(!('Notification' in window)||Notification.permission==='granted'){
+      clearTimeout(notificationOnboardingTimer);
+      return;
+    }
     if(notificationOnboardingShown)return;
     clearTimeout(notificationOnboardingTimer);
     notificationOnboardingTimer=setTimeout(()=>showNotificationOnboarding().catch(()=>{}),delay);
