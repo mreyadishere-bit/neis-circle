@@ -1,0 +1,485 @@
+/* Supabase Studio-inspired identity browser, scoped to main admin and OVH. */
+(()=>{
+  'use strict';
+  const MAIN_ADMIN='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
+  const isOwner=()=>typeof authUser!=='undefined'&&authUser?.id===MAIN_ADMIN&&
+    typeof state!=='undefined'&&state?.isAdmin===true;
+  if(typeof admin!=='function')return;
+  const rootId='neisAuthStudio';
+  const $=(suffix)=>document.getElementById('naStudio'+suffix);
+  let currentPage=0, pageSize=20, viewAll=false, search='', searchField='all', filter='all';
+  let provider='all', sort='created_desc', busy=false, pending=false, nonce=0, loadedRoot=null;
+  let overview=null, data=null, detailsId=null, detailsGeneration=0;
+  const selected=new Set();
+  const selectedRows=new Map();
+  let selectAllMatching=false;
+  const excludedIds=new Set();
+  const LIMIT_FULL_EXPORT=10000;
+  const available=[
+    ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
+    ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
+    ['last_sign_in_at','Last sign in at'],['status','Status'],['branch','Branch'],
+    ['grade','Grade'],['role','Role']
+  ];
+  let columns=new Set(available.map(x=>x[0]));
+  const when=(raw,long=false)=>{
+    if(!raw)return '—';
+    const d=new Date(raw);
+    return Number.isNaN(d.getTime())?'—':long?d.toString():d.toLocaleString(undefined,
+      {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  };
+  const el=(tag,className='',txt)=>{
+    const node=document.createElement(tag);
+    if(className)node.className=className;
+    if(txt!==undefined)node.textContent=String(txt);
+    return node;
+  };
+  const styles=[
+    '#neisAuthStudio{--st-bg:var(--card);--st-panel:var(--card);--st-border:var(--line);--st-hover:var(--soft);--st-fg:var(--ink);--st-secondary:var(--muted);--st-green:var(--accent);--st-warn:var(--gold);background:var(--st-bg)!important;border:1px solid var(--st-border)!important;color:var(--st-fg)!important;border-radius:14px;padding:0!important;margin:20px 0;overflow:hidden;font-family:inherit}',
+    '#neisAuthStudio *{box-sizing:border-box}',
+    '#neisAuthStudio [hidden]{display:none!important}',
+    '#neisAuthStudio .st-title{padding:21px 25px 16px;border-bottom:1px solid var(--st-border);display:flex;align-items:center;justify-content:space-between;gap:12px}',
+    '#neisAuthStudio h2{font-size:19px;margin:0;color:var(--st-fg);font-weight:650}',
+    '#neisAuthStudio h3{font-size:16px;margin:0}',
+    '#neisAuthStudio .st-sub{font-size:11px;color:var(--st-secondary)}',
+    '#neisAuthStudio .st-actionbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:13px 20px;background:var(--soft);border-bottom:1px solid var(--st-border)}',
+    '#neisAuthStudio input,#neisAuthStudio select,#neisAuthStudio button{font-family:inherit;color:var(--st-fg);font-size:12px}',
+    '#neisAuthStudio input,#neisAuthStudio select,#neisAuthStudio button.st-btn,#neisAuthStudio summary{height:37px;min-width:0;border-radius:8px;border:1px solid var(--line);background:var(--card);padding:0 12px}',
+    '#neisAuthStudio input::placeholder{color:var(--muted)}',
+    '#neisAuthStudio input:focus-visible,#neisAuthStudio select:focus-visible,#neisAuthStudio button:focus-visible,#neisAuthStudio summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}',
+    '#neisAuthStudio button{cursor:pointer}',
+    '#neisAuthStudio button:disabled{opacity:.45;cursor:default}',
+    '#neisAuthStudio .st-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap}',
+    '#neisAuthStudio .st-btn:hover:not(:disabled),#neisAuthStudio summary:hover{background:var(--soft)}',
+    '#neisAuthStudio .st-add{background:var(--accent)!important;border-color:var(--accent)!important;color:var(--card)!important;font-weight:700}',
+    '#neisAuthStudio .st-add:hover{background:color-mix(in srgb,var(--accent) 88%,var(--ink))!important}',
+    '#neisAuthStudio .st-search{display:flex;align-items:center;flex:1 1 360px;min-width:190px;gap:0}',
+    '#neisAuthStudio .st-search select{max-width:148px;border-radius:8px 0 0 8px;border-right:0}',
+    '#neisAuthStudio .st-search input{min-width:100px;flex:1;border-radius:0 8px 8px 0;background:var(--card)}',
+    '#neisAuthStudio .st-push{margin-left:auto}',
+    '#neisAuthStudio select{appearance:auto}',
+    '#neisAuthStudio select option{background:var(--card);color:var(--ink)}',
+    '#neisAuthStudio details{position:relative}',
+    '#neisAuthStudio details summary{display:flex;align-items:center;cursor:pointer;list-style:none;gap:7px;white-space:nowrap;user-select:none}',
+    '#neisAuthStudio details summary::-webkit-details-marker{display:none}',
+    '#neisAuthStudio .st-menu{position:absolute;top:calc(100% + 6px);right:0;z-index:12;min-width:230px;max-height:360px;overflow:auto;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}',
+    '#neisAuthStudio .st-check{display:flex;align-items:center;gap:9px;padding:6px 4px;font-size:12px;cursor:pointer}',
+    '#neisAuthStudio input[type=checkbox]{width:15px;height:15px;min-width:15px;accent-color:var(--accent);cursor:pointer}',
+    '#neisAuthStudio .st-table{width:100%;overflow:auto;max-height:590px;scrollbar-color:var(--muted) var(--soft)}',
+    '#neisAuthStudio table{min-width:980px;width:max-content;max-width:none;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:12px}',
+    '#neisAuthStudio th{background:var(--soft);position:sticky;top:0;z-index:2;text-align:left;white-space:nowrap;font-weight:650;padding:12px 11px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--ink);vertical-align:middle}',
+    '#neisAuthStudio th button{color:inherit;background:transparent;border:0;font-size:12px;padding:0;cursor:pointer;text-align:left}',
+    '#neisAuthStudio td{height:52px;background:var(--card);border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 11px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '#neisAuthStudio tr:hover td{background:var(--st-hover)}',
+    '#neisAuthStudio tr.st-checked td{background:var(--accent2)}',
+    '#neisAuthStudio .st-choose{width:47px;min-width:47px;text-align:center}',
+    '#neisAuthStudio .st-uid{width:316px;min-width:316px}',
+    '#neisAuthStudio .st-name{width:210px;min-width:210px}',
+    '#neisAuthStudio .st-mail{width:310px;min-width:310px}',
+    '#neisAuthStudio .st-phone{width:176px;min-width:176px}',
+    '#neisAuthStudio .st-provider{width:165px;min-width:165px}',
+    '#neisAuthStudio .st-provider-type{width:122px;min-width:122px}',
+    '#neisAuthStudio .st-datetime{width:242px;min-width:242px}',
+    '#neisAuthStudio .st-other{width:145px;min-width:145px}',
+    '#neisAuthStudio .st-link{color:var(--ink);text-align:left;border:0;background:none;padding:0;white-space:nowrap;font-weight:620;max-width:100%;overflow:hidden;text-overflow:ellipsis}',
+    '#neisAuthStudio .st-link:hover{color:var(--accent);text-decoration:underline}',
+    '#neisAuthStudio .st-avatar{width:25px;height:25px;border-radius:50%;display:inline-grid;place-items:center;font-size:11px;font-weight:700;background:var(--violet);color:var(--ink)}',
+    '#neisAuthStudio .st-provider-label{display:inline-flex;align-items:center;gap:7px}',
+    '#neisAuthStudio .st-google{display:inline-grid;place-items:center;width:24px;height:24px;background:var(--soft);border-radius:50%;border:1px solid var(--line);font-size:15px;font-weight:850;color:#4285f4}',
+    '#neisAuthStudio .st-soft{color:var(--st-secondary)}',
+    '#neisAuthStudio .st-state{padding:4px 7px;border-radius:7px;background:var(--accent2);color:var(--accent)}',
+    '#neisAuthStudio .st-state.warn{background:color-mix(in srgb,var(--gold) 17%,var(--card));color:var(--ink)}',
+    '#neisAuthStudio .st-state.bad{background:color-mix(in srgb,var(--coral) 16%,var(--card));color:var(--ink)}',
+    '#neisAuthStudio .st-foot{display:flex;gap:9px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:13px 20px;border-top:1px solid var(--st-border);font-size:11px;color:var(--st-secondary)}',
+    '#neisAuthStudio .st-meta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}',
+    '#neisAuthStudio .st-detail{border-top:1px solid var(--st-border);padding:24px;background:var(--soft)}',
+    '#neisAuthStudio .st-detail-head{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}',
+    '#neisAuthStudio .st-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 0}',
+    '#neisAuthStudio .st-field{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--card);min-width:0}',
+    '#neisAuthStudio dt{color:var(--st-secondary);font-size:11px;margin-bottom:6px}',
+    '#neisAuthStudio dd{margin:0;font-size:12px;word-break:break-word;white-space:normal}',
+    '#neisAuthStudio .st-empty{padding:35px 20px!important;text-align:center;color:var(--muted)}',
+    '#neisAuthStudio .st-toast{font-size:11px;color:var(--accent)}',
+    '@media(max-width:700px){#neisAuthStudio .st-actionbar{padding:12px}#neisAuthStudio .st-title{padding:16px}#neisAuthStudio .st-search{flex-basis:100%}#neisAuthStudio .st-push{margin-left:0}#neisAuthStudio .st-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}',
+    '@media(max-width:460px){#neisAuthStudio .st-search select{max-width:125px}#neisAuthStudio .st-detail-grid{grid-template-columns:1fr}}'
+  ].join('');
+  const shell=
+    '<style id="naStudioCss">'+styles+'</style>'+
+    '<section class="module-card" id="neisAuthStudio" aria-label="OVH Authentication Users">'+
+    '<div class="st-title"><div><h2>Users</h2><div class="st-sub">Authentication · OVH · Main Admin only</div></div>'+
+    '<span id="naStudioStatus" class="st-sub">● Connecting…</span></div>'+
+    '<div class="st-actionbar">'+
+      '<label class="st-search"><select id="naStudioField" aria-label="Search field">'+
+        '<option value="all">Unified search</option><option value="id">User ID</option>'+
+        '<option value="email">Email</option><option value="phone">Phone</option>'+
+        '<option value="name">Display name</option></select>'+
+        '<input type="search" id="naStudioQuery" aria-label="Search users" autocomplete="off" placeholder="Search by user ID, email, phone or name"></label>'+
+      '<select id="naStudioFilter" aria-label="User status filter"><option value="all">All users</option>'+
+        '<option value="confirmed">Confirmed</option><option value="pending">Unconfirmed</option>'+
+        '<option value="blocked">Blocked / inactive</option><option value="admins">Admins</option>'+
+        '<option value="no_profile">Missing profile</option><option value="signed_in_30d">Active in 30 days</option></select>'+
+      '<select id="naStudioProvider" aria-label="Provider"><option value="all">Provider: All</option>'+
+        '<option value="google">Google</option><option value="other">Other providers</option></select>'+
+      '<details id="naStudioColumns"><summary>All columns ▾</summary><div class="st-menu" id="naStudioColumnsMenu"></div></details>'+
+      '<select id="naStudioSort" aria-label="Sort users">'+
+        '<option value="created_desc">↓ Sorted by created at</option>'+
+        '<option value="created_asc">↑ Oldest first</option>'+
+        '<option value="last_sign_in_desc">↓ Last sign in</option>'+
+        '<option value="last_sign_in_asc">↑ Least recent sign in</option>'+
+        '<option value="email_asc">↑ Email A–Z</option><option value="email_desc">↓ Email Z–A</option>'+
+        '<option value="name_asc">↑ Display name</option></select>'+
+      '<button type="button" class="st-btn st-push" data-st-action="refresh" title="Refresh users">↻ Refresh</button>'+
+      '<details id="naStudioAddMenu"><summary class="st-add">＋ Add user ▾</summary>'+
+        '<div class="st-menu"><div style="font-weight:650;margin-bottom:6px">Google Sign-in only</div>'+
+        '<p class="st-sub" style="margin:5px 0 12px">Accounts are created securely when students first sign in with Google. No password-based users are created.</p>'+
+        '<button class="st-btn" type="button" data-st-action="copy-invite">Copy sign-up link</button></div></details>'+
+    '</div>'+
+    '<div class="st-actionbar" id="naStudioSelectedBar" hidden>'+
+      '<span id="naStudioSelectedCount" class="st-sub">0 selected</span>'+
+      '<button type="button" class="st-btn" data-st-action="copy-ids">Copy UIDs</button>'+
+      '<button type="button" class="st-btn" data-st-action="export-selected">Export selected CSV</button>'+
+      '<button type="button" class="st-btn" data-st-action="clear-selection">Clear selection</button>'+
+    '</div>'+
+    '<div class="st-table" role="region" aria-label="Users table (scroll horizontally)" tabindex="0">'+
+      '<table><thead id="naStudioHead"></thead><tbody id="naStudioRows"></tbody></table></div>'+
+    '<div class="st-foot"><div class="st-meta"><span id="naStudioPage">Loading…</span>'+
+      '<span id="naStudioSummary">Self-hosted Auth</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px"><span id="naStudioToast" class="st-toast" aria-live="polite"></span>'+
+        '<label>Rows <select id="naStudioPageSize" aria-label="Rows per page"><option value="20">20</option><option value="50">50</option><option value="all">All</option></select></label>'+
+        '<button class="st-btn" type="button" data-st-action="prev">← Previous</button>'+
+        '<button class="st-btn" type="button" data-st-action="next">Next →</button></div></div>'+
+    '<div id="naStudioDetail" class="st-detail" hidden></div>'+
+    '</section>';
+  const oldAdmin=admin;
+  admin=function(){
+    const page=oldAdmin.apply(this,arguments);
+    if(!isOwner())return page;
+    queueMicrotask(()=>{if(state.view==='admin')void load()});
+    return page+shell;
+  };
+  function message(msg){const node=$('Toast');if(node)node.textContent=msg;}
+  function statusOf(u){
+    if(u.banned||u.account_status&&u.account_status!=='active')return ['Blocked','bad'];
+    if(!u.confirmed)return ['Unconfirmed','warn'];
+    if(!u.has_profile)return ['No profile','warn'];
+    return ['Confirmed',''];
+  }
+  function checked(u){return selectAllMatching?!excludedIds.has(u.user_id):selected.has(u.user_id)}
+  function countSelected(){return selectAllMatching?Math.max(0,(Number(data?.total)||0)-excludedIds.size):selected.size}
+  function clearSelection(){selectAllMatching=false;excludedIds.clear();selected.clear();selectedRows.clear()}
+  function showColumns(){
+    const m=$('ColumnsMenu');if(!m)return;m.replaceChildren();
+    for(const [key,title] of available){
+      const label=el('label','st-check');
+      const check=el('input');check.type='checkbox';check.checked=columns.has(key);
+      check.dataset.stColumn=key;
+      label.append(check,document.createTextNode(title));m.appendChild(label);
+    }
+  }
+  function colClass(k){
+    return ['user_id'].includes(k)?'st-uid':
+      k==='display_name'?'st-name':k==='profile'?'st-other':k==='email'?'st-mail':
+      k==='phone'?'st-phone':k==='providers'?'st-provider':
+      k==='provider_type'?'st-provider-type':
+      ['created_at','last_sign_in_at'].includes(k)?'st-datetime':'st-other';
+  }
+  function shown(){return available.filter(x=>columns.has(x[0]));}
+  function addCell(tr,k,u){
+    const td=el('td');td.className=colClass(k);td.title='';
+    const val=u[k];
+    if(k==='profile'){const b=el('button','st-link',u.has_profile?'Profile ↗':'No profile');b.disabled=!u.has_profile;b.type='button';b.dataset.stGoProfile=u.user_id;td.appendChild(b)}else if(k==='user_id'||k==='email'||k==='display_name'){
+      const b=el('button','st-link',k==='user_id'?u.user_id||'—':
+        k==='email'?u.email||'—':u.display_name||'—');
+      b.type='button';b.dataset.stDetail=u.user_id;b.title='Open user details';
+      td.appendChild(b);
+    }else if(k==='providers'){
+      const label=el('span','st-provider-label');
+      const tag=el('span','st-google',u.google_provider?'G':'●');
+      label.append(tag,document.createTextNode((u.providers||[]).join(', ')||'—'));td.appendChild(label);
+    }else if(k==='provider_type'){
+      td.textContent=u.google_provider?'Social':'Other';
+    }else if(k==='status'){
+      const [text,cls]=statusOf(u);td.appendChild(el('span','st-state '+cls,text));
+    }else if(k==='created_at'||k==='last_sign_in_at'){
+      td.textContent=when(val,true);td.title=when(val,true);
+    }else{
+      td.textContent=val==null||val===''?'—':String(val);
+      td.title=td.textContent;
+    }
+    tr.appendChild(td);
+  }
+  function render(){
+    const head=$('Head'),body=$('Rows');if(!head||!body)return;
+    head.replaceChildren();body.replaceChildren();
+    const htr=el('tr');
+    const all=el('th','st-choose'),allCheck=el('input');allCheck.type='checkbox';
+    allCheck.dataset.stSelectAll='1';
+    const users=Array.isArray(data?.users)?data.users:[];
+    allCheck.checked=users.length>0&&users.every(u=>checked(u));
+    allCheck.indeterminate=users.some(u=>checked(u))&&!allCheck.checked;
+    allCheck.setAttribute('aria-label','Select all matching users on every page');
+    all.appendChild(allCheck);htr.appendChild(all);
+    for(const [key,title] of shown()){
+      const th=el('th',colClass(key)),sortKey={
+        user_id:null,display_name:'name_asc',email:'email_asc',
+        created_at:'created_desc',last_sign_in_at:'last_sign_in_desc'
+      }[key];
+      if(sortKey){
+        const b=el('button','',title+' '+(sort===sortKey?'▾':'⌄'));
+        b.type='button';b.dataset.stSort=key;th.appendChild(b);
+      }else th.textContent=title;
+      htr.appendChild(th);
+    }
+    head.appendChild(htr);
+    if(!users.length){
+      const row=el('tr'),cell=el('td','st-empty','No users found with these filters.');
+      cell.colSpan=shown().length+1;row.appendChild(cell);body.appendChild(row);
+    }
+    for(const u of users){
+      const tr=el('tr',checked(u)?'st-checked':'');
+      const checkCell=el('td','st-choose'),ch=el('input');
+      ch.type='checkbox';ch.dataset.stSelect=u.user_id;ch.checked=checked(u);
+      ch.setAttribute('aria-label','Select '+(u.display_name||u.email||'account'));
+      checkCell.appendChild(ch);tr.appendChild(checkCell);
+      for(const [key] of shown())addCell(tr,key,u);
+      body.appendChild(tr);
+    }
+    const total=Number(data?.total)||0,offset=viewAll?0:currentPage*pageSize;
+    const label=$('Page');if(label)label.textContent=total?
+      (viewAll?'All '+users.length+' of '+total+' users':(offset+1)+'–'+(offset+users.length)+' of '+total+' users'):'0 users';
+    const summary=$('Summary');if(summary&&overview)summary.textContent=
+      String(overview.confirmed||0)+' confirmed · '+
+      String(overview.google||0)+' Google · '+String(overview.signed_in_30d||0)+' signed in (30d)';
+    const prev=document.querySelector('#neisAuthStudio [data-st-action="prev"]');
+    const next=document.querySelector('#neisAuthStudio [data-st-action="next"]');
+    if(prev)prev.disabled=viewAll||currentPage===0;
+    if(next)next.disabled=viewAll||offset+users.length>=total;
+    renderSelection();
+  }
+  function renderSelection(){
+    const bar=$('SelectedBar'),count=$('SelectedCount');
+    if(bar)bar.hidden=countSelected()===0;
+    if(count)count.textContent=countSelected()+' / '+(Number(data?.total)||0)+' matching users selected across all pages';
+  }
+  async function load(force=false){
+    const root=document.getElementById(rootId);
+    if(!root||!isOwner()||typeof sb==='undefined'||!sb)return;
+    if(busy){pending=true;return}
+    if(!force&&loadedRoot===root)return;
+    loadedRoot=root;busy=true;const seq=++nonce;
+    const tag=$('Status');if(tag)tag.textContent='● Loading…';
+    showColumns();
+    try{
+      const requests=[sb.rpc('main_admin_auth_users',argsAt(viewAll?0:currentPage*pageSize,viewAll?50:pageSize))];
+      if(!overview||force)requests.push(sb.rpc('main_admin_auth_overview'));
+      const responses=await Promise.all(requests);
+      if(responses[0].error)throw responses[0].error;
+      if(responses[1]?.error)throw responses[1].error;
+      if(!root.isConnected||!isOwner()||seq!==nonce)return;
+      data=responses[0].data;if(responses[1])overview=responses[1].data;
+      if(viewAll&&Number(data?.total)>50){
+        data={...data,users:await getEveryMatching(Number(data.total),2000)};
+      }
+      if(!root.isConnected||!isOwner()||seq!==nonce)return;
+      if(tag)tag.textContent='● OVH connected';
+      render();
+    }catch(e){
+      if(root.isConnected){
+        if(tag)tag.textContent='● Data unavailable';
+        message('Unable to load users · '+(e?.message||'Retry'));
+        const rows=$('Rows');if(rows){rows.replaceChildren();const tr=el('tr'),td=el('td','st-empty',
+          'Unable to load accounts. Try refreshing.');td.colSpan=shown().length+1;tr.appendChild(td);rows.appendChild(tr);}
+      }
+    }finally{busy=false;if(pending){pending=false;void load(true)}}
+  }
+  function newQuery(){
+    search=$('Query')?.value?.slice(0,100)||'';
+    searchField=$('Field')?.value||'all';filter=$('Filter')?.value||'all';
+    provider=$('Provider')?.value||'all';sort=$('Sort')?.value||'created_desc';
+    currentPage=0;clearSelection();void load(true);
+  }
+  function field(container,label,value){
+    const box=el('div','st-field'),dt=el('dt','',label),dd=el('dd');
+    dd.textContent=Array.isArray(value)?value.join(', ')||'—':
+      value===true?'Yes':value===false?'No':
+      value==null||value===''?'—':String(value);
+    box.append(dt,dd);container.appendChild(box);
+  }
+  function renderDetail(d){
+    const pane=$('Detail');if(!pane)return;
+    pane.replaceChildren();pane.hidden=false;
+    if(!d){pane.textContent='User record not found.';return}
+    const header=el('div','st-detail-head'),texts=el('div'),title=el('h3','',d.profile?.full_name||d.email||'User details');
+    const sub=el('p','st-sub',d.email||'No email address');texts.append(title,sub);
+    const actions=el('div'),close=el('button','st-btn','Close');close.type='button';close.dataset.stAction='close-detail';
+    const copy=el('button','st-btn','Copy UID');copy.type='button';copy.dataset.stCopyUid=d.user_id;
+    actions.append(copy,close);actions.style.display='flex';actions.style.gap='8px';
+    header.append(texts,actions);pane.appendChild(header);
+    const p=d.profile||{},grid=el('dl','st-detail-grid');
+    for(const [key,val] of [
+      ['UID',d.user_id],['Display name',p.full_name],['Email',d.email],
+      ['Provider(s)',d.providers],['Email confirmed',when(d.confirmed_at,true)],
+      ['Created at',when(d.created_at,true)],['Last signed in',when(d.last_sign_in_at,true)],
+      ['Auth ban',d.banned_until&&new Date(d.banned_until)>new Date()?
+        'Until '+when(d.banned_until,true):'No'],
+      ['Username',p.username],['Role',p.role],['Account status',p.account_status],
+      ['Grade',p.grade],['Branch',p.branch],['Campus',p.campus],
+      ['Graduation year',p.graduation_year],['Onboarding complete',p.onboarding_complete],
+      ['Verified',p.verified],['Published posts',d.posts_count],
+      ['Interests',p.interests],['Skills',p.skills],['Bio',p.bio]
+    ])field(grid,key,val);
+    pane.appendChild(grid);
+    const note=el('p','st-sub',
+      'Identity information is read-only here. Password hashes, access tokens and private Google metadata are never returned.');
+    note.style.marginTop='15px';pane.appendChild(note);
+    pane.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+  async function showDetail(id){
+    const pane=$('Detail');if(!isOwner()||!pane||!id||!sb)return;
+    detailsId=id;const gen=++detailsGeneration;
+    pane.hidden=false;pane.replaceChildren(el('p','st-sub','Loading account details…'));
+    try{
+      const {data:record,error}=await sb.rpc('main_admin_auth_user_detail',{p_user_id:id});
+      if(error)throw error;
+      if(gen===detailsGeneration&&isOwner()&&pane.isConnected)renderDetail(record);
+    }catch(e){if(gen===detailsGeneration&&pane.isConnected)pane.replaceChildren(
+      el('p','st-sub','Could not load details: '+(e?.message||'Retry')))}
+  }
+  function copyText(text){
+    if(!text)return;
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(text).then(()=>message('Copied to clipboard'))
+        .catch(()=>message('Clipboard access is unavailable'));
+    }else message('Clipboard access is unavailable in this browser');
+  }
+  function argsAt(offset,limit){
+    return {p_search:search,p_filter:filter,p_sort:sort,p_limit:limit,p_offset:offset,
+      p_search_field:searchField,p_provider:provider};
+  }
+  async function getEveryMatching(total,limit){
+    if(total>limit)throw new Error('This operation is limited to '+limit+
+      ' accounts. Narrow the filter to reduce the number.');
+    const output=[];
+    // Server enforces 50 rows per request. Small parallel batches keep OVH load low.
+    for(let start=0;start<total;start+=150){
+      if(!isOwner()||!document.getElementById(rootId))throw new Error('Admin session ended');
+      const offsets=[];
+      for(let off=start;off<Math.min(start+150,total);off+=50)offsets.push(off);
+      const replies=await Promise.all(offsets.map(n=>sb.rpc('main_admin_auth_users',argsAt(n,50))));
+      for(const reply of replies){
+        if(reply.error)throw reply.error;
+        if(Number(reply.data?.total)!==total)throw new Error('User count changed. Refresh and try again.');
+        output.push(...(reply.data?.users||[]));
+      }
+      message('Processing '+Math.min(output.length,total)+' / '+total+' accounts');
+    }
+    if(output.length!==total)throw new Error('The complete account list was not retrieved.');
+    return output;
+  }
+  async function getSelectedAccounts(){
+    if(!selectAllMatching)return [...selectedRows.values()];
+    const all=await getEveryMatching(Number(data?.total)||0,LIMIT_FULL_EXPORT);
+    return all.filter(u=>!excludedIds.has(u.user_id));
+  }
+  async function exportSelected(){
+    if(exporting||!countSelected())return;
+    exporting=true;
+    try{
+      const users=await getSelectedAccounts();
+      if(!isOwner())return;
+      const headings=['UID','Display name','Email','Phone','Providers','Created at','Last sign in at'];
+      const fields=u=>[u.user_id,u.display_name,u.email,u.phone,(u.providers||[]).join(';'),
+        u.created_at,u.last_sign_in_at];
+      // Excel formula injection protection.
+      const cell=v=>{
+        const str=String(v??'').replace(/^[\s]*[=+\-@]/,x=>"'"+x);
+        return '"'+str.replace(/"/g,'""')+'"';
+      };
+      const body=[headings.map(cell).join(','),...users.map(u=>fields(u).map(cell).join(','))].join('\r\n');
+      const blob=new Blob(['\ufeff'+body],{type:'text/csv;charset=utf-8'});
+      const url=URL.createObjectURL(blob),a=document.createElement('a');
+      a.href=url;a.download='neis-selected-users.csv';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1200);
+      message('Exported '+users.length+' selected accounts');
+    }catch(e){message('Export could not finish: '+(e?.message||'Retry'))}
+    finally{exporting=false}
+  }
+  async function copySelectedUids(){
+    if(exporting||!countSelected())return;
+    exporting=true;
+    try{
+      const users=await getSelectedAccounts();
+      if(isOwner())copyText(users.map(u=>u.user_id).join('\n'));
+    }catch(e){message('Could not copy UIDs: '+(e?.message||'Retry'))}
+    finally{exporting=false}
+  }
+  let searchTimer;
+  document.addEventListener('input',e=>{
+    if(!isOwner())return;
+    if(e.target?.id==='naStudioQuery'){
+      clearTimeout(searchTimer);searchTimer=setTimeout(newQuery,300);
+    }
+  });
+  document.addEventListener('change',e=>{
+    if(!isOwner())return;
+    if(e.target?.dataset?.stColumn){
+      const key=e.target.dataset.stColumn;
+      if(e.target.checked)columns.add(key);
+      else if(columns.size>1)columns.delete(key);
+      else e.target.checked=true;
+      render();return;
+    }
+    if(e.target?.dataset?.stSelect){
+      const id=e.target.dataset.stSelect;
+      if(selectAllMatching){
+        if(e.target.checked)excludedIds.delete(id);else excludedIds.add(id);
+      }else if(e.target.checked){
+        selected.add(id);
+        const user=(data?.users||[]).find(u=>u.user_id===id);
+        if(user)selectedRows.set(id,user);
+      }else{selected.delete(id);selectedRows.delete(id)}
+      render();return;
+    }
+    if(e.target?.dataset?.stSelectAll){
+      if(e.target.checked){
+        selectAllMatching=true;excludedIds.clear();selected.clear();selectedRows.clear();
+      }else clearSelection();
+      render();return;
+    }
+    if(e.target?.id==='naStudioPageSize'){
+      viewAll=e.target.value==='all';pageSize=e.target.value==='50'?50:20;
+      currentPage=0;clearSelection();void load(true);return;
+    }
+    if(['naStudioField','naStudioFilter','naStudioProvider','naStudioSort'].includes(e.target?.id))
+      newQuery();
+  });
+  document.addEventListener('click',e=>{
+    if(!isOwner())return;
+    const root=e.target?.closest?.('#neisAuthStudio');if(!root)return;
+    const button=e.target?.closest?.('button');if(!button)return;
+    if(button.dataset.stDetail){void showDetail(button.dataset.stDetail);return}
+    if(button.dataset.stGoProfile){if(typeof routeTo==='function')routeTo('profile/'+button.dataset.stGoProfile);return}
+    if(button.dataset.stCopyUid){copyText(button.dataset.stCopyUid);return}
+    if(button.dataset.stSort){
+      const k=button.dataset.stSort;
+      if(k==='created_at')sort=sort==='created_desc'?'created_asc':'created_desc';
+      if(k==='last_sign_in_at')sort=sort==='last_sign_in_desc'?'last_sign_in_asc':'last_sign_in_desc';
+      if(k==='email')sort=sort==='email_asc'?'email_desc':'email_asc';
+      if(k==='display_name')sort='name_asc';
+      const select=$('Sort');if(select)select.value=sort;
+      currentPage=0;clearSelection();void load(true);return;
+    }
+    switch(button.dataset.stAction){
+      case 'refresh':overview=null;void load(true);break;
+      case 'prev':if(!viewAll&&currentPage>0){currentPage--;void load(true)}break;
+      case 'next':if(!viewAll&&(currentPage+1)*pageSize<(Number(data?.total)||0)){
+        currentPage++;void load(true)}break;
+      case 'clear-selection':clearSelection();render();break;
+      case 'copy-ids':void copySelectedUids();break;
+      case 'export-selected':void exportSelected();break;
+      case 'copy-invite':copyText('https://neiscircle.site/');break;
+      case 'close-detail':detailsId=null;detailsGeneration++;
+        if($('Detail')){$('Detail').hidden=true;$('Detail').replaceChildren()}break;
+    }
+  });
+})();
