@@ -35,7 +35,7 @@ def main():
     for phrase in ("manual-content:%","UNEXPECTED_NONMANUAL_JOBS",
          "reject_automatic_notification_email_insert","MANUAL_MAIL_PENDING_DUE"):
         demand(phrase in worker,"MANUAL_SAFETY_MISSING")
-    demand("OnUnitInactiveSec=2min" in timer and "neis-manual-email-dispatch" in service,
+    demand("OnUnitInactiveSec=2min" in timer and "manual-email-dispatch.py" in service,
            "SCHEDULE_UNEXPECTED")
     run(["python3","-m","py_compile",str(STAGE/"worker.py")])
     run(COMPOSE+["config","--quiet"],timeout=35)
