@@ -1,0 +1,27 @@
+[Unit]
+Description=NEIS Circle Private VPS Usage Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/python3 -B /home/ubuntu/.local/share/neis-private-monitor/monitor.py
+WorkingDirectory=/home/ubuntu/.local/share/neis-private-monitor
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_UNIX
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
