@@ -36,7 +36,7 @@ jobs:
           assert "revoke all on function public.main_admin_auth_users" in s
           assert 'notify pgrst' in s
           for word in ('Unified search','All columns','Add user','p_search_field','p_provider',
-                       'export-selected','data-st-select','Copy sign-up link'):
+                       'export-selected','dataset.stSelect','Copy sign-up link'):
             assert word in ui,word
           assert "isOwner()" in ui and "textContent" in ui and "MAIN_ADMIN" in ui
           assert 'OWNERSHIP_CHANGED' not in ops
