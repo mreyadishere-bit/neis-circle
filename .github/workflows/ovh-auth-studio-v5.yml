@@ -1,0 +1,80 @@
+name: OVH Auth Studio V5
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/auth-profile-links-secure-block-20261011]
+    paths:
+      - 'scripts/main-admin-auth-studio-v5.js'
+      - 'supabase/migrations/20261011212500_main_admin_auth_secure_block.sql'
+      - 'scripts/ops/ovh-auth-studio-v5-dryrun.py'
+      - 'scripts/ops/ovh-deploy-auth-studio-v5.py'
+      - '.github/workflows/ovh-auth-studio-v5.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static validation
+        run: |
+          node --check scripts/main-admin-auth-studio-v5.js
+          python3 -m py_compile scripts/ops/ovh-auth-studio-v5-dryrun.py scripts/ops/ovh-deploy-auth-studio-v5.py
+  verify:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH host setup
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          test -n "$HOST"
+      - name: Transaction rollback security tests
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/auth-studio-v5-20261011
+          ssh -o StrictHostKeyChecking=yes ubuntu@"$HOST" "install -d -m 700 $dst"
+          scp -q -o StrictHostKeyChecking=yes supabase/migrations/20261011212500_main_admin_auth_secure_block.sql ubuntu@"$HOST":$dst/migration.sql
+          ssh -o StrictHostKeyChecking=yes ubuntu@"$HOST" 'python3 -' < scripts/ops/ovh-auth-studio-v5-dryrun.py
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH host setup
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          test -n "$HOST"
+      - name: Deploy safeguarded authentication console
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/auth-studio-v5-20261011
+          scp -q -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v5.js ubuntu@"$HOST":$dst/ui.js
+          ssh -o StrictHostKeyChecking=yes ubuntu@"$HOST" 'python3 -' < scripts/ops/ovh-deploy-auth-studio-v5.py
