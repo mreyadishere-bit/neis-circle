@@ -43,6 +43,8 @@ jobs:
       - name: Preserve original Google-only authentication flow
         run: node qa/google-only-auth-contract.mjs
       - run: npm run qa:unit
+      - name: Verify device notification sound and PWA recovery
+        run: node qa/notification-sound-device.test.mjs
 
   browser-smoke:
     name: Browser boot smoke
