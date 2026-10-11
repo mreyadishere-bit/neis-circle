@@ -40,7 +40,7 @@ def main():
          and "main_admin_auth_users" in migration
          and "revoke all on function public.main_admin_auth_users" in migration
          and "notify pgrst" in migration,"SECURITY_PREFLIGHT")
-    need("Unified search" in ui and "data-st-select" in ui and "All columns" in ui
+    need("Unified search" in ui and "dataset.stSelect" in ui and "All columns" in ui
          and "p_search_field" in ui and "p_provider" in ui,"UI_PREFLIGHT")
     run(["node","--check",str(STAGE/"ui.js")])
     run(COMPOSE+["config","--quiet"])
