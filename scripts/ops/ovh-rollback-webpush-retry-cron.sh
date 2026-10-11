@@ -7,7 +7,7 @@ if [[ "$previous" != *"$marker"* ]];then
  echo 'WEBPUSH_CRON_ROLLBACK=NOT_INSTALLED'
  exit 0
 fi
-printf '%s\n' "$previous" | grep -Fv "$marker" | crontab -
+printf '%s\n' "$previous" | awk -v marker="$marker" 'index($0,marker)==0' | crontab -
 if crontab -l | grep -Fq "$marker";then
  echo 'WEBPUSH_CRON_ROLLBACK=FAILED'
  exit 1
