@@ -295,6 +295,8 @@
     const prefs={};
     devicePushPreferenceKeys.forEach(key=>{prefs[key]=values[key]!==false});
     try{localStorage.setItem(devicePushSettingsKey(),JSON.stringify(prefs))}catch(_){}
+    // Sound belongs to this browser, not a Push subscription on the server.
+    window.NEISNotificationRuntime?.setDeviceSoundEnabled?.(prefs.sound);
     if(('Notification' in window)&&Notification.permission==='granted')await ensureWebPush(false);
     const sub=await currentSubscription();
     if(sub&&typeof sb!=='undefined'&&sb){
@@ -315,8 +317,15 @@
       await sb.rpc('set_web_push_device_preferences',{endpoint_input:sub.endpoint,preferences_input:local});
       return local;
     }
-    try{localStorage.setItem(devicePushSettingsKey(),JSON.stringify(remote))}catch(_){}
-    return remote;
+    // Remote Push settings must not undo a local preference after a previous
+    // registration or migration. In-app chimes still work without Web Push.
+    const merged={...remote,...local};
+    const uid=String((typeof authUser!=='undefined'&&authUser?.id)||'guest');
+    const explicitSound=localStorage.getItem('neis-local-notification-sound-v1:'+uid);
+    if(explicitSound==='on')merged.sound=true;
+    else if(explicitSound==='off')merged.sound=false;
+    try{localStorage.setItem(devicePushSettingsKey(),JSON.stringify(merged))}catch(_){}
+    return merged;
   }
 
   async function openPwaNotificationSettings(){
@@ -357,6 +366,8 @@
       <div class="modal-actions pwa-notification-actions">
         <button type="button" class="secondary" data-pwa-toggle-all></button>
         <button type="button" class="secondary" data-test-notification-sound>${lang('Test sound','اختبار الصوت')}</button>
+        <button type="button" class="secondary" data-test-incoming-alert>${lang('Test incoming alert','اختبار تنبيه رسالة واردة')}</button>
+        <p data-incoming-audio-diagnostic style="margin:6px 0;font-size:12px;opacity:.85"></p>
         <button type="button" class="secondary" data-pwa-notification-permission>${notificationPermission==='granted'?lang('Notifications enabled','الإشعارات مفعلة'):lang('Enable notifications','تفعيل الإشعارات')}</button>
         <button type="button" class="primary" data-save-pwa-push>${lang('Save','حفظ')}</button>
       </div>
@@ -405,6 +416,29 @@
         :lang('Browser sound is blocked. Check site audio permissions and device volume.','صوت المتصفح محظور. راجع إذن الصوت ومستوى صوت الجهاز.'));
     };
 
+    const incomingTest=document.querySelector('[data-test-incoming-alert]');
+    const diag=document.querySelector('[data-incoming-audio-diagnostic]');
+    const describe=()=>{
+      const snap=window.NEISNotificationRuntime?.snapshot?.()||{};
+      const detail=snap.lastChimeResult||'none';
+      const map={
+        played:lang('Sound was scheduled successfully.','تم تشغيل صوت التنبيه بنجاح.'),
+        'device-sound-disabled':lang('In-app sound is OFF on this device. Enable Notification sound and save.','صوت التنبيهات مقفول على هذا الجهاز. فعّله واضغط حفظ.'),
+        'browser-audio-blocked':lang('Browser blocked audio. Try again with the page active.','المتصفح منع الصوت. جرب مع فتح الصفحة والتفاعل معها.'),
+        'already-read':lang('Notification was already read.','الإشعار مقروء بالفعل.'),
+        'silent-by-event':lang('This alert was marked silent.','التنبيه محدد كصامت.'),
+        none:lang('No incoming alert sound attempt detected yet.','لم تُكتشف محاولة صوت لتنبيه وارد حتى الآن.')
+      };
+      if(diag)diag.textContent=map[detail]||detail;
+    };
+    describe();
+    if(incomingTest)incomingTest.onclick=async()=>{
+      incomingTest.disabled=true;
+      try{await window.NEISNotificationRuntime?.testIncomingAlert?.()}finally{
+        incomingTest.disabled=false;
+        describe();
+      }
+    };
     const permissionButton=document.querySelector('[data-pwa-notification-permission]');
     if(permissionButton)permissionButton.onclick=async()=>{
       permissionButton.disabled=true;
