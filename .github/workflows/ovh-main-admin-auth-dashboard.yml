@@ -1,0 +1,104 @@
+name: OVH Main Admin Auth Dashboard
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/ovh-admin-auth-users-v1-20261011]
+    paths:
+      - 'supabase/migrations/20261011195000_main_admin_auth_dashboard.sql'
+      - 'scripts/main-admin-auth-dashboard-v1.js'
+      - 'scripts/ops/ovh-deploy-main-admin-auth-dashboard-v1.py'
+      - 'scripts/ops/ovh-auth-dashboard-sql-dryrun.py'
+      - '.github/workflows/ovh-main-admin-auth-dashboard.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-main-admin-auth-dashboard
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate dashboard syntax and access control
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-auth-dashboard-v1.js
+          python3 -m py_compile scripts/ops/ovh-auth-dashboard-sql-dryrun.py scripts/ops/ovh-deploy-main-admin-auth-dashboard-v1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path('supabase/migrations/20261011195000_main_admin_auth_dashboard.sql').read_text()
+          ui=Path('scripts/main-admin-auth-dashboard-v1.js').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-main-admin-auth-dashboard-v1.py').read_text()
+          assert sql.count('auth.uid()')>=3
+          assert sql.count("'25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid")>=3
+          assert sql.count("profile.role='admin'")>=3
+          assert sql.count("coalesce(profile.account_status,'active')='active'")>=3
+          for name in ('main_admin_auth_overview','main_admin_auth_users','main_admin_auth_user_detail'):
+              assert name in sql and name in ui or name=='main_admin_auth_overview' and name in sql
+          assert 'encrypted_password' not in sql and 'raw_user_meta_data' not in sql
+          assert 'revoke all on function public.main_admin_auth_user_detail(uuid) from public, anon' in sql
+          assert 'least(50,greatest(1,coalesce(p_limit,20)))' in sql
+          assert 'pendingRefresh' in ui and 'data-nu-user' in ui
+          assert 'ROLLED_BACK_FRONTEND' in deploy and 'ANONYMOUS_NOT_DENIED' in deploy
+          print('OVH_AUTH_DASHBOARD_STATIC_CHECK=PASS')
+          PY
+  dryrun:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Test SQL inside rolled back OVH transaction (no user data printed)
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          dest=/home/ubuntu/neis-backups/admin-auth-v1-20261011
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $dest"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261011195000_main_admin_auth_dashboard.sql "$target:$dest/schema.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-auth-dashboard-sql-dryrun.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dryrun
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy owner-only account dashboard into current live frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          dest=/home/ubuntu/neis-backups/admin-auth-v1-20261011
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-dashboard-v1.js "$target:$dest/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-main-admin-auth-dashboard-v1.py
