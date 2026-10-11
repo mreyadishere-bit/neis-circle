@@ -1,0 +1,20 @@
+[Unit]
+Description=NEIS Circle hourly PostgreSQL retention and private daily storage metrics
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/neis-supabase
+UMask=0077
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 -B /home/ubuntu/.local/share/neis-private-monitor/db-retention.py
+TimeoutStartSec=120
+NoNewPrivileges=no
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+StandardOutput=journal
+StandardError=journal

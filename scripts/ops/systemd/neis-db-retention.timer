@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly safe database space retention on OVH
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=3min
+Persistent=true
+Unit=neis-db-retention.service
+
+[Install]
+WantedBy=timers.target
