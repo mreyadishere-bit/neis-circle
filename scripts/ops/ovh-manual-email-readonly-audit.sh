@@ -3,10 +3,10 @@ set -Eeuo pipefail
 cd /home/ubuntu/neis-supabase
 D=(sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml)
 "${D[@]}" exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atq <<'SQL'
-select 'EMAIL_OUTBOX_EXISTS='||to_regclass('public.email_notification_outbox') is not null;
-select 'MANUAL_BROADCAST_TABLE_EXISTS='||to_regclass('public.admin_content_email_broadcasts') is not null;
+select 'EMAIL_OUTBOX_EXISTS='||(to_regclass('public.email_notification_outbox') is not null)::text;
+select 'MANUAL_BROADCAST_TABLE_EXISTS='||(to_regclass('public.admin_content_email_broadcasts') is not null)::text;
 select 'EMAIL_RPC_EXISTS='||(to_regprocedure('public.admin_email_content_to_audience(text,text,boolean)') is not null)::text;
-select 'QUEUE_'+upper(status)||'='||count(*)
+select 'QUEUE_'||upper(status)||'='||count(*)
 from public.email_notification_outbox
 where event_key like 'manual-content:%'
 group by status order by 1;
