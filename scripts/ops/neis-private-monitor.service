@@ -18,7 +18,6 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 ProtectKernelModules=yes
 LockPersonality=yes
-CapabilityBoundingSet=
 RestrictAddressFamilies=AF_INET AF_UNIX
 StandardOutput=null
 StandardError=journal
