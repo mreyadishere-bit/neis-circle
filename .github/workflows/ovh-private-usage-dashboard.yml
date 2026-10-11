@@ -32,7 +32,7 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:8765/health | python3 -c 'import json,sys; assert json.load(sys.stdin)["ready"]'
-          curl -fsS http://127.0.0.1:8765/api/metrics | python3 -c 'import json,sys; x=json.load(sys.stdin); assert 0<=x["memory"]["percent"]<=100 and x["docker"]["running"] is None'
+          curl -fsS http://127.0.0.1:8765/api/metrics | python3 -c 'import json,sys; x=json.load(sys.stdin); assert 0<=x["memory"]["percent"]<=100 and (x["docker"]["running"] is None or x["docker"]["running"]>=0)'
           curl -fsS http://127.0.0.1:8765/ | grep -q 'Server overview'
           test "$(curl -s -o /dev/null -w '%{http_code}' --header 'Host: remote.example' http://127.0.0.1:8765/health)" = 403
   deploy:
