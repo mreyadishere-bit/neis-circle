@@ -8,6 +8,8 @@ assert.match(sw,/PUSH_REFRESH_URL = "https:\/\/supabase\.neiscircle\.site\/funct
 assert.match(pwa,/neis-pwa-sw\.js\?v=13/);
 assert.match(pwa,/data-test-notification-sound/);
 assert.match(pwa,/data-pwa-onboarding-sound/);
+assert.match(pwa,/Notification\.permission==='granted'\)return/);
+assert.match(pwa,/function scheduleNotificationOnboarding\(delay=700\)/);
 assert.match(pwa,/event==='SIGNED_OUT'/);
 assert.match(pwa,/\['INITIAL_SESSION','SIGNED_IN'\]\.includes\(event\)/);
 assert.match(pwa,/NEISNotificationRuntime\?\.refresh\?\.\(true,\{force:true\}\)/);
@@ -108,6 +110,27 @@ const playedOnce=audible;
 nt.ingestPush(row('blocked'));
 await Promise.resolve();await Promise.resolve();
 assert.equal(audible,playedOnce,'retries must not duplicate a successfully played notification');
+// The actual user symptom: another component updates the shared notification
+// array and calls updateBadges() => updateTabBadge(), without any event hook.
+const beforeExternal=audible;
+context.state.notifications=[row('external-dm'),...context.state.notifications];
+nt.updateTabBadge();
+await new Promise(resolve=>setImmediate(resolve));
+assert.ok(audible>beforeExternal,
+  'tab-bracket count changing because of an incoming DM must produce a chime');
+const afterExternal=audible;
+nt.updateTabBadge();
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(audible,afterExternal,'rerendering the badge must not ring again');
+
+// Explicit muting always wins, even when the counter increases.
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:false}));
+context.state.notifications=[row('muted-from-badge'),...context.state.notifications];
+nt.updateTabBadge();
+await new Promise(resolve=>setImmediate(resolve));
+assert.equal(audible,afterExternal,'counter must respect device mute preference');
+store.set('neis-device-push-prefs-v1:synthetic-test-id',JSON.stringify({sound:true}));
+
 // The notification badge remains intact.
-assert.equal(context.document.title,'(6) NEIS Circle');
+assert.equal(context.document.title,'(8) NEIS Circle');
 console.log('NOTIFICATION_SOUND_DEVICE_TEST=PASS');
