@@ -49,3 +49,35 @@ jobs:
         run: npm install --no-save playwright && npx playwright install --with-deps chromium
       - name: Test full desktop grid PNG on desktop and mobile
         run: node qa/timetable-export-png.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy from the current live OVH frontend with rollback
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/timetable-png-export-20261012-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/timetable-export-png-v1.js "$target:$stage/export.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/timetable-export-png-v1.css "$target:$stage/export.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-timetable-png-export-v1.py
