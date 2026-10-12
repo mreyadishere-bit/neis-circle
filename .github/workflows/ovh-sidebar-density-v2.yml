@@ -30,7 +30,7 @@ jobs:
           for x in ('@media (min-width: 1024px)','max-height: 760px','max-height: 580px',
                     '--neis-rail-row: 42px','--neis-rail-row: 34px','--neis-rail-row: 29px',
                     'grid-template-columns: 60px minmax(0,1fr)','body .rail.neis-hover-rail',
-                    'overflow-y: auto','align-content: start','var(--muted)','var(--soft)'):
+                    'overflow-y: auto','align-content: start','var(--ink)','var(--soft)'):
             assert x in s,x
           assert '.stage{' not in s and '.top{' not in s
           assert 'SIDEBAR_DENSITY_FRONTEND=ROLLED_BACK' in d
