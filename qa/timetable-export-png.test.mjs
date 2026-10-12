@@ -43,8 +43,9 @@ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
 async function runCase(width,height){
  const context=await browser.newContext({viewport:{width,height},acceptDownloads:true});
  const page=await context.newPage();
- const errors=[];
+ const errors=[];const logMessages=[];
  page.on('pageerror',err=>errors.push(err.message));
+ page.on('console',msg=>logMessages.push(msg.type()+': '+msg.text()));
  try{
   await page.setContent(pageHTML,{waitUntil:'load'});
   await page.evaluate(()=>{
@@ -67,9 +68,14 @@ async function runCase(width,height){
   await btn.waitFor();
   assert.ok(await btn.isVisible(),'Export button visible at '+width);
   assert.equal(await page.locator('.tt-board .tt-day').count(),5);
-  const downloadPromise=page.waitForEvent('download',{timeout:20000});
+  const downloadPromise=page.waitForEvent('download',{timeout:12000});
   await btn.click();
-  const download=await downloadPromise;
+  let download;
+  try{download=await downloadPromise}
+  catch(err){
+    console.log('PNG_EXPORT_DEBUG='+JSON.stringify({toast:await page.evaluate(()=>window.__exportToast),errors,logs:logMessages.slice(-9),renderers:await page.locator('iframe').count()}));
+    throw err;
+  }
   assert.ok(download.suggestedFilename().endsWith('.png'));
   const png=fs.readFileSync(await download.path());
   assert.equal(png.subarray(1,4).toString('ascii'),'PNG');
