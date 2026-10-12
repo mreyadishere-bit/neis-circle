@@ -86,6 +86,7 @@ async function runCase(width,height){
   assert.ok(pixels&&pixels.bg[3]===255);
   assert.ok(pixels.card.some((x,i)=>i<3&&x<220),
     'colored timetable card should not be a blank white image, '+JSON.stringify(pixels));
+  await page.waitForFunction(()=>!document.querySelector('.tt-png-private-renderer'),{timeout:5000});
   assert.equal(await page.locator('.tt-png-private-renderer').count(),0,'temporary renderer disposed');
   assert.equal(await page.locator('.tt-board .tt-day').count(),5,'source board not altered');
   assert.equal(await btn.isEnabled(),true);
