@@ -1,0 +1,11 @@
+/* Desktop sidebar v3 — use available vertical height gracefully.
+   The compact v2 row heights remain the floor on short laptop windows.
+   No JS changes, no layout shifting, no changes below 1024px. */
+@media (min-width: 1024px) {
+  html body .rail.neis-hover-rail .rail-nav,
+  html body .rail.neis-hover-rail.is-expanded .rail-nav {
+    /* Distribute surplus nav height evenly between the 13 sections.
+       On short viewports, CSS alignment falls back to start when no surplus exists. */
+    align-content: space-evenly;
+  }
+}
