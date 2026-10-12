@@ -1,0 +1,21 @@
+/* Additive Timetable PNG button. Native board, cards and device layouts unchanged. */
+.tt-head-actions .tt-export-png-button{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  white-space:nowrap;min-height:40px;border-radius:13px;
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  font-weight:750;transition:background-color .15s ease,border-color .15s ease;
+}
+.tt-head-actions .tt-export-png-button:hover:not(:disabled){
+  background:var(--soft);border-color:var(--accent);
+}
+.tt-head-actions .tt-export-png-button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+.tt-head-actions .tt-export-png-button:disabled{
+  cursor:progress;opacity:.7;
+}
+@media(max-width:760px){
+  .tt-head-actions .tt-export-png-button{
+    font-size:11px;min-width:0;width:100%;
+  }
+}

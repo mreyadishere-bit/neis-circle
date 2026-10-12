@@ -1,0 +1,83 @@
+name: Timetable High Quality PNG Export
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/timetable-desktop-png-export-20261012]
+    paths:
+      - 'scripts/timetable-export-png-v1.js'
+      - 'styles/timetable-export-png-v1.css'
+      - 'qa/timetable-export-png.test.mjs'
+      - 'scripts/ops/ovh-deploy-timetable-png-export-v1.py'
+      - '.github/workflows/ovh-timetable-png-export.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-png-export
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate syntax and privacy / fidelity invariants
+        run: |
+          set -euo pipefail
+          node --check scripts/timetable-export-png-v1.js
+          node --check qa/timetable-export-png.test.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          code=Path('scripts/timetable-export-png-v1.js').read_text()
+          for t in ('tt-desktop-only .tt-board','Export as PNG','iframe',
+                    'width=Math.max(1560','getComputedStyle','XMLSerializer',
+                    'image/svg+xml','image/png','toBlob','URL.revokeObjectURL',
+                    'onboardingComplete','MutationObserver','createObjectURL',
+                    'download=file','PNG encoding failed'):
+             assert t in code,t
+          assert 'fetch(' not in code and 'localStorage.setItem(' not in code
+          print('TIMETABLE_EXPORT_STATIC=PASS')
+          PY
+  browser:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser for real PNG download regression
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test full desktop grid PNG on desktop and mobile
+        run: node qa/timetable-export-png.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy from the current live OVH frontend with rollback
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/timetable-png-export-20261012-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/timetable-export-png-v1.js "$target:$stage/export.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/timetable-export-png-v1.css "$target:$stage/export.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-timetable-png-export-v1.py
