@@ -1,0 +1,81 @@
+name: OVH Sidebar Fluid Spacing
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/desktop-sidebar-fluid-vertical-spacing-20261012]
+    paths:
+      - 'styles/desktop-hover-rail-fluid-v3.css'
+      - 'qa/desktop-hover-rail-fluid.test.mjs'
+      - 'scripts/ops/ovh-deploy-sidebar-fluid-v3.py'
+      - '.github/workflows/ovh-sidebar-fluid-v3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-sidebar-density-v2
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check CSS invariants and deployment script
+        run: |
+          set -euo pipefail
+          node --check qa/desktop-hover-rail-fluid.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-sidebar-fluid-v3.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('styles/desktop-hover-rail-fluid-v3.css').read_text()
+          d=Path('scripts/ops/ovh-deploy-sidebar-fluid-v3.py').read_text()
+          assert '@media (min-width: 1024px)' in s
+          assert 'align-content: space-evenly' in s
+          assert '.rail.neis-hover-rail.is-expanded .rail-nav' in s
+          assert '.stage{' not in s and '.top{' not in s
+          assert 'SIDEBAR_FLUID_FRONTEND=ROLLED_BACK' in d
+          assert 'main-admin-auth-studio-v5.js' in d and 'main-admin-db-storage-v1.js' in d
+          print('SIDEBAR_FLUID_STATIC=PASS')
+          PY
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install headless Chromium
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Verify more vertical breathing room while all items fit across screen sizes
+        run: node qa/desktop-hover-rail-fluid.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Publish fluid spacing stylesheet only on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest=/home/ubuntu/neis-backups/sidebar-fluid-20261012-v3
+          target=ubuntu@"$HOST"
+          ssh -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $dest"
+          scp -q -o StrictHostKeyChecking=yes styles/desktop-hover-rail-fluid-v3.css "$target:$dest/fluid.css"
+          ssh -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-sidebar-fluid-v3.py
