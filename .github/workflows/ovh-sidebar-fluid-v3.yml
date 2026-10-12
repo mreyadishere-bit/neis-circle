@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-sidebar-density-v2
+  group: ovh-sidebar-fluid-v3
   cancel-in-progress: false
 jobs:
   static:
