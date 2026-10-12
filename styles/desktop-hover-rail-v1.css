@@ -189,6 +189,8 @@
     transition: opacity 170ms ease, color 150ms ease, background-color 150ms ease;
   }
   .rail.neis-hover-rail.is-expanded .neis-rail-pin {
+    width: auto;
+    padding-inline: 10px;
     opacity: 1;
     pointer-events: auto;
   }
