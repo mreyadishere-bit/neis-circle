@@ -1,0 +1,94 @@
+name: OVH Desktop Hover Sidebar
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/desktop-hover-sidebar-20261012]
+    paths:
+      - 'styles/desktop-hover-rail-v1.css'
+      - 'scripts/desktop-hover-rail-v1.js'
+      - 'scripts/ops/ovh-deploy-desktop-hover-rail-v1.py'
+      - 'qa/desktop-hover-rail.test.mjs'
+      - '.github/workflows/ovh-desktop-hover-sidebar.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-desktop-hover-sidebar
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static validations – no mobile changes or auth edits
+        run: |
+          set -euo pipefail
+          node --check scripts/desktop-hover-rail-v1.js
+          node --check qa/desktop-hover-rail.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-desktop-hover-rail-v1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/desktop-hover-rail-v1.js').read_text()
+          css=Path('styles/desktop-hover-rail-v1.css').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-desktop-hover-rail-v1.py').read_text()
+          for token in ('pointerenter','pointerleave','focusin','focusout',
+                        'MutationObserver','localStorage','matchMedia',
+                        'data-nav','data-action','neis-rail-label','neis-rail-pin'):
+            assert token in js,token
+          for token in ('@media (min-width: 1024px)','--neis-rail-open: 248px',
+                        'body.rtl .rail','prefers-reduced-motion','var(--card)',
+                        'var(--muted)','var(--accent)','z-index: 45',
+                        'is-expanded','.nav-btn'):
+            assert token in css,token
+          assert '.top{' not in css and '.stage{' not in css
+          assert 'SIDEBAR_HOVER_FRONTEND=ROLLED_BACK' in deploy
+          assert 'AUTH_OR_PROXY_CHANGED' in deploy
+          assert 'main-admin-db-storage-v1.js' in deploy
+          assert 'main-admin-auth-studio-v5.js' in deploy
+          assert "TARGET_ALREADY_EXISTS" in deploy
+          print('SIDEBAR_STATIC=PASS')
+          PY
+  browser:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser runtime
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test expansion, keyboard, RTL, themes, pin and mobile/tablet
+        run: node qa/desktop-hover-rail.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy immutable desktop sidebar overlay to live OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/desktop-hover-rail-20261012-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/desktop-hover-rail-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/desktop-hover-rail-v1.css "$target:$stage/ui.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-desktop-hover-rail-v1.py
