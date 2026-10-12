@@ -1,0 +1,225 @@
+/* NEIS Circle desktop rail: desktop-only overlay, zero content reflow.
+   Colors are exclusively derived from the existing website theme tokens. */
+@media (min-width: 1024px) {
+  .rail.neis-hover-rail {
+    --neis-rail-closed: 84px;
+    --neis-rail-open: 248px;
+    box-sizing: border-box;
+    width: var(--neis-rail-closed);
+    padding: 22px 14px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    z-index: 45;
+    overflow: hidden;
+    direction: ltr;
+    background: color-mix(in srgb, var(--card) 96%, transparent);
+    border-inline-end: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    box-shadow: none;
+    transition: width 245ms cubic-bezier(.22,1,.36,1),
+                box-shadow 245ms ease,
+                background-color 180ms ease;
+    will-change: width;
+  }
+  body.rtl .rail.neis-hover-rail {
+    direction: rtl;
+    border-right: 0;
+    border-left: 1px solid var(--line);
+    border-inline-end: 1px solid var(--line);
+  }
+  .rail.neis-hover-rail.is-expanded {
+    width: var(--neis-rail-open);
+    box-shadow: 10px 0 36px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  body.rtl .rail.neis-hover-rail.is-expanded {
+    box-shadow: -10px 0 36px color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  .rail.neis-hover-rail .neis-rail-brand {
+    display: flex;
+    align-items: center;
+    min-height: 50px;
+    flex: 0 0 50px;
+    min-width: 0;
+    gap: 12px;
+  }
+  .rail.neis-hover-rail .neis-rail-brand .logo {
+    flex: 0 0 50px;
+    width: 50px;
+    height: 50px;
+    margin-inline-start: 3px;
+    position: relative;
+    z-index: 1;
+  }
+  .rail.neis-hover-rail .neis-rail-brand-name {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    max-width: 155px;
+    white-space: nowrap;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(-7px);
+    transition: opacity 135ms ease, transform 220ms cubic-bezier(.22,1,.36,1);
+    pointer-events: none;
+    color: var(--ink);
+    text-align: start;
+  }
+  body.rtl .rail.neis-hover-rail .neis-rail-brand-name {
+    transform: translateX(7px);
+  }
+  .rail.neis-hover-rail .neis-rail-brand-name strong {
+    font-size: 14px;
+    font-weight: 760;
+    letter-spacing: -.025em;
+  }
+  .rail.neis-hover-rail .neis-rail-brand-name small {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .rail.neis-hover-rail .rail-nav {
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: grid;
+    grid-auto-rows: 48px;
+    align-content: start;
+    justify-items: center;
+    gap: 8px;
+    margin-top: 28px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    scrollbar-width: none;
+  }
+  .rail.neis-hover-rail .rail-nav::-webkit-scrollbar { display: none; }
+  .rail.neis-hover-rail .nav-btn {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    min-height: 48px;
+    border-radius: 13px;
+    padding: 0;
+    overflow: hidden;
+    transition: width 245ms cubic-bezier(.22,1,.36,1),
+                color 160ms ease, background-color 160ms ease;
+  }
+  /* The icon's physical position stays fixed (42px from the screen edge). */
+  .rail.neis-hover-rail .nav-btn > svg {
+    grid-row: 1;
+    grid-column: 1;
+    justify-self: center;
+    align-self: center;
+    flex-shrink: 0;
+    margin: 0;
+  }
+  .rail.neis-hover-rail .nav-btn .neis-rail-label {
+    grid-row: 1;
+    grid-column: 2;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    line-height: 1.4;
+    color: inherit;
+    text-align: start;
+    opacity: 0;
+    transform: translateX(-5px);
+    pointer-events: none;
+    transition: opacity 145ms ease, transform 225ms ease;
+  }
+  body.rtl .rail.neis-hover-rail .nav-btn .neis-rail-label {
+    transform: translateX(5px);
+  }
+  .rail.neis-hover-rail.is-expanded .rail-nav { justify-items: stretch; }
+  .rail.neis-hover-rail.is-expanded .nav-btn { width: 100%; grid-template-columns: 56px minmax(0,1fr); }
+  .rail.neis-hover-rail.is-expanded .neis-rail-label,
+  .rail.neis-hover-rail.is-expanded .neis-rail-brand-name {
+    opacity: 1;
+    transform: translateX(0);
+    transition-delay: 60ms;
+  }
+  .rail.neis-hover-rail .nav-btn:focus-visible,
+  .rail.neis-hover-rail .logo:focus-visible,
+  .rail.neis-hover-rail .neis-rail-pin:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .rail.neis-hover-rail .neis-rail-footer {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    flex: 0 0 42px;
+    margin-top: 9px;
+    border-top: 1px solid transparent;
+  }
+  .rail.neis-hover-rail.is-expanded .neis-rail-footer {
+    justify-content: flex-end;
+    border-top-color: var(--line);
+    padding-top: 6px;
+  }
+  .rail.neis-hover-rail .neis-rail-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    background: transparent;
+    color: var(--muted);
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 170ms ease, color 150ms ease, background-color 150ms ease;
+  }
+  .rail.neis-hover-rail.is-expanded .neis-rail-pin {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .rail.neis-hover-rail .neis-rail-pin:hover,
+  .rail.neis-hover-rail .neis-rail-pin[aria-pressed="true"] {
+    background: var(--soft);
+    color: var(--accent);
+  }
+  .rail.neis-hover-rail .neis-rail-pin svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .rail.neis-hover-rail .neis-rail-pin-label {
+    font-size: 11px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .rail.neis-hover-rail.is-pinned .neis-rail-pin { color: var(--accent); }
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+  .rail.neis-hover-rail,
+  .rail.neis-hover-rail .nav-btn,
+  .rail.neis-hover-rail .neis-rail-label,
+  .rail.neis-hover-rail .neis-rail-brand-name,
+  .rail.neis-hover-rail .neis-rail-pin {
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
