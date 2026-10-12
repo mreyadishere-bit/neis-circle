@@ -78,9 +78,10 @@ try{
  await page.setViewportSize({width:390,height:760});
  assert.equal(await rail.evaluate(n=>getComputedStyle(n).display),'none','mobile rail hidden');
  await page.setViewportSize({width:1366,height:900});
+ const beforeTheme=await rail.evaluate(n=>getComputedStyle(n).backgroundColor);
  await page.evaluate(()=>document.documentElement.style.setProperty('--card','#17271d'));
  const bg=await rail.evaluate(n=>getComputedStyle(n).backgroundColor);
- assert.ok(bg.includes('rgb')||bg.includes('color('),'theme background resolves');
+ assert.notEqual(bg,beforeTheme,'sidebar must respond to site theme tokens');
  console.log('SIDEBAR_HOVER_BROWSER=PASS');
  console.log('SIDEBAR_RTL_DESKTOP_ONLY=PASS');
  console.log('SIDEBAR_NO_CONTENT_REFLOW=PASS');
