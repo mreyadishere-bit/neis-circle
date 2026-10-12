@@ -70,6 +70,11 @@ try{
    document.activeElement.blur();
  });
  await page.waitForTimeout(50);
+ console.log('SIDEBAR_RTL_DEBUG='+JSON.stringify(await page.evaluate(()=>{
+   const n=document.querySelector('button.nav-btn[data-nav="home"]');
+   return {title:n.getAttribute('title'),label:n.querySelector('.neis-rail-label')?.textContent,
+     bodyRtl:document.body.classList.contains('rtl'),rail:document.querySelector('.rail')?.className};
+ })));
  assert.equal(await page.locator('button[data-nav="home"] .neis-rail-label').textContent(),'الرئيسية');
  assert.equal(await rail.evaluate(n=>getComputedStyle(n).right),'0px','RTL right anchor');
  await page.setViewportSize({width:900,height:800});
