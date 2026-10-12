@@ -47,7 +47,7 @@ def main():
                    "body.rtl .rail","prefers-reduced-motion",
                    "var(--card)","var(--line)","var(--accent)"):
         require(marker in css,"CSS_FEATURE_MISSING")
-    require("data-nav" in js and "data-action" in js,"ORIGINAL_NAV_FEATURE_MISSING")
+    require("data-nav" in js and "dataset.action" in js,"ORIGINAL_NAV_FEATURE_MISSING")
     exec_cmd(["node","--check",str(STAGE/"ui.js")],timeout=15)
     exec_cmd(COMPOSE+["config","--quiet"],timeout=40)
 
