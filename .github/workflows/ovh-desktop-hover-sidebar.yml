@@ -32,7 +32,7 @@ jobs:
           deploy=Path('scripts/ops/ovh-deploy-desktop-hover-rail-v1.py').read_text()
           for token in ('pointerenter','pointerleave','focusin','focusout',
                         'MutationObserver','localStorage','matchMedia',
-                        'data-nav','data-action','neis-rail-label','neis-rail-pin'):
+                        'data-nav','dataset.action','neis-rail-label','neis-rail-pin'):
             assert token in js,token
           for token in ('@media (min-width: 1024px)','--neis-rail-open: 248px',
                         'body.rtl .rail','prefers-reduced-motion','var(--card)',
