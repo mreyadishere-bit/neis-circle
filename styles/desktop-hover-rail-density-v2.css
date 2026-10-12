@@ -78,7 +78,7 @@
     justify-self: stretch;
     width: 100%;
     min-width: 0;
-    grid-template-columns: 48px minmax(0,1fr);
+    grid-template-columns: 60px minmax(0,1fr);
   }
   html body .rail.neis-hover-rail .nav-btn > svg {
     box-sizing: border-box;
