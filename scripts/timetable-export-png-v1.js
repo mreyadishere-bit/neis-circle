@@ -189,8 +189,10 @@ async function renderBlob(stage,width,height){
     '" viewBox="0 0 '+width+' '+height+'">'+
     '<foreignObject x="0" y="0" width="100%" height="100%">'+xml+
     '</foreignObject></svg>';
-  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));
-  try{
+  // SVG must be a self-contained data URL: rendering a blob-backed foreignObject
+  // can taint Canvas in Chromium even when the timetable contains no remote images.
+  const url='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  {
     const image=new Image();
     image.decoding='async';
     image.src=url;
@@ -211,7 +213,7 @@ async function renderBlob(stage,width,height){
     },'image/png'));
     if(png.type!=='image/png')throw new Error('PNG encoding unavailable');
     return png;
-  }finally{URL.revokeObjectURL(url)}
+  }
 }
 async function save(blob){
   const url=URL.createObjectURL(blob);
