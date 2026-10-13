@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-image-downsample-v2
+  group: ovh-image-downsample-v2-fast
   cancel-in-progress: false
 jobs:
   validate:
