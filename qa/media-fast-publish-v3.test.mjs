@@ -108,13 +108,14 @@ try{
     });
     for(const script of [v1,bridge,v2,fast])await page.addScriptTag({content:script});
     const res=await page.evaluate(async()=>{
-      const file=new File([new Uint8Array(10*1048576)],'huge.png',{type:'image/png'});
-      const nativeImage=window.Image;
+      // JPEG SOF reports 20,000 x 13,000 without allocating 260 million pixels.
+      const jpegHeader=new Uint8Array([
+        0xff,0xd8, 0xff,0xc0,0x00,0x11,0x08,
+        0x32,0xc8, 0x4e,0x20, 0x03,0x01,0x11,0x00,
+        0x02,0x11,0x01, 0x03,0x11,0x01, 0xff,0xd9]);
+      const file=new File([jpegHeader,new Uint8Array(10*1048576)],
+        'huge.jpg',{type:'image/jpeg'});
       const nativeBitmap=window.createImageBitmap;
-      window.Image=class extends nativeImage{
-        get naturalWidth(){return 20000}
-        get naturalHeight(){return 13000}
-      };
       let requested=null;
       window.createImageBitmap=async(f,o)=>{
         requested=o;
@@ -127,7 +128,7 @@ try{
         const optimized=await window.NEISImageOptimizer.prepare(file);
         return {requested,bytes:optimized.after,large:optimized.changed,
           width:optimized.width,height:optimized.height};
-      }finally{window.Image=nativeImage;window.createImageBitmap=nativeBitmap}
+      }finally{window.createImageBitmap=nativeBitmap}
     });
     assert.equal(res.requested.resizeWidth,2600);
     assert.ok(res.bytes<=7.5*1048576);
