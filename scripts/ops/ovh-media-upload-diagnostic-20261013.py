@@ -55,7 +55,7 @@ for name,query in [
  ('AUTH_UID_FUNCTION_EXISTS',"SELECT to_regprocedure('auth.uid()') IS NOT NULL;")
 ]:
  value=sql(query)
- echo(name,value if value in ['t','f'] else 'UNKNOWN')
+ echo(name,value if value in ['t','f','true','false'] else 'UNKNOWN')
 
 # No personal data or object names in these aggregates.
 bucket=sql("""SELECT json_build_object('exists',EXISTS
@@ -85,6 +85,16 @@ if policies:
   echo('STORAGE_INSERT_POLICIES',counts[1])
   echo('STORAGE_AUTHENTICATED_ROLE_POLICIES',counts[2])
 else:echo('STORAGE_POLICIES_QUERY','FAILED')
+
+path_stats=sql("""SELECT count(*)::text||','||
+ count(*) FILTER (WHERE split_part(name,'/',1) ~*
+ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')::text
+ FROM storage.objects WHERE bucket_id='community-media';""")
+if path_stats:
+ a=path_stats.split(',')
+ if len(a)==2:
+  echo('BUCKET_OBJECTS_TOTAL',a[0])
+  echo('BUCKET_OBJECTS_UID_PREFIX',a[1])
 
 latest=sql("""SELECT count(*) FILTER (WHERE created_at > now()-interval '2 hours')::text||','||
  count(*) FILTER (WHERE created_at > now()-interval '1 day')::text
