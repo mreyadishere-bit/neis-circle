@@ -1,0 +1,30 @@
+/* Image preparation feedback, scoped to existing post/article modal.
+   No change to the composer layout or any form controls. */
+.neis-image-processing-status{
+  display:flex;align-items:center;gap:9px;
+  margin:8px 0 12px;padding:11px 14px;
+  border:1px solid var(--line,#dfe7e3);
+  border-radius:12px;
+  background:var(--soft,#edf4f1);
+  color:var(--ink,#142b25);
+  font-size:12px;line-height:1.45;font-weight:600;
+}
+.neis-image-processing-status[data-phase="optimizing"]::before,
+.neis-image-processing-status[data-phase="uploading"]::before{
+  content:"";display:block;flex:0 0 13px;height:13px;width:13px;
+  border:2px solid var(--line,#dfe7e3);
+  border-top-color:var(--accent,#087b5b);
+  border-radius:50%;
+  animation:neis-image-status-spin .85s linear infinite;
+}
+.neis-image-processing-status[data-phase="error"]{
+  background:color-mix(in srgb,#ce573d 10%,var(--card,#fff));
+  border-color:color-mix(in srgb,#ce573d 22%,var(--line,#ddd));
+}
+.neis-image-processing-status[data-phase="ready"]{
+  border-color:color-mix(in srgb,var(--accent,#087b5b) 36%,var(--line,#ddd));
+}
+@keyframes neis-image-status-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+  .neis-image-processing-status::before{animation-duration:2s!important}
+}
