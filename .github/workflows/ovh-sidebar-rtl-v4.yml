@@ -1,0 +1,89 @@
+name: OVH Desktop RTL Sidebar Polish
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/desktop-sidebar-arabic-rtl-polish-20261013]
+    paths:
+      - 'scripts/desktop-hover-rail-rtl-v4.js'
+      - 'styles/desktop-hover-rail-rtl-v4.css'
+      - 'qa/desktop-hover-rail-rtl-v4.test.mjs'
+      - 'scripts/ops/ovh-deploy-sidebar-rtl-v4.py'
+      - '.github/workflows/ovh-sidebar-rtl-v4.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-sidebar-rtl-v4
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify localization and deployment guards
+        run: |
+          set -euo pipefail
+          node --check scripts/desktop-hover-rail-rtl-v4.js
+          node --check qa/desktop-hover-rail-rtl-v4.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-sidebar-rtl-v4.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/desktop-hover-rail-rtl-v4.js').read_text()
+          css=Path('styles/desktop-hover-rail-rtl-v4.css').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-sidebar-rtl-v4.py').read_text()
+          for token in ('العلاقات','Connections','MutationObserver',
+                        'data-nav','dataset.action','aria-pressed','rtl'):
+            assert token in js,token
+          for token in ('@media (min-width: 1024px)','justify-content: flex-start',
+                        'scrollbar-width: none','body.rtl'):
+            assert token in css,token
+          assert '.stage{' not in css and '.top{' not in css
+          assert 'SIDEBAR_RTL_FRONTEND=ROLLED_BACK' in deploy
+          assert 'scripts/timetable-export-png-v1.js' in deploy
+          assert 'main-admin-auth-studio-v5.js' in deploy
+          print('SIDEBAR_RTL_STATIC=PASS')
+          PY
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Chromium
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test Arabic labels, footer, English switch and desktop sizing
+        run: node qa/desktop-hover-rail-rtl-v4.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Activate RTL polish over live OVH release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/sidebar-rtl-polish-20261013-v4
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/desktop-hover-rail-rtl-v4.js "$target:$stage/rtl.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/desktop-hover-rail-rtl-v4.css "$target:$stage/rtl.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-sidebar-rtl-v4.py
