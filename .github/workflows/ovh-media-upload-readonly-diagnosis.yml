@@ -1,0 +1,48 @@
+name: OVH Media Upload Readonly Diagnosis
+on:
+  workflow_dispatch:
+  push:
+    branches: [diagnostics/storage-upload-failure-20261013]
+    paths:
+      - 'scripts/ops/ovh-media-upload-diagnostic-20261013.py'
+      - '.github/workflows/ovh-media-upload-readonly-diagnosis.yml'
+permissions:
+  contents: read
+jobs:
+  diagnosis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static safety and syntax checks
+        run: |
+          python3 -m py_compile scripts/ops/ovh-media-upload-diagnostic-20261013.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/ops/ovh-media-upload-diagnostic-20261013.py').read_text()
+          assert "SELECT" in s and "storage.buckets" in s
+          assert "storage.objects" in s
+          assert "COMPLETED','READ_ONLY_NO_PRIVATE_DATA" in s
+          assert not any(x in s for x in ("CREATE TABLE","INSERT INTO","DELETE FROM","UPDATE storage.", "DOCKER_HOST"))
+          print('OVH_MEDIA_UPLOAD_READONLY=PASS')
+          PY
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Diagnose OVH storage upload from aggregated metadata only
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-media-upload-diagnostic-20261013.py
