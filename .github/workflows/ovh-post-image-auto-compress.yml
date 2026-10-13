@@ -1,0 +1,87 @@
+name: OVH Post Image Automatic Compression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/post-media-25mb-auto-compress-20261013]
+    paths:
+      - 'scripts/media-auto-compression-v2.js'
+      - 'qa/post-media-auto-compression.test.mjs'
+      - 'scripts/ops/ovh-deploy-post-image-compress-v2.py'
+      - '.github/workflows/ovh-post-image-auto-compress.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-post-image-compress-v2
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify 8MB guard is intercepted before uploading
+        run: |
+          set -euo pipefail
+          node --check scripts/media-auto-compression-v2.js
+          node --check qa/post-media-auto-compression.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-post-image-compress-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/media-auto-compression-v2.js').read_text()
+          old=Path('scripts/02-content-admin.js').read_text()
+          polls=Path('scripts/home-polls-v170.js').read_text()
+          py=Path('scripts/ops/ovh-deploy-post-image-compress-v2.py').read_text()
+          for marker in ('window.uploadMedia=optimizedUploadMedia',
+            'NEISImageOptimizer.prepare','Image optimized:',
+            'await saved.call(this,result.file,folder)'):
+              assert marker in js,marker
+          assert "async function uploadMedia(file,folder)" in old
+          assert "file.size>8*1024*1024" in old
+          assert "await uploadMedia(file,'posts')" in polls
+          assert "POST_IMAGE_COMPRESS_FRONTEND=ROLLED_BACK" in py
+          assert 'main-admin-auth-studio-v5.js' in py
+          print('POST_MEDIA_STATIC=PASS')
+          PY
+  browser:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Chromium
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Exercise real 25MB JPG post uploads on mobile and desktop
+        run: node qa/post-media-auto-compression.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy over live OVH frontend while preserving auth and DB
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/post-image-auto-compression-20261013-v2
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/media-auto-compression-v2.js "$target:$stage/post-compress.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-post-image-compress-v2.py
