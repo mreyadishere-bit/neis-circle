@@ -1,0 +1,84 @@
+name: OVH Extreme Dimension Image Downsampling
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/large-image-dimension-downsample-v2-20261013]
+    paths:
+      - 'scripts/article-image-optimizer-v2.js'
+      - 'qa/image-extreme-dimension-v2.test.mjs'
+      - 'scripts/ops/ovh-deploy-large-image-downsample-v2.py'
+      - '.github/workflows/ovh-image-downsample-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-image-downsample-v2-fast
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and no-hard-pixel-rejection checks
+        run: |
+          set -euo pipefail
+          node --check scripts/article-image-optimizer-v2.js
+          node --check qa/image-extreme-dimension-v2.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-large-image-downsample-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/article-image-optimizer-v2.js').read_text()
+          deploy=Path('scripts/ops/ovh-deploy-large-image-downsample-v2.py').read_text()
+          for x in ['createImageBitmap(file,','resizeWidth:rw','resizeHeight:rh',
+                    'NEISImageOptimizer=Object.freeze','7.5*MIB',
+                    'ctx.imageSmoothingQuality']:
+           assert x in s,x
+          assert 'Image dimensions exceed the safe processing limit.' not in s
+          assert 'IMAGE_DOWNSAMPLE_FRONTEND=ROLLED_BACK' in deploy
+          assert 'scripts/media-auto-compression-v2.js' in deploy
+          assert 'main-admin-auth-studio-v5.js' in deploy
+          print('BIG_IMAGE_DOWNSAMPLE_STATIC=PASS')
+          PY
+  browser:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser dependencies
+        run: npm install --no-save playwright
+      - name: Real 25MB JPEG and 260MP dimensions downsampling regression
+        run: node qa/image-extreme-dimension-v2.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy read-only tested optimizer over live frontend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/large-image-downsample-20261013-v2
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/article-image-optimizer-v2.js "$target:$stage/optimizer.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-large-image-downsample-v2.py
