@@ -1,0 +1,135 @@
+name: OVH Article Large Image Auto Compression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/article-auto-image-compress-20261013]
+    paths:
+      - 'scripts/article-image-optimizer-v1.js'
+      - 'scripts/articles-v27.js'
+      - 'scripts/06-image-editor.js'
+      - 'qa/article-image-optimizer.test.mjs'
+      - 'scripts/ops/ovh-deploy-article-image-optimizer-v1.py'
+      - '.github/workflows/ovh-article-image-optimizer.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-article-image-optimizer
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check syntax and failure handling
+        run: |
+          set -euo pipefail
+          node --check scripts/article-image-optimizer-v1.js
+          node --check scripts/articles-v27.js
+          node --check scripts/06-image-editor.js
+          node --check qa/article-image-optimizer.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-article-image-optimizer-v1.py
+          python3 - <<'PY'
+          from pathlib import Path
+          optimizer=Path('scripts/article-image-optimizer-v1.js').read_text()
+          article=Path('scripts/articles-v27.js').read_text()
+          editor=Path('scripts/06-image-editor.js').read_text()
+          assert "7.5*MIB" in optimizer and "image/webp" in optimizer
+          assert "await window.NEISImageOptimizer.prepare(file)" in article
+          assert "if(button)button.disabled=false" in article
+          assert "record.source=optimized.file" in editor
+          assert "input.value='';" in editor
+          print('IMAGE_OPTIMIZER_STATIC=PASS')
+          PY
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser runtime
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Verify real high-resolution PNG optimization
+        run: node qa/article-image-optimizer.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Generate exact patch fragments from last main release
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess,json
+          from pathlib import Path
+          files=['scripts/articles-v27.js','scripts/06-image-editor.js']
+          patch=[]
+          def slice_between(text,start,stop):
+            a=text.index(start)
+            b=text.index(stop,a)
+            return text[a:b]
+          for path in files:
+            old=subprocess.run(['git','show','HEAD^:'+path],check=True,text=True,capture_output=True).stdout
+            new=Path(path).read_text()
+            if path.endswith('articles-v27.js'):
+              boundaries=[('    if(file){\n','    const payload={author_id:')]
+            else:
+              boundaries=[
+                ("    if(file.size>20*1024*1024)",'    var preview=document.getElementById(config.preview);'),
+                ("    active=true;\n",'\n  },true);')
+              ]
+            changes=[]
+            for i,(start,end) in enumerate(boundaries):
+              if path.endswith('06-image-editor.js') and i==1:
+                old_section=old[old.index('    records.set(input,record);'):]
+                new_section=new[new.index('    records.set(input,record);'):]
+                before=slice_between(old_section,start,end)
+                after=slice_between(new_section,start,end)
+              elif path.endswith('06-image-editor.js'):
+                before=slice_between(old,start,end)
+                after=slice_between(new,"    if(!window.NEISImageOptimizer)",end)
+              else:
+                before=slice_between(old,start,end)
+                after=slice_between(new,start,end)
+              assert before!=after and old.count(before)==1,(path,i)
+              changes.append({'old':before,'new':after})
+              assert len(before)<15000 and len(after)<16000
+            check=old
+            for item in changes:
+              check=check.replace(item['old'],item['new'],1)
+            assert check==new,'unexpected modifications outside approved image edits in '+path
+            patch.append({'path':path,'changes':changes})
+          Path('image-optimizer-patches.json').write_text(json.dumps(patch))
+          print('ARTICLE_PATCH_GENERATION=PASS')
+          PY
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy client-only image optimization with live-code patch guards
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/article-image-compression-20261013-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/article-image-optimizer-v1.js "$target:$stage/optimizer.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes image-optimizer-patches.json "$target:$stage/patches.json"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-article-image-optimizer-v1.py

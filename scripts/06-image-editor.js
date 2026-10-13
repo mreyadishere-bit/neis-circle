@@ -215,7 +215,9 @@
     if(!file)return;
     event.stopImmediatePropagation();
     if(!file.type.startsWith('image/')){input.value='';tell(tr('Choose a valid image file.','اختر ملف صورة صالحًا.'));return}
-    if(file.size>20*1024*1024){input.value='';tell(tr('Choose an image smaller than 20 MB before editing.','اختر صورة أقل من 20 ميجابايت قبل التعديل.'));return}
+    if(!window.NEISImageOptimizer){
+      input.value='';tell(tr('Image optimizer is loading. Refresh and try again.','أداة ضغط الصور لم تُحمّل بعد. حدّث الصفحة وحاول مجددًا.'));return;
+    }
     var preview=document.getElementById(config.preview);
     if(!preview)return;
     var previous=records.get(input);
@@ -226,8 +228,20 @@
     };
     records.set(input,record);
     active=true;
-    var result=await editor(file,config.aspect,null);
-    if(result)applyResult(record,result);
-    else{input.value='';restorePreview(record)}
+    try{
+      // Convert large images before the crop dialog; otherwise the old
+      // 20MB hard stop prevents students from ever using their cover image.
+      if(file.size>window.NEISImageOptimizer.maxBytes)
+        tell(tr('Optimizing large image for upload…','جارٍ ضغط الصورة الكبيرة للرفع…'));
+      var optimized=await window.NEISImageOptimizer.prepare(file);
+      record.source=optimized.file;
+      var result=await editor(record.source,config.aspect,null);
+      if(result)applyResult(record,result);
+      else{input.value='';restorePreview(record)}
+    }catch(error){
+      input.value='';
+      restorePreview(record);
+      tell(error?.message||tr('Could not optimize this image.','تعذر ضغط هذه الصورة.'));
+    }finally{active=false}
   },true);
 })();

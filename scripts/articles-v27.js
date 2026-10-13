@@ -176,6 +176,20 @@
     const existing=state.articles.find(item=>same(item.id,id));let file=$('#articleCover')?.files?.[0]||autosaveContext?.restoredCoverFile||null;
     let coverUrl=existing?.cover_url||$('#articleCoverPreview')?.dataset.persistedUrl||'',uploadedPath='';
     if(file){
+      // Both the older uploadRecord and newer uploadMedia enforce an 8 MiB limit.
+      // Optimize before either storage path; never publish without the chosen cover.
+      try{
+        if(!window.NEISImageOptimizer)throw new Error(tr('Image optimizer is loading. Refresh and try again.','أداة ضغط الصور لم تُحمّل بعد. حدّث الصفحة وحاول مجددًا.'));
+        const optimized=await window.NEISImageOptimizer.prepare(file);
+        file=optimized.file;
+        if(optimized.changed)toast(tr('Cover optimized from ','تم ضغط صورة الغلاف من ')+
+          (optimized.before/1048576).toFixed(1)+' MB '+tr('to','إلى')+' '+
+          (optimized.after/1048576).toFixed(1)+' MB');
+      }catch(err){
+        toast(err?.message||tr('Could not optimize this image.','تعذر ضغط هذه الصورة.'));
+        if(button)button.disabled=false;
+        return;
+      }
       if(typeof uploadRecord==='function'){const media=await uploadRecord(file,'article-covers');if(!media){if(button)button.disabled=false;return}coverUrl=media.url;uploadedPath=media.path||''}
       else{coverUrl=await uploadMedia(file,'article-covers');if(!coverUrl){if(button)button.disabled=false;return}}
     }
