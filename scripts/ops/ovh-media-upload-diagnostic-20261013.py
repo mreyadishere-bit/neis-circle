@@ -37,6 +37,26 @@ for service in ['storage','rest','db','caddy']:
    echo('STORAGE_FILE_ETAG_MODE',env.get('FILE_STORAGE_ETAG_ALGORITHM','UNSPECIFIED')
         if env.get('FILE_STORAGE_ETAG_ALGORITHM','') in ['mtime','md5'] else 'OTHER_OR_UNSET')
 
+# Verify whether RLS actually enforces policies, plus the authenticated role's grants.
+rls=sql("""SELECT c.relrowsecurity::text||','||c.relforcerowsecurity::text
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname='storage' AND c.relname='objects' AND c.relkind IN ('r','p');""")
+if rls:
+ vals=rls.split(',')
+ if len(vals)==2:
+  echo('STORAGE_OBJECT_RLS_ENABLED',vals[0])
+  echo('STORAGE_OBJECT_FORCE_RLS',vals[1])
+for name,query in [
+ ('AUTH_ROLE_EXISTS',"SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated')::text;"),
+ ('AUTH_ROLE_TABLE_INSERT',"SELECT has_table_privilege('authenticated','storage.objects','INSERT')::text;"),
+ ('AUTH_ROLE_TABLE_SELECT',"SELECT has_table_privilege('authenticated','storage.objects','SELECT')::text;"),
+ ('AUTH_ROLE_TABLE_DELETE',"SELECT has_table_privilege('authenticated','storage.objects','DELETE')::text;"),
+ ('AUTH_ROLE_SCHEMA_USAGE',"SELECT has_schema_privilege('authenticated','storage','USAGE')::text;"),
+ ('AUTH_UID_FUNCTION_EXISTS',"SELECT to_regprocedure('auth.uid()') IS NOT NULL;")
+]:
+ value=sql(query)
+ echo(name,value if value in ['t','f'] else 'UNKNOWN')
+
 # No personal data or object names in these aggregates.
 bucket=sql("""SELECT json_build_object('exists',EXISTS
    (SELECT 1 FROM storage.buckets WHERE id='community-media'),
