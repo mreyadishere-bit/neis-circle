@@ -48,7 +48,7 @@ jobs:
         with:
           node-version: 22
       - name: Install browser dependencies
-        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+        run: npm install --no-save playwright && npx playwright install chromium
       - name: Real 25MB JPEG and 260MP dimensions downsampling regression
         run: node qa/image-extreme-dimension-v2.test.mjs
   deploy:
