@@ -1,0 +1,32 @@
+/* Desktop RTL sidebar polish. Do not alter document-wide scrolling.
+   Only the sidebar's own internal scrolling may be visually suppressed. */
+@media (min-width: 1024px) {
+  html body .rail.neis-hover-rail {
+    overflow: hidden;
+    scrollbar-width: none;
+  }
+  html body .rail.neis-hover-rail .rail-nav {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none;
+    overscroll-behavior-y: contain;
+  }
+  html body .rail.neis-hover-rail .rail-nav::-webkit-scrollbar,
+  html body .rail.neis-hover-rail::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+  }
+  html body.rtl .rail.neis-hover-rail.is-expanded .neis-rail-footer {
+    /* The old flex-end puts the pin at the opposite edge in RTL. */
+    justify-content: flex-start !important;
+  }
+  html body.rtl .rail.neis-hover-rail .neis-rail-pin {
+    direction: rtl;
+    flex-direction: row;
+  }
+  html body.rtl .rail.neis-hover-rail .neis-rail-label,
+  html body.rtl .rail.neis-hover-rail .neis-rail-brand-name {
+    direction: rtl;
+    unicode-bidi: plaintext;
+    text-align: start;
+  }
+}
