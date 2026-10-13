@@ -1,0 +1,74 @@
+name: OVH Secure Media Upload Policy Restore
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/ovh-media-owned-storage-policies-20261013]
+    paths:
+      - 'supabase/migrations/20261013163000_restore_ovh_community_media_own_path_rls.sql'
+      - 'scripts/ops/ovh-restore-community-media-rls-20261013.py'
+      - '.github/workflows/ovh-secure-media-upload-policy-restore.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-secure-media-upload-policy-restore
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check RLS policy scope and read-only integration probes
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-restore-community-media-rls-20261013.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('supabase/migrations/20261013163000_restore_ovh_community_media_own_path_rls.sql').read_text()
+          py=Path('scripts/ops/ovh-restore-community-media-rls-20261013.py').read_text()
+          assert s.count('CREATE POLICY ')==3
+          assert 'TO authenticated' in s
+          assert s.count("bucket_id='community-media'")>=3
+          assert s.count("split_part(name,'/',1) = (select auth.uid()::text)") == 3
+          assert 'SAVEPOINT neis_probe;' in s
+          assert 'ROLLBACK TO SAVEPOINT neis_probe;' in s
+          assert 'SECURITY FAILURE: cross-user upload was not rejected' in s
+          assert s.count('BEGIN;')==1 and s.count('COMMIT;')==1
+          assert not any(x in s.upper() for x in
+             ['DISABLE ROW LEVEL SECURITY','GRANT ALL','DROP TABLE',
+              'TRUNCATE STORAGE.OBJECTS'])
+          assert 'STORAGE_OBJECTS_UNCHANGED=YES' in py
+          assert 'SQL_INTEGRATION_FAILED' in py
+          print('SECURE_MEDIA_POLICY_STATIC=PASS')
+          PY
+  deploy:
+    needs: static
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Restore own-folder RLS policies (transactional with dry-run insert)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/community-media-rls-restore-20261013
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/migrations/20261013163000_restore_ovh_community_media_own_path_rls.sql "$target:$stage/restore.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-restore-community-media-rls-20261013.py
