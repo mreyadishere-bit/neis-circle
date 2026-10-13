@@ -5,7 +5,7 @@ import {chromium} from 'playwright';
 const v1=fs.readFileSync('scripts/article-image-optimizer-v1.js','utf8');
 const v2=fs.readFileSync('scripts/article-image-optimizer-v2.js','utf8');
 const bridge=fs.readFileSync('scripts/media-auto-compression-v2.js','utf8');
-const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox']});
 try{
   for(const width of [1440,390]){
     const page=await browser.newPage({viewport:{width,height:820}});
