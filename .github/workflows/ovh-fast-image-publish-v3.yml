@@ -1,0 +1,87 @@
+name: OVH Fast Image Publish v3
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, fix/fast-image-publish-progress-20261013]
+    paths:
+      - 'scripts/media-fast-publish-v3.js'
+      - 'styles/media-fast-publish-v3.css'
+      - 'qa/media-fast-publish-v3.test.mjs'
+      - 'scripts/ops/ovh-deploy-fast-image-publish-v3.py'
+      - '.github/workflows/ovh-fast-image-publish-v3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-fast-image-publish-v3
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check scripts and deployment boundaries
+        run: |
+          set -euo pipefail
+          node --check scripts/media-fast-publish-v3.js
+          node --check qa/media-fast-publish-v3.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-fast-image-publish-v3.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/media-fast-publish-v3.js').read_text()
+          css=Path('styles/media-fast-publish-v3.css').read_text()
+          op=Path('scripts/ops/ovh-deploy-fast-image-publish-v3.py').read_text()
+          for word in ['image/jpeg','jpegDimensions','resizeQuality','queue=',
+                      'WeakMap','window.uploadMedia=publish','neis-image-processing-status',
+                      'aria-live','window.NEISImageOptimizer']:
+             assert word in js,word
+          assert 'for(const quality of [.92,.86,.80,.72])' not in js
+          assert '.neis-image-processing-status' in css
+          assert 'FAST_IMAGE_PUBLISH_FRONTEND=ROLLED_BACK' in op
+          assert 'main-admin-auth-studio-v5.js' in op
+          print('FAST_IMAGE_PUBLISH_STATIC=PASS')
+          PY
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright for preinstalled Chrome
+        run: npm install --no-save playwright
+      - name: Test 25MB image preloading, progress, upload, and 260MP dimensions
+        run: node qa/media-fast-publish-v3.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Activate fast optimized image publishing on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/fast-image-publish-20261013-v3
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/media-fast-publish-v3.js "$target:$stage/fast.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/media-fast-publish-v3.css "$target:$stage/fast.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-fast-image-publish-v3.py
