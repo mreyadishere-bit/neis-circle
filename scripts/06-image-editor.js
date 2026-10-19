@@ -14,10 +14,31 @@
   function tell(message){if(typeof window.toast==='function')window.toast(message);else window.alert(message)}
   function loadImage(file){
     return new Promise(function(resolve,reject){
-      var url=URL.createObjectURL(file),image=new Image();
-      image.onload=function(){URL.revokeObjectURL(url);resolve(image)};
-      image.onerror=function(){URL.revokeObjectURL(url);reject(new Error('image_decode_failed'))};
-      image.src=url;
+      if(!file||!file.size){reject(new Error('image_file_empty'));return}
+      var image=new Image(),url='',finished=false;
+      function cleanup(){if(url){URL.revokeObjectURL(url);url=''}}
+      function fallback(){
+        if(finished)return;
+        cleanup();
+        var reader=new FileReader();
+        reader.onload=function(){
+          image.onload=function(){
+            if(!image.naturalWidth||!image.naturalHeight){finished=true;reject(new Error('image_decode_failed'));return}
+            finished=true;resolve(image);
+          };
+          image.onerror=function(){if(!finished){finished=true;reject(new Error('image_decode_failed'))}};
+          image.src=String(reader.result||'');
+        };
+        reader.onerror=function(){if(!finished){finished=true;reject(new Error('image_read_failed'))}};
+        try{reader.readAsDataURL(file)}catch(error){finished=true;reject(error)}
+      }
+      image.onload=function(){
+        if(!image.naturalWidth||!image.naturalHeight){fallback();return}
+        if(finished)return;
+        finished=true;cleanup();resolve(image);
+      };
+      image.onerror=fallback;
+      try{url=URL.createObjectURL(file);image.src=url}catch(error){fallback()}
     });
   }
   function editor(file,preferredAspect,savedState){
