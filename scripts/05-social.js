@@ -3188,17 +3188,47 @@ function openCirclePost(){
   $('#cpPollSelection').onchange=()=>$('#cpPollMaxWrap').classList.toggle('hidden',$('#cpPollSelection').value!=='multiple');
   $('#cpPollClosing').onchange=()=>$('#cpPollCloseAtWrap').classList.toggle('hidden',$('#cpPollClosing').value!=='custom');
 
+  const selectedPreviewUrls=new Map();
+  const previewUrlFor=file=>{
+    if(!selectedPreviewUrls.has(file))selectedPreviewUrls.set(file,URL.createObjectURL(file));
+    return selectedPreviewUrls.get(file);
+  };
   const renderSelected=()=>{
-    preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${t('Adjust image','تعديل الصورة')} ${index+1}"><img src="${URL.createObjectURL(file)}" alt="${t('Selected image','صورة مختارة')} ${index+1}"><span>${index+1}</span><em>${t('Crop','قص')}</em></button>`).join('');
+    preview.innerHTML=selectedFiles.map((file,index)=>`<button type="button" class="post-upload-preview-item post-upload-editable" data-edit-upload-image="${index}" aria-label="${t('Adjust image','تعديل الصورة')} ${index+1}"><img src="${esc(previewUrlFor(file))}" alt=""><span>${index+1}</span><em>${t('Crop','قص')}</em></button>`).join('');
     preview.classList.toggle('hidden',!selectedFiles.length);hint.classList.toggle('hidden',!selectedFiles.length);
+    preview.querySelectorAll('img').forEach((image,index)=>{
+      image.onerror=()=>{
+        const file=selectedFiles[index];
+        if(!file||image.dataset.dataFallback==='1')return;
+        image.dataset.dataFallback='1';
+        const reader=new FileReader();
+        reader.onload=()=>{if(image.isConnected)image.src=String(reader.result||'')};
+        reader.onerror=()=>{if(image.isConnected){image.removeAttribute('src');image.alt=t('Preview unavailable — reselect this image.','المعاينة غير متاحة — أعد اختيار هذه الصورة.')}};
+        try{reader.readAsDataURL(file)}catch(_){image.alt=t('Preview unavailable — reselect this image.','المعاينة غير متاحة — أعد اختيار هذه الصورة.')}
+      };
+    });
     preview.querySelectorAll('[data-edit-upload-image]').forEach(button=>button.onclick=async()=>{
       const index=Number(button.dataset.editUploadImage),source=selectedFiles[index];
       if(!source||!window.NEISImageEditor?.editFile)return;
-      const result=await window.NEISImageEditor.editFile(source,16/9,null);
-      if(result?.file){selectedFiles[index]=result.file;renderSelected()}
+      button.disabled=true;
+      try{
+        const result=await window.NEISImageEditor.editFile(source,16/9,null);
+        if(result?.file){selectedFiles[index]=result.file;renderSelected()}
+      }catch(error){
+        console.error('[NEIS image crop]',error);
+        toast(t('This image could not be decoded. Try saving it as JPG or PNG, then select it again.','تعذر قراءة الصورة. احفظها بصيغة JPG أو PNG ثم اخترها مرة أخرى.'));
+      }finally{if(button.isConnected)button.disabled=false}
     });
   };
-  imageInput.onchange=()=>{selectedFiles=[...(imageInput.files||[])].slice(0,8);if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));renderSelected()};
+  imageInput.onchange=()=>{
+    selectedPreviewUrls.forEach(url=>{try{URL.revokeObjectURL(url)}catch(_){}});
+    selectedPreviewUrls.clear();
+    const files=[...(imageInput.files||[])].slice(0,8);
+    selectedFiles=files.filter(file=>file&&file.size>0&&String(file.type||'').startsWith('image/'));
+    if(selectedFiles.length!==files.length)toast(t('One selected file is empty or not a supported image. Please choose it again.','أحد الملفات المختارة فارغ أو ليس صورة مدعومة. اختره مرة أخرى.'));
+    if((imageInput.files?.length||0)>8)toast(t('You can add up to 8 images per post.','يمكنك إضافة حتى 8 صور في المنشور.'));
+    renderSelected();
+  };
 
   $('#circlePostForm').onsubmit=async e=>{
     e.preventDefault();const button=e.submitter;if(button?.disabled)return;
@@ -3224,7 +3254,15 @@ function openCirclePost(){
       const selection=$('#cpPollSelection').value,rawMax=$('#cpPollMax').value.trim();
       const maxSelections=selection==='multiple'?(rawMax?Math.max(1,Math.min(cleanOptions.length,Number(rawMax)||1)):null):1;
       const closesAt=$('#cpPollClosing').value==='custom'?new Date($('#cpPollCloseAt').value).toISOString():null;
-      const {data:createdPollPostId,error}=await sb.rpc('create_circle_poll_post',{p_circle_id:c.id,p_title:$('#cpTitle').value.trim(),p_body:$('#cpBody').value.trim(),p_tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:cleanOptions,p_selection_type:selection,p_max_selections:maxSelections,p_allow_vote_change:$('#cpPollAllowChange').checked,p_anonymous:$('#cpPollAnonymous').checked,p_results_visibility:$('#cpPollResults').value,p_closes_at:closesAt});
+      let createdPollPostId=null,error=null;
+      try{
+        const result=await sb.rpc('create_circle_poll_post',{p_circle_id:c.id,p_title:$('#cpTitle').value.trim(),p_body:$('#cpBody').value.trim(),p_tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),p_image_url:image_url,p_image_urls:image_urls,p_image_display_mode:image_display_mode,p_options:cleanOptions,p_selection_type:selection,p_max_selections:maxSelections,p_allow_vote_change:$('#cpPollAllowChange').checked,p_anonymous:$('#cpPollAnonymous').checked,p_results_visibility:$('#cpPollResults').value,p_closes_at:closesAt});
+        createdPollPostId=result.data;error=result.error;
+      }catch(networkError){
+        console.error('[NEIS Circle poll publish network failure]',networkError);
+        toast(t('Connection interrupted while publishing. Check the Circle feed before retrying to avoid a duplicate.','انقطع الاتصال أثناء النشر. تحقق من منشورات المجتمع قبل إعادة المحاولة لتجنب التكرار.'));
+        button.disabled=false;return;
+      }
       if(error||!createdPollPostId){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(error?safeError(error,'create this poll'):t('The poll was created but could not be identified.','تم إنشاء التصويت لكن تعذر تحديده.'));button.disabled=false;return}
       const {data:createdPollPost,error:pollPostReadError}=await sb.from('posts').select(postRealtimeFields).eq('id',createdPollPostId).maybeSingle();
       closeModal();
@@ -3243,8 +3281,16 @@ function openCirclePost(){
       toast(t('Poll published. Refresh if it does not appear immediately.','تم نشر التصويت. حدّث الصفحة إذا لم يظهر فورًا.'));return;
     }
 
-    const {data:createdPost,error}=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url}).select(postRealtimeFields).single();
-    if(error||!createdPost){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(error?safeError(error,'publish this post'):t('The post was created but could not be loaded.','تم إنشاء المنشور لكن تعذر تحميله.'));button.disabled=false;return}
+    let createdPost=null,postError=null;
+    try{
+      const result=await sb.from('posts').insert({author_id:authUser.id,circle_id:c.id,kind:kind.value,title:$('#cpTitle').value.trim(),body:$('#cpBody').value.trim(),tags:$('#cpTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url}).select(postRealtimeFields).single();
+      createdPost=result.data;postError=result.error;
+    }catch(networkError){
+      console.error('[NEIS Circle post publish network failure]',networkError);
+      toast(t('Connection interrupted while publishing. Check the Circle feed before retrying to avoid a duplicate.','انقطع الاتصال أثناء النشر. تحقق من منشورات المجتمع قبل إعادة المحاولة لتجنب التكرار.'));
+      button.disabled=false;return;
+    }
+    if(postError||!createdPost){for(const uploaded of image_urls)await removeMediaUrl(uploaded);toast(postError?safeError(postError,'publish this post'):t('The post could not be confirmed. Please check the feed and retry if it is missing.','تعذر تأكيد نشر المنشور. تحقق من الصفحة الرئيسية وأعد المحاولة إذا لم يظهر.'));button.disabled=false;return}
     closeModal();await handlePostRealtime({eventType:'INSERT',new:createdPost});if(!window.NEISPatchCircleHomeRealtime?.())render();toast(t('Published in the Circle.','تم النشر في المجتمع.'));
   };
 }
