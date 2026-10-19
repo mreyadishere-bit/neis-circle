@@ -70,9 +70,9 @@ jobs:
           set -euo pipefail
           test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
           install -d -m 700 ~/.ssh
-          printf '%s\\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          printf '%s\\n' "$KNOWN" > ~/.ssh/known_hosts
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
           # Match the target alias to the trusted known_hosts entry; do not trust ssh-keyscan.
           KNOWN_ALIAS="$(awk 'NF >= 3 && $1 !~ /^#/ && $1 !~ /^@/ && index($1,"|")==0 {split($1,hosts,","); print hosts[1]; exit}' ~/.ssh/known_hosts)"
@@ -95,6 +95,6 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/02-content-admin.js "$target:$stage/content-admin.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/social.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/06-image-editor.js "$target:$stage/image-editor.js"
-          printf '%s\\n' "$release" > release-name.txt
+          printf '%s\n' "$release" > release-name.txt
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes release-name.txt "$target:$stage/release-name.txt"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-post-composer-fix.py
