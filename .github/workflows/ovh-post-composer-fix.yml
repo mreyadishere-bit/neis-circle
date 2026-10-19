@@ -1,0 +1,93 @@
+name: OVH Post Composer Reliability Fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/02-content-admin.js'
+      - 'scripts/05-social.js'
+      - 'scripts/06-image-editor.js'
+      - 'qa/media-fast-publish-v3.test.mjs'
+      - 'scripts/ops/ovh-deploy-post-composer-fix.py'
+      - '.github/workflows/ovh-post-composer-fix.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-post-composer-fix
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate patched frontend and deployment script
+        run: |
+          set -euo pipefail
+          node --check scripts/02-content-admin.js
+          node --check scripts/05-social.js
+          node --check scripts/06-image-editor.js
+          node --check qa/media-fast-publish-v3.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-post-composer-fix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          editor=Path('scripts/06-image-editor.js').read_text()
+          admin=Path('scripts/02-content-admin.js').read_text()
+          social=Path('scripts/05-social.js').read_text()
+          assert 'reader.readAsDataURL(file)' in editor
+          assert '[NEIS media upload network failure]' in admin
+          assert 'selectedPreviewUrls' in social
+          assert 'post publish network failure' in social
+          assert 'POST_COMPOSER_FIX_FRONTEND=ROLLED_BACK' in Path('scripts/ops/ovh-deploy-post-composer-fix.py').read_text()
+          print('POST_COMPOSER_FIX_STATIC=PASS')
+          PY
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright for preinstalled Chrome
+        run: npm install --no-save playwright
+      - name: Regression test image preparation and uploads
+        run: node qa/media-fast-publish-v3.test.mjs
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage verified frontend files on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/post-composer-fix-stage
+          release="post-composer-fix-$RUN_ID-$RUN_ATTEMPT"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/02-content-admin.js "$target:$stage/content-admin.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/06-image-editor.js "$target:$stage/image-editor.js"
+          printf '%s\\n' "$release" > release-name.txt
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes release-name.txt "$target:$stage/release-name.txt"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-post-composer-fix.py
