@@ -75,9 +75,9 @@ jobs:
           printf '%s\\n' "$KNOWN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
           # Match the target alias to the trusted known_hosts entry; do not trust ssh-keyscan.
-          KNOWN_ALIAS="$(awk 'NF >= 3 && $1 !~ /^#/ && $1 !~ /^@/ && $1 !~ /^\\|/ {split($1,hosts,","); print hosts[1]; exit}' ~/.ssh/known_hosts)"
+          KNOWN_ALIAS="$(awk 'NF >= 3 && $1 !~ /^#/ && $1 !~ /^@/ && index($1,"|")==0 {split($1,hosts,","); print hosts[1]; exit}' ~/.ssh/known_hosts)"
           test -n "$KNOWN_ALIAS"
-          printf 'Host *\\n  HostKeyAlias %s\\n  ControlMaster auto\\n  ControlPath ~/.ssh/cm-%%C\\n  ControlPersist 5m\\n  StrictHostKeyChecking yes\\n  BatchMode yes\\n' "$KNOWN_ALIAS" > ~/.ssh/config
+          printf 'Host *\n  HostKeyAlias %s\n  ControlMaster auto\n  ControlPath ~/.ssh/cm-%%C\n  ControlPersist 5m\n  StrictHostKeyChecking yes\n  BatchMode yes\n' "$KNOWN_ALIAS" > ~/.ssh/config
           chmod 600 ~/.ssh/config
       - name: Stage verified frontend files on OVH
         env:
