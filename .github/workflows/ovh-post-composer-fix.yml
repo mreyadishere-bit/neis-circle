@@ -74,6 +74,15 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\\n' "$KNOWN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<'SSHCFG'
+          Host *
+            ControlMaster auto
+            ControlPath ~/.ssh/cm-%C
+            ControlPersist 5m
+            StrictHostKeyChecking yes
+            BatchMode yes
+          SSHCFG
+          chmod 600 ~/.ssh/config
       - name: Stage verified frontend files on OVH
         env:
           HOST: ${{ secrets.OVH_HOST }}
@@ -84,6 +93,8 @@ jobs:
           target="ubuntu@$HOST"
           stage=/home/ubuntu/neis-backups/post-composer-fix-stage
           release="post-composer-fix-$RUN_ID-$RUN_ATTEMPT"
+          ssh -MNf -o BatchMode=yes -o StrictHostKeyChecking=yes "$target"
+          trap 'ssh -O exit "$target" >/dev/null 2>&1 || true' EXIT
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/02-content-admin.js "$target:$stage/content-admin.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/social.js"
