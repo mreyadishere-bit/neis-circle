@@ -55,6 +55,8 @@ function newGallery(){if(!requireAccount())return;openModal(`<div class="modal-h
 async function moderateGallery(id,changes){if(!state.isAdmin)return;const {data,error}=await sb.from('gallery_items').update(changes).eq('id',id).select('*').maybeSingle();if(error||!data){toast(error?.message||"Gallery could not be updated");return}const existing=state.gallery.find(x=>String(x.id)===String(id));if(existing)Object.assign(existing,data);else if(window.NEISSecondaryData)await window.NEISSecondaryData.loadGallery({force:true,useCache:false});window.NEISSecondaryData?.invalidate?.('gallery');render();toast("Gallery updated")}
 
 async function uploadMedia(file,folder){
+  // This file uses state.lang directly; do not rely on the social module's private t() helper.
+  const t=(en,ar)=>state.lang==='ar'?ar:en;
   if(!sb||!authUser){toast(t('Sign in before uploading images.','سجّل الدخول قبل رفع الصور.'));return ""}
   if(!file||!file.size){toast(t('This image is empty or unavailable. Choose it again.','الصورة فارغة أو غير متاحة. اخترها مرة أخرى.'));return ""}
   if(file.size>8*1024*1024){toast(t('Image must be smaller than 8 MB.','يجب أن يكون حجم الصورة أقل من 8 ميجابايت.'));return ""}
