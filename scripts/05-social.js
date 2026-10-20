@@ -3261,7 +3261,7 @@ function openCirclePost(){
       console.error('[NEIS Circle image publish flow]',uploadFlowError);
       for(const uploaded of image_urls){try{await removeMediaUrl(uploaded)}catch(cleanupError){console.warn('[NEIS image cleanup]',cleanupError)}}
       toast(t('Could not finish uploading the photos. Your post is still here; please try again.','تعذر إكمال رفع الصور. ما زال منشورك هنا؛ حاول مرة أخرى.'));
-      button.disabled=false;button.removeAttribute('aria-busy');button.textContent=originalButtonLabel;return;
+      button.disabled=false;return;
     }
     toast(t('Publishing post…','جارٍ نشر المنشور…'));
     const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
