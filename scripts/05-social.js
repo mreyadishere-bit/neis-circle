@@ -3246,16 +3246,15 @@ function openCirclePost(){
       if($('#cpPollClosing').value==='custom'&&!$('#cpPollCloseAt').value){toast(t('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
     }
 
-    button.disabled=true;button.setAttribute('aria-busy','true');
-    const originalButtonLabel=button.textContent;const image_urls=[];
-    const setPublishProgress=message=>{button.textContent=message;toast(message)};
+    button.disabled=true;const image_urls=[];
+    const setPublishProgress=message=>toast(message);
     try{
       for(let index=0;index<selectedFiles.length;index++){
         setPublishProgress(t('Uploading image '+(index+1)+' of '+selectedFiles.length+'…','جارٍ رفع الصورة '+(index+1)+' من '+selectedFiles.length+'…'));
         let url='';
         try{url=await uploadMedia(selectedFiles[index],`circles/${c.id}`)}
         catch(uploadError){console.error('[NEIS Circle image upload rejected]',uploadError);toast(t('Image upload was interrupted. Your post and selected photos are still here; try publishing again.','انقطع رفع الصورة. ما زال المنشور والصور المختارة هنا؛ حاول النشر مرة أخرى.'))}
-        if(!url){for(const uploaded of image_urls){try{await removeMediaUrl(uploaded)}catch(cleanupError){console.warn('[NEIS image cleanup]',cleanupError)}}button.disabled=false;button.removeAttribute('aria-busy');button.textContent=originalButtonLabel;return}
+        if(!url){for(const uploaded of image_urls){try{await removeMediaUrl(uploaded)}catch(cleanupError){console.warn('[NEIS image cleanup]',cleanupError)}}button.disabled=false;return}
         image_urls.push(url);
       }
     }catch(uploadFlowError){
@@ -3264,7 +3263,7 @@ function openCirclePost(){
       toast(t('Could not finish uploading the photos. Your post is still here; please try again.','تعذر إكمال رفع الصور. ما زال منشورك هنا؛ حاول مرة أخرى.'));
       button.disabled=false;button.removeAttribute('aria-busy');button.textContent=originalButtonLabel;return;
     }
-    button.textContent=t('Publishing…','جارٍ النشر…');
+    toast(t('Publishing post…','جارٍ نشر المنشور…'));
     const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
 
     if(isPoll){
