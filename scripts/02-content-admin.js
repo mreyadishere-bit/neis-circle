@@ -60,27 +60,36 @@ async function uploadMedia(file,folder){
   if(file.size>8*1024*1024){toast(t('Image must be smaller than 8 MB.','يجب أن يكون حجم الصورة أقل من 8 ميجابايت.'));return ""}
   if(!String(file.type||'').startsWith('image/')){toast(t('Choose a valid image file.','اختر ملف صورة صالحًا.'));return ""}
   const ext=(String(file.name||'image.jpg').split('.').pop()||'jpg').replace(/[^a-z0-9]/gi,'').toLowerCase()||'jpg';
-  const path=`${authUser.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
   toast(t('Uploading image…','جارٍ رفع الصورة…'));
-  try{
-    const result=await sb.storage.from('community-media').upload(path,file,{cacheControl:'3600',upsert:false});
-    if(result.error){
-      console.error('[NEIS media upload]',result.error);
-      toast(/fetch|network|offline|timeout/i.test(String(result.error.message||''))?
-        t('Connection interrupted while uploading. Check your internet and try again.','انقطع الاتصال أثناء رفع الصورة. تحقق من الإنترنت وحاول مرة أخرى.'):
-        (result.error.message||t('Image upload failed. Please try again.','فشل رفع الصورة. حاول مرة أخرى.')));
-      return "";
+  const transient=/fetch|network|offline|timeout|load failed|connection|temporar/i;
+  let lastError=null,path='';
+  for(let attempt=0;attempt<3;attempt++){
+    path=`${authUser.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    try{
+      const result=await sb.storage.from('community-media').upload(path,file,{cacheControl:'3600',upsert:false});
+      if(!result.error){
+        const publicUrl=sb.storage.from('community-media').getPublicUrl(path)?.data?.publicUrl;
+        if(!publicUrl){toast(t('The image uploaded, but its public link could not be created. Please retry.','تم رفع الصورة لكن تعذر إنشاء رابطها. حاول مرة أخرى.'));return ""}
+        return publicUrl;
+      }
+      lastError=result.error;
+      console.error('[NEIS media upload]',{attempt:attempt+1,error:result.error});
+      if(!transient.test(String(result.error.message||''))||attempt===2){
+        toast(t('Image upload failed: ','فشل رفع الصورة: ')+String(result.error.message||'Unknown storage error').slice(0,180));
+        return "";
+      }
+    }catch(error){
+      lastError=error;
+      console.error('[NEIS media upload network failure]',{attempt:attempt+1,error});
+      if(!transient.test(String(error?.message||error))||attempt===2){
+        toast(t('Image upload failed: ','فشل رفع الصورة: ')+String(error?.message||error||'Unknown network error').slice(0,180));
+        return "";
+      }
     }
-    const publicUrl=sb.storage.from('community-media').getPublicUrl(path)?.data?.publicUrl;
-    if(!publicUrl){toast(t('The image uploaded, but its public link could not be created. Please retry.','تم رفع الصورة لكن تعذر إنشاء رابطها. حاول مرة أخرى.'));return ""}
-    return publicUrl;
-  }catch(error){
-    console.error('[NEIS media upload network failure]',error);
-    toast(/fetch|network|offline|timeout|load failed/i.test(String(error?.message||error))?
-      t('Connection interrupted while uploading. Check your internet and try again.','انقطع الاتصال أثناء رفع الصورة. تحقق من الإنترنت وحاول مرة أخرى.'):
-      t('Image upload failed. Your post is still here; please try again.','فشل رفع الصورة. ما زال منشورك محفوظًا هنا؛ حاول مرة أخرى.'));
-    return "";
+    await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
   }
+  toast(t('Image upload failed: ','فشل رفع الصورة: ')+String(lastError?.message||'Please try again.').slice(0,180));
+  return "";
 }
 function validPostHttpsUrl(value){try{const url=new URL(String(value||'').trim());return url.protocol==='https:'&&!!url.hostname&&!/\s/.test(String(value||''))}catch{return false}}
 
