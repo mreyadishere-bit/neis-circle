@@ -3253,7 +3253,7 @@ function openCirclePost(){
         setPublishProgress(t('Uploading image '+(index+1)+' of '+selectedFiles.length+'…','جارٍ رفع الصورة '+(index+1)+' من '+selectedFiles.length+'…'));
         let url='';
         try{url=await uploadMedia(selectedFiles[index],`circles/${c.id}`)}
-        catch(uploadError){console.error('[NEIS Circle image upload rejected]',uploadError);toast(t('Image upload was interrupted. Your post and selected photos are still here; try publishing again.','انقطع رفع الصورة. ما زال المنشور والصور المختارة هنا؛ حاول النشر مرة أخرى.'))}
+        catch(uploadError){console.error('[NEIS Circle image upload rejected]',uploadError);const detail=String(uploadError?.message||uploadError||'Unknown upload error').slice(0,160);toast(t('Image upload failed: '+detail+'. Your post and selected photos are still here; retry publishing.','فشل رفع الصورة: '+detail+'. ما زال المنشور والصور المختارة هنا؛ حاول النشر مرة أخرى.'))}
         if(!url){for(const uploaded of image_urls){try{await removeMediaUrl(uploaded)}catch(cleanupError){console.warn('[NEIS image cleanup]',cleanupError)}}button.disabled=false;return}
         image_urls.push(url);
       }
