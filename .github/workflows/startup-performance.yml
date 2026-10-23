@@ -1,0 +1,26 @@
+name: Startup performance regression
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'qa/startup-*.test.mjs'
+      - 'qa/secondary-data.test.mjs'
+      - '.github/workflows/startup-performance.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run qa:unit
+      - run: npm install --no-save playwright
+      - run: test -x "$CHROME_PATH"
+      - run: node qa/startup-home-dom.test.mjs

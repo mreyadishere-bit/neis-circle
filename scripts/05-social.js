@@ -343,6 +343,38 @@ const applyNotificationRows=(...args)=>notificationRuntime.applyRows(...args);
 const applyRealtimeNotification=(...args)=>notificationRuntime.applyRealtime(...args);
 const refreshNotificationsOnly=(...args)=>notificationRuntime.refresh(...args);
 const setupNotificationRealtime=(...args)=>notificationRuntime.setup(...args);
+// Notifications can arrive before the posts Realtime event (or after a reconnect).
+// Fetch the exact target under the current user's RLS instead of trusting the feed snapshot.
+const notificationPostRequests=new Map();
+function ensureRoutePost(postId){
+  if(!sb||!authUser||!postId)return Promise.resolve(null);
+  const uid=authUser.id,id=String(postId),key=uid+':'+id;
+  if(notificationPostRequests.has(key))return notificationPostRequests.get(key);
+  const task=(async()=>{
+    const {data,error}=await sb.from('posts')
+      .select(postRealtimeFields+',profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
+      .eq('id',id).maybeSingle();
+    if(error)throw error;
+    if(authUser?.id!==uid||!data)return null;
+    if(data.profiles)mergeStartupMembers([data.profiles]);
+    const index=(state.posts||[]).findIndex(post=>same(post.id,id));
+    const post=realtimePostFromRow(data,index>=0?state.posts[index]:{},data.profiles);
+    if(index>=0)state.posts[index]=post;else state.posts=[post,...(state.posts||[])];
+    patchVisiblePostState(id,{force:true});
+    return post;
+  })().catch(error=>{
+    console.warn('[NEIS notification target]',error);
+    return null;
+  }).finally(()=>notificationPostRequests.delete(key));
+  notificationPostRequests.set(key,task);
+  return task;
+}
+window.NEISEnsureNotificationPost=function(item){
+  const route=String(item?.route||'').replace(/^\/?#?\/?/,'');
+  const id=item?.entity_type==='post'?item.entity_id:
+    (route.startsWith('post/')?route.split('/')[1]?.split('?')[0]:new URLSearchParams(route.split('?')[1]||'').get('post'));
+  return id?ensureRoutePost(id):Promise.resolve(null);
+};
 function routeTo(path,replace=false){const hash='#/'+String(path||'home').replace(/^\/+/, '');if(location.hash===hash){applyRoute();return}(replace?history.replaceState(null,'',hash):history.pushState(null,'',hash));applyRoute()}
 
 function applyRoute(){
@@ -357,9 +389,7 @@ function applyRoute(){
   else if(head==='post'&&parts[1]){
     const postId=parts[1],targetComment=(new URLSearchParams(queryPart).get('comment')||'');
     state.view='home';
-    if(targetComment){
-      setTimeout(()=>comments(postId,targetComment),80);
-    }else{
+    if(!targetComment){
       state.filter='Latest';
       state.notificationPostTarget=postId;
     }
@@ -367,6 +397,19 @@ function applyRoute(){
   else if(head==='admin'&&!state.isAdmin){history.replaceState(null,'','#/home');state.view='home';toast(t('The admin workspace is private.','مساحة الإدارة خاصة.'))}
   else{state.view=['home','discover','circles','messages','library','opportunities','gallery','articles','study','timetable','admin','notifications'].includes(head)?head:'home'}
   render();
+  const routeHash=location.hash;
+  const routePostId=head==='post'?parts[1]:(head==='circles'&&state.circleTab==='home'?state.circlePostTarget:'');
+  if(routePostId){
+    void ensureRoutePost(routePostId).then(post=>{
+      if(location.hash!==routeHash)return;
+      if(!post){toast(t('This post is unavailable or could not be loaded. Try again.','المنشور غير متاح أو تعذر تحميله. حاول مرة أخرى.'));return}
+      const commentId=new URLSearchParams(queryPart).get('comment');
+      if(head==='post'&&post.circle_id){
+        routeTo(`circles/${encodeURIComponent(post.circle_id)}/home?post=${encodeURIComponent(post.id)}`);
+      }
+      if(commentId)comments(post.id,commentId);
+    });
+  }
   Promise.resolve(window.NEISSecondaryData?.ensureForView?.(state.view)).catch(error=>console.warn('[NEIS secondary route]',error));
   if(head==='post'&&parts[1]&&!new URLSearchParams(queryPart).get('comment')){
     const targetId=String(parts[1]);
@@ -1175,7 +1218,13 @@ loadLiveData=async function(){
   const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{
     console.warn('[NEIS notifications startup]',error);
   });
+  // Start articles alongside the primary feed, rather than after social/chat bootstrap.
+  void Promise.resolve(window.NEISSecondaryData?.ensureForView?.(state.view))
+    .catch(error=>console.warn('[NEIS startup articles]',error));
+  const wasReady=state.platformReady;
   await coreLoad();
+  if(authUser?.id!==uid)return;
+  if(!wasReady&&typeof render==='function')render();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
   const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
@@ -3581,7 +3630,16 @@ function bindV6(root=document){
   if(state.view==='circle-detail'&&state.circleTab==='chat'&&state.circleMessageTarget){const targetId=String(state.circleMessageTarget),row=root.querySelector(`#circleChatFlow > .chat-message[data-message-id="${CSS.escape(targetId)}"]`);if(row){state.circleMessageTarget='';row.classList.add('notification-target-highlight');setTimeout(()=>{row.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>row.classList.remove('notification-target-highlight'),2600)},60)}}
 
   root.querySelectorAll('[data-clear-global-search]').forEach(el=>el.onclick=()=>{state.query='';state.searchResults=[];state.searchLoading=false;state.dataErrors.search=null;const input=$('#globalSearch');if(input){input.value='';input.focus()}routeTo('discover')});
-  root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=async()=>{const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));if(item)item.read_at=readAt;updateBadges();const {error}=await sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification);if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}routeTo(notificationTargetRoute(item)||el.dataset.route||'notifications')});
+  root.querySelectorAll('[data-open-notification]').forEach(el=>el.onclick=()=>{
+    const readAt=new Date().toISOString(),item=state.notifications.find(n=>same(n.id,el.dataset.openNotification));
+    if(item)item.read_at=readAt;
+    updateBadges();
+    // Navigation and target hydration must not wait for the read-receipt write.
+    routeTo(notificationTargetRoute(item)||el.dataset.route||'notifications');
+    void Promise.resolve(sb.from('notifications').update({read_at:readAt}).eq('id',el.dataset.openNotification))
+      .then(({error})=>{if(error){console.error('[NEIS notification read]',error);refreshNotificationsOnly()}})
+      .catch(error=>console.warn('[NEIS notification read]',error));
+  });
   setTimeout(()=>markVisibleLocationNotificationsRead(),120);
   root.querySelectorAll('[data-mark-all-read]').forEach(el=>el.onclick=async()=>{
     const unreadIds=(state.notifications||[]).filter(n=>!n.read_at&&n.id!=null).map(n=>n.id);

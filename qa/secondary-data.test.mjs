@@ -41,6 +41,7 @@ function makeContext(storage,counts){
         return Promise.resolve({data:[{id:'r1'}],error:null});
       }
     },
+    NEISPatchHomeArticles(){counts.homePatch=(counts.homePatch||0)+1},
     render(){counts.render=(counts.render||0)+1}
   };
   context.window=context;
@@ -84,6 +85,11 @@ assert.equal(counts.reports,2,'private reports must not persist in session stora
 
 await context.NEISSecondaryData.loadArticles({force:true,useCache:false});
 assert.equal(counts.articles,2,'forced article refresh must hit the backend');
+
+context.NEISSecondaryData.invalidate('articles');
+await context.NEISSecondaryData.ensureForView('home');
+assert.equal(counts.homePatch,1,'Home articles must patch immediately after their own request');
+assert.equal(counts.render||0,0,'Home article arrival must preserve the feed DOM');
 
 context.NEISSecondaryData.clearUser();
 assert.equal(storage.length,0,'clearUser must clear persistent secondary caches');

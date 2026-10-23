@@ -126,6 +126,24 @@
     return html;
   };
 
+  // Replace only the editorial section; keep the feed, players and composer alive.
+  window.NEISPatchHomeArticles=function(){
+    if(state.view!=='home')return;
+    const root=document.querySelector('#view');
+    if(!root)return;
+    const template=document.createElement('template');
+    template.innerHTML=home();
+    const next=template.content.querySelector('.article-grid')?.closest('section');
+    const current=root.querySelector('.article-grid')?.closest('section');
+    if(current&&next)current.replaceWith(next);
+    else if(current)current.remove();
+    else if(next){
+      const dashboard=root.querySelector('.dashboard');
+      if(dashboard)dashboard.before(next);
+    }
+    if(next&&typeof bindDynamic==='function')bindDynamic();
+  };
+
   bindDynamic=function(){
     baseBindDynamic();
 

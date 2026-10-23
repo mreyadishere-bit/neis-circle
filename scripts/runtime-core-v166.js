@@ -161,7 +161,8 @@
         safeQuery('bookmarks',sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),8000),
         profileRequest
       ]);
-      await articlesPromise;
+      // Articles update their own Home section without delaying core recovery.
+      void articlesPromise.then(()=>window.NEISPatchHomeArticles?.());
 
       if(!profiles.error&&!profiles.cached&&Array.isArray(profiles.data)){
         window.NEISProfileCache?.write?.(authUser.id,profiles.data);

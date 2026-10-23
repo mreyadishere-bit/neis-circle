@@ -125,7 +125,8 @@
     }));
     if(changed&&state.view===before&&typeof render==='function'){
       // Never force a Home rebuild for secondary data; active media must keep playing.
-      if(before!=='home')render();
+      if(before==='home')window.NEISPatchHomeArticles?.();
+      else render();
     }
   }
   function clearUser(){
