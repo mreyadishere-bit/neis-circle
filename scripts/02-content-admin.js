@@ -132,34 +132,41 @@ function refreshPrimaryBackground(){
   if(primaryBackgroundRefreshPromise||!sb||!authUser)return primaryBackgroundRefreshPromise;
   const uid=authUser.id;
   primaryBackgroundRefreshPromise=(async()=>{
-    const [memberRes,engagementRes]=await Promise.all([
-      sb.from('profiles')
-        .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-        .order('full_name'),
-      sb.rpc('post_engagement_counts')
-    ]);
-    if(!memberRes.error){
-      state.members=memberRes.data||state.members||[];
-      window.NEISProfileCache?.write?.(uid,state.members);
-    }else console.warn('[NEIS startup] member directory refresh failed',memberRes.error);
-
-    if(!engagementRes.error){
-      const counts=new Map((engagementRes.data||[]).map(row=>[String(row.post_id),row]));
-      const changed=[];
-      for(const post of (state.posts||[])){
-        const row=counts.get(String(post.id));
-        if(!row)continue;
-        const likes=Number(row.reaction_count||0),comments=Number(row.comment_count||0);
-        if(post.likes!==likes||post.comments!==comments){
-          post.likes=likes;
-          post.comments=comments;
-          changed.push(post.id);
+    // Apply each result immediately: a slow directory must not hold up counts.
+    const membersTask=Promise.resolve(sb.from('profiles')
+      .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
+      .order('full_name')).then(memberRes=>{
+      if(authUser?.id!==uid)return;
+      if(!memberRes.error){
+        state.members=memberRes.data||state.members||[];
+        window.NEISProfileCache?.write?.(uid,state.members);
+        if(state.view==='home'){
+          const count=document.querySelector('#view .hero .pulse strong');
+          if(count)count.textContent=String(state.members.length);
         }
-      }
-      if(typeof patchVisiblePostState==='function')changed.forEach(id=>patchVisiblePostState(id));
-    }else console.warn('[NEIS startup] engagement counts refresh failed',engagementRes.error);
+        if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+      }else console.warn('[NEIS startup] member directory refresh failed',memberRes.error);
+    });
+    const engagementTask=Promise.resolve(sb.rpc('post_engagement_counts')).then(engagementRes=>{
+      if(authUser?.id!==uid)return;
+      if(!engagementRes.error){
+        const counts=new Map((engagementRes.data||[]).map(row=>[String(row.post_id),row]));
+        const changed=[];
+        for(const post of (state.posts||[])){
+          const row=counts.get(String(post.id));
+          if(!row)continue;
+          const likes=Number(row.reaction_count||0),comments=Number(row.comment_count||0);
+          if(post.likes!==likes||post.comments!==comments){
+            post.likes=likes;
+            post.comments=comments;
+            changed.push(post.id);
+          }
+        }
+        if(typeof patchVisiblePostState==='function')changed.forEach(id=>patchVisiblePostState(id));
+      }else console.warn('[NEIS startup] engagement counts refresh failed',engagementRes.error);
 
-    if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+    });
+    await Promise.allSettled([membersTask,engagementTask]);
   })().catch(error=>console.warn('[NEIS startup] background refresh failed',error))
     .finally(()=>{primaryBackgroundRefreshPromise=null});
   return primaryBackgroundRefreshPromise;

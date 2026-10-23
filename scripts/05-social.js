@@ -1175,7 +1175,13 @@ loadLiveData=async function(){
   const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{
     console.warn('[NEIS notifications startup]',error);
   });
+  // Start articles alongside the primary feed, rather than after social/chat bootstrap.
+  void Promise.resolve(window.NEISSecondaryData?.ensureForView?.(state.view))
+    .catch(error=>console.warn('[NEIS startup articles]',error));
+  const wasReady=state.platformReady;
   await coreLoad();
+  if(authUser?.id!==uid)return;
+  if(!wasReady&&typeof render==='function')render();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
   const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
