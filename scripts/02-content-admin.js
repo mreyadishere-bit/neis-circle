@@ -182,6 +182,7 @@ loadLiveData=async function(){
     if(cachedSelf)applyOwnProfileRow(cachedSelf);
   }
 
+  const postsAtRequest=new Set((state.posts||[]).map(post=>String(post.id)));
   const [postRes,myReactionRes,bookmarkRes,profileRes]=await Promise.all([
     sb.from('posts')
       .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
@@ -220,7 +221,9 @@ loadLiveData=async function(){
       };
     });
     mergeStartupMembers(authors);
-    state.posts=livePosts;
+    const fetchedIds=new Set(livePosts.map(post=>String(post.id)));
+    const arrivedDuringRequest=(state.posts||[]).filter(post=>!postsAtRequest.has(String(post.id))&&!fetchedIds.has(String(post.id)));
+    state.posts=[...arrivedDuringRequest,...livePosts];
   }
 
   state.postReactionKeys=(myReactionRes.data||[])

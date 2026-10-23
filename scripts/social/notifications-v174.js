@@ -246,6 +246,7 @@
     // refresh. Older callers pass soundForNew=false during routine sync: that
     // flag must not suppress *new* messages while still changing the tab count.
     if(baselineLoaded){
+      fresh.filter(n=>!n.read_at).slice(0,5).forEach(n=>window.NEISEnsureNotificationPost?.(n));
       const latestUnread=fresh.find(n=>!n.read_at&&n.silent!==true);
       if(latestUnread)chimeOnce(latestUnread).catch(()=>{});
     }
@@ -255,6 +256,7 @@
   function ingestPush(payload){
     const row=payload&&typeof payload==='object'?payload:null;
     if(!row?.id)return;
+    window.NEISEnsureNotificationPost?.(row);
     if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
       state.notifications=[{
         id:row.id,
@@ -277,6 +279,7 @@
   function applyRealtime(payload){
     const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};
     if(event==='INSERT'&&row?.id){
+      window.NEISEnsureNotificationPost?.(row);
       if(!(state.notifications||[]).some(n=>same(n.id,row.id))){
         state.notifications=[row,...(state.notifications||[])].slice(0,100);
       }
