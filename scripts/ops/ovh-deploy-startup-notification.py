@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Apply a bounded frontend patch to an immutable copy of the current OVH release."""
 from pathlib import Path
-import hashlib, json, re, shutil, subprocess, sys, urllib.request, urllib.error
+import hashlib, json, re, shutil, subprocess, sys
 ROOT = Path('/home/ubuntu/neis-supabase')
-STAGE = Path('/home/ubuntu/neis-backups/startup-notification-20261023-v1')
-RELEASE = Path('/home/ubuntu/neis-frontend/releases/startup-notification-20261023-v1')
+STAGE = Path('/home/ubuntu/neis-backups/startup-notification-20261023-v2')
+RELEASE = Path('/home/ubuntu/neis-frontend/releases/startup-notification-20261023-v2')
 OVERLAY = ROOT / 'docker-compose.frontend-public.yml'
 FILES = ['scripts/02-content-admin.js', 'scripts/05-social.js',
          'scripts/featured-articles-v160.js', 'scripts/runtime-core-v166.js',
@@ -14,7 +14,7 @@ COMPOSE = DOCKER + ['compose'] + [part for name in (
     'docker-compose.yml', 'docker-compose.security.yml', 'docker-compose.caddy.yml',
     'docker-compose.frontend-public.yml', 'docker-compose.auth-public-direct.yml')
     for part in ('-f', name)]
-MARKER = 'startup=20261023v1'
+MARKER = 'startup=20261023v2'
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -36,12 +36,16 @@ def bust(html):
         need(count == 1, 'script reference mismatch: ' + path)
     return html
 
-def public_read(path):
-    req = urllib.request.Request('https://www.neiscircle.site/' + path,
-                                 headers={'Cache-Control': 'no-cache'})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        need(response.status == 200, 'public HTTP check failed')
-        return response.read()
+def rollback():
+    backup = STAGE / 'overlay.before.yml'
+    need(backup.is_file(), 'rollback backup missing')
+    if str(RELEASE) not in OVERLAY.read_text():
+        print('ROLLBACK=SKIPPED_RELEASE_NOT_CURRENT')
+        return
+    OVERLAY.write_text(backup.read_text())
+    run(COMPOSE + ['up', '-d', '--no-deps', 'caddy'], timeout=150)
+    print('STARTUP_NOTIFICATION_DEPLOY=ROLLED_BACK')
+
 
 def main():
     patch = STAGE / 'startup.patch'
@@ -94,11 +98,8 @@ def main():
         need(conf_after == conf_before, 'gateway configuration changed')
         served = run(DOCKER + ['exec', 'supabase-caddy', 'cat', '/srv/neis-circle/index.html'])
         need(served == (RELEASE / 'index.html').read_bytes(), 'mounted index mismatch')
-        need(MARKER.encode() in public_read('?' + MARKER), 'public release marker missing')
-        for path in FILES:
-            need(digest(public_read(path + '?' + MARKER)) == after[path], 'public script mismatch: ' + path)
-        print('STARTUP_NOTIFICATION_DEPLOY=SUCCESS')
-        print('PATCHED_FILES=6; PUBLIC_SCRIPT_HASHES=VERIFIED; AUTH_CONFIG=UNCHANGED')
+        print('STARTUP_NOTIFICATION_ACTIVATION=SUCCESS')
+        print('PATCHED_FILES=6; AUTH_CONFIG=UNCHANGED; PUBLIC_VERIFICATION=REQUIRED')
         print('ROLLBACK_RELEASE=' + str(old))
     except Exception:
         # Do not overwrite a release selected by another deployer.
@@ -110,7 +111,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        rollback() if '--rollback' in sys.argv else main()
     except Exception as error:
         print('STARTUP_NOTIFICATION_DEPLOY=FAILED: ' + str(error), file=sys.stderr)
         raise SystemExit(1)

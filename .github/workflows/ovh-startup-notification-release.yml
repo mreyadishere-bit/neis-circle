@@ -6,6 +6,7 @@ on:
     paths:
       - 'scripts/ops/startup-notification-20261023.patch'
       - 'scripts/ops/ovh-deploy-startup-notification.py'
+      - 'scripts/ops/ovh-verify-startup-notification.py'
       - '.github/workflows/ovh-startup-notification-release.yml'
 permissions:
   contents: read
@@ -28,7 +29,7 @@ jobs:
       - name: Validate frontend and targeted regressions
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/ops/ovh-deploy-startup-notification.py
+          python3 -m py_compile scripts/ops/ovh-deploy-startup-notification.py scripts/ops/ovh-verify-startup-notification.py
           git show 78e89de3acd637622d8faabd91b7beffa1b6171f:index.html > index.html
           git show 78e89de3acd637622d8faabd91b7beffa1b6171f:404.html > 404.html
           npm run qa:static
@@ -62,13 +63,21 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
-      - name: Patch a copy of the current live release, activate and verify
+      - name: Patch a copy of the current live release and activate
+        id: activate
         env:
           HOST: ${{ secrets.OVH_HOST }}
         run: |
           set -euo pipefail
           target="ubuntu@$HOST"
-          stage=/home/ubuntu/neis-backups/startup-notification-20261023-v1
+          stage=/home/ubuntu/neis-backups/startup-notification-20261023-v2
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/startup-notification-20261023.patch "$target:$stage/startup.patch"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-startup-notification.py
+      - name: Verify the release from the public internet
+        run: python3 scripts/ops/ovh-verify-startup-notification.py
+      - name: Roll back if public verification fails
+        if: failure() && steps.activate.outcome == 'success'
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 - --rollback' < scripts/ops/ovh-deploy-startup-notification.py
