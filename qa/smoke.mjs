@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const baseURL = process.env.NEIS_SMOKE_URL || 'http://127.0.0.1:4173/';
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH, args: ['--no-sandbox'] } : {}) });
 const context = await browser.newContext({
   viewport: { width: 1280, height: 800 },
   serviceWorkers: 'block'

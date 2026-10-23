@@ -10,12 +10,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-frontend-release
+  group: ovh-startup-notification-release
   cancel-in-progress: false
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 6
+    env:
+      CHROME_PATH: /usr/bin/google-chrome
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save playwright
-          npx playwright install --with-deps chromium
+          test -x "$CHROME_PATH"
           node qa/startup-home-dom.test.mjs
           python3 -m http.server 4173 --bind 127.0.0.1 > /tmp/neis-http.log 2>&1 &
           npm run qa:smoke
