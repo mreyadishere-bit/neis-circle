@@ -1,4 +1,4 @@
-name: OVH Notification Mark All Read Sound V7
+name: OVH Chat Notifications - Collision-Safe Release
 on:
   workflow_dispatch:
   push:
@@ -36,6 +36,25 @@ jobs:
           node --check neis-pwa-sw.js
           node qa/notification-sound-device.test.mjs
           python3 -m py_compile scripts/ops/ovh-deploy-notification-chime-v7.py scripts/ops/ovh-rollback-notification-chime-v7.py scripts/ops/ovh-deploy-notification-chime-v7.py
+      - name: Prepare unique, rollback-safe release scripts
+        env:
+          RELEASE_TAG: v7-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          tag=os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v7-[0-9]+-[0-9]+',tag)
+          for name in ('ovh-deploy-notification-chime-v7.py','ovh-rollback-notification-chime-v7.py'):
+           src=Path('scripts/ops')/name
+           script=src.read_text()
+           assert script.count('v7-20261011')>=2
+           target=Path('/tmp')/('neis-release-'+name)
+           target.write_text(script.replace('v7-20261011',tag))
+           compile(target.read_text(),str(target),'exec')
+          print('NOTIFICATION_RELEASE_TAG='+tag)
+          PY
       - name: Configure secured SSH credentials
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -53,15 +72,15 @@ jobs:
           OVH_HOST: ${{ secrets.OVH_HOST }}
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/notification-chime-v7-20261011'
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-20261011/notifications-v174.js"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-20261011/05-social.js"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-20261011/pwa-install-v117.js"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes neis-pwa-sw.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-20261011/neis-pwa-sw.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'mkdir -p -m 700 /home/ubuntu/neis-backups/notification-chime-v7-${{ github.run_id }}-${{ github.run_attempt }}'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-${{ github.run_id }}-${{ github.run_attempt }}/notifications-v174.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-${{ github.run_id }}-${{ github.run_attempt }}/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-${{ github.run_id }}-${{ github.run_attempt }}/pwa-install-v117.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes neis-pwa-sw.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/notification-chime-v7-${{ github.run_id }}-${{ github.run_attempt }}/neis-pwa-sw.js"
       - name: Deploy isolated notification assets without touching Auth REST or data
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
-        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-deploy-notification-chime-v7.py
+        run: ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < /tmp/neis-release-ovh-deploy-notification-chime-v7.py
       - name: Check live browser assets plus Google and REST routes
         run: |
           python3 - <<'PY'
@@ -80,12 +99,12 @@ jobs:
              last=type(exc).__name__
             time.sleep(2)
            raise AssertionError('External site did not become ready: '+str(last))
-          html=fetch('/',expected='&sound=v7-20261011')
+          html=fetch('/',expected='&sound=v7-${{ github.run_id }}-${{ github.run_attempt }}')
           sound=fetch('/scripts/social/notifications-v174.js?notification-sound=20261011')
           social=fetch('/scripts/05-social.js?incoming-chime=20261011')
           pwa=fetch('/scripts/pwa-install-v117.js?notification-sound=20261011')
           sw=fetch('/neis-pwa-sw.js?v=13')
-          assert '&sound=v7-20261011' in html
+          assert '&sound=v7-${{ github.run_id }}-${{ github.run_attempt }}' in html
           assert 'signalIncomingMessage' in sound and 'lastIncomingMessageSignalAt' in sound
           assert 'chimedMessageActivities' in sound and 'inflightMessageActivities' in sound
           assert '.in(\'id\',unreadIds)' in social
@@ -111,5 +130,5 @@ jobs:
           OVH_HOST: ${{ secrets.OVH_HOST }}
         run: |
           if [ -s ~/.ssh/id_ed25519 ]; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < scripts/ops/ovh-rollback-notification-chime-v7.py
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' < /tmp/neis-release-ovh-rollback-notification-chime-v7.py
           fi
