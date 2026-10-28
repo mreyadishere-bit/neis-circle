@@ -1114,6 +1114,45 @@ async function recoverChatRealtimeGap(){
   }).finally(()=>{chatRealtimeRecoveryPromise=null});
   return chatRealtimeRecoveryPromise;
 }
+// Notification-assisted chat repair: no polling, one indexed message lookup only
+// if the open conversation is missing a message after the realtime event window.
+const pendingChatNotificationIds=new Set();
+function reconcileNotifiedChatMessage(event){
+  if(!sb||!authUser||document.visibilityState!=='visible')return;
+  const type=event?.detail?.type,id=String(event?.detail?.messageId||'');
+  const inDm=type==='message'&&state.view==='messages'&&!!state.activeConversationId;
+  const inCircle=type==='circle_message'&&state.view==='circle-detail'&&state.circleTab==='chat'&&!!state.activeCircleId;
+  if(!id||(!inDm&&!inCircle)||pendingChatNotificationIds.has(type+':'+id))return;
+  const key=type+':'+id;
+  const list=inDm?state.liveMessages:state.circleMessages;
+  if((list||[]).some(message=>same(message.id,id)))return;
+  pendingChatNotificationIds.add(key);
+  // Give the primary WebSocket event time to render before spending a REST request.
+  setTimeout(async()=>{
+    try{
+      if(!sb||!authUser||document.visibilityState!=='visible')return;
+      const stillOpen=inDm
+        ?state.view==='messages'&&!!state.activeConversationId
+        :state.view==='circle-detail'&&state.circleTab==='chat'&&!!state.activeCircleId;
+      if(!stillOpen)return;
+      if((inDm?state.liveMessages:state.circleMessages||[]).some(message=>same(message.id,id)))return;
+      const table=inDm?'messages':'circle_messages';
+      const fields=inDm?chatFields.message:chatFields.circleMessage;
+      const {data,error}=await sb.from(table).select(fields).eq('id',id).maybeSingle();
+      if(error||!data)return;
+      if(inDm){
+        if(!same(data.conversation_id,state.activeConversationId))return;
+        await handleMessageRealtime({eventType:'INSERT',new:data});
+      }else{
+        if(!same(data.circle_id,state.activeCircleId))return;
+        await handleCircleMessageRealtime({eventType:'INSERT',new:data});
+      }
+    }catch(error){console.warn('[NEIS chat notification reconcile]',error)}
+    finally{pendingChatNotificationIds.delete(key)}
+  },350);
+}
+window.addEventListener('neis:chat-notification',reconcileNotifiedChatMessage);
+
 function handleSocialRealtimeStatus(nextStatus,previousStatus){
   if(nextStatus!=='SUBSCRIBED')return;
   const reconnect=socialRealtimeSubscribedOnce&&previousStatus!=='SUBSCRIBED';
