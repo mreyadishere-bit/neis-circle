@@ -239,6 +239,7 @@
     const next=Array.isArray(rows)?rows:[];
     const fresh=next.filter(n=>!previousIds.has(String(n.id)));
     state.notifications=next;
+    if(baselineLoaded)for(const row of fresh)signalChatReconcile(row);
     writeCache();
     renderNotificationsIfVisible();
     // The first uncached hydration is intentionally quiet. After that, a new
@@ -274,6 +275,16 @@
     chimeOnce(row);
   }
 
+  // Notify the chat UI about a missing message without additional polling.
+  // The consumer only performs a narrow lookup when the message is not locally present.
+  function signalChatReconcile(row){
+    const type=String(row?.type||row?.entity_type||'');
+    if(!['message','circle_message'].includes(type)||!row?.entity_id)return;
+    try{window.dispatchEvent(new CustomEvent('neis:chat-notification',{
+      detail:{type,messageId:String(row.entity_id)}
+    }));}catch(_){}
+  }
+
   function applyRealtime(payload){
     const event=payload?.eventType,row=payload?.new||{},oldRow=payload?.old||{};
     if(event==='INSERT'&&row?.id){
@@ -282,6 +293,7 @@
       }
       writeCache();
       renderNotificationsIfVisible();
+      signalChatReconcile(row);
       if(!row.read_at){
         chimeOnce(row);
         showSystemNotification(row);
