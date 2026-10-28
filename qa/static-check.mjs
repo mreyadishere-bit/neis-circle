@@ -596,7 +596,7 @@ else {
 }
 
 const circlePostCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
-const circlePostCreateStart = circlePostCreateSource.indexOf("const {data:createdPost,error}=await sb.from('posts').insert");
+const circlePostCreateStart = circlePostCreateSource.indexOf("let createdPost=null,postError=null;");
 const circlePostCreateEnd = circlePostCreateStart >= 0
   ? circlePostCreateSource.indexOf('\n  };\n}\n\nfunction suggestedPersonItem', circlePostCreateStart)
   : -1;
@@ -851,7 +851,7 @@ else if (!ingestPushSection.includes('updateTabBadge()')) failures.push('Push in
 
 const targetedPollCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 for (const token of [
-  "data:createdPollPostId",
+  "createdPollPostId=result.data",
   ".eq('id',createdPollPostId).maybeSingle()",
   "handlePostRealtime({eventType:'INSERT',new:createdPollPost})",
   "loadCirclePolls(c.id,{force:true})",
@@ -860,7 +860,7 @@ for (const token of [
   if (!targetedPollCreateSource.includes(token)) failures.push('Targeted Circle poll creation contract is missing: ' + token);
 }
 const pollCreateStart = targetedPollCreateSource.indexOf("sb.rpc('create_circle_poll_post'");
-const pollCreateEnd = pollCreateStart >= 0 ? targetedPollCreateSource.indexOf("const {data:createdPost,error}", pollCreateStart) : -1;
+const pollCreateEnd = pollCreateStart >= 0 ? targetedPollCreateSource.indexOf("let createdPost=null,postError=null;", pollCreateStart) : -1;
 const pollCreateSection = pollCreateStart >= 0 && pollCreateEnd > pollCreateStart ? targetedPollCreateSource.slice(pollCreateStart, pollCreateEnd) : '';
 if (!pollCreateSection) failures.push('Circle poll creation section could not be located.');
 else {
