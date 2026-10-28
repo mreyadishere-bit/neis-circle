@@ -278,7 +278,7 @@
   // Notify the chat UI about a missing message without additional polling.
   // The consumer only performs a narrow lookup when the message is not locally present.
   function signalChatReconcile(row){
-    const type=String(row?.type||row?.entity_type||'');
+    const type=String(row?.entity_type||row?.type||'');
     if(!['message','circle_message'].includes(type)||!row?.entity_id)return;
     try{window.dispatchEvent(new CustomEvent('neis:chat-notification',{
       detail:{type,messageId:String(row.entity_id)}
