@@ -1,0 +1,98 @@
+name: OVH Home Startup Performance Auto Deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/runtime-core-v166.js'
+      - '.github/workflows/ovh-home-startup-perf-autodeploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate targeted change
+        run: |
+          node --check scripts/runtime-core-v166.js
+          grep -q 'void articlesPromise.then' scripts/runtime-core-v166.js
+      - name: Pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage revised file
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/home-startup-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/runtime-core-v166.js "$target:$stage/runtime-core-v166.js"
+      - name: Isolated frontend-only deployment and verification
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/home-startup-${{ github.run_id }}-${{ github.run_attempt }}"
+          new="/home/ubuntu/neis-frontend/releases/home-startup-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -f "$overlay" && test -f "$stage/runtime-core-v166.js" && test ! -e "$new" || { echo PREFLIGHT=INVALID; exit 1; }
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old" || { echo PREFLIGHT=SOURCE_UNEXPECTED; exit 1; }
+          test -f "$old/scripts/runtime-core-v166.js" || { echo PREFLIGHT=TARGET_NOT_ACTIVE; exit 1; }
+          grep -Fq "$old" "$overlay" || { echo PREFLIGHT=OVERLAY_MISMATCH; exit 1; }
+          grep -Fq 'scripts/runtime-core-v166.js' "$old/index.html" || { echo PREFLIGHT=SCRIPT_NOT_REFERENCED; exit 1; }
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$new"
+          cp "$stage/runtime-core-v166.js" "$new/scripts/runtime-core-v166.js"
+          python3 - "$new/index.html" "$overlay" "$old" "$new" <<'PY'
+          import re,sys
+          from pathlib import Path
+          html,overlay,old,new=map(str,sys.argv[1:])
+          p=Path(html);h=p.read_text()
+          pat=r'scripts/runtime-core-v166\.js(?:\?[^"\x27<>]*)?'
+          if len(re.findall(pat,h))!=1:raise SystemExit('TARGET_SCRIPT_REFERENCE_MISMATCH')
+          h=re.sub(pat,'scripts/runtime-core-v166.js?startup=${{ github.run_id }}',h)
+          p.write_text(h)
+          o=Path(overlay);s=o.read_text()
+          if s.count(old)!=1:raise SystemExit('SOURCE_MOUNT_MISMATCH')
+          o.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo HOME_DEPLOY=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy)
+          test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -q 'void articlesPromise.then' /srv/neis-circle/scripts/runtime-core-v166.js
+          "${docker[@]}" exec "$cid" grep -q 'startup=${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo HOME_DEPLOY=SUCCESS
+          REMOTE
