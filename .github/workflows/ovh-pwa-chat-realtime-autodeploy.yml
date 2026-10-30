@@ -55,23 +55,27 @@ jobs:
         run: |
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
           set -Eeuo pipefail
+          trap 'echo "CHAT_DEPLOY_FAILED_AT_LINE=$LINENO" >&2' ERR
           root=/home/ubuntu/neis-supabase
           stage="/home/ubuntu/neis-backups/chat-realtime-${{ github.run_id }}"
           new="/home/ubuntu/neis-frontend/releases/chat-realtime-${{ github.run_id }}"
           cd "$root"
           overlay=docker-compose.frontend-public.yml
-          test -f "$overlay"
-          test ! -e "$new"
+          test -f "$overlay" || { echo 'PREFLIGHT=OVERLAY_NOT_FOUND'; exit 1; }
+          test ! -e "$new" || { echo 'PREFLIGHT=RELEASE_EXISTS'; exit 1; }
           docker=(sudo -n /usr/bin/docker)
           compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
           old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
-          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
-          grep -Fq "$old" "$overlay"
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old" || { echo 'PREFLIGHT=SOURCE_MOUNT_NOT_RELEASE'; exit 1; }
+          grep -Fq "$old" "$overlay" || { echo 'PREFLIGHT=OVERLAY_SOURCE_MISMATCH'; exit 1; }
+          echo 'PREFLIGHT=SOURCE_AND_OVERLAY_VALID'
           test -f "$old/scripts/05-social.js"
           grep -q 'function handleMessageRealtime' "$old/scripts/05-social.js"
           grep -q 'function handleMessageRealtime' "$stage/05-social.js"
+          echo 'PREFLIGHT=CHAT_ASSETS_VALID'
           cp "$overlay" "$stage/overlay.previous"
           cp -a "$old" "$new"
+          echo 'STAGE=FRONTEND_COPIED'
           cp "$stage/05-social.js" "$new/scripts/05-social.js"
           python3 - "$new/index.html" <<'PY'
           from pathlib import Path
@@ -79,7 +83,7 @@ jobs:
           p=Path(sys.argv[1]);h=p.read_text()
           pattern=r'(scripts/05-social\.js(?:\?[^"\x27<>]*)?)'
           matches=list(re.finditer(pattern,h))
-          if len(matches)!=1:raise SystemExit('SCRIPT_TAG_MISMATCH')
+          if len(matches)!=1:raise SystemExit('SCRIPT_TAG_MISMATCH_COUNT='+str(len(matches)))
           m=matches[0];url=m.group(1)
           url=url.split('?')[0]+'?chat-realtime=${{ github.run_id }}'
           p.write_text(h[:m.start()]+url+h[m.end():])
@@ -98,6 +102,7 @@ jobs:
             echo "CHAT_RELEASE=ROLLED_BACK"
           }
           trap rollback ERR
+          echo 'STAGE=OVERLAY_UPDATED'
           "${compose[@]}" config --quiet
           "${compose[@]}" up -d --no-deps caddy
           cid=$("${compose[@]}" ps -q caddy)
