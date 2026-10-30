@@ -1,0 +1,109 @@
+name: OVH PWA Chat Realtime Auto Deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/05-social.js'
+      - '.github/workflows/ovh-pwa-chat-realtime-autodeploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-pwa-chat-realtime-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate event-driven chat repair
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node qa/realtime-registry.test.mjs
+          node qa/chat-bootstrap.test.mjs
+          grep -q 'scheduleChatResumeRecovery' scripts/05-social.js
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage patched chat code
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "install -d -m 700 /home/ubuntu/neis-backups/chat-realtime-${{ github.run_id }}"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/chat-realtime-${{ github.run_id }}/05-social.js"
+      - name: Switch only frontend release with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          root=/home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/chat-realtime-${{ github.run_id }}"
+          new="/home/ubuntu/neis-frontend/releases/chat-realtime-${{ github.run_id }}"
+          cd "$root"
+          overlay=docker-compose.frontend-public.yml
+          test -f "$overlay"
+          test ! -e "$new"
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          grep -Fq "$old" "$overlay"
+          test -f "$old/scripts/05-social.js"
+          grep -q 'function handleMessageRealtime' "$old/scripts/05-social.js"
+          grep -q 'function handleMessageRealtime' "$stage/05-social.js"
+          cp "$overlay" "$stage/overlay.previous"
+          cp -a "$old" "$new"
+          cp "$stage/05-social.js" "$new/scripts/05-social.js"
+          python3 - "$new/index.html" <<'PY'
+          from pathlib import Path
+          import sys,re
+          p=Path(sys.argv[1]);h=p.read_text()
+          pattern=r'(scripts/05-social\.js(?:\?[^"\x27<>]*)?)'
+          matches=list(re.finditer(pattern,h))
+          if len(matches)!=1:raise SystemExit('SCRIPT_TAG_MISMATCH')
+          m=matches[0];url=m.group(1)
+          url=url.split('?')[0]+'?chat-realtime=${{ github.run_id }}'
+          p.write_text(h[:m.start()]+url+h[m.end():])
+          PY
+          python3 - "$overlay" "$old" "$new" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:]
+          s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('OVERLAY_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.previous" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo "CHAT_RELEASE=ROLLED_BACK"
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy)
+          test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -q scheduleChatResumeRecovery /srv/neis-circle/scripts/05-social.js
+          "${docker[@]}" exec "$cid" grep -q "chat-realtime=${{ github.run_id }}" /srv/neis-circle/index.html
+          trap - ERR
+          echo CHAT_RELEASE=SUCCESS
+          REMOTE
