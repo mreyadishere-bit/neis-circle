@@ -1153,6 +1153,24 @@ function reconcileNotifiedChatMessage(event){
 }
 window.addEventListener('neis:chat-notification',reconcileNotifiedChatMessage);
 
+// Resume visible chats after Android PWA suspension or a temporary network outage.
+// Event-driven only: no interval polling and at most one shared catch-up at a time.
+let chatResumeRecoveryTimer=null;
+function scheduleChatResumeRecovery(){
+  if(document.visibilityState!=='visible'||!authUser||!sb)return;
+  if(chatResumeRecoveryTimer!==null)clearTimeout(chatResumeRecoveryTimer);
+  chatResumeRecoveryTimer=setTimeout(()=>{
+    chatResumeRecoveryTimer=null;
+    if(document.visibilityState==='visible'&&navigator.onLine!==false){
+      recoverChatRealtimeGap();
+    }
+  },300);
+}
+document.addEventListener('visibilitychange',scheduleChatResumeRecovery);
+window.addEventListener('online',scheduleChatResumeRecovery);
+window.addEventListener('pageshow',scheduleChatResumeRecovery);
+
+
 function handleSocialRealtimeStatus(nextStatus,previousStatus){
   if(nextStatus!=='SUBSCRIBED')return;
   const reconnect=socialRealtimeSubscribedOnce&&previousStatus!=='SUBSCRIBED';
