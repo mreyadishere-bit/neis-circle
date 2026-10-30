@@ -161,7 +161,15 @@
         safeQuery('bookmarks',sb.from('bookmarks').select('post_id,user_id').eq('user_id',authUser.id),8000),
         profileRequest
       ]);
-      await articlesPromise;
+      // Articles are secondary content. Never hold post counts and the Home
+      // feed hostage while their independent request is in flight.
+      void articlesPromise.then(()=>{
+        if(state?.view==='home'&&typeof window.NEISPatchHomeRealtime==='function'){
+          window.NEISPatchHomeRealtime();
+        }else if(state?.view==='articles'&&typeof render==='function'){
+          render();
+        }
+      }).catch(()=>{});
 
       if(!profiles.error&&!profiles.cached&&Array.isArray(profiles.data)){
         window.NEISProfileCache?.write?.(authUser.id,profiles.data);
