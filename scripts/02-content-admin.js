@@ -132,17 +132,24 @@ function refreshPrimaryBackground(){
   if(primaryBackgroundRefreshPromise||!sb||!authUser)return primaryBackgroundRefreshPromise;
   const uid=authUser.id;
   primaryBackgroundRefreshPromise=(async()=>{
-    const [memberRes,engagementRes]=await Promise.all([
-      sb.from('profiles')
+    // Independent responses: a slow engagement RPC cannot hold back
+    // the real member count, and a slow directory cannot delay post counts.
+    const memberTask=(async()=>{
+      const memberRes=await sb.from('profiles')
         .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-        .order('full_name'),
-      sb.rpc('post_engagement_counts')
-    ]);
+        .order('full_name');
     if(!memberRes.error){
       state.members=memberRes.data||state.members||[];
       window.NEISProfileCache?.write?.(uid,state.members);
     }else console.warn('[NEIS startup] member directory refresh failed',memberRes.error);
-
+      if(state.view==='home'){
+        // Update the visible counter without rebuilding posts or interrupting media.
+        const number=document.querySelector('#view .hero .pulse strong');
+        if(number)number.textContent=String((state.members||[]).length);
+      }else if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+    })();
+    const engagementTask=(async()=>{
+      const engagementRes=await sb.rpc('post_engagement_counts');
     if(!engagementRes.error){
       const counts=new Map((engagementRes.data||[]).map(row=>[String(row.post_id),row]));
       const changed=[];
@@ -158,8 +165,8 @@ function refreshPrimaryBackground(){
       }
       if(typeof patchVisiblePostState==='function')changed.forEach(id=>patchVisiblePostState(id));
     }else console.warn('[NEIS startup] engagement counts refresh failed',engagementRes.error);
-
-    if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+    })();
+    await Promise.allSettled([memberTask,engagementTask]);
   })().catch(error=>console.warn('[NEIS startup] background refresh failed',error))
     .finally(()=>{primaryBackgroundRefreshPromise=null});
   return primaryBackgroundRefreshPromise;
