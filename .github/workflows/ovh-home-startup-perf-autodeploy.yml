@@ -79,7 +79,7 @@ jobs:
           html,overlay,old,new=map(str,sys.argv[1:])
           p=Path(html);h=p.read_text()
           for basename in ('runtime-core-v166.js','02-content-admin.js'):
-            pat=r'scripts/'+re.escape(basename)+r'(?:\\?[^"\\x27<>]*)?'
+            pat=r'scripts/'+re.escape(basename)+r'(?:\?[^"\x27<>]*)?'
             if len(re.findall(pat,h))!=1:raise SystemExit('TARGET_SCRIPT_REFERENCE_MISMATCH_'+basename)
             h=re.sub(pat,'scripts/'+basename+'?startup=${{ github.run_id }}',h)
           p.write_text(h)
