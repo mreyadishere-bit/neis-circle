@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/runtime-core-v166.js'
+      - 'scripts/02-content-admin.js'
       - '.github/workflows/ovh-home-startup-perf-autodeploy.yml'
   workflow_dispatch:
 permissions:
@@ -24,7 +25,9 @@ jobs:
       - name: Validate targeted change
         run: |
           node --check scripts/runtime-core-v166.js
-          grep -q 'void articlesPromise.then' scripts/runtime-core-v166.js
+          node --check scripts/02-content-admin.js
+          grep -q 'primeArticles()' scripts/runtime-core-v166.js
+          grep -q 'firstHomePaint' scripts/02-content-admin.js
       - name: Pinned SSH
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -47,6 +50,7 @@ jobs:
           stage="/home/ubuntu/neis-backups/home-startup-${{ github.run_id }}-${{ github.run_attempt }}"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/runtime-core-v166.js "$target:$stage/runtime-core-v166.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/02-content-admin.js "$target:$stage/02-content-admin.js"
       - name: Isolated frontend-only deployment and verification
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -59,23 +63,25 @@ jobs:
           overlay=docker-compose.frontend-public.yml
           docker=(sudo -n /usr/bin/docker)
           compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
-          test -f "$overlay" && test -f "$stage/runtime-core-v166.js" && test ! -e "$new" || { echo PREFLIGHT=INVALID; exit 1; }
+          test -f "$overlay" && test -f "$stage/runtime-core-v166.js" && test -f "$stage/02-content-admin.js" && test ! -e "$new" || { echo PREFLIGHT=INVALID; exit 1; }
           old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
           [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old" || { echo PREFLIGHT=SOURCE_UNEXPECTED; exit 1; }
-          test -f "$old/scripts/runtime-core-v166.js" || { echo PREFLIGHT=TARGET_NOT_ACTIVE; exit 1; }
+          test -f "$old/scripts/runtime-core-v166.js" && test -f "$old/scripts/02-content-admin.js" || { echo PREFLIGHT=TARGET_NOT_ACTIVE; exit 1; }
           grep -Fq "$old" "$overlay" || { echo PREFLIGHT=OVERLAY_MISMATCH; exit 1; }
-          grep -Fq 'scripts/runtime-core-v166.js' "$old/index.html" || { echo PREFLIGHT=SCRIPT_NOT_REFERENCED; exit 1; }
+          grep -Fq 'scripts/runtime-core-v166.js' "$old/index.html" && grep -Fq 'scripts/02-content-admin.js' "$old/index.html" || { echo PREFLIGHT=SCRIPT_NOT_REFERENCED; exit 1; }
           cp "$overlay" "$stage/overlay.backup"
           cp -a "$old" "$new"
           cp "$stage/runtime-core-v166.js" "$new/scripts/runtime-core-v166.js"
+          cp "$stage/02-content-admin.js" "$new/scripts/02-content-admin.js"
           python3 - "$new/index.html" "$overlay" "$old" "$new" <<'PY'
           import re,sys
           from pathlib import Path
           html,overlay,old,new=map(str,sys.argv[1:])
           p=Path(html);h=p.read_text()
-          pat=r'scripts/runtime-core-v166\.js(?:\?[^"\x27<>]*)?'
-          if len(re.findall(pat,h))!=1:raise SystemExit('TARGET_SCRIPT_REFERENCE_MISMATCH')
-          h=re.sub(pat,'scripts/runtime-core-v166.js?startup=${{ github.run_id }}',h)
+          for basename in ('runtime-core-v166.js','02-content-admin.js'):
+            pat=r'scripts/'+re.escape(basename)+r'(?:\\?[^"\\x27<>]*)?'
+            if len(re.findall(pat,h))!=1:raise SystemExit('TARGET_SCRIPT_REFERENCE_MISMATCH_'+basename)
+            h=re.sub(pat,'scripts/'+basename+'?startup=${{ github.run_id }}',h)
           p.write_text(h)
           o=Path(overlay);s=o.read_text()
           if s.count(old)!=1:raise SystemExit('SOURCE_MOUNT_MISMATCH')
@@ -91,8 +97,10 @@ jobs:
           "${compose[@]}" up -d --no-deps caddy
           cid=$("${compose[@]}" ps -q caddy)
           test -n "$cid"
-          "${docker[@]}" exec "$cid" grep -q 'void articlesPromise.then' /srv/neis-circle/scripts/runtime-core-v166.js
-          "${docker[@]}" exec "$cid" grep -q 'startup=${{ github.run_id }}' /srv/neis-circle/index.html
+          "${docker[@]}" exec "$cid" grep -q 'primeArticles()' /srv/neis-circle/scripts/runtime-core-v166.js
+          "${docker[@]}" exec "$cid" grep -q 'firstHomePaint' /srv/neis-circle/scripts/02-content-admin.js
+          "${docker[@]}" exec "$cid" grep -Fq '02-content-admin.js?startup=${{ github.run_id }}' /srv/neis-circle/index.html
+          "${docker[@]}" exec "$cid" grep -Fq 'runtime-core-v166.js?startup=${{ github.run_id }}' /srv/neis-circle/index.html
           trap - ERR
           echo HOME_DEPLOY=SUCCESS
           REMOTE
