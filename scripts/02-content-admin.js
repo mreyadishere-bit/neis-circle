@@ -178,14 +178,16 @@ loadLiveData=async function(){
   // The feed is the only first-paint requirement after the account check.
   // Other account preferences and engagement data must not delay Home.
   const firstHomePaint=state.view==='home'&&state.onboardingComplete===true&&!state.platformReady;
+  window.__neisPrimaryLoading=true;
+  window.__neisPrimaryStartedAt=Date.now();
   const postRequest=sb.from('posts')
     .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
     .order('created_at',{ascending:false});
-  const myReactionRequest=sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid);
-  const bookmarkRequest=sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid);
-  const profileRequest=sb.from('profiles')
+  const myReactionRequest=Promise.resolve(sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid));
+  const bookmarkRequest=Promise.resolve(sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid));
+  const profileRequest=Promise.resolve(sb.from('profiles')
     .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-    .eq('id',uid).maybeSingle();
+    .eq('id',uid).maybeSingle());
   // Start all requests together, but await the feed on its own.
   const postRes=await postRequest;
 
@@ -214,6 +216,9 @@ loadLiveData=async function(){
     mergeStartupMembers(authors);
     state.posts=livePosts;
   }
+
+  // Counts and the member directory start in the background as soon as feed is available.
+  if(!postRes.error)refreshPrimaryBackground();
 
   // Make the first paint with real posts as soon as the posts request finishes.
   // Only do this on initial Home load; subsequent refreshes retain existing DOM.
@@ -248,6 +253,7 @@ loadLiveData=async function(){
   state.platformReady=true;
   save();
   document.body.classList.toggle('is-admin',state.isAdmin);
+  window.__neisPrimaryLoading=false;
   refreshPrimaryBackground();
 }
 window.NEISPrimaryContentLoad=loadLiveData;
