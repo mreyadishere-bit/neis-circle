@@ -246,9 +246,8 @@
   // posts/profiles/reactions reads during a normal startup.
   const primaryReady=()=>!!(
     state?.platformReady &&
-    Array.isArray(state?.members) &&
     Array.isArray(state?.posts) &&
-    state.members.length
+    (Array.isArray(state?.members)||!!state?.profile?.name)
   );
   // Do not start a second parallel feed/profile hydration while the primary
   // loader is still fetching. On a failed/stuck request, recovery remains bounded.
