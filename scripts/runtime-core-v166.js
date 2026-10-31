@@ -189,6 +189,43 @@
     return hydratePromise;
   }
 
+
+  // Articles were previously requested only by the slow recovery path.
+  // Start them during NORMAL Home startup, independently of feed/profile queries.
+  // The secondary loader is single-flight and uses its existing short-lived cache.
+  let articleRequestUser='';
+  let articleRequestAt=0;
+  function primeArticles(){
+    if(!sb||!authUser||!window.NEISSecondaryData?.loadArticles)return false;
+    const uid=String(authUser.id);
+    if(articleRequestUser===uid&&Date.now()-articleRequestAt<180000)return true;
+    articleRequestUser=uid;
+    articleRequestAt=Date.now();
+    const before=JSON.stringify(safeArray(state.articles).map(row=>[row.id,row.updated_at,row.status,row.featured]));
+    Promise.resolve().then(()=>window.NEISSecondaryData.loadArticles()).then(()=>{
+      if(String(authUser?.id)!==uid)return;
+      const after=JSON.stringify(safeArray(state.articles).map(row=>[row.id,row.updated_at,row.status,row.featured]));
+      if(before===after)return;
+      if((state.view==='home'||state.view==='articles')&&state.onboardingComplete===true&&typeof render==='function'){
+        // One update after the article response, not a Home refresh per item.
+        render();
+      }
+    }).catch(error=>{
+      console.warn('[NEIS] article startup fetch failed',error);
+      if(articleRequestUser===uid)articleRequestUser='';
+    });
+    return true;
+  }
+
+  // Authentication and the secondary-data layer may initialize after this file.
+  // Bounded retry only during startup; no continuous polling or server cost.
+  let articleStartupAttempts=0;
+  function startArticlesWhenReady(){
+    if(primeArticles())return;
+    if(++articleStartupAttempts<36)setTimeout(startArticlesWhenReady,250);
+  }
+  setTimeout(startArticlesWhenReady,100);
+
   window.NEISHydrateCore=hydrate;
 
   if(typeof nav==='function'&&!window.__neisHomeNavGuardV168){
@@ -196,6 +233,7 @@
     const previousNav=nav;
     nav=function(view){
       const result=previousNav(view);
+      if(view==='home'||view==='articles')primeArticles();
       if(view==='home'&&!primaryReady()){
         setTimeout(()=>{if(!primaryReady())hydrate({reason:'home-nav'});},0);
       }
@@ -212,11 +250,15 @@
     Array.isArray(state?.posts) &&
     state.members.length
   );
-  setTimeout(async()=>{
+  // Do not start a second parallel feed/profile hydration while the primary
+  // loader is still fetching. On a failed/stuck request, recovery remains bounded.
+  async function recoverIfStillNeeded(){
     if(primaryReady())return;
-    // The normal loader may still be in flight on slower mobile connections.
-    await new Promise(resolve=>setTimeout(resolve,1800));
-    if(primaryReady())return;
+    const primaryAge=Date.now()-Number(window.__neisPrimaryStartedAt||0);
+    if(window.__neisPrimaryLoading&&primaryAge<9500){
+      setTimeout(recoverIfStillNeeded,850);
+      return;
+    }
     const ok=await hydrate({force:true,reason:'startup-recovery'});
     if(!ok&&!startupRetryUsed){
       startupRetryUsed=true;
@@ -224,5 +266,6 @@
         if(!primaryReady())hydrate({force:true,reason:'startup-retry'});
       },1800);
     }
-  },650);
+  }
+  setTimeout(recoverIfStillNeeded,2450);
 })();
