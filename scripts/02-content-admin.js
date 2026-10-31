@@ -132,17 +132,24 @@ function refreshPrimaryBackground(){
   if(primaryBackgroundRefreshPromise||!sb||!authUser)return primaryBackgroundRefreshPromise;
   const uid=authUser.id;
   primaryBackgroundRefreshPromise=(async()=>{
-    const [memberRes,engagementRes]=await Promise.all([
-      sb.from('profiles')
+    // Independent responses: a slow engagement RPC cannot hold back
+    // the real member count, and a slow directory cannot delay post counts.
+    const memberTask=(async()=>{
+      const memberRes=await sb.from('profiles')
         .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-        .order('full_name'),
-      sb.rpc('post_engagement_counts')
-    ]);
+        .order('full_name');
     if(!memberRes.error){
       state.members=memberRes.data||state.members||[];
       window.NEISProfileCache?.write?.(uid,state.members);
     }else console.warn('[NEIS startup] member directory refresh failed',memberRes.error);
-
+      if(state.view==='home'){
+        // Update the visible counter without rebuilding posts or interrupting media.
+        const number=document.querySelector('#view .hero .pulse strong');
+        if(number)number.textContent=String((state.members||[]).length);
+      }else if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+    })();
+    const engagementTask=(async()=>{
+      const engagementRes=await sb.rpc('post_engagement_counts');
     if(!engagementRes.error){
       const counts=new Map((engagementRes.data||[]).map(row=>[String(row.post_id),row]));
       const changed=[];
@@ -158,8 +165,8 @@ function refreshPrimaryBackground(){
       }
       if(typeof patchVisiblePostState==='function')changed.forEach(id=>patchVisiblePostState(id));
     }else console.warn('[NEIS startup] engagement counts refresh failed',engagementRes.error);
-
-    if(['discover','connections'].includes(state.view)&&typeof render==='function')render();
+    })();
+    await Promise.allSettled([memberTask,engagementTask]);
   })().catch(error=>console.warn('[NEIS startup] background refresh failed',error))
     .finally(()=>{primaryBackgroundRefreshPromise=null});
   return primaryBackgroundRefreshPromise;
@@ -175,21 +182,22 @@ loadLiveData=async function(){
     if(cachedSelf)applyOwnProfileRow(cachedSelf);
   }
 
-  const [postRes,myReactionRes,bookmarkRes,profileRes]=await Promise.all([
-    sb.from('posts')
-      .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
-      .order('created_at',{ascending:false}),
-    sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid),
-    sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid),
-    sb.from('profiles')
-      .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-      .eq('id',uid).maybeSingle()
-  ]);
+  // The feed is the only first-paint requirement after the account check.
+  // Other account preferences and engagement data must not delay Home.
+  const firstHomePaint=state.view==='home'&&state.onboardingComplete===true&&!state.platformReady;
+  window.__neisPrimaryLoading=true;
+  window.__neisPrimaryStartedAt=Date.now();
+  const postRequest=sb.from('posts')
+    .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
+    .order('created_at',{ascending:false});
+  const myReactionRequest=Promise.resolve(sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid));
+  const bookmarkRequest=Promise.resolve(sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid));
+  const profileRequest=Promise.resolve(sb.from('profiles')
+    .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
+    .eq('id',uid).maybeSingle());
+  // Start all requests together, but await the feed on its own.
+  const postRes=await postRequest;
 
-  if(!profileRes.error&&profileRes.data){
-    mergeStartupMembers([profileRes.data]);
-    applyOwnProfileRow(profileRes.data);
-  }
 
   if(!postRes.error){
     const previousById=new Map((state.posts||[]).map(item=>[String(item.id),item]));
@@ -216,6 +224,25 @@ loadLiveData=async function(){
     state.posts=livePosts;
   }
 
+  // Counts and the member directory start in the background as soon as feed is available.
+  if(!postRes.error)refreshPrimaryBackground();
+
+  // Make the first paint with real posts as soon as the posts request finishes.
+  // Only do this on initial Home load; subsequent refreshes retain existing DOM.
+  if(firstHomePaint&&!postRes.error&&authUser?.id===uid){
+    state.platformReady=true;
+    try{save()}catch(error){console.warn('[NEIS startup] feed cache save skipped',error)}
+    if(typeof render==='function')render();
+  }
+
+  const [myReactionRes,bookmarkRes,profileRes]=await Promise.all([
+    myReactionRequest,bookmarkRequest,profileRequest
+  ]);
+  if(!profileRes.error&&profileRes.data){
+    mergeStartupMembers([profileRes.data]);
+    applyOwnProfileRow(profileRes.data);
+  }
+
   state.postReactionKeys=(myReactionRes.data||[])
     .map(x=>[x.post_id,x.user_id,x.reaction||'like'].map(String).join('|'));
   state.liked=(myReactionRes.data||[]).map(x=>x.post_id);
@@ -233,6 +260,7 @@ loadLiveData=async function(){
   state.platformReady=true;
   save();
   document.body.classList.toggle('is-admin',state.isAdmin);
+  window.__neisPrimaryLoading=false;
   refreshPrimaryBackground();
 }
 window.NEISPrimaryContentLoad=loadLiveData;
