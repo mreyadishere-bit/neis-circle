@@ -175,21 +175,20 @@ loadLiveData=async function(){
     if(cachedSelf)applyOwnProfileRow(cachedSelf);
   }
 
-  const [postRes,myReactionRes,bookmarkRes,profileRes]=await Promise.all([
-    sb.from('posts')
-      .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
-      .order('created_at',{ascending:false}),
-    sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid),
-    sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid),
-    sb.from('profiles')
-      .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
-      .eq('id',uid).maybeSingle()
-  ]);
+  // The feed is the only first-paint requirement after the account check.
+  // Other account preferences and engagement data must not delay Home.
+  const firstHomePaint=state.view==='home'&&state.onboardingComplete===true&&!state.platformReady;
+  const postRequest=sb.from('posts')
+    .select('id,kind,title,body,tags,image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url,created_at,author_id,circle_id,pinned,post_type,profiles!posts_author_id_fkey(id,full_name,username,avatar_url,grade,branch,campus)')
+    .order('created_at',{ascending:false});
+  const myReactionRequest=sb.from('reactions').select('post_id,user_id,reaction').eq('user_id',uid);
+  const bookmarkRequest=sb.from('bookmarks').select('post_id,user_id').eq('user_id',uid);
+  const profileRequest=sb.from('profiles')
+    .select('id,full_name,username,avatar_url,grade,branch,campus,bio,interests,role,onboarding_complete')
+    .eq('id',uid).maybeSingle();
+  // Start all requests together, but await the feed on its own.
+  const postRes=await postRequest;
 
-  if(!profileRes.error&&profileRes.data){
-    mergeStartupMembers([profileRes.data]);
-    applyOwnProfileRow(profileRes.data);
-  }
 
   if(!postRes.error){
     const previousById=new Map((state.posts||[]).map(item=>[String(item.id),item]));
@@ -214,6 +213,22 @@ loadLiveData=async function(){
     });
     mergeStartupMembers(authors);
     state.posts=livePosts;
+  }
+
+  // Make the first paint with real posts as soon as the posts request finishes.
+  // Only do this on initial Home load; subsequent refreshes retain existing DOM.
+  if(firstHomePaint&&!postRes.error&&authUser?.id===uid){
+    state.platformReady=true;
+    try{save()}catch(error){console.warn('[NEIS startup] feed cache save skipped',error)}
+    if(typeof render==='function')render();
+  }
+
+  const [myReactionRes,bookmarkRes,profileRes]=await Promise.all([
+    myReactionRequest,bookmarkRequest,profileRequest
+  ]);
+  if(!profileRes.error&&profileRes.data){
+    mergeStartupMembers([profileRes.data]);
+    applyOwnProfileRow(profileRes.data);
   }
 
   state.postReactionKeys=(myReactionRes.data||[])
