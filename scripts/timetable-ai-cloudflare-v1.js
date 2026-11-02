@@ -247,27 +247,43 @@ function buildWizardDraft(){
   stateAI.preview=false;w.step="review";
 }
 function updateWizardRow(key,field,value){
-  const row=stateAI.draft?.find(x=>x.key===key);
+  const row=stateAI.draft?.find(x=>x.key===key)||Object.values(stateAI.wizard?.pendingIssues||{}).find(x=>x.key===key);
   if(!row)return;
-  stateAI.draftHistory.push(structuredClone(stateAI.draft));
+  if(!String(key).startsWith("pending:"))stateAI.draftHistory.push(structuredClone(stateAI.draft));
   if(field==="day_of_week")row[field]=Number(value);
   else if(field==="color")row[field]=/^#[\da-f]{6}$/i.test(value)?value:row[field];
   else row[field]=String(value).slice(0,field==="notes"?1000:120);
 }
 // A flagged PDF fragment is NOT a verified lesson. Create a deliberately
 // incomplete editor next to that issue, never a guessed time or day.
-function addUnverifiedLesson(issueId, suggestedTitle=""){
+function pendingIssue(issueId,suggestedTitle=""){
   const w=stateAI.wizard;
-  if(!w || stateAI.draft.length>=80)return;
-  const permitted=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
-  const title=permitted.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||permitted[0]||"";
+  w.pendingIssues=w.pendingIssues||{};
+  if(!w.pendingIssues[issueId]){
+    const selected=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
+    const title=selected.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||suggestedTitle||"";
+    w.pendingIssues[issueId]={key:"pending:"+issueId,title,day_of_week:-1,
+      start_time:"",end_time:"",location:"",notes:"",category:"Class",
+      color:w.colors[subjectKey(title)]||suggestedColor(title)};
+  }
+  return w.pendingIssues[issueId];
+}
+function validIssueLesson(row){
+  return Boolean(row && row.title && Number.isInteger(Number(row.day_of_week)) &&
+    Number(row.day_of_week)>=0 && Number(row.day_of_week)<=6 &&
+    /^([01]\\d|2[0-3]):[0-5]\\d$/.test(row.start_time||"") &&
+    /^([01]\\d|2[0-3]):[0-5]\\d$/.test(row.end_time||"") &&
+    row.end_time>row.start_time);
+}
+function addUnverifiedLesson(issueId){
+  const w=stateAI.wizard, pending=w?.pendingIssues?.[issueId];
+  if(!w||!validIssueLesson(pending)||stateAI.draft.length>=80)return;
   stateAI.draftHistory.push(structuredClone(stateAI.draft));
-  const row={key:tmpKey(),title,day_of_week:-1,start_time:"",end_time:"",
-    location:"",notes:"",category:"Class",color:w.colors[subjectKey(title)]||suggestedColor(title)};
+  const row={...pending,key:tmpKey()};
   stateAI.draft.push(row);
-  w.issueRows=w.issueRows||{};
-  w.issueRows[issueId]=row.key;
-  w.editingLesson=row.key;
+  w.addedIssues=w.addedIssues||{};
+  w.addedIssues[issueId]=row.key;
+  w.editingLesson=null;
   draw();
 }
 function issueCard(issueId,title,description,subject=""){
@@ -276,33 +292,32 @@ function issueCard(issueId,title,description,subject=""){
   const heading=el("div","ttai-issue-head");
   heading.append(el("strong",null,title));
   card.append(heading);
-  const existing=stateAI.draft.find(x=>x.key===w.issueRows?.[issueId]);
-  // Keep the source explanation legible and move actions under each issue.
   card.append(el("p","ttai-issue-desc",description));
+  const added=stateAI.draft.find(x=>x.key===w.addedIssues?.[issueId]);
+  const pending=w.pendingIssues?.[issueId];
+  const expanded=w.editingLesson===issueId;
   const actions=el("div","ttai-issue-actions");
-  if(!existing){
-    const add=wizardButton(wizardText("+ Add this lesson","+ إضافة هذه الحصة"),
-      "ttai-primary ttai-issue-action",()=>addUnverifiedLesson(issueId,subject),
-      stateAI.draft.length>=80);
-    actions.append(add);
-  }else{
-    const complete=Boolean(existing.title&&existing.day_of_week>=0&&
-      existing.start_time&&existing.end_time&&existing.end_time>existing.start_time);
-    const expanded=w.editingLesson===existing.key;
-    if(complete)card.append(el("p","ttai-issue-complete",
-      wizardText("Lesson details entered — review or adjust below.","تم إدخال بيانات الحصة — راجعها أو عدّلها.")));
-    const toggle=wizardButton(expanded?
-      wizardText("Done editing","إنهاء التعديل"):
-      wizardText("Edit this lesson","تعديل هذه الحصة"),
-      "ttai-subtle ttai-issue-action",()=>{
-        w.editingLesson=expanded?null:existing.key;draw();
-      });
-    actions.append(toggle);
-    if(expanded){
-      const editor=editWizardRow(existing,true);
-      card.append(editor);
-    }
+  const edit=wizardButton(expanded?
+    wizardText("Close editor","إغلاق التعديل"):
+    wizardText("Edit","تعديل"),"ttai-subtle ttai-issue-action",()=>{
+      if(!w.pendingIssues?.[issueId])pendingIssue(issueId,subject);
+      w.editingLesson=expanded?null:issueId;draw();
+    });
+  actions.append(edit);
+  const add=wizardButton(added?
+    wizardText("Added ✓","تمت الإضافة ✓"):
+    wizardText("+ Add lesson","+ إضافة الحصة"),
+    "ttai-primary ttai-issue-action",()=>addUnverifiedLesson(issueId),
+    Boolean(added)||!validIssueLesson(pending)||stateAI.draft.length>=80);
+  actions.append(add);
+  if(added)card.append(el("p","ttai-issue-complete",
+    wizardText("Added to your draft. You can review it below before saving.","الحصة أُضيفت للمسودة، ويمكن مراجعتها قبل الحفظ.")));
+  if(expanded){
+    const form=editWizardRow(added||pendingIssue(issueId,subject),true);
+    card.append(form);
   }
+  if(!added&&!validIssueLesson(pending))card.append(el("p","ttai-issue-hint",
+    wizardText("Edit the subject, day and both times to enable Add.","عدّل المادة واليوم ووقتي البداية والنهاية لتفعيل زر الإضافة.")));
   card.append(actions);
   return card;
 }
@@ -315,7 +330,8 @@ function editWizardRow(row,compact=false){
     stateAI.draft=stateAI.draft.filter(x=>x.key!==row.key);draw();
   });
   remove.setAttribute("aria-label",wizardText("Remove lesson","حذف الحصة"));
-  top.append(remove);article.append(top);
+  if(!compact)top.append(remove);
+  article.append(top);
   const form=el("div","ttai-wiz-edit-grid");
   if(!row.start_time||!row.end_time)article.classList.add("ttai-incomplete-lesson");
   const makeInput=(caption,type,value,field,options)=>{
@@ -489,8 +505,7 @@ function drawWizard(chat){
       panel.append(issues);
     }
     const lessons=el("div","ttai-wiz-lessons");
-    const issueKeys=new Set(Object.values(w.issueRows||{}));
-    const ordered=[...(stateAI.draft||[])].filter(x=>!issueKeys.has(x.key)).sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
+    const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
     let lastDay=-1;
     for(const row of ordered){
       if(row.day_of_week!==lastDay){

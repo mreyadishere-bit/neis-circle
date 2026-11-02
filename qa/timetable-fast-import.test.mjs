@@ -94,17 +94,23 @@ assert.match(client,/Clear selection/,'offer simple selection controls');
 
 assert.match(client,/function issueCard\(/,"each unresolved PDF item renders an issue card");
 assert.match(client,/function addUnverifiedLesson\(/,"each issue gets its own add action");
-assert.match(client,/day_of_week:-1,start_time:"",end_time:""/,"new lessons never invent day or times");
-assert.match(client,/w\.issueRows\?\.\["missing:"\+subjectKey\(name\)\]/,"inline editor persists after adding it");
-assert.match(client,/const issueKeys=new Set/,"inline rows are not duplicated in regular lesson list");
+assert.match(client,/day_of_week:-1,[\s\S]*?start_time:"",end_time:""/,"new lessons never invent day or times");
+assert.match(client,/w\.addedIssues\[issueId\]=row\.key/,"added issue is tracked independently");
+assert.match(client,/const ordered=\[\.\.\.\(stateAI\.draft\|\|\[\]\)\]/,"only added issue rows appear in the saved draft list");
 
 assert.match(client,/function editWizardRow\(row,compact=false\)/,"issue editor supports compact mode");
 assert.match(client,/const actions=el\("div","ttai-issue-actions"\)/,"issue action is placed after explanation");
 assert.match(client,/card\.append\(actions\)/,"each unresolved lesson has its own action at card end");
-assert.match(client,/Done editing/,"inline editor can collapse");
+assert.match(client,/Close editor/,"inline editor can collapse");
 assert.doesNotMatch(client,/const info=el\("button","ttai-info-btn"/,"chat info button removed");
 
 assert.match(server,/for\(let i=0;i<imageParts\.length;i\+=2\)/,"bound Gemini requests to two PDF pages");
 assert.match(server,/Promise\.all\(groups\.map/,"analyze PDF chunks concurrently");
 assert.match(server,/GEMINI_QUOTA_LIMIT/,"report Gemini quota errors");
 assert.match(client,/Visual analysis failed: "\+safe/,"surface server failure reason to student");
+
+assert.match(client,/function pendingIssue\(/,"unverified sessions have separate editable state");
+assert.match(client,/function validIssueLesson\(/,"adding requires explicit valid lesson information");
+assert.match(client,/!validIssueLesson\(pending\)/,"Add remains disabled until valid editing");
+assert.match(client,/w\.addedIssues\[issueId\]=row\.key/,"Add commits one lesson to timetable draft");
+assert.match(client,/w\.editingLesson=expanded\?null:issueId/,"Edit opens and closes without adding");
