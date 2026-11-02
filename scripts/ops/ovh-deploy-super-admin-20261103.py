@@ -28,6 +28,7 @@ def require(x,why):
 def main():
  require(STAGE.is_dir() and OVERLAY.is_file(),"STAGING_MISSING")
  source_sql=(STAGE/"schema.sql").read_text()
+ parity_sql=(STAGE/"owner-parity.sql").read_text()
  source_js=(STAGE/"ui.js").read_text()
  require("neis_admin_delete_account" in source_sql and "neis_admin_set_super" in source_sql and
          "25b556a3-ec6f-49e7-ac6c-1b09720e3bfd" in source_sql,"UNEXPECTED_SCHEMA")
@@ -50,6 +51,8 @@ def main():
  temp=Path(str(dest)+".building")
  shutil.copytree(previous,temp)
  shutil.copy2(STAGE/"ui.js",temp/"scripts/super-admin-management-v1.js")
+ for file,target in (("server-usage.js","server-usage-admin-v1.js"),("auth-studio.js","main-admin-auth-studio-v5.js"),("db-storage.js","main-admin-db-storage-v1.js")):
+  shutil.copy2(STAGE/file,temp/"scripts"/target)
  if "scripts/super-admin-management-v1.js" not in live_index:
   live_index=live_index.replace("</body>",
    '<script defer src="scripts/super-admin-management-v1.js?v=20261103"></script>\n</body>')
@@ -57,6 +60,7 @@ def main():
  temp.rename(dest)
  # A failed migration leaves the old UI active. No deletion is performed during deploy.
  db(source_sql,check=True)
+ db(parity_sql,check=True)
  tests=db("""begin;
  set local role authenticated;
  select case when public.neis_admin_is_super() then 'FAIL' else 'ANON_DENY_PASS' end;
