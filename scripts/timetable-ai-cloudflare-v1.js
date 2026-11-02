@@ -611,9 +611,36 @@ function extractReadableTextFallback(evidence){
     const title=match[0].replace(/\s+/g," ").trim();
     if(!found.has(subjectKey(title)))found.set(subjectKey(title),title);
   }
+  const footerLessons=[];
+  const DAYS={sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6};
+  const as24=(clock,period)=>{
+    const bits=clock.split(":").map(Number);
+    if(bits.length!==2||bits[0]<1||bits[0]>12||bits[1]>59)return "";
+    let hour=bits[0]%12;if(period.toLowerCase()==="pm")hour+=12;
+    return String(hour).padStart(2,"0")+":"+String(bits[1]).padStart(2,"0");
+  };
+  for(const raw of String(evidence||"").split("\n").slice(0,750)){
+    const clean=raw.replace(/\bx=-?\d+:/g,"").replace(/\s*\|\s*/g," ").replace(/\s+/g," ");
+    const note=clean.match(/\*\s*([^()]{2,90})\s*\(([^)]{8,140})\)/);
+    if(!note)continue;
+    const title=note[1].trim();
+    const dayWords=[...note[2].matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day|sday|nesday|rsday|urday)?\b/gi)];
+    const times=[...note[2].matchAll(/\b(\d{1,2}:\d{2})\s*(am|pm)\b/gi)];
+    if(dayWords.length!==1||times.length!==2||!title)continue;
+    const start=as24(times[0][1],times[0][2]),end=as24(times[1][1],times[1][2]);
+    if(!start||!end||end<=start)continue;
+    const day=DAYS[dayWords[0][1].slice(0,3).toLowerCase()];
+    if(day===undefined)continue;
+    const key=subjectKey(title);
+    if(!found.has(key))found.set(key,title);
+    if(!footerLessons.some(x=>x.title===title&&x.day_of_week===day)){
+      footerLessons.push({title,day_of_week:day,start_time:start,end_time:end,
+        location:"",notes:"",category:"Class"});
+    }
+  }
   return {
     all_detected_subjects:[...found.values()].slice(0,60),
-    detected_lessons:[],
+    detected_lessons:footerLessons.slice(0,30),
     ambiguous_items:[wizardText(
       "Only subject names were read from the PDF text. The visual AI did not verify days or times; add/confirm each class before saving.",
       "تمت قراءة أسماء المواد فقط من نص الـPDF. لم يتم التأكد من الأيام والأوقات بصريًا؛ لازم تدخل كل حصة أو تراجعها قبل الحفظ.")],
