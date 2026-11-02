@@ -505,8 +505,7 @@ function drawWizard(chat){
       panel.append(issues);
     }
     const lessons=el("div","ttai-wiz-lessons");
-    const issueKeys=new Set(Object.values(w.addedIssues||{}));
-    const ordered=[...(stateAI.draft||[])].filter(x=>!issueKeys.has(x.key)).sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
+    const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
     let lastDay=-1;
     for(const row of ordered){
       if(row.day_of_week!==lastDay){
