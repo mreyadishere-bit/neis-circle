@@ -1,0 +1,35 @@
+name: Gemini real multimodal smoke
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/gemini-live-timetable-smoke.yml']
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    steps:
+      - name: Test live Gemini with 2 tiny images
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os,base64,json,urllib.request,urllib.error
+          key=os.getenv("GEMINI_KEY","")
+          assert key,"MISSING_GEMINI_KEY"
+          tiny="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII="
+          p={"systemInstruction":{"parts":[{"text":"Return valid JSON only."}]},"contents":[{"role":"user","parts":[{"text":"Two PNG images are attached. Return JSON {page_count:2}."},{"inlineData":{"mimeType":"image/png","data":tiny}},{"inlineData":{"mimeType":"image/png","data":tiny}}]}],"generationConfig":{"responseMimeType":"application/json","maxOutputTokens":8192,"thinkingConfig":{"thinkingLevel":"LOW"}}}
+          req=urllib.request.Request("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",data=json.dumps(p).encode(),headers={"x-goog-api-key":key,"Content-Type":"application/json"})
+          try:
+            with urllib.request.urlopen(req,timeout=45) as res: d=json.load(res)
+          except urllib.error.HTTPError as e:
+            try: st=json.loads(e.read()).get("error",{}).get("status","unknown")
+            except Exception: st="unknown"
+            raise SystemExit(f"HTTP_{e.code}_{st}")
+          c=(d.get("candidates") or [{}])[0]
+          txt="".join(z.get("text","") for z in c.get("content",{}).get("parts",[]))
+          if not txt: raise SystemExit("EMPTY_"+str(c.get("finishReason","UNKNOWN")))
+          json.loads(txt)
+          print("GEMINI_TWO_IMAGE_REAL_REQUEST=PASS")
+          PY
