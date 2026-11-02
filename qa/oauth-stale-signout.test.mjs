@@ -9,7 +9,13 @@ async function context(signedIn, failed, reason) {
   const page=await browser.newPage();
   const exceptions=[];
   page.on("pageerror",e=>exceptions.push(String(e.name)));
-  await page.setContent('<!DOCTYPE html><html><body><main id="authRoot"></main></body></html>');
+  // A real-origin browser document is required: about:blank denies localStorage.
+  // Serve only synthetic HTML through Playwright, never reach production.
+  await page.route("https://neis-auth-qa.invalid/**",route=>route.fulfill({
+    status:200,contentType:"text/html",
+    body:'<!DOCTYPE html><html><body><main id="authRoot"></main></body></html>'
+  }));
+  await page.goto("https://neis-auth-qa.invalid/");
   await page.evaluate(({signedIn,failed,reason})=>{
     window.state={lang:"en",theme:"light",identityVerification:{},onboardingComplete:true,profile:{name:"Student"}};
     window.authUser=signedIn?{id:"00000000-0000-4000-8000-000000000111"}:null;
