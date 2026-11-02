@@ -188,7 +188,7 @@ class CloudflareComposePreservation(unittest.TestCase):
 
     def assertValidCompose(self, before, after, old_dir, new_dir):
         deploy.verify_edge_config_preserved(
-            before, after, old_dir, new_dir, "cloudflare-test-secret", "0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef"
+            before, after, old_dir, new_dir, "cloudflare-test-secret", "0123456789abcdef0123456789abcdef"
         )
 
 
