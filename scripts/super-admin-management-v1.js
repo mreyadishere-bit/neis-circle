@@ -89,6 +89,19 @@
           };
           actions.append(promote);
         }
+        if(!user.is_super&&user.user_id!==authUser.id){
+          const role=document.createElement('button');role.type='button';
+          const makeAdmin=user.role!=='admin';
+          role.textContent=makeAdmin?'Make Admin':'Remove Admin';
+          role.onclick=async()=>{
+            if(!confirm((makeAdmin?'Grant administrator permissions to ':'Revoke administrator permissions from ')+(user.full_name||user.username)+'?'))return;
+            role.disabled=true;
+            const res=await sb.rpc('neis_admin_set_regular_admin',{p_user_id:user.user_id,p_make_admin:makeAdmin});
+            if(res.error){alert(res.error.message);role.disabled=false;return}
+            await listUsers();
+          };
+          actions.append(role);
+        }
         if(user.user_id!==authUser.id){
           const del=document.createElement('button');del.type='button';del.className='sa-danger';
           del.textContent='Delete permanently';
