@@ -41,7 +41,14 @@
       if(response.error)throw response.error;
       if(seq!==nonce||!root.isConnected)return;
       capabilities=response.data;
+      const prior=window.neisSuperAdminGranted===true&&window.neisSuperAdminUser===authUser?.id;
+      window.neisSuperAdminGranted=Boolean(capabilities?.super_admin);
+      window.neisSuperAdminUser=authUser?.id||null;
       root.hidden=!Boolean(capabilities?.super_admin);
+      if(!prior&&capabilities?.super_admin&&!capabilities?.owner&&typeof render==='function'){
+        render();
+        return;
+      }
       if(!root.hidden)await listUsers();
     }catch{
       root.hidden=true;
