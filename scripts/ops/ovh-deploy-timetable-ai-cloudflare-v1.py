@@ -413,25 +413,19 @@ def main():
         FRONTEND_OVERLAY.is_file()
         and (STAGE / 'timetable-ai-cloudflare-v1.js').is_file()
         and (STAGE / 'timetable-ai-v1.css').is_file()
-        and (STAGE / '01-core.js').is_file()
         and (STAGE / 'index.ts').is_file(),
         'STAGING_MISSING',
     )
     js_code = (STAGE / 'timetable-ai-cloudflare-v1.js').read_text()
-    core_code = (STAGE / '01-core.js').read_text()
     edge_code = (STAGE / 'index.ts').read_text()
     for tok in ('Llama 4 Scout', 'application/pdf', 'timetable-ai-cloudflare', '__neisTimetableAiMounted'):
         ensure(tok in js_code, 'FRONTEND_CODE_INVALID')
-    for tok in ('https://supabase.neiscircle.site', "flowType:'pkce'"):
-        ensure(tok in core_code, 'CORE_CONFIG_INVALID')
-    ensure('ydieijgynqlckaczalju' not in core_code, 'OLD_CLOUD_URL_FOUND_IN_CORE')
     for tok in ('@cf/meta/llama-4-scout', 'CLOUDFLARE_API_TOKEN', 'image_url', 'client.auth.getUser(jwt)'):
         ensure(tok in edge_code, 'EDGE_CODE_INVALID')
     ensure('decodeVerifiedJwtClaims' not in edge_code, 'UNVERIFIED_JWT_DECODE_FORBIDDEN')
     ensure('gemini' not in js_code.lower() and 'gemini' not in edge_code.lower(), 'OLD_PROVIDER_REFERENCE_FOUND')
 
     call(['node', '--check', str(STAGE / 'timetable-ai-v1.js')], timeout=15)
-    call(['node', '--check', str(STAGE / '01-core.js')], timeout=15)
     call(compose_cmd(True) + ['config', '--quiet'], timeout=40)
 
     # 1. Deploy and verify OVH Edge Function (`timetable-ai`)
@@ -448,6 +442,14 @@ def main():
     src = Path(mounts[0])
     ensure(src.is_dir() and str(src).startswith('/home/ubuntu/neis-frontend/releases/'), 'INVALID_RELEASE')
 
+    # The live OVH core is the known-good authentication implementation.
+    # Never replace it with a GitHub snapshot during an AI-only deployment.
+    current_core = src / 'scripts/01-core.js'
+    ensure(current_core.is_file(), 'ACTIVE_CORE_MISSING')
+    active_core_code = current_core.read_text()
+    ensure('https://supabase.neiscircle.site' in active_core_code and
+           'ydieijgynqlckaczalju' not in active_core_code,
+           'ACTIVE_AUTH_CONFIG_INVALID')
     index = (src / 'index.html').read_text()
     ensure(
         "We'll be back soon" not in index
@@ -471,12 +473,6 @@ def main():
     shutil.copytree(src, tmp)
     shutil.copy2(STAGE / 'timetable-ai-cloudflare-v1.js', tmp / JS)
     shutil.copy2(STAGE / 'timetable-ai-v1.css', tmp / CSS)
-    patched_core = re.sub(
-        r'supabaseAnonKey\s*:\s*"[^"]+"',
-        'supabaseAnonKey:"' + ovh_anon + '"',
-        core_code,
-    )
-    (tmp / 'scripts/01-core.js').write_text(patched_core)
 
     updated_index = re.sub(
         r'supabaseAnonKey\s*:\s*"[^"]+"',
