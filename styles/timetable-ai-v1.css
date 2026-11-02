@@ -94,3 +94,22 @@
   .ttai-pending{animation:none}
   .tt-head-actions .ttai-launch:hover{transform:none}
 }
+
+/* v1.1: keep the composer clear; privacy details remain in the info control */
+.ttai-header-controls{display:flex;align-items:center;gap:5px}
+.ttai-info-btn{display:grid;place-items:center;width:30px;height:30px;border:0;border-radius:9px;
+ background:transparent;color:var(--ttai-muted);font:inherit;font-size:18px;cursor:pointer}
+.ttai-info-btn:hover,.ttai-info-btn[aria-expanded="true"]{background:color-mix(in srgb,var(--ttai-ink) 6%,transparent)}
+.ttai-privacy-info{margin:0;padding:11px 16px;border-bottom:1px solid var(--ttai-line);
+ font-size:11px;line-height:1.5;color:var(--ttai-muted);
+ background:color-mix(in srgb,var(--ttai-ink) 3%,var(--ttai-paper))}
+.ttai-retry{align-self:flex-start;background:transparent;border:1px solid var(--ttai-line);
+ color:var(--ttai-accent);font:inherit;font-size:12px;border-radius:11px;
+ padding:7px 13px;cursor:pointer;font-weight:700}
+.ttai-retry:hover{background:color-mix(in srgb,var(--ttai-accent) 6%,var(--ttai-paper))}
+.ttai-file-remove{display:inline-grid;place-items:center;vertical-align:middle;
+ width:22px;height:22px;padding:0;margin:0 4px 6px 0;border:none;
+ background:transparent;border-radius:6px;color:var(--ttai-muted);font:inherit;
+ font-size:19px;cursor:pointer}
+.ttai-file-name{display:inline-block;max-width:calc(100% - 34px);vertical-align:middle}
+.ttai-file-name:empty + .ttai-file-remove{display:none}
