@@ -1,0 +1,50 @@
+name: Validate Cloudflare Timetable AI Integration (No OVH)
+on:
+  push:
+    branches: [feature/cloudflare-timetable-ai-prod-20261102]
+    paths:
+      - 'scripts/timetable-ai-cloudflare-v1.js'
+      - 'supabase/functions/timetable-ai-cloudflare/index.ts'
+      - 'scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py'
+      - '.github/workflows/verify-cloudflare-timetable-integration.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install using tracked dependencies
+        run: bun install --frozen-lockfile
+      - name: Compile and validate Cloudflare integration without contacting production
+        run: |
+          node --check scripts/timetable-ai-cloudflare-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
+          bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/cloudflare-ts-syntax-check
+          python3 - <<'PY'
+          from pathlib import Path
+          edge=Path('supabase/functions/timetable-ai-cloudflare/index.ts').read_text()
+          front=Path('scripts/timetable-ai-cloudflare-v1.js').read_text()
+          ops=Path('scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py').read_text()
+          assert 'client.auth.getUser(jwt)' in edge, 'missing verified Supabase auth'
+          assert 'CLOUDFLARE_API_TOKEN' in edge and 'CLOUDFLARE_ACCOUNT_ID' in edge
+          assert '@cf/meta/llama-4-scout-17b-16e-instruct' in edge
+          assert 'timetable-ai-cloudflare' in front and 'getDocument({data:bytes})' in front
+          assert 'GEMINI_API_KEY' not in edge and 'AIza' not in edge
+          assert 'restore_previous_cloudflare_override' in ops
+          assert 'PREVIOUS_GEMINI_OVERLAY' in ops
+          assert 'CLOUDFLARE_API_TOKEN' in ops and 'CLOUDFLARE_ACCOUNT_ID' in ops
+          assert 'client.auth.getUser(jwt)' in ops
+          print('CLOUDFLARE_INTEGRATION_STATIC=PASS')
+          PY
+      - name: Run existing application unit and regression tests
+        run: |
+          node qa/static-check.mjs
+          npm run qa:unit
