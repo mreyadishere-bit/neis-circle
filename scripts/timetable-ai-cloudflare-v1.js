@@ -250,6 +250,11 @@ function editWizardRow(row){
   makeInput(wizardText("To","إلى"),"time",row.end_time,"end_time");
   makeInput(wizardText("Where","المكان"),"text",row.location,"location");
   makeInput(wizardText("Color","اللون"),"color",row.color||suggestedColor(row.title),"color");
+  makeInput(wizardText("Type","النوع"),"select",row.category||"Class","category",
+    [["Class",wizardText("Class","حصة")],["Lab",wizardText("Lab","معمل")],
+      ["Study",wizardText("Study","مذاكرة")],["Exam",wizardText("Exam","امتحان")],
+      ["Activity",wizardText("Activity","نشاط")],["Other",wizardText("Other","أخرى")]]);
+  makeInput(wizardText("Notes","ملاحظات"),"text",row.notes,"notes");
   article.append(form);
   if(!row.start_time||!row.end_time||row.end_time<=row.start_time){
     article.append(el("p","ttai-wiz-warning",wizardText("Fix this lesson's time before saving.","صحّح وقت الحصة قبل الحفظ.")));
@@ -356,7 +361,14 @@ function drawWizard(chat){
     }
     const lessons=el("div","ttai-wiz-lessons");
     const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
-    for(const row of ordered)lessons.append(editWizardRow(row));
+    let lastDay=-1;
+    for(const row of ordered){
+      if(row.day_of_week!==lastDay){
+        lastDay=row.day_of_week;
+        lessons.append(el("h4","ttai-wiz-day",dayName(lastDay)));
+      }
+      lessons.append(editWizardRow(row));
+    }
     if(!ordered.length)lessons.append(el("p","ttai-wiz-warning",wizardText(
       "No readable times found. Add lessons manually or upload a clearer timetable.",
       "مفيش أوقات واضحة. ضيف الحصص يدويًا أو ارفع جدول أوضح."
