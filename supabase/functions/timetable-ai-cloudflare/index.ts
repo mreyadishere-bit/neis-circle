@@ -303,6 +303,115 @@ export function parseExplicitFootnoteLessons(pdfEvidence: string): Array<Record<
   return found.slice(0, 30);
 }
 
+
+/**
+ * Recover only independently readable, fully timed grid cells. This is not
+ * OCR or timetable prediction: headings, day labels and AM/PM must ALL be
+ * present in the PDF text layer. PDF image-only uploads still use visual AI.
+ * Page 2 can continue page 1's columns without repeating its headings.
+ */
+export function parsePdfTextGridLessons(evidence: string): Array<Record<string, unknown>> {
+  const sections=(evidence.match(/PAGE \\d+ POSITIONED PDF TEXT[\\s\\S]*?(?=PAGE \\d+ POSITIONED PDF TEXT|$)/g)||[]);
+  if(!sections.length)return [];
+  const tokenize=(source:string)=>{
+    const found:Array<{x:number;y:number;text:string}>=[];
+    for(const line of source.split("\n")){
+      const y=Number(line.match(/^y=(-?\\d+)/)?.[1]);
+      if(!Number.isFinite(y))continue;
+      for(const m of line.matchAll(/x=(-?\\d+):([^|\\n]+)/g)){
+        found.push({x:Number(m[1]),y,text:m[2].trim()});
+      }
+    }
+    return found;
+  };
+  const first=tokenize(sections[0]);
+  const firstDay=first.find(t=>/^(sat|sun|mon|tue|tues|wed|thu|thurs|fri)$/i.test(t.text));
+  if(!firstDay)return [];
+  const headings=first.filter(t=>t.y<firstDay.y&&t.y>firstDay.y-160&&
+    /^(arabic|math|physic|physics|chemist|chemistry|english|biolog|biology|ict|histor)$/i.test(t.text))
+    .sort((a,b)=>a.x-b.x);
+  const titles=extractPdfSubjectHeaders(evidence);
+  if(headings.length<4||titles.length!==headings.length)return [];
+  const days:Record<string,number>={sun:0,mon:1,tue:2,tues:2,wed:3,thu:4,thurs:4,fri:5,sat:6};
+  const results:Array<Record<string,unknown>>=[];
+  const seen=new Set<string>();
+  for(const [pageIndex,section] of sections.entries()){
+    const tokens=tokenize(section);
+    const dayAnchors=tokens.filter(t=>days[t.text.toLowerCase()]!==undefined&&t.x<120)
+      .sort((a,b)=>a.y-b.y);
+    for(let j=0;j<dayAnchors.length;j++){
+      const anchor=dayAnchors[j],day=days[anchor.text.toLowerCase()];
+      const nextY=dayAnchors[j+1]?.y??1050;
+      for(const [colIndex,h] of headings.entries()){
+        const left=colIndex?(h.x+headings[colIndex-1].x)/2:Math.max(0,h.x-45);
+        const right=colIndex+1<headings.length?(h.x+headings[colIndex+1].x)/2:1050;
+        const cell=tokens.filter(t=>t.y>=anchor.y-4&&t.y<nextY-4&&t.x>=left&&t.x<right)
+          .sort((a,b)=>a.y-b.y||a.x-b.x).map(t=>t.text).join(" ");
+        // Do not repair ambiguous 10 AM -> 12:30 AM, or broken time digits.
+        const times=[...cell.matchAll(/\\b(\\d{1,2}:\\d{2})\\s*(am|pm)\\b/gi)];
+        if(times.length!==2)continue;
+        const start=normalizeTime24(times[0][1]+" "+times[0][2]);
+        const end=normalizeTime24(times[1][1]+" "+times[1][2]);
+        if(!start||!end||end<=start)continue;
+        const title=titles[colIndex];
+        const id=[day,title.toLowerCase(),start,end].join("|");
+        if(seen.has(id))continue;
+        seen.add(id);
+        results.push({title,day_of_week:day,start_time:start,end_time:end,
+          source_page:pageIndex+1,source_x:Math.round((left+right)/2),
+          location:/onlin/i.test(cell)?"Online":"",notes:""});
+      }
+    }
+  }
+  return results;
+}
+
+/** Exact Arabic weekday/clock notes, including right-to-left Grade 11 notes. */
+export function parseArabicDatedLessons(evidence:string):Array<Record<string,unknown>>{
+  const result:Array<Record<string,unknown>>=[];
+  const seen=new Set<string>();
+  const dayMap:Record<string,number>={
+    "الاحد":0,"الاثنين":1,"الاثنين":1,"الثلاثاء":2,
+    "الاربعاء":3,"الخميس":4,"الجمعة":5,"السبت":6,
+  };
+  const ar=(value:string)=>value.normalize("NFKC").replace(/[\\u064b-\\u065f\\u0670\\u0640]/g,"")
+    .replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه");
+  const pageSections=(evidence.match(/PAGE \\d+ POSITIONED PDF TEXT[\\s\\S]*?(?=PAGE \\d+ POSITIONED PDF TEXT|$)/g)||[]);
+  pageSections.forEach((page,pageIndex)=>{
+    for(const line of page.split("\n")){
+      const coords=[...line.matchAll(/x=(-?\\d+):([^|\\n]+)/g)]
+        .map(m=>({x:Number(m[1]),text:m[2].trim()})).sort((a,b)=>b.x-a.x);
+      if(coords.length<5)continue;
+      const words=coords.flatMap(item=>item.text.split(/\\s+/).filter(Boolean));
+      const normalized=words.map(ar);
+      const dayIndex=normalized.findIndex(w=>dayMap[w.replace(/[^\\p{L}]/gu,"")]!==undefined);
+      if(dayIndex<1)continue;
+      const day=dayMap[normalized[dayIndex].replace(/[^\\p{L}]/gu,"")];
+      const title=words.slice(0,dayIndex).join(" ").replace(/[()*]/g,"").trim();
+      // Require a plausible Arabic subject name, not page headings or rules.
+      if(!/[\\p{Script=Arabic}]/u.test(title)||title.length<6||/ملاحظات/.test(ar(title)))continue;
+      const times:Array<string>=[];
+      for(let i=dayIndex+1;i<words.length;i++){
+        const m=words[i].match(/(\\d{1,2}:\\d{2})/);
+        if(!m)continue;
+        const next=ar(words.slice(i+1,i+3).join(" "));
+        const local=ar(words[i]);
+        const period=/(?:^|\\s)(ص|صباحا|am)(?:\\s|$)/i.test(next)||/ص$/.test(local)?"AM":
+          /(?:^|\\s)(م|مساء|pm)(?:\\s|$)/i.test(next)||/م$/.test(local)?"PM":"";
+        if(period)times.push(normalizeTime24(m[1]+" "+period));
+      }
+      if(times.length!==2||!times[0]||!times[1]||times[1]<=times[0])continue;
+      const canonicalTitle=title.replace(/\\s+/g," ");
+      const id=[day,ar(canonicalTitle),times.join("-")].join("|");
+      if(seen.has(id))continue;seen.add(id);
+      result.push({title:canonicalTitle,day_of_week:day,start_time:times[0],end_time:times[1],
+        location:/اونلاين|اونلين|online/i.test(ar(words.join(" ")))?"Online":"",
+        notes:"",source_page:pageIndex+1});
+    }
+  });
+  return result.slice(0,25);
+}
+
 function parseModelObject(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim().replace(/^~~~json\s*/i, "").replace(/^`{3}(?:json)?\s*/i, "").replace(/\s*`{3}$/i, "");
   try {
@@ -593,20 +702,26 @@ Deno.serve(async (request: Request) => {
     const entries = discoveryMode ? [] : validateAndNormalizeEntries(parsed.entries);
     const extracted = extractedObject && !Array.isArray(extractedObject)
       ? extractedObject : {};
-    const explicitNotes = discoveryMode ? parseExplicitFootnoteLessons(pdfEvidence) : [];
+    const explicitNotes = discoveryMode ? [
+      ...parseExplicitFootnoteLessons(pdfEvidence),
+      ...parseArabicDatedLessons(pdfEvidence),
+    ] : [];
+    const textGridLessons = discoveryMode ? parsePdfTextGridLessons(pdfEvidence) : [];
     const rawLessons = Array.isArray(extracted.detected_lessons) ? extracted.detected_lessons : [];
     const checked = discoveryMode && pdfEvidence ? verifyPdfGridLessons(rawLessons,pdfEvidence)
       : {accepted:rawLessons,rejected:0};
     const modelLessons = checked.accepted;
     // Explicit single-day printed notes outrank model guesses for that same
     // subject/day, while never touching unrelated grid lessons.
-    const noteKeys = new Set(explicitNotes.map((r) =>
-      String(r.title).toLowerCase().replace(/\s+/g, "") + "|" + r.day_of_week));
+    const lessonIdentity=(r:Record<string,unknown>)=>String(r.title||"").toLowerCase()
+      .replace(/\\s+/g,"").replace(/physic(s)?/g,"physics").replace(/maths/g,"math")+
+      "|"+String(r.day_of_week??"");
+    const independentlyVerified=[...textGridLessons,...explicitNotes];
+    const groundedKeys=new Set(independentlyVerified.map(lessonIdentity));
+    // The PDF's own readable, complete cells outrank a conflicting AI time.
     const groundedLessons = validateAndNormalizeEntries([
-      ...modelLessons.filter((r: Record<string, unknown>) =>
-        !noteKeys.has(String(r?.title ?? "").toLowerCase().replace(/\s+/g, "") +
-        "|" + String(r?.day_of_week ?? ""))),
-      ...explicitNotes,
+      ...modelLessons.filter((r: Record<string, unknown>)=>!groundedKeys.has(lessonIdentity(r))),
+      ...independentlyVerified,
     ]);
     const pdfHeaders=discoveryMode&&pdfEvidence?extractPdfSubjectHeaders(pdfEvidence):[];
     const modelSubjects=(Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects : []).map(String);
@@ -615,7 +730,7 @@ Deno.serve(async (request: Request) => {
     // Never let a generic model label erase a more specific PDF level.
     // The previous regex accidentally matched a literal backslash rather than
     // whitespace, and discarded qualified model labels when a header was generic.
-    const allCandidates=[...pdfHeaders,...modelSubjects,...explicitNotes.map(r=>String(r.title))];
+    const allCandidates=[...pdfHeaders,...modelSubjects,...independentlyVerified.map(r=>String(r.title))];
     const base=(x:string)=>x.trim().toLowerCase().replace(/\\s+(?:l[12]|gr\\s*1[12])$/i,"").replace(/\\s+/g," ");
     const isQualified=(x:string)=>/\\s+(?:l[12]|gr\\s*1[12])$/i.test(x.trim());
     const qualifiedBases=new Set(allCandidates.filter(isQualified).map(base));
