@@ -58,7 +58,7 @@ const labels={
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
 const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,draftHistory:[],original:[],baseline:[],
-  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,wizard:null};
+  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,wizard:null,phase:"",abort:null,cancelled:false};
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
 function isTimetable(){return typeof state!=="undefined" && state.view==="timetable"&&
@@ -465,7 +465,15 @@ function draw(){
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
   drawWizard(chat);
-  if(stateAI.busy)chat.append(message(t("busy"),"pending"));
+  if(stateAI.busy){
+    const working=el("div","ttai-work");
+    working.append(el("span","ttai-work-spinner","◌"),
+      el("span",null,stateAI.phase||t("busy")));
+    const cancel=el("button","ttai-work-cancel",wizardText("Cancel","إلغاء"));
+    cancel.type="button";cancel.onclick=()=>{stateAI.cancelled=true;stateAI.abort?.abort();
+      stateAI.phase=wizardText("Stopping request…","بوقف التحليل…");draw()};
+    working.append(cancel);chat.append(working);
+  }
   if(stateAI.lastFailed && !stateAI.busy){
     const retry=el("button","ttai-retry",t("retry"));
     retry.type="button";
@@ -661,9 +669,10 @@ async function toData(file){
 // Keep the chat responsive even if a large PDF or the Edge relay stalls.
 // Supabase supports AbortSignal; Promise.race is a second safety net if
 // a browser/network implementation ignores the abort request.
-const AI_REQUEST_DEADLINE_MS=95000;
+const AI_REQUEST_DEADLINE_MS=52000;
 async function invokeWithDeadline(body){
   const controller=new AbortController();
+  stateAI.abort=controller;
   let deadline;
   const timeout=new Promise((_,reject)=>{
     deadline=setTimeout(()=>{
@@ -682,12 +691,18 @@ async function invokeWithDeadline(body){
     ]);
   }finally{
     clearTimeout(deadline);
+    if(stateAI.abort===controller)stateAI.abort=null;
   }
+}
+function setPhase(msg){
+  if(!stateAI.cancelled&&stateAI.busy){stateAI.phase=msg;draw()}
 }
 async function submit(text,retrying=false){
   if(stateAI.busy||stateAI.saving)return;
   const file=stateAI.file;
-  stateAI.busy=true;
+  stateAI.busy=true;stateAI.cancelled=false;
+  stateAI.phase=wizardText("Preparing your timetable…","بجهز جدولك…");
+  let prepared=null;
   if(retrying && stateAI.lastFailed){
     // Do not duplicate a failed prompt in conversational memory.
     stateAI.history=stateAI.history.filter(x=>!x.isError && !x.failedPrompt);
@@ -712,8 +727,15 @@ async function submit(text,retrying=false){
       history:prior,
       messages:prior
     };
-    if(file)Object.assign(body,await toData(file));
+    if(file){
+      prepared=await toData(file);
+      if(stateAI.cancelled)throw new Error(wizardText("Cancelled","تم الإلغاء"));
+      Object.assign(body,prepared);
+    }
+    setPhase(file ? wizardText("Reading timetable pages visually…","بقرأ صفحات الجدول بصريًا…")
+      : wizardText("Updating your timetable…","بحدّث جدولك…"));
     const {data,error}=await invokeWithDeadline(body);
+    if(stateAI.cancelled)throw new Error(wizardText("Cancelled","تم الإلغاء"));
     if(error||!data||!Array.isArray(data.entries)){
       let description=data?.error||"";
       if(error?.context?.json){
@@ -746,11 +768,29 @@ async function submit(text,retrying=false){
     stateAI.history[stateAI.history.length-2].failedPrompt=false;
     stateAI.file=null;
   }catch(e){
-    stateAI.lastFailed={text,file};
-    const safe=String(e?.message||t("error"));
-    stateAI.history.push({role:"assistant",text:safe,isError:true});
+    if(stateAI.cancelled){
+      stateAI.lastFailed={text,file};
+      stateAI.history.push({role:"assistant",text:wizardText(
+        "Analysis cancelled. Your file is still here; Retry when ready.",
+        "التحليل اتلغى. الملف لسه موجود وتقدر تعيد المحاولة."),isError:true});
+    }else{
+      stateAI.lastFailed={text,file};
+      const safe=String(e?.message||t("error"));
+      const partial=file&&prepared?.textEvidence?
+        extractReadableTextFallback(prepared.textEvidence):null;
+      if(partial?.all_detected_subjects?.length){
+        stateAI.source=partial;
+        startWizard(partial);
+        stateAI.history.push({role:"assistant",text:wizardText(
+          "Visual AI is unavailable, but I found subject names in the PDF text. Choose your subjects; times not reliably read must be entered in Review. You can also Retry the visual analysis.",
+          "التحليل البصري مش متاح حاليًا، لكن قدرت أقرأ أسماء مواد من نص الـPDF. اختار موادك وراجع الأوقات أو أدخلها يدويًا. تقدر تضغط إعادة المحاولة كمان."
+        ),isError:true});
+      }else{
+        stateAI.history.push({role:"assistant",text:safe,isError:true});
+      }
+    }
   }finally{
-    stateAI.busy=false;draw();
+    stateAI.phase="";stateAI.busy=false;stateAI.abort=null;draw();
   }
 }
 async function applyPlan(){
