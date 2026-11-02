@@ -273,7 +273,17 @@ def deploy_edge_function(anon_key, gemini_key):
                original_gemini_text.count('    volumes:\n') == 1 and
                original_gemini_text.count('services:\n') == 1,
                'PREVIOUS_GEMINI_OVERRIDE_UNRECOGNIZED')
-        env_file_match = re.search(r'^      - (.+\.env)
+        env_file_match = re.search(
+            r"(?m)^      - ([^\r\n]+[.]env)\s*",
+            original_gemini_text,
+        )
+        ensure(env_file_match is not None,
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+        previous_owned_env_file = env_file_match.group(1).strip()
+        ensure(previous_owned_env_file.startswith(str(STAGE) + '/') and
+               Path(previous_owned_env_file).name.startswith('gemini-provider'),
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+    previous = read_compose_config(include_gemini=old_gemini_exists)
     # An immutable, private backup lets operators restore this exact release.
     if previous_gemini_bytes is not None:
         fd = os.open(str(GEMINI_OVERRIDE_BACKUP),
