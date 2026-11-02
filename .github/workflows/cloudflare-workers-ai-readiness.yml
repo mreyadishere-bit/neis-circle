@@ -1,0 +1,78 @@
+name: Cloudflare Workers AI Readiness (No OVH Changes)
+on:
+  push:
+    branches: [diagnostics/cloudflare-workers-ai-readiness-20261102]
+    paths: [.github/workflows/cloudflare-workers-ai-readiness.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 6
+    steps:
+      - name: Verify Cloudflare secret, account and run small text/vision checks
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 - <<'PY'
+          import base64,json,os,struct,zlib,urllib.error,urllib.request
+          token=os.getenv('CLOUDFLARE_API_TOKEN','').strip()
+          account=os.getenv('CLOUDFLARE_ACCOUNT_ID','').strip()
+          print('CF_TOKEN_PRESENT='+str(bool(token)).upper())
+          print('CF_ACCOUNT_ID_PRESENT='+str(bool(account)).upper())
+          if not token or not account: raise SystemExit('CF_READINESS=MISSING_GITHUB_SETTING')
+          if len(account)!=32 or not all(c in '0123456789abcdefABCDEF' for c in account):
+            raise SystemExit('CF_ACCOUNT_ID=INVALID_FORMAT')
+          headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'}
+          def request(url,data=None):
+            args={'headers':headers,'timeout':35}
+            if data is not None:args['data']=json.dumps(data).encode('utf-8')
+            try:
+              with urllib.request.urlopen(urllib.request.Request(url,**args)) as r:
+                return r.status,json.load(r)
+            except urllib.error.HTTPError as e:
+              try:
+                body=json.load(e)
+                codes=[str(err.get('code',''))[:12] for err in body.get('errors',[]) if isinstance(err,dict)]
+              except Exception:codes=[]
+              print('CF_API_HTTP='+str(e.code)+' CF_ERROR_CODES='+','.join(codes[:4]))
+              raise SystemExit('CF_API_REQUEST_FAILED')
+            except Exception as e:
+              print('CF_NETWORK_ERROR_TYPE='+type(e).__name__)
+              raise SystemExit('CF_NETWORK_REQUEST_FAILED')
+          code,verified=request('https://api.cloudflare.com/client/v4/user/tokens/verify')
+          is_valid=bool(verified.get('success') and verified.get('result',{}).get('status')=='active')
+          print('CF_TOKEN_ACTIVE='+str(is_valid).upper())
+          if not is_valid:raise SystemExit('CF_TOKEN_NOT_ACTIVE')
+          model='@cf/meta/llama-4-scout-17b-16e-instruct'
+          url='https://api.cloudflare.com/client/v4/accounts/'+account+'/ai/run/'+model
+          code,text_result=request(url,{'messages':[{'role':'user','content':'For a tiny API smoke test, reply with the single word READY.'}],'max_tokens':32})
+          response=(text_result.get('result') or {}).get('response','')
+          text_ok=code==200 and text_result.get('success') and isinstance(response,str) and bool(response.strip())
+          print('CF_LLAMA_SCOUT_TEXT_OK='+str(text_ok).upper())
+          if not text_ok:raise SystemExit('CF_LLAMA_SCOUT_TEXT_FAILED')
+          # Create a synthetic red-left blue-right PNG without personal/school data.
+          width=height=128
+          pixels=b''.join(b'\x00'+b''.join(
+            (b'\xf0\x14\x14' if x<64 else b'\x14\x32\xf0') for x in range(width)
+          ) for _ in range(height))
+          def chunk(tag,data):
+            return struct.pack('>I',len(data))+tag+data+struct.pack('>I',zlib.crc32(tag+data)&0xffffffff)
+          png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',width,height,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(pixels))+chunk(b'IEND',b'')
+          data_url='data:image/png;base64,'+base64.b64encode(png).decode()
+          message={'role':'user','content':[
+            {'type':'text','text':'Identify the two main colors in this image, from left to right, in seven words or fewer.'},
+            {'type':'image_url','image_url':{'url':data_url}}
+          ]}
+          code,result=request(url,{'messages':[message],'max_tokens':45})
+          vision_text=(result.get('result') or {}).get('response','')
+          vision_ok=bool(code==200 and result.get('success') and isinstance(vision_text,str) and vision_text.strip())
+          contains_colors='red' in vision_text.lower() and 'blue' in vision_text.lower()
+          print('CF_LLAMA_SCOUT_VISION_API_OK='+str(vision_ok).upper())
+          print('CF_SYNTHETIC_IMAGE_COLORS_CORRECT='+str(contains_colors).upper())
+          if not vision_ok:raise SystemExit('CF_LLAMA_SCOUT_VISION_FAILED')
+          print('CF_READINESS=PASS_NO_PRODUCTION_CHANGES')
+          PY
