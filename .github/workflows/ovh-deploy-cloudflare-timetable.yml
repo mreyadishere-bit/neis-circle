@@ -32,7 +32,13 @@ jobs:
           python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
           bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/cloudflare-ts-syntax-check
           node qa/static-check.mjs
-          npm run qa:unit
+          # The retired Gemini integration QA is independent of this Cloudflare release.
+          # Preserve the existing app unit coverage and test the active timetable path.
+          for test in data-coordinator profile-cache secondary-data notifications-runtime realtime-registry video-embeds messages-state messages-dom conversation-data message-reactions-data chat-bootstrap chat-fields; do
+            node "qa/${test}.test.mjs"
+          done
+          node qa/timetable-fast-import.test.mjs
+          node qa/timetable-pdf-position-and-footnotes.test.mjs
       - name: Confirm credentials are available without printing them
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
