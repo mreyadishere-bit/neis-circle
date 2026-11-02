@@ -262,7 +262,7 @@ function addUnverifiedLesson(issueId, suggestedTitle=""){
   const permitted=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
   const title=permitted.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||permitted[0]||"";
   stateAI.draftHistory.push(structuredClone(stateAI.draft));
-  const row={key:tmpKey(),title,day_of_week:0,start_time:"",end_time:"",
+  const row={key:tmpKey(),title,day_of_week:-1,start_time:"",end_time:"",
     location:"",notes:"",category:"Class",color:w.colors[subjectKey(title)]||suggestedColor(title)};
   stateAI.draft.push(row);
   w.issueRows=w.issueRows||{};
@@ -324,7 +324,7 @@ function editWizardRow(row){
   makeInput(wizardText("Subject","المادة"),"text",row.title,"title",
     availableSubjects.length?[[ "",wizardText("Choose subject","اختر المادة")],...availableSubjects.map(name=>[name,name])]:null);
   makeInput(wizardText("Day","اليوم"),"select",row.day_of_week,"day_of_week",
-    Array.from({length:7},(_,n)=>[n,dayName(n)]));
+    [[-1,wizardText("Choose day","اختر اليوم")],...Array.from({length:7},(_,n)=>[n,dayName(n)])]);
   makeInput(wizardText("From","من"),"time",row.start_time,"start_time");
   makeInput(wizardText("To","إلى"),"time",row.end_time,"end_time");
   makeInput(wizardText("Where","المكان"),"text",row.location,"location");
@@ -441,7 +441,7 @@ function drawWizard(chat){
     // Individual review cards appear before the list of verified lessons.
     // Summary-only warnings remain informational; they aren't fake sessions.
     const selectedNames=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
-    const missingNames=selectedNames.filter(name=>!stateAI.draft.some(row=>
+    const missingNames=selectedNames.filter(name=>w.issueRows?.["missing:"+subjectKey(name)] || !stateAI.draft.some(row=>
       subjectKey(row.title)===subjectKey(name)));
     const actionable=w.warnings.filter(item=>!/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
     if(actionable.length||missingNames.length||w.warnings.length){
