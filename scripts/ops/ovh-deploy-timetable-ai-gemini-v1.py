@@ -187,11 +187,16 @@ def verify_edge_config_preserved(before, after, old_mount_source,
     if previous_gemini_env_file is not None:
         # Replacing the prior Gemini-owned env file is safe. Do NOT discard
         # any existing unrelated env files inherited from base Compose.
-        ensure(previous_gemini_env_file in old_files,
-               'PREVIOUS_GEMINI_ENV_FILE_NOT_ACTIVE')
-        replacement = [str(GEMINI_ENV_FILE) if p == previous_gemini_env_file
-                       else p for p in old_files]
-        allowed_env_lists += (replacement,)
+        # Docker Compose 'config --format json' commonly resolves env_file
+        # into environment and omits env_file metadata entirely. In that
+        # case old_files and new_files are both empty; the strict environment
+        # comparison above is the authoritative preservation check.
+        if old_files:
+            ensure(previous_gemini_env_file in old_files,
+                   'PREVIOUS_GEMINI_ENV_FILE_NOT_ACTIVE')
+            replacement = [str(GEMINI_ENV_FILE) if p == previous_gemini_env_file
+                           else p for p in old_files]
+            allowed_env_lists += (replacement,)
     ensure(new_files in allowed_env_lists, 'EDGE_ENV_FILE_LIST_CHANGED')
     ensure(old == new, 'EDGE_OTHER_CONFIGURATION_CHANGED')
 
