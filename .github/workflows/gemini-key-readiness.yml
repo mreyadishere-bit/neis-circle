@@ -1,0 +1,58 @@
+name: Gemini Key and Timetable Deployment Readiness (No production changes)
+on:
+  push:
+    branches: [diagnostics/ai-studio-live-20261102]
+    paths: [.github/workflows/gemini-key-readiness.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate key and Gemini model metadata (no student prompts)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          key=os.environ.get('GEMINI_API_KEY','')
+          if not key:
+            print('GEMINI_KEY=PRESENT_FALSE')
+            raise SystemExit(1)
+          req=urllib.request.Request(
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash',
+            headers={'x-goog-api-key':key,'User-Agent':'NEIS-Circle-Model-Readiness/1.0'}
+          )
+          try:
+            with urllib.request.urlopen(req,timeout=20) as response:
+              result=json.load(response)
+            methods=result.get('supportedGenerationMethods',[])
+            print('GEMINI_KEY=VALID')
+            print('GEMINI_MODEL_ACCESS='+str('generateContent' in methods).upper())
+            print('GEMINI_MODEL_NAME='+str(result.get('name','')).replace('\n','')[:60])
+            assert 'generateContent' in methods
+          except urllib.error.HTTPError as e:
+            print('GEMINI_MODEL_HTTP='+str(e.code))
+            raise SystemExit(1)
+          except Exception:
+            print('GEMINI_MODEL=UNAVAILABLE_NO_SECRET_OUTPUT')
+            raise SystemExit(1)
+          PY
+      - name: Detect security blockers before deploying unverified AI Studio backend
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('supabase/functions/timetable-ai/index.ts').read_text()
+          idx=Path('index.html').read_text()
+          print('PROPOSED_GEMINI_EDGE_AUTH_USES_VERIFIED_JWT='+str(
+            'auth.getUser(' in src or 'auth.getClaims(' in src).upper())
+          print('GEMINI_FRONTEND_IN_APP_SHELL='+str(
+            'scripts/timetable-ai-gemini-v1.js' in idx).upper())
+          print('LEGACY_AI_FRONTEND_IN_APP_SHELL='+str(
+            'scripts/timetable-ai-v1.js' in idx).upper())
+          print('READ_ONLY_READINESS=COMPLETE_NO_OVH_MUTATIONS')
+          PY
