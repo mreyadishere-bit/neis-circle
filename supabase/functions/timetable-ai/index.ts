@@ -275,7 +275,9 @@ CRITICAL RULES:
 async function callGeminiWithRetry(
   ai: GoogleGenAI,
   contents: Array<Record<string, unknown>>,
-  maxRetries = 2,
+  // A PDF request must never consume several multi-minute SDK attempts.
+  // Transient failures are returned to the UI, which preserves Retry + PDF.
+  maxRetries = 0,
 ) {
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -492,7 +494,8 @@ Deno.serve(async (request: Request) => {
 
     const ai = new GoogleGenAI({
       apiKey: geminiApiKey,
-      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+      // Bound slow native-PDF processing below the frontend's 95s deadline.
+      httpOptions: { timeout: 80000, headers: { "User-Agent": "aistudio-build" } },
     });
 
     const response = await callGeminiWithRetry(ai, [
