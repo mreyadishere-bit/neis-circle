@@ -53,6 +53,17 @@ assert.ok(subjects.some(x=>x.includes("french")));
 assert.ok(subjects.some(x=>x.includes("religion")));
 assert.ok(subjects.some(x=>x.includes("physics")));
 assert.ok(fallback.ambiguous_items.length);
+const explicit=context.__test.extractReadableTextFallback(
+  "PAGE 2 POSITIONED PDF TEXT\n"+
+  "y=780 x=45:* Religion Gr11 ( Mon 7:30 am – 8:30 am )\n"+
+  "y=850 x=40:* French Gr 11 ( Sun 12:00 pm – 1:00 pm )");
+const foot=JSON.parse(JSON.stringify(explicit.detected_lessons));
+assert.equal(foot.length,2,"Only two unambiguous notes can be restored");
+assert.ok(foot.some(x=>x.title.toLowerCase().includes("french")&&
+  x.day_of_week===0&&x.start_time==="12:00"&&x.end_time==="13:00"));
+assert.ok(foot.some(x=>x.title.toLowerCase().includes("religion")&&
+  x.day_of_week===1&&x.start_time==="07:30"&&x.end_time==="08:30"));
+
 console.log("REUSED_CONVERSION_WITHOUT_REUPLOAD=PASS");
 console.log("SAFE_PARTIAL_PDF_TEXT_FALLBACK=PASS");
 console.log("CLOUD_FLARE_DISCOVERY_RESPONSE_FIX=PASS");
