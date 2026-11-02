@@ -1,0 +1,50 @@
+name: Diagnose Cloudflare Edge 503 After Deployment (Read-only)
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/diagnose-cloudflare-edge-startup.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Inspect sanitized OVH Edge logs and service health
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' <<'PY'
+          import subprocess,json,re,collections
+          args=['sudo','-n','/usr/bin/docker']
+          inspect=subprocess.run(args+['inspect','supabase-edge-functions'],capture_output=True,text=True,timeout=20)
+          assert inspect.returncode==0
+          info=json.loads(inspect.stdout)[0]
+          print('EDGE_RUNNING='+str(bool(info.get('State',{}).get('Running'))).upper())
+          logs=subprocess.run(args+['logs','--since','35m','--timestamps','--tail','2800','supabase-edge-functions'],
+                 capture_output=True,text=True,timeout=35)
+          assert logs.returncode==0
+          lines=(logs.stdout+'\n'+logs.stderr).splitlines()
+          keywords=['SyntaxError','TypeError','Uncaught','Module not found','Module evaluation failed',
+             'Worker boot','WorkerLoad','Bootstrap','declaration','ReferenceError','boot error',
+             'Import','unexpected token','failed to boot','opfs','memory limit','Out of memory',
+             'Invalid regex','Invalid regular expression','503','timetable-ai-cloudflare']
+          counts=collections.Counter()
+          for line in lines:
+              lower=line.lower()
+              for k in keywords:
+                  if k.lower() in lower:counts[k]+=1
+          print('EDGE_DIAGNOSTIC_TAGS='+json.dumps(dict(counts)))
+          print('EDGE_DIAGNOSTIC_LINE_COUNT='+str(len(lines)))
+          # No actual log lines: they could contain user text or access tokens.
+          print('EDGE_DIAGNOSTIC_READ_ONLY=YES')
+          PY
