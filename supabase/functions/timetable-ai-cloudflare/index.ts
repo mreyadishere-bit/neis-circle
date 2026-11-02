@@ -181,12 +181,16 @@ async function callCloudflare(token: string, account: string, messages: unknown[
       throw err;
     }
     const data = await result.json();
-    if (!data || data.success !== true || typeof data.result?.response !== "string") {
+    const response = data?.result?.response;
+    // Cloudflare may return an already-parsed JSON object for structured
+    // prompts, or a plain JSON string. Both are valid model outputs.
+    if (!data || data.success !== true ||
+        (typeof response !== "string" && (!response || typeof response !== "object"))) {
       const err = new Error("CLOUDFLARE_MALFORMED_RESPONSE") as Error & { status?: number };
       err.status = 502;
       throw err;
     }
-    return data.result.response as string;
+    return typeof response === "string" ? response : JSON.stringify(response);
   } finally { clearTimeout(deadline); }
 }
 
