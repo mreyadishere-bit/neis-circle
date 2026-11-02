@@ -147,6 +147,24 @@ const SYSTEM_INSTRUCTION = [
   "Use the student's language, Arabic or English. JSON text MUST be valid with no extra prose."
 ].join("\n");
 
+
+const DISCOVERY_INSTRUCTION = [
+  "You are a precise visual TIMETABLE READER, not a timetable generator.",
+  "The user has NOT selected subjects yet. Extract all distinct subjects from the NEWLY UPLOADED timetable images.",
+  "Never invent, substitute or rearrange lessons. Never derive days or times from previous user data.",
+  "Read the entire grid: row/column headers, day columns, time slots, level suffixes (L1/L2), spanning cells, separate sessions and page headers.",
+  "Identify the exact timetable orientation (days along rows or columns). A column's day heading governs every cell in that column.",
+  "Extract ALL subjects as original labels into extracted.all_detected_subjects; keep English separate from English L1 and Physics L1 separate from Physics L2.",
+  "Extract each readable lesson into extracted.detected_lessons with exact day_of_week 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat and start_time/end_time in HH:MM.",
+  "Do NOT include a lesson in detected_lessons when its day, start, end, or subject level is unreadable. Describe the missing data in extracted.ambiguous_items.",
+  "Do not infer missing AM/PM or durations unless unequivocally printed in the source grid.",
+  "One subject can occur several times; include ALL weekly occurrences without confusing adjacent cells. Preserve source locations only when printed.",
+  "Return ONLY strict JSON: reply (brief), changed (false), entries (empty array), extracted.",
+  "extracted must have summary, document_language, page_count, all_detected_subjects, ambiguous_items, detected_lessons.",
+  "Every detected lesson must have day_of_week, title, start_time, end_time, location, notes. All values must come from visible source evidence.",
+  "Use the user's Arabic or English language. Avoid adding timetable events or choosing subjects.",
+].join("\n");
+
 function parseModelObject(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim().replace(/^~~~json\s*/i, "").replace(/^`{3}(?:json)?\s*/i, "").replace(/\s*`{3}$/i, "");
   try {
@@ -232,12 +250,16 @@ Deno.serve(async (request: Request) => {
       return respond({ error: "Upload timetable page images instead of flattened text.", code: "VISUAL_UPLOAD_REQUIRED" }, 400);
     }
     const prompt = String(body.message ?? body.prompt ?? "").trim().slice(0, 1600);
+    const discoveryMode = body.mode === "discover";
     const attachments = Array.isArray(body.attachments) ? body.attachments : [];
     if (attachments.length > MAX_ATTACHMENT_COUNT) {
       return respond({ error: "Up to five timetable pages per upload. Please split a larger PDF.", code: "TOO_MANY_PAGES" }, 413);
     }
     if (!prompt && !attachments.length) {
       return respond({ error: "Provide a message or attach a timetable.", code: "EMPTY_REQUEST" }, 400);
+    }
+    if(discoveryMode && !attachments.length){
+      return respond({error:"Upload timetable images for subject discovery.",code:"IMAGE_REQUIRED"},400);
     }
     const parts: Array<Record<string, unknown>> = [];
     let totalAttachmentBytes = 0;
@@ -275,9 +297,12 @@ Deno.serve(async (request: Request) => {
         text: String(m?.text ?? m?.content ?? "").slice(0, 900),
       })),
     });
-    const textPart = { type: "text", text: "Context JSON:\n" + contextSummary + "\n\nRequest: " + (prompt || "Visually read this timetable.") };
+    const messageText = discoveryMode
+      ? "Read ONLY the attached timetable page images. Find ALL distinct subjects and all unambiguously timed lessons. No draft generation. Output JSON extraction only."
+      : "Context JSON:\n" + contextSummary + "\n\nRequest: " + (prompt || "Update this timetable draft.");
+    const textPart = { type: "text", text: messageText };
     const messages = [
-      { role: "system", content: SYSTEM_INSTRUCTION },
+      { role: "system", content: discoveryMode ? DISCOVERY_INSTRUCTION : SYSTEM_INSTRUCTION },
       { role: "user", content: parts.length ? [textPart, ...parts] : textPart.text },
     ];
     const raw = await callCloudflare(token, account, messages);
@@ -285,12 +310,14 @@ Deno.serve(async (request: Request) => {
     if (!parsed || !Array.isArray(parsed.entries)) {
       return respond({ error: "The model did not return a valid timetable. Retry or use a clearer page.", code: "INVALID_MODEL_OUTPUT" }, 502);
     }
-    const entries = validateAndNormalizeEntries(parsed.entries);
+    // A file can only seed the guided selection wizard, never a ready-to-save
+    // draft. Ignore generated entries/changed even if the AI disregards prompts.
+    const entries = discoveryMode ? [] : validateAndNormalizeEntries(parsed.entries);
     const extracted = parsed.extracted && typeof parsed.extracted === "object" && !Array.isArray(parsed.extracted)
       ? parsed.extracted as Record<string, unknown> : {};
     return respond({
       reply: String(parsed.reply || (body.lang === "ar" ? "تم تحليل الجدول." : "Timetable analyzed. Review your draft.")).slice(0, 1400),
-      changed: Boolean(parsed.changed),
+      changed: discoveryMode ? false : Boolean(parsed.changed),
       entries,
       extracted: {
         summary: String(extracted.summary ?? "").slice(0, 1200),
