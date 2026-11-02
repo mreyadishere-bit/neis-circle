@@ -22,6 +22,8 @@ assert.match(css,/ttai-work-cancel/);
 assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.entries\)/);
 assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
+assert.match(server,/callGemini\(geminiKey,messages\)/,"Gemini takes priority when configured");
+assert.match(server,/actualProvider==="gemini"/,"provider is reported accurately");
 assert.match(server,/verifyPdfGridLessons\(rawLessons,pdfEvidence\)/,"verify visual timetable proposals against extracted PDF coordinates");
 assert.match(server,/const firstDay=parsed\.find/,"subject headers must be found relative to first timetable day");
 assert.match(server,/const level=candidates\.filter/,"recover subject L1/L2 from positioned header text");
