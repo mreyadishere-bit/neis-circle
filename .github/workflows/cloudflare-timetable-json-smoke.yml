@@ -36,7 +36,10 @@ jobs:
           messages=[{'role':'system','content':instructions},{'role':'user','content':[{'type':'text','text':'Read both timetable page images. Include all three selected lessons; exclude Chemistry.'},*pages]}]
           req=urllib.request.Request('https://api.cloudflare.com/client/v4/accounts/'+acct+'/ai/run/@cf/meta/llama-4-scout-17b-16e-instruct',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},data=json.dumps({'messages':messages,'max_tokens':1350,'temperature':0.1}).encode())
           with urllib.request.urlopen(req,timeout=65) as r:data=json.load(r)
-          raw=data['result']['response'].strip()
+          response=data['result']['response']
+          print('CF_RESPONSE_TYPE='+type(response).__name__)
+          if isinstance(response,dict): print('CF_RESPONSE_KEYS='+','.join(sorted(response.keys())[:15]))
+          raw=response if isinstance(response,str) else json.dumps(response)
           raw=re.sub(r'^\x60{3}(?:json)?\s*','',raw,flags=re.I)
           raw=re.sub(r'\s*\x60{3}$','',raw)
           start,end=raw.find('{'),raw.rfind('}')
