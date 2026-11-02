@@ -29,6 +29,7 @@ const context={
   setPhase:x=>{phase=x},
   wizardText:en=>en,
   stateAI:{cancelled:false},
+  subjectKey:title=>String(title||"").normalize("NFKC").trim().replace(/\s+/g," ").toLowerCase(),
 };
 vm.createContext(context);
 vm.runInContext(code,context);
