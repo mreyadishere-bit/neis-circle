@@ -425,7 +425,8 @@ def main():
     ensure('decodeVerifiedJwtClaims' not in edge_code, 'UNVERIFIED_JWT_DECODE_FORBIDDEN')
     ensure('gemini' not in js_code.lower() and 'gemini' not in edge_code.lower(), 'OLD_PROVIDER_REFERENCE_FOUND')
 
-    call(['node', '--check', str(STAGE / 'timetable-ai-v1.js')], timeout=15)
+    # Validate the actual staged Cloudflare UI, not the old Gemini filename.
+    call(['node', '--check', str(STAGE / 'timetable-ai-cloudflare-v1.js')], timeout=15)
     call(compose_cmd(True) + ['config', '--quiet'], timeout=40)
 
     # 1. Deploy and verify OVH Edge Function (`timetable-ai`)
