@@ -5,7 +5,7 @@ import vm from "node:vm";
 const frontend=fs.readFileSync("scripts/timetable-ai-cloudflare-v1.js","utf8");
 const edge=fs.readFileSync("supabase/functions/timetable-ai-cloudflare/index.ts","utf8");
 assert.match(frontend,/getTextContent\(\)/);
-assert.match(frontend,/textEvidence:textEvidence\.join/);
+assert.match(frontend,/textEvidence:(?:textEvidence\.join|result\.map\(x=>x\.evidence\)\.join)/);
 assert.match(frontend,/convertToViewportPoint/);
 assert.match(edge,/DISCOVERY_INSTRUCTION/);
 assert.match(edge,/POSITIONED PDF EVIDENCE/);

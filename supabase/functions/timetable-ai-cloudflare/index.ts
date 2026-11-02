@@ -162,7 +162,7 @@ const DISCOVERY_INSTRUCTION = [
   "The timetable may CONTINUE across pages. Match x-positions and inherited column headings from previous pages, not only visible row labels.",
   "Explicit notes below the main grid may contain French Gr11, Religion Gr11, or other subjects. Extract those even if absent from main headers.",
   "Never confuse 11 AM with 11 PM or change AM/PM to fit expectations. If a printed time is internally contradictory, report it as ambiguous.",
-  "Return ONLY strict JSON: reply (brief), changed (false), entries (empty array), extracted.",
+  "Return ONLY a JSON object. Required key extracted: {all_detected_subjects: string[], detected_lessons: object[], ambiguous_items: string[]}. Optional reply. No entries array needed.",
   "extracted must have summary, document_language, page_count, all_detected_subjects, ambiguous_items, detected_lessons.",
   "Every detected lesson must have day_of_week, title, start_time, end_time, location, notes. All values must come from visible source evidence.",
   "Use the user's Arabic or English language. Avoid adding timetable events or choosing subjects.",
@@ -222,7 +222,7 @@ function parseModelObject(raw: string): Record<string, unknown> | null {
 
 async function callCloudflare(token: string, account: string, messages: unknown[]) {
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), 70000);
+  const deadline = setTimeout(() => controller.abort(), 40000);
   try {
     const url = "https://api.cloudflare.com/client/v4/accounts/" + account + "/ai/run/" + PRIMARY_MODEL;
     const result = await fetch(url, {
@@ -231,12 +231,18 @@ async function callCloudflare(token: string, account: string, messages: unknown[
         "Authorization": "Bearer " + token,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages, max_tokens: 2400, temperature: 0.1 }),
+      // Avoid very long output and token wastage. The discovery payload is
+      // intentionally small and excludes any saveable "entries" table.
+      body: JSON.stringify({ messages, max_tokens: 2200, temperature: 0 }),
       signal: controller.signal,
     });
     if (!result.ok) {
-      const err = new Error("CLOUDFLARE_HTTP_ERROR") as Error & { status?: number };
+      // Read ONLY provider error code metadata (never upstream prompt/body).
+      const errorData = await result.json().catch(() => null);
+      const code = Number(errorData?.errors?.[0]?.code || 0);
+      const err = new Error("CLOUDFLARE_HTTP_ERROR") as Error & { status?: number; providerCode?: number };
       err.status = result.status;
+      err.providerCode = code;
       throw err;
     }
     const data = await result.json();
@@ -350,14 +356,26 @@ Deno.serve(async (request: Request) => {
     ];
     const raw = await callCloudflare(token, account, messages);
     const parsed = parseModelObject(raw);
-    if (!parsed || !Array.isArray(parsed.entries)) {
-      return respond({ error: "The model did not return a valid timetable. Retry or use a clearer page.", code: "INVALID_MODEL_OUTPUT" }, 502);
+    // Discovery returns "extracted", not a saveable "entries" array. The
+    // previous check rejected correct extraction responses and wasted the
+    // student's entire upload. Accept a direct extraction object as well.
+    const extractedObject = parsed?.extracted && typeof parsed.extracted === "object"
+      ? parsed.extracted as Record<string, unknown>
+      : parsed;
+    const hasDiscovery = !!extractedObject &&
+      (Array.isArray(extractedObject.all_detected_subjects) ||
+       Array.isArray(extractedObject.detected_lessons));
+    if (!parsed || (discoveryMode ? !hasDiscovery : !Array.isArray(parsed.entries))) {
+      return respond({
+        error: "AI returned an incomplete timetable. You can retry or use the PDF's readable text to choose subjects manually.",
+        code: "INVALID_MODEL_OUTPUT",
+      }, 502);
     }
     // A file can only seed the guided selection wizard, never a ready-to-save
     // draft. Ignore generated entries/changed even if the AI disregards prompts.
     const entries = discoveryMode ? [] : validateAndNormalizeEntries(parsed.entries);
-    const extracted = parsed.extracted && typeof parsed.extracted === "object" && !Array.isArray(parsed.extracted)
-      ? parsed.extracted as Record<string, unknown> : {};
+    const extracted = extractedObject && !Array.isArray(extractedObject)
+      ? extractedObject : {};
     const explicitNotes = discoveryMode ? parseExplicitFootnoteLessons(pdfEvidence) : [];
     const modelLessons = Array.isArray(extracted.detected_lessons) ? extracted.detected_lessons : [];
     // Explicit single-day printed notes outrank model guesses for that same
@@ -394,14 +412,22 @@ Deno.serve(async (request: Request) => {
     const aborted = error instanceof Error && error.name === "AbortError";
     // Never log message text, personal data, the API token, or image contents.
     console.error("Cloudflare timetable request failure: status=" + status + ", timeout=" + aborted);
+    const providerCode = Number((error as {providerCode?: number})?.providerCode ?? 0);
+    if (status === 429 && providerCode === 3036) return respond(
+      { error: "Cloudflare's free daily AI allowance has been used. Keep the PDF and continue editing manually, or retry when the daily allocation resets.",
+        code: "CLOUDFLARE_DAILY_LIMIT", retryAfterSeconds: 3600 }, 429
+    );
     if (status === 429) return respond(
-      { error: "Cloudflare free-tier limit reached. Your file is preserved; retry later.", code: "CLOUDFLARE_RATE_LIMIT", retryAfterSeconds: 60 }, 429
+      { error: "Cloudflare inference is at capacity. Your PDF remains selected; use the partial text extraction or retry later.",
+        code: providerCode === 3040 ? "CLOUDFLARE_CAPACITY" : "CLOUDFLARE_RATE_LIMIT",
+        retryAfterSeconds: 30 }, 429
     );
     if (status === 403) return respond(
       { error: "Cloudflare model access is not enabled on this account.", code: "CLOUDFLARE_ACCESS_DENIED" }, 503
     );
-    if (status === 503 || status === 502 || aborted) return respond(
-      { error: "Cloudflare AI is temporarily unavailable. Your file is preserved. Retry shortly.", code: "CLOUDFLARE_TEMPORARY_ERROR" }, 503
+    if (status === 408 || status === 503 || status === 502 || aborted) return respond(
+      { error: "Visual AI did not finish in time. Your prepared pages are preserved; try again or continue with the readable PDF text.",
+        code: aborted ? "CLOUDFLARE_TIMEOUT" : "CLOUDFLARE_TEMPORARY_ERROR" }, 503
     );
     return respond({ error: "Could not analyze timetable. Please retry.", code: "CLOUDFLARE_UPSTREAM_ERROR" }, 502);
   }

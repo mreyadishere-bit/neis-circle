@@ -1,0 +1,36 @@
+name: Verify Fast Resilient Timetable Import (No OVH)
+on:
+  push:
+    branches: [fix/timetable-fast-resilient-import-20261102]
+    paths:
+      - 'scripts/timetable-ai-cloudflare-v1.js'
+      - 'supabase/functions/timetable-ai-cloudflare/index.ts'
+      - 'styles/timetable-ai-v1.css'
+      - 'qa/timetable-fast-import.test.mjs'
+      - 'qa/timetable-pdf-position-and-footnotes.test.mjs'
+      - 'qa/timetable-guided-import-v2.test.mjs'
+      - '.github/workflows/verify-fast-timetable-import.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - name: Check PDF conversion, model responses and timetable safety
+        run: |
+          bun install --frozen-lockfile
+          node --check scripts/timetable-ai-cloudflare-v1.js
+          node qa/timetable-fast-import.test.mjs
+          node qa/timetable-guided-import-v2.test.mjs
+          node qa/timetable-pdf-position-and-footnotes.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
+          bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/fast-import-edge-compile
+          node qa/static-check.mjs
+          npm run qa:unit
