@@ -88,6 +88,7 @@ jobs:
           if run.returncode:
             errors=[line.strip()[:350] for line in run.stderr.splitlines() if ("ERROR:" in line or "HINT:" in line or "DETAIL:" in line)]
             print("SUPER_ADMIN_DB_DRY_RUN=FAILED "+str(errors[:3]))
+            print("SQL_CONTEXT="+str(run.stderr.splitlines()[-7:])[:1200])
             raise SystemExit(1)
           print("SUPER_ADMIN_DB_DRY_RUN=PASS")
           '"'"''
