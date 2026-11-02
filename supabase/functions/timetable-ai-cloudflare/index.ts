@@ -148,6 +148,59 @@ const SYSTEM_INSTRUCTION = [
 ].join("\n");
 
 
+// Cross-check AI-proposed grid positions against independent PDF text coordinates.
+// For a PDF with readable column headings, an unlocated grid lesson is uncertain,
+// not a saveable timetable entry. Explicit printed footer lessons are parsed below.
+export function verifyPdfGridLessons(
+  lessons: unknown[],
+  evidence: string,
+): { accepted: Array<Record<string, unknown>>; rejected: number } {
+  const rows = Array.isArray(lessons) ? lessons : [];
+  const firstPage = evidence.split(/PAGE 2 POSITIONED PDF TEXT/)[0] || "";
+  const headerLine = firstPage.split("\n").find((line) =>
+    /x=\d+:(?:Math|Physics|Physic|Chemist|English|Arabic|Biolog|ICT|Histor)/i.test(line) &&
+    /x=\d+:Day\b/i.test(line)
+  );
+  if (!headerLine) return {accepted: rows.filter((r): r is Record<string, unknown> => !!r && typeof r === "object"), rejected: 0};
+  const tokens = [...firstPage.matchAll(/x=(\d+):([^|\n]+)/g)].map((m) => ({
+    x: Number(m[1]), text: m[2].trim().toLowerCase(),
+  }));
+  const headings = [...headerLine.matchAll(/x=(\d+):([^|\n]+)/g)]
+    .map((m) => ({x:Number(m[1]), word:m[2].trim().toLowerCase()}))
+    .filter((h) => /^(arabic|math|physic|physics|chemist|english|biolog|ict|histor)/.test(h.word))
+    .sort((a,b)=>a.x-b.x);
+  if (headings.length < 3) return {accepted:rows.filter((r): r is Record<string, unknown>=>!!r&&typeof r==="object"),rejected:0};
+  const canonical=(t:string)=>t.toLowerCase().replace(/[^a-z0-9]/g,"").replace(/maths/g,"math").replace(/physicl/g,"physic");
+  const columns=headings.map((h,i)=>{
+    const next=headings[i+1]?.x ?? 1050;
+    const suffix=tokens.filter((t)=>t.x>=h.x-5&&t.x<next&&/^(l[12]|[12])$/.test(t.text))
+      .map((t)=>t.text).find((x)=>/^l[12]$/.test(x));
+    return {x:h.x,left:i?(headings[i-1].x+h.x)/2:Math.max(0,h.x-40),
+      right:next===1050?1050:(h.x+next)/2,
+      name:canonical(h.word+(suffix||""))};
+  });
+  const accepted:Array<Record<string,unknown>>=[];
+  let rejected=0;
+  for(const r of rows){
+    if(!r||typeof r!=="object"){rejected++;continue}
+    const lesson=r as Record<string,unknown>;
+    const x=Number(lesson.source_x);
+    const page=Number(lesson.source_page);
+    const title=canonical(String(lesson.title||""));
+    const col=columns.find((c)=>x>=c.left&&x<c.right);
+    // The heading survives across pages. Do not substitute adjacent columns.
+    const titleBase=title.replace(/l[12]$/,"");
+    const colBase=col?.name.replace(/l[12]$/,"");
+    if(!Number.isFinite(x)||x<0||x>1000||!Number.isInteger(page)||
+      page<1||page>5||!col||titleBase!==colBase||
+      (/l[12]$/.test(title)&&col.name!==title)){
+      rejected++;continue;
+    }
+    accepted.push(lesson);
+  }
+  return {accepted,rejected};
+}
+
 const DISCOVERY_INSTRUCTION = [
   "You are a precise visual TIMETABLE READER, not a timetable generator.",
   "The user has NOT selected subjects yet. Extract all distinct subjects from the NEWLY UPLOADED timetable images.",
@@ -164,7 +217,8 @@ const DISCOVERY_INSTRUCTION = [
   "Never confuse 11 AM with 11 PM or change AM/PM to fit expectations. If a printed time is internally contradictory, report it as ambiguous.",
   "Return ONLY a JSON object. Required key extracted: {all_detected_subjects: string[], detected_lessons: object[], ambiguous_items: string[]}. Optional reply. No entries array needed.",
   "extracted must have summary, document_language, page_count, all_detected_subjects, ambiguous_items, detected_lessons.",
-  "Every detected lesson must have day_of_week, title, start_time, end_time, location, notes. All values must come from visible source evidence.",
+  "Every grid lesson must include source_page (1-based) and source_x (0-1000 normalized horizontal CENTER of its actual cell); if you cannot locate it, mark it ambiguous instead. Keep exact column identity across pages.",
+  "For each extracted lesson provide day_of_week, title, start_time, end_time, location, notes, source_page, source_x. All values must come from visible source evidence.",
   "Use the user's Arabic or English language. Avoid adding timetable events or choosing subjects.",
 ].join("\n");
 
@@ -377,7 +431,10 @@ Deno.serve(async (request: Request) => {
     const extracted = extractedObject && !Array.isArray(extractedObject)
       ? extractedObject : {};
     const explicitNotes = discoveryMode ? parseExplicitFootnoteLessons(pdfEvidence) : [];
-    const modelLessons = Array.isArray(extracted.detected_lessons) ? extracted.detected_lessons : [];
+    const rawLessons = Array.isArray(extracted.detected_lessons) ? extracted.detected_lessons : [];
+    const checked = discoveryMode && pdfEvidence ? verifyPdfGridLessons(rawLessons,pdfEvidence)
+      : {accepted:rawLessons,rejected:0};
+    const modelLessons = checked.accepted;
     // Explicit single-day printed notes outrank model guesses for that same
     // subject/day, while never touching unrelated grid lessons.
     const noteKeys = new Set(explicitNotes.map((r) =>
@@ -401,7 +458,10 @@ Deno.serve(async (request: Request) => {
         document_language: String(extracted.document_language ?? (body.lang === "ar" ? "ar" : "en")),
         page_count: Math.max(1, Math.min(5, Number(extracted.page_count || attachments.length || 1))),
         all_detected_subjects: detectedSubjects.slice(0, 80),
-        ambiguous_items: Array.isArray(extracted.ambiguous_items) ? extracted.ambiguous_items.map(String).slice(0, 40) : [],
+        ambiguous_items: [
+          ...(Array.isArray(extracted.ambiguous_items) ? extracted.ambiguous_items.map(String) : []),
+          ...(checked.rejected ? [checked.rejected + " grid lesson(s) need manual review: the PDF column could not be verified."] : []),
+        ].slice(0, 40),
         detected_lessons: discoveryMode ? groundedLessons : (modelLessons.length ? validateAndNormalizeEntries(modelLessons) : entries),
       },
       model: PRIMARY_MODEL,
