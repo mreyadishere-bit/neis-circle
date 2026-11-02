@@ -642,8 +642,8 @@ function extractReadableTextFallback(evidence){
     all_detected_subjects:[...found.values()].slice(0,60),
     detected_lessons:footerLessons.slice(0,30),
     ambiguous_items:[wizardText(
-      "Only subject names were read from the PDF text. The visual AI did not verify days or times; add/confirm each class before saving.",
-      "تمت قراءة أسماء المواد فقط من نص الـPDF. لم يتم التأكد من الأيام والأوقات بصريًا؛ لازم تدخل كل حصة أو تراجعها قبل الحفظ.")],
+      "The visual AI is unavailable. Grid times are not verified; only explicitly dated footnote lessons may be suggested. Check all entries before saving.",
+      "التحليل البصري غير متاح. أوقات الجدول الرئيسي غير مؤكدة، لكن يمكن قراءة حصص الملاحظات المكتوبة صراحة. راجع كل الحصص قبل الحفظ.")],
     summary:"Partial local text extraction only; no AI timetable mapping",
     source:"local-text-fallback"
   };
