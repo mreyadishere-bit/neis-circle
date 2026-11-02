@@ -64,7 +64,7 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request
           request=urllib.request.Request(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview",
             headers={"x-goog-api-key":os.environ["GEMINI_KEY"]},
           )
           with urllib.request.urlopen(request, timeout=15) as response:
