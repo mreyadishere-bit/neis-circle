@@ -27,20 +27,24 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 import urllib.error
 import urllib.request
 
 ROOT = Path('/home/ubuntu/neis-supabase')
 ENV_FILE = ROOT / '.env'
 STAGE = Path('/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3')
-EDGE_REL = Path('/home/ubuntu/neis-backups/edge-runtime-release-gemini-20261102-v3')
+# Each dispatch gets an immutable, unique release. Never delete/reuse active paths.
+RELEASE_ID = uuid.uuid4().hex[:16]
+EDGE_REL = Path('/home/ubuntu/neis-backups/edge-runtime-release-gemini-' + RELEASE_ID)
 EDGE_OVERLAY = ROOT / 'docker-compose.edge-integrations.yml'
 # This deployment owns ONLY this additive override; never rewrite the shared
 # Edge integrations overlay containing secrets and unrelated service settings.
 GEMINI_OVERLAY = ROOT / 'docker-compose.timetable-ai-gemini.yml'
-GEMINI_ENV_FILE = STAGE / 'gemini-provider.env'
+GEMINI_ENV_FILE = STAGE / ('gemini-provider-' + RELEASE_ID + '.env')
+GEMINI_OVERRIDE_BACKUP = STAGE / ('gemini-override.before-' + RELEASE_ID + '.yml')
 EXISTING_TIMETABLE_OVERLAY = ROOT / 'docker-compose.timetable-ai.yml'
-FRONTEND_DEST = Path('/home/ubuntu/neis-frontend/releases/timetable-ai-gemini-20261102-v3')
+FRONTEND_DEST = Path('/home/ubuntu/neis-frontend/releases/timetable-ai-gemini-' + RELEASE_ID)
 FRONTEND_OVERLAY = ROOT / 'docker-compose.frontend-public.yml'
 DOCKER = ['sudo', '-n', '/usr/bin/docker']
 COMPOSE_FILES = [
@@ -136,7 +140,8 @@ def edge_mount(config):
 
 
 def verify_edge_config_preserved(before, after, old_mount_source,
-                                 new_mount_source, gemini_key):
+                                 new_mount_source, gemini_key,
+                                 previous_gemini_env_file=None):
     """Prove that ONLY Gemini env + the one Edge source mount changed."""
     before_services = copy.deepcopy(before['services'])
     after_services = copy.deepcopy(after['services'])
@@ -178,9 +183,51 @@ def verify_edge_config_preserved(before, after, old_mount_source,
     # contents. The additional private env_file is the ONLY permitted new field.
     old_files = old.pop('env_file', []) or []
     new_files = new.pop('env_file', []) or []
-    ensure(new_files in (old_files, old_files + [str(GEMINI_ENV_FILE)]),
-           'EDGE_ENV_FILE_LIST_CHANGED')
+    allowed_env_lists = (old_files, old_files + [str(GEMINI_ENV_FILE)])
+    if previous_gemini_env_file is not None:
+        # Replacing the prior Gemini-owned env file is safe. Do NOT discard
+        # any existing unrelated env files inherited from base Compose.
+        # Docker Compose 'config --format json' commonly resolves env_file
+        # into environment and omits env_file metadata entirely. In that
+        # case old_files and new_files are both empty; the strict environment
+        # comparison above is the authoritative preservation check.
+        if old_files:
+            ensure(previous_gemini_env_file in old_files,
+                   'PREVIOUS_GEMINI_ENV_FILE_NOT_ACTIVE')
+            replacement = [str(GEMINI_ENV_FILE) if p == previous_gemini_env_file
+                           else p for p in old_files]
+            allowed_env_lists += (replacement,)
+    ensure(new_files in allowed_env_lists, 'EDGE_ENV_FILE_LIST_CHANGED')
     ensure(old == new, 'EDGE_OTHER_CONFIGURATION_CHANGED')
+
+
+def write_gemini_override_atomic(content):
+    """Replace only our own Compose override; keep existing overlay intact."""
+    temp = ROOT / ('docker-compose.timetable-ai-gemini.' + RELEASE_ID + '.tmp')
+    fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(content)
+        os.replace(temp, GEMINI_OVERLAY)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def restore_previous_gemini_override(previous_bytes):
+    """Restore the exact previously active override on preflight/activation errors."""
+    if previous_bytes is None:
+        GEMINI_OVERLAY.unlink(missing_ok=True)
+        return
+    # Preserve the exact content including whitespace. It may reference a
+    # previous release's private env_file; do not delete that env_file.
+    temp = ROOT / ('docker-compose.timetable-ai-gemini.rollback-' + RELEASE_ID + '.tmp')
+    fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, 'wb') as f:
+            f.write(previous_bytes)
+        os.replace(temp, GEMINI_OVERLAY)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def deploy_edge_function(anon_key, gemini_key):
@@ -190,10 +237,20 @@ def deploy_edge_function(anon_key, gemini_key):
            'EDGE_ORIGINAL_OVERLAY_MISSING')
     ensure((EDGE_OVERLAY.stat().st_mode & 0o777) == 0o600,
            'EDGE_ORIGINAL_OVERLAY_PERMISSIONS')
-    ensure(not GEMINI_OVERLAY.exists() and not GEMINI_OVERLAY.is_symlink(),
-           'GEMINI_OVERRIDE_ALREADY_EXISTS')
+    # An existing Gemini override means the previous deployment succeeded.
+    # Keep it active, snapshot its bytes, and compare against its effective
+    # configuration instead of rejecting normal repeat deployments.
+    ensure(not GEMINI_OVERLAY.is_symlink(), 'GEMINI_OVERRIDE_SYMLINK')
+    old_gemini_exists = GEMINI_OVERLAY.is_file()
+    ensure(not GEMINI_OVERLAY.exists() or old_gemini_exists,
+           'GEMINI_OVERRIDE_INVALID_TYPE')
+    if old_gemini_exists:
+        ensure((GEMINI_OVERLAY.stat().st_mode & 0o777) == 0o600,
+               'GEMINI_OVERRIDE_PERMISSIONS')
     ensure(not GEMINI_ENV_FILE.exists() and not GEMINI_ENV_FILE.is_symlink(),
            'GEMINI_SECRET_FILE_ALREADY_EXISTS')
+    ensure(not GEMINI_OVERRIDE_BACKUP.exists() and not GEMINI_OVERRIDE_BACKUP.is_symlink(),
+           'GEMINI_BACKUP_ALREADY_EXISTS')
     ensure(not EDGE_REL.exists(), 'EDGE_RELEASE_ALREADY_EXISTS')
 
     edge_inspect = json.loads(call(DOCKER + ['inspect', 'supabase-edge-functions'], timeout=20))[0]
@@ -209,7 +266,35 @@ def deploy_edge_function(anon_key, gemini_key):
     ensure((src_functions / 'main' / 'index.ts').is_file(),
            'EDGE_MAIN_ROUTER_MISSING')
     previous_overlay_bytes = EDGE_OVERLAY.read_bytes()
-    previous = read_compose_config(include_gemini=False)
+    previous_gemini_bytes = GEMINI_OVERLAY.read_bytes() if old_gemini_exists else None
+    previous_owned_env_file = None
+    if previous_gemini_bytes is not None:
+        # Only replace the known minimal Gemini override created by us;
+        # fail closed on unexpected edits or extra service configuration.
+        original_gemini_text = previous_gemini_bytes.decode('utf-8')
+        expected_prefix = 'services:\n  functions:\n    env_file:\n'
+        ensure(original_gemini_text.startswith(expected_prefix) and
+               original_gemini_text.count('    env_file:\n') == 1 and
+               original_gemini_text.count('    volumes:\n') == 1 and
+               original_gemini_text.count('services:\n') == 1,
+               'PREVIOUS_GEMINI_OVERRIDE_UNRECOGNIZED')
+        env_file_match = re.search(
+            r"(?m)^      - ([^\r\n]+[.]env)\s*",
+            original_gemini_text,
+        )
+        ensure(env_file_match is not None,
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+        previous_owned_env_file = env_file_match.group(1).strip()
+        ensure(previous_owned_env_file.startswith(str(STAGE) + '/') and
+               Path(previous_owned_env_file).name.startswith('gemini-provider'),
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+    previous = read_compose_config(include_gemini=old_gemini_exists)
+    # An immutable, private backup lets operators restore this exact release.
+    if previous_gemini_bytes is not None:
+        fd = os.open(str(GEMINI_OVERRIDE_BACKUP),
+                     os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as f:
+            f.write(previous_gemini_bytes)
     ensure(edge_mount(previous).get('source') == str(src_functions),
            'LIVE_EDGE_MOUNT_DIFFERS_FROM_COMPOSE')
 
@@ -248,21 +333,22 @@ def deploy_edge_function(anon_key, gemini_key):
         '    volumes:\n'
         f'      - {json.dumps(current_mount, separators=(",", ":"))}\n'
     )
-    fd = os.open(str(GEMINI_OVERLAY),
-                 os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, 'w', encoding='utf-8') as f:
-        f.write(override)
+    # The previous override may still be referenced by the running container.
+    # Atomic replacement does not disturb it until Compose explicitly recreates
+    # only the Edge service. The previous bytes remain available for rollback.
+    write_gemini_override_atomic(override)
 
     phase = 'edge_preflight'
     try:
         candidate = read_compose_config(include_gemini=True)
         verify_edge_config_preserved(previous, candidate,
-                                     src_functions, target_functions, gemini_key)
+                                     src_functions, target_functions, gemini_key,
+                                     previous_owned_env_file)
         ensure(EDGE_OVERLAY.read_bytes() == previous_overlay_bytes,
                'EXISTING_EDGE_OVERLAY_MODIFIED')
         call(compose_cmd(True, True) + ['config', '--quiet'], timeout=40)
     except Exception:
-        GEMINI_OVERLAY.unlink(missing_ok=True)
+        restore_previous_gemini_override(previous_gemini_bytes)
         GEMINI_ENV_FILE.unlink(missing_ok=True)
         raise
 
@@ -277,9 +363,9 @@ def deploy_edge_function(anon_key, gemini_key):
     except Exception:
         # The original overlay is untouched. Remove our new override and
         # recreate only functions from the previous, complete Compose stack.
-        GEMINI_OVERLAY.unlink(missing_ok=True)
+        restore_previous_gemini_override(previous_gemini_bytes)
         GEMINI_ENV_FILE.unlink(missing_ok=True)
-        call(compose_cmd(True, False) +
+        call(compose_cmd(True, old_gemini_exists) +
              ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
              timeout=100, check=False)
         print('TIMETABLE_AI_EDGE=ROLLED_BACK')
@@ -339,11 +425,13 @@ def main():
     )
     original_overlay = FRONTEND_OVERLAY.read_text()
     ensure(original_overlay.count(str(src)) == 1, 'OVERLAY_BIND_CHANGED')
-    if FRONTEND_DEST.exists():
-        shutil.rmtree(FRONTEND_DEST)
+    # Never delete any previously published frontend release. A repeated
+    # workflow dispatch receives a new RELEASE_ID instead.
+    ensure(not FRONTEND_DEST.exists() and not FRONTEND_DEST.is_symlink(),
+           'FRONTEND_RELEASE_COLLISION')
     tmp = Path(str(FRONTEND_DEST) + '.building')
-    if tmp.exists():
-        shutil.rmtree(tmp)
+    ensure(not tmp.exists() and not tmp.is_symlink(),
+           'FRONTEND_STAGING_COLLISION')
 
     phase = 'frontend_copy'
     shutil.copytree(src, tmp)
@@ -401,6 +489,8 @@ def main():
         raise
 
     print('OVH_BACKEND_CONFIG=FIXED_VERIFIED')
+    print('TIMETABLE_AI_REPEAT_DEPLOY_SAFE=YES')
+    print('TIMETABLE_AI_RELEASE_ID=' + RELEASE_ID)
     print('TIMETABLE_AI_EDGE_DEPLOY=SUCCESS')
     print('TIMETABLE_AI_FRONTEND_DEPLOY=SUCCESS')
     print('TIMETABLE_AI_PROVIDER=GEMINI_3_8_FLASH')
