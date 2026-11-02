@@ -131,9 +131,13 @@ try {
     name:"physics-l2.pdf",mimeType:"application/pdf",buffer:fixturePDF()
   });
   await page.locator(".ttai-compose button[type=submit]").click();
-  await page.getByText("I found Physics and Chemistry. Which do you take?").last().waitFor({timeout:45000});
+  await page.waitForFunction(()=>!document.querySelector(".ttai-pending"),null,{timeout:45000});
   const pdfCalls=await page.evaluate(()=>window.__calls);
   const final=pdfCalls.at(-1);
+  if(!final.body.images){
+    const lastMessage=await page.locator(".ttai-bubble.ttai-assistant").last().innerText();
+    console.error("PDF_RENDER_FAILURE="+lastMessage.slice(0,400));
+  }
   assert.equal(final.body.images.length,1,"One-page PDF should render as one image");
   assert.equal(final.body.images[0].mime,"image/jpeg");
   assert(final.body.images[0].data.length>150,"PDF image should contain real pixels");
