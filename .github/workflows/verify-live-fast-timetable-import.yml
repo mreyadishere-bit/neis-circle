@@ -1,0 +1,65 @@
+name: Verify Live Fast Timetable Import (Read-only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-live-fast-timetable-import.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Verify running OVH container mounts, live JS, Edge and UI
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          from pathlib import Path
+          import json,subprocess,urllib.request
+          cmd=['sudo','-n','/usr/bin/docker']
+          def mount(name,destination):
+              p=subprocess.run(cmd+['inspect',name],text=True,capture_output=True,timeout=25)
+              if p.returncode:raise SystemExit('LIVE_INSPECT_FAILED')
+              data=json.loads(p.stdout)[0]
+              if not data.get('State',{}).get('Running'):raise SystemExit('LIVE_CONTAINER_NOT_RUNNING')
+              matches=[x['Source'] for x in data['Mounts'] if x.get('Destination')==destination]
+              if len(matches)!=1:raise SystemExit('LIVE_MOUNT_AMBIGUOUS')
+              return Path(matches[0])
+          front=mount('supabase-caddy','/srv/neis-circle')
+          edge=mount('supabase-edge-functions','/home/deno/functions')
+          js=(front/'scripts/timetable-ai-v1.js').read_text()
+          css=(front/'styles/timetable-ai-v1.css').read_text()
+          api=(edge/'timetable-ai-cloudflare/index.ts').read_text()
+          html=(front/'index.html').read_text()
+          assert 'const preparedFileCache=new Map();' in js
+          assert 'SHA-256' in js and 'canvas.toBlob' in js
+          assert 'Promise.all(Array.from' in js
+          assert 'extractReadableTextFallback' in js
+          assert 'function startWizard' in js and 'function drawWizard' in js
+          assert 'AI_REQUEST_DEADLINE_MS=52000' in js
+          assert 'ttai-work-cancel' in css and 'ttai-work-spinner' in css
+          assert 'discoveryMode ? !hasDiscovery' in api
+          assert 'CLOUDFLARE_DAILY_LIMIT' in api and 'CLOUDFLARE_CAPACITY' in api
+          assert 'client.auth.getUser(jwt)' in api
+          assert '?v=cloudflare-' in html
+          with urllib.request.urlopen('https://www.neiscircle.site/',timeout=25) as response:
+              assert response.status==200
+          print('LIVE_PDF_TWO_PAGE_CONVERSION=PASS')
+          print('LIVE_PDF_HASH_CACHE=PASS')
+          print('LIVE_RETRY_AND_CANCEL=PASS')
+          print('LIVE_PARTIAL_TEXT_FALLBACK=PASS')
+          print('LIVE_DISCOVERY_JSON_ACCEPTANCE=PASS')
+          print('LIVE_QUOTA_CAPACITY_ERRORS=PASS')
+          print('LIVE_LOGIN_VALIDATION=PASS')
+          print('LIVE_NEIS_CIRCLE_HTTP200=PASS')
+          PY
