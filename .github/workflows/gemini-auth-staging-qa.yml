@@ -1,0 +1,42 @@
+name: Gemini Timetable Hardened Auth — Staging QA
+on:
+  push:
+    branches:
+      - diagnostics/ai-studio-live-20261102
+    paths:
+      - .github/workflows/gemini-auth-staging-qa.yml
+      - supabase/functions/timetable-ai/index.ts
+  pull_request:
+    branches: [main]
+    paths:
+      - supabase/functions/timetable-ai/index.ts
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate hard-fail auth checks and client never receives key
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          edge=Path('supabase/functions/timetable-ai/index.ts').read_text()
+          assert 'client.auth.getUser(jwt)' in edge, 'Must verify real JWT via Supabase Auth'
+          assert 'decodeVerifiedJwtClaims' not in edge, 'Unverified decoded JWT claims forbidden'
+          assert 'AUTH_NOT_CONFIGURED' in edge
+          assert 'ACCOUNT_CHECK_UNAVAILABLE' in edge
+          assert 'Deno.env.get("GEMINI_API_KEY")' in edge
+          assert 'GEMINI_API_KEY' not in Path('scripts/timetable-ai-gemini-v1.js').read_text()
+          print('AUTH_TOKEN_SIGNATURE_AND_FAILURE_GATES=PASS')
+          PY
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run existing Gemini integration and static suites
+        run: |
+          npm run qa:static
+          npm run qa:timetable-ai
