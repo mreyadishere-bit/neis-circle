@@ -399,20 +399,20 @@ async function discoverGeminiByPageGroups(
   evidence: string,
   systemInstruction: string,
 ): Promise<string> {
-  const pages=evidence.split(/(?=PAGE \\d+ POSITIONED PDF TEXT)/).filter(Boolean);
+  const pages=evidence.split(/(?=PAGE \d+ POSITIONED PDF TEXT)/).filter(Boolean);
   const header=(pages[0]||"").slice(0,4500);
   const groups:Array<{start:number;images:Array<Record<string,unknown>>}>=[];
   for(let i=0;i<imageParts.length;i+=2)groups.push({start:i,images:imageParts.slice(i,i+2)});
   const responses=await Promise.all(groups.map(async group=>{
     const pageNumbers=group.images.map((_,i)=>group.start+i+1);
-    const localEvidence=pageNumbers.map(n=>(pages[n-1]||"").slice(0,9000)).join("\\n\\n");
+    const localEvidence=pageNumbers.map(n=>(pages[n-1]||"").slice(0,9000)).join("\n\n");
     const instruction="Analyze ONLY original PDF page(s) "+pageNumbers.join(", ")+
       ". Every detected lesson must use ORIGINAL source_page numbering "+pageNumbers.join(" or ")+
       " and its source_x coordinate. Do not reinterpret the attached images as page 1 unless it is original page 1."+
       " The source has continuing columns; use the first-page heading evidence to identify columns."+
-      "\\nFIRST PAGE HEADER CONTEXT:\\n"+header+
-      "\\nCURRENT PAGE POSITIONED TEXT:\\n"+localEvidence+
-      "\\nReturn extraction JSON with all_detected_subjects, detected_lessons and ambiguous_items. Do not invent sessions.";
+      "\nFIRST PAGE HEADER CONTEXT:\n"+header+
+      "\nCURRENT PAGE POSITIONED TEXT:\n"+localEvidence+
+      "\nReturn extraction JSON with all_detected_subjects, detected_lessons and ambiguous_items. Do not invent sessions.";
     const messages=[
       {role:"system",content:systemInstruction},
       {role:"user",content:[{type:"text",text:instruction},...group.images]},
