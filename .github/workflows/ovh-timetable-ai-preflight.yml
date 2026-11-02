@@ -30,6 +30,13 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+      - name: Inspect active OVH front end, Edge runtime and timetable DB (read-only)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-timetable-ai-preflight.py
       - name: Verify real Groq free-model API and strict JSON response
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
@@ -50,23 +57,21 @@ jobs:
             req=urllib.request.Request("https://api.groq.com/openai/v1/chat/completions",
               data=json.dumps(body).encode(),headers={
               "Authorization":"Bearer "+os.environ['GROQ_API_KEY'],
-              "Content-Type":"application/json"},method="POST")
+              "Content-Type":"application/json", "User-Agent":"NEIS-Circle-Staging-Probe/1.0"},method="POST")
             with urllib.request.urlopen(req,timeout=30) as res:
               result=json.load(res)
             answer=json.loads(result['choices'][0]['message']['content'])
             assert answer.get('reply')
             print("GROQ_AUTH_AND_JSON_SCHEMA=PASS")
           except urllib.error.HTTPError as e:
-            print("GROQ_AUTH_AND_JSON_SCHEMA=FAIL_HTTP_"+str(e.code))
+            try:
+              error=json.loads(e.read(2048)).get('error',{})
+              subtype=str(error.get('code') or error.get('type') or '').replace(' ','_')[:55]
+            except Exception:
+              subtype='UNKNOWN'
+            print("GROQ_AUTH_AND_JSON_SCHEMA=FAIL_HTTP_"+str(e.code)+"_"+subtype)
             sys.exit(1)
           except Exception:
             print("GROQ_AUTH_AND_JSON_SCHEMA=FAIL_NO_SECRET_OUTPUT")
             sys.exit(1)
           PY
-      - name: Inspect active OVH front end, Edge runtime and timetable DB (read-only)
-        env:
-          HOST: ${{ secrets.OVH_HOST }}
-        run: |
-          set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-timetable-ai-preflight.py
