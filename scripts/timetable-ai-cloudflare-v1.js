@@ -170,7 +170,7 @@ function startWizard(extracted){
   const subjects=normalizeSubjects(extracted);
   const lessons=Array.isArray(extracted?.detected_lessons)?extracted.detected_lessons.filter(x=>x&&typeof x==="object").slice(0,100):[];
   const wizard={
-    step:"subjects",subjects,lessons,selected:new Set(),locations:{},colors:{},mode:stateAI.original.length?"merge":"replace",
+    step:"subjects",subjects,lessons,selected:new Set(),locations:{},colors:{},mode:"replace",
     warnings:Array.isArray(extracted?.ambiguous_items)?extracted.ambiguous_items.map(String).slice(0,20):[]
   };
   const oldUniqueSubjects=new Set(stateAI.original.map(x=>subjectKey(x.title)));
