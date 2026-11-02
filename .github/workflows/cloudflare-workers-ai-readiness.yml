@@ -28,10 +28,10 @@ jobs:
             raise SystemExit('CF_ACCOUNT_ID=INVALID_FORMAT')
           headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'}
           def request(url,data=None):
-            args={'headers':headers,'timeout':35}
+            args={'headers':headers}
             if data is not None:args['data']=json.dumps(data).encode('utf-8')
             try:
-              with urllib.request.urlopen(urllib.request.Request(url,**args)) as r:
+              with urllib.request.urlopen(urllib.request.Request(url,**args),timeout=35) as r:
                 return r.status,json.load(r)
             except urllib.error.HTTPError as e:
               try:
