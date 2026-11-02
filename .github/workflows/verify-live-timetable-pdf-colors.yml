@@ -1,0 +1,69 @@
+name: Verify Live Timetable PDF Fidelity and Colors (Read-only)
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-live-timetable-pdf-colors.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 6
+    steps:
+      - name: Check running OVH release and SQL source, never inspect student records
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,urllib.request
+          from pathlib import Path
+          DOCKER=['sudo','-n','/usr/bin/docker']
+          def mounted(name,destination):
+            r=subprocess.run(DOCKER+['inspect',name],capture_output=True,text=True,timeout=22)
+            assert r.returncode==0
+            data=json.loads(r.stdout)[0]
+            assert data.get('State',{}).get('Running')
+            mounts=[m['Source'] for m in data['Mounts'] if m.get('Destination')==destination]
+            assert len(mounts)==1
+            return Path(mounts[0])
+          front=mounted('supabase-caddy','/srv/neis-circle')
+          edge=mounted('supabase-edge-functions','/home/deno/functions')
+          js=(front/'scripts/timetable-ai-v1.js').read_text()
+          html=(front/'index.html').read_text()
+          edge_src=(edge/'timetable-ai-cloudflare/index.ts').read_text()
+          assert 'getTextContent()' in js and 'convertToViewportPoint' in js
+          assert 'textEvidence:textEvidence.join' in js
+          assert 'matchesSelectedSubject' in js and 'missingSubjects' in js
+          assert 'parseExplicitFootnoteLessons(pdfEvidence)' in edge_src
+          assert 'POSITIONED PDF EVIDENCE' in edge_src
+          assert 'DISCOVERY_INSTRUCTION' in edge_src
+          assert 'client.auth.getUser(jwt)' in edge_src
+          assert '?v=cloudflare-' in html
+          print('LIVE_POSITIONED_PDF_EXTRACTION=PASS')
+          print('LIVE_FRENCH_RELIGION_FOOTNOTE_RECOVERY=PASS')
+          print('LIVE_MISSING_SUBJECT_SAFEGUARD=PASS')
+          sql=("select pg_get_functiondef(p.oid) from pg_proc p "
+               "join pg_namespace n on n.oid=p.pronamespace "
+               "where n.nspname='public' and p.proname='apply_timetable_ai_plan' and p.pronargs=2")
+          cmd=DOCKER+['exec','supabase-db','psql','-U','postgres','-d','postgres','-At','-c',sql]
+          result=subprocess.run(cmd,capture_output=True,text=True,timeout=30)
+          assert result.returncode==0
+          code=result.stdout
+          assert "color=coalesce(item->>'color','#2f7db8')" in code
+          assert "coalesce(item->>'category','Class'),coalesce(item->>'color','#2f7db8'),false,15)" in code
+          assert "category,color) is distinct from" in code
+          print('LIVE_RPC_CUSTOM_COLORS_INSERT_UPDATE=PASS')
+          with urllib.request.urlopen('https://www.neiscircle.site/',timeout=20) as response:
+            assert response.status==200
+          print('LIVE_WEBSITE_HTTP_200=PASS')
+          print('READ_ONLY_VERIFICATION=PASS')
+          PY
