@@ -223,7 +223,7 @@ def verify_edge_config_preserved(before, after, old_mount_source,
     ensure(old == new, 'EDGE_OTHER_CONFIGURATION_CHANGED')
 
 
-def write_gemini_override_atomic(content):
+def write_cloudflare_override_atomic(content):
     """Replace only our own Compose override; keep existing overlay intact."""
     temp = ROOT / ('docker-compose.timetable-ai-gemini.' + RELEASE_ID + '.tmp')
     fd = os.open(str(temp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -235,7 +235,7 @@ def write_gemini_override_atomic(content):
         temp.unlink(missing_ok=True)
 
 
-def restore_previous_gemini_override(previous_bytes):
+def restore_previous_cloudflare_override(previous_bytes):
     """Restore the exact previously active override on preflight/activation errors."""
     if previous_bytes is None:
         CLOUDFLARE_OVERLAY.unlink(missing_ok=True)
@@ -270,9 +270,9 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
         ensure((CLOUDFLARE_OVERLAY.stat().st_mode & 0o777) == 0o600,
                'CLOUDFLARE_OVERRIDE_PERMISSIONS')
     ensure(not CLOUDFLARE_ENV_FILE.exists() and not CLOUDFLARE_ENV_FILE.is_symlink(),
-           'GEMINI_SECRET_FILE_ALREADY_EXISTS')
+           'CLOUDFLARE_SECRET_FILE_ALREADY_EXISTS')
     ensure(not CLOUDFLARE_OVERRIDE_BACKUP.exists() and not CLOUDFLARE_OVERRIDE_BACKUP.is_symlink(),
-           'GEMINI_BACKUP_ALREADY_EXISTS')
+           'CLOUDFLARE_BACKUP_ALREADY_EXISTS')
     ensure(not EDGE_REL.exists(), 'EDGE_RELEASE_ALREADY_EXISTS')
 
     edge_inspect = json.loads(call(DOCKER + ['inspect', 'supabase-edge-functions'], timeout=20))[0]
@@ -305,11 +305,11 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
             original_cloudflare_text,
         )
         ensure(env_file_match is not None,
-               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+               'PREVIOUS_CLOUDFLARE_SECRET_FILE_UNRECOGNIZED')
         previous_owned_env_file = env_file_match.group(1).strip()
         ensure(previous_owned_env_file.startswith(str(STAGE) + '/') and
                Path(previous_owned_env_file).name.startswith('cloudflare-provider'),
-               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+               'PREVIOUS_CLOUDFLARE_SECRET_FILE_UNRECOGNIZED')
     previous = read_compose_config(include_cloudflare=old_cloudflare_exists)
     # An immutable, private backup lets operators restore this exact release.
     if previous_cloudflare_bytes is not None:
@@ -359,7 +359,7 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
     # The previous override may still be referenced by the running container.
     # Atomic replacement does not disturb it until Compose explicitly recreates
     # only the Edge service. The previous bytes remain available for rollback.
-    write_gemini_override_atomic(override)
+    write_cloudflare_override_atomic(override)
 
     phase = 'edge_preflight'
     try:
@@ -371,7 +371,7 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
                'EXISTING_EDGE_OVERLAY_MODIFIED')
         call(compose_cmd(True, True) + ['config', '--quiet'], timeout=40)
     except Exception:
-        restore_previous_gemini_override(previous_cloudflare_bytes)
+        restore_previous_cloudflare_override(previous_cloudflare_bytes)
         CLOUDFLARE_ENV_FILE.unlink(missing_ok=True)
         raise
 
@@ -386,7 +386,7 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
     except Exception:
         # The original overlay is untouched. Remove our new override and
         # recreate only functions from the previous, complete Compose stack.
-        restore_previous_gemini_override(previous_cloudflare_bytes)
+        restore_previous_cloudflare_override(previous_cloudflare_bytes)
         CLOUDFLARE_ENV_FILE.unlink(missing_ok=True)
         call(compose_cmd(True, old_cloudflare_exists) +
              ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
