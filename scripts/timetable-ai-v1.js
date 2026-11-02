@@ -9,7 +9,7 @@ const labels={
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
     review:"Review changes",discard:"Discard draft",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
-    privacy:"Images and schedule details are sent to Google Gemini for analysis. Avoid uploading personal details. Files aren't stored by NEIS Circle.",
+    privacy:"Your schedule is sent to Google Gemini for analysis. Its free tier may use this content to improve Google products. Don't upload personal details; NEIS Circle doesn't store the file.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 5 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
     error:"Couldn't complete that request. Please retry.",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
@@ -17,7 +17,7 @@ const labels={
     attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
     review:"مراجعة التعديلات",discard:"إلغاء المسودة",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
-    privacy:"الصورة وبيانات الجدول بتتبعت لـGoogle Gemini للتحليل. متبعتش بيانات شخصية. NEIS Circle مش بيخزن الملف.",
+    privacy:"بيانات جدولك بتتبعت لـGoogle Gemini. النسخة المجانية ممكن تستخدم المحتوى لتحسين خدمات Google. متبعتش بيانات شخصية؛ NEIS Circle مش بيخزن الملف.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 5 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
     error:"حصلت مشكلة في الطلب. جرّب تاني.",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
