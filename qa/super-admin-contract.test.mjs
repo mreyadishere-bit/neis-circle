@@ -28,3 +28,7 @@ for(const name of ['main_admin_server_usage','main_admin_auth_overview','main_ad
 assert.ok((parity.match(/neis_admin_is_super\(\)/g)||[]).length>=6);
 assert.match(sql,/neis_admin_set_regular_admin/);
 assert.match(js,/neis_admin_set_regular_admin/);
+
+for(const name of ['admin_search_dm_users','admin_list_user_dm_conversations','admin_create_dm_review_request','admin_get_dm_review_messages']){
+ assert.ok(parity.includes('function public.'+name+'('),'missing audited safety review parity '+name);
+}
