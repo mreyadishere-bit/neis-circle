@@ -595,9 +595,11 @@ async function loadPdfRenderer(){
 // PDF rendering on Retry, without cookies, IndexedDB or database uploads.
 const preparedFileCache=new Map();
 const fileKeyCache=new WeakMap();
+const fileBytesCache=new WeakMap();
 async function fileFingerprint(file){
   if(fileKeyCache.has(file))return fileKeyCache.get(file);
   const bytes=await file.arrayBuffer();
+  fileBytesCache.set(file,bytes);
   const hash=await crypto.subtle.digest("SHA-256",bytes);
   const key=Array.from(new Uint8Array(hash),n=>n.toString(16).padStart(2,"0")).join("");
   fileKeyCache.set(file,key);return key;
@@ -657,7 +659,9 @@ async function prepareVisualPages(file){
   const pdfjs=await loadPdfRenderer();
   let doc;
   try{
-    doc=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    const sourceBytes=fileBytesCache.get(file)||await file.arrayBuffer();
+    // PDF.js consumes a transferable copy; never give it the fingerprint cache buffer.
+    doc=await pdfjs.getDocument({data:new Uint8Array(sourceBytes.slice(0))}).promise;
     if(doc.numPages>MAX_RENDERED_PAGES)
       throw new Error(wizardText(
         "This PDF has more than five pages. Please split it into sections of five pages.",
@@ -668,6 +672,9 @@ async function prepareVisualPages(file){
       const page=await doc.getPage(pageNum);
       try{
         const original=page.getViewport({scale:1});
+        // Read text coordinates while rasterization is in flight: neither task
+        // needs the other. The image remains the visual source of truth.
+        const textPromise=(async()=>{
         const textEvidence=[];
         // PDF text and image are complementary: images retain the grid;
         // normalized XY coordinates clarify repeating day headings.
@@ -695,6 +702,8 @@ async function prepareVisualPages(file){
               line.parts.map(item=>"x="+item.x+":"+item.text).join(" | "));
           }
         }catch{ /* Scanned image PDF: visual path still works. */ }
+        return textEvidence.join("\n").slice(0,10000);
+        })();
         if(stateAI.cancelled)throw new Error("Cancelled");
         // Keep small images for affordable, quick Workers AI inference.
         // Two pages at a time balances CPU time and mobile memory.
@@ -713,7 +722,7 @@ async function prepareVisualPages(file){
           const data=await readData(blob);
           result[pageNum-1]={
             attachment:{name:"page-"+pageNum+".jpg",mimeType:"image/jpeg",data},
-            evidence:"PAGE "+pageNum+" POSITIONED PDF TEXT\n"+textEvidence.join("\n").slice(0,10000)
+            evidence:"PAGE "+pageNum+" POSITIONED PDF TEXT\n"+await textPromise
           };
         }finally{
           canvas.width=0;canvas.height=0;
@@ -741,6 +750,7 @@ async function toData(file){
   while(preparedFileCache.size>2)preparedFileCache.delete(preparedFileCache.keys().next().value);
   try{return await prepared}
   catch(error){preparedFileCache.delete(hash);throw error}
+  finally{fileBytesCache.delete(file)}
 }
 // Keep the chat responsive even if a large PDF or the Edge relay stalls.
 // Supabase supports AbortSignal; Promise.race is a second safety net if
