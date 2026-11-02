@@ -645,6 +645,20 @@ Deno.serve(async (request: Request) => {
     // Never log message text, personal data, the API token, or image contents.
     console.error("Cloudflare timetable request failure: status=" + status + ", timeout=" + aborted);
     const providerCode = Number((error as {providerCode?: number})?.providerCode ?? 0);
+    const errorType=error instanceof Error?error.message:"";
+    const providerIsGemini=errorType.startsWith("GEMINI_") || (status===429 && providerCode===0);
+    if(providerIsGemini && status===429)return respond({
+      error:"Gemini is rate limited or its available quota has been exhausted. Your PDF is still selected. Retry when the limit resets.",
+      code:"GEMINI_QUOTA_LIMIT",retryAfterSeconds:60
+    },429);
+    if(providerIsGemini && errorType==="GEMINI_CHUNK_INVALID_JSON")return respond({
+      error:"Gemini returned an incomplete page result. Your PDF has not been saved; please retry the visual import.",
+      code:"GEMINI_INVALID_PAGE_RESULT"
+    },502);
+    if(aborted)return respond({
+      error:"Gemini did not respond before the request deadline. The PDF is preserved for retry.",
+      code:"GEMINI_TIMEOUT"
+    },503);
     if (status === 429 && providerCode === 3036) return respond(
       { error: "Cloudflare's free daily AI allowance has been used. Keep the PDF and continue editing manually, or retry when the daily allocation resets.",
         code: "CLOUDFLARE_DAILY_LIMIT", retryAfterSeconds: 3600 }, 429
