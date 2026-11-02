@@ -391,6 +391,70 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
   }finally{clearTimeout(deadline)}
 }
 
+// Read dense PDFs in bounded two-page chunks. Each request receives only its
+// own images and positioned text, with the first page's header as context.
+async function discoverGeminiByPageGroups(
+  key: string,
+  imageParts: Array<Record<string, unknown>>,
+  evidence: string,
+  systemInstruction: string,
+): Promise<string> {
+  const pages=evidence.split(/(?=PAGE \d+ POSITIONED PDF TEXT)/).filter(Boolean);
+  const header=(pages[0]||"").slice(0,4500);
+  const groups:Array<{start:number;images:Array<Record<string,unknown>>}>=[];
+  for(let i=0;i<imageParts.length;i+=2)groups.push({start:i,images:imageParts.slice(i,i+2)});
+  const responses=await Promise.all(groups.map(async group=>{
+    const pageNumbers=group.images.map((_,i)=>group.start+i+1);
+    const localEvidence=pageNumbers.map(n=>(pages[n-1]||"").slice(0,9000)).join("\n\n");
+    const instruction="Analyze ONLY original PDF page(s) "+pageNumbers.join(", ")+
+      ". Every detected lesson must use ORIGINAL source_page numbering "+pageNumbers.join(" or ")+
+      " and its source_x coordinate. Do not reinterpret the attached images as page 1 unless it is original page 1."+
+      " The source has continuing columns; use the first-page heading evidence to identify columns."+
+      "\nFIRST PAGE HEADER CONTEXT:\n"+header+
+      "\nCURRENT PAGE POSITIONED TEXT:\n"+localEvidence+
+      "\nReturn extraction JSON with all_detected_subjects, detected_lessons and ambiguous_items. Do not invent sessions.";
+    const messages=[
+      {role:"system",content:systemInstruction},
+      {role:"user",content:[{type:"text",text:instruction},...group.images]},
+    ];
+    let raw:string;
+    try{raw=await callGemini(key,messages,GEMINI_MODEL,29000);}
+    catch{
+      raw=await callGemini(key,messages,GEMINI_FAST_FALLBACK,13000);
+    }
+    const parsed=parseModelObject(raw);
+    const item=parsed?.extracted && typeof parsed.extracted==="object"?parsed.extracted:parsed;
+    if(!item||!Array.isArray(item.all_detected_subjects)||!Array.isArray(item.detected_lessons))
+      throw new Error("GEMINI_CHUNK_INVALID_JSON");
+    const lessons=item.detected_lessons.map((lesson:Record<string,unknown>)=>{
+      const copy={...lesson};
+      const sourcePage=Number(copy.source_page);
+      if(group.start && !pageNumbers.includes(sourcePage) &&
+        sourcePage>=1 && sourcePage<=group.images.length){
+        copy.source_page=group.start+sourcePage;
+      }
+      return copy;
+    });
+    return {subjects:item.all_detected_subjects.map(String),lessons,
+      ambiguities:Array.isArray(item.ambiguous_items)?item.ambiguous_items.map(String):[]};
+  }));
+  const seenLessons=new Set<string>();
+  const lessons:Array<Record<string,unknown>>=[];
+  for(const group of responses)for(const lesson of group.lessons){
+    const identity=[lesson.title,lesson.day_of_week,lesson.start_time,lesson.end_time,
+      lesson.source_page,lesson.source_x].join("|");
+    if(seenLessons.has(identity))continue;
+    seenLessons.add(identity);lessons.push(lesson);
+  }
+  return JSON.stringify({extracted:{
+    all_detected_subjects:[...new Set(responses.flatMap(x=>x.subjects))],
+    detected_lessons:lessons,
+    ambiguous_items:responses.flatMap(x=>x.ambiguities).slice(0,40),
+    page_count:imageParts.length,
+    summary:"Combined independent visual timetable page readings",
+  }});
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return respond({ error: "Method not allowed" }, 405);
@@ -489,24 +553,22 @@ Deno.serve(async (request: Request) => {
     ];
     let actualProvider="cloudflare";
     let raw:string;
-    if(geminiKey){
-      try {
-        raw=await callGemini(geminiKey,messages,GEMINI_MODEL,17000);
-        actualProvider="gemini";
-      } catch(primaryError) {
-        // This faster model has passed a real multimodal API smoke test using
-        // the same configured key. Do not depend on the slow 3.8 model.
-        try {
-          raw=await callGemini(geminiKey,messages,GEMINI_FAST_FALLBACK,12000);
-          actualProvider="gemini-lite";
-        } catch(secondaryError) {
-          const primaryStatus=Number((primaryError as {status?:number}).status||0);
-          const secondaryStatus=Number((secondaryError as {status?:number}).status||0);
+    if(geminiKey && discoveryMode && parts.length>1){
+      // Two-page requests run concurrently, not one three-page mega-request.
+      raw=await discoverGeminiByPageGroups(geminiKey,parts,pdfEvidence,DISCOVERY_INSTRUCTION);
+      actualProvider="gemini";
+    }else if(geminiKey){
+      try{raw=await callGemini(geminiKey,messages,GEMINI_MODEL,33000);actualProvider="gemini"}
+      catch(primaryError){
+        try{raw=await callGemini(geminiKey,messages,GEMINI_FAST_FALLBACK,13000);actualProvider="gemini-lite"}
+        catch(secondaryError){
           console.error("Timetable Gemini inference failed",JSON.stringify({
-            primaryStatus,secondaryStatus,primaryType:primaryError instanceof Error?primaryError.name:"unknown",
+            primaryStatus:Number((primaryError as {status?:number}).status||0),
+            secondaryStatus:Number((secondaryError as {status?:number}).status||0),
+            primaryType:primaryError instanceof Error?primaryError.name:"unknown",
             secondaryType:secondaryError instanceof Error?secondaryError.name:"unknown"
           }));
-          raw=await callCloudflare(token,account,messages,12000);
+          throw secondaryError;
         }
       }
     }else raw=await callCloudflare(token,account,messages);
@@ -583,6 +645,20 @@ Deno.serve(async (request: Request) => {
     // Never log message text, personal data, the API token, or image contents.
     console.error("Cloudflare timetable request failure: status=" + status + ", timeout=" + aborted);
     const providerCode = Number((error as {providerCode?: number})?.providerCode ?? 0);
+    const errorType=error instanceof Error?error.message:"";
+    const providerIsGemini=errorType.startsWith("GEMINI_") || (status===429 && providerCode===0);
+    if(providerIsGemini && status===429)return respond({
+      error:"Gemini is rate limited or its available quota has been exhausted. Your PDF is still selected. Retry when the limit resets.",
+      code:"GEMINI_QUOTA_LIMIT",retryAfterSeconds:60
+    },429);
+    if(providerIsGemini && errorType==="GEMINI_CHUNK_INVALID_JSON")return respond({
+      error:"Gemini returned an incomplete page result. Your PDF has not been saved; please retry the visual import.",
+      code:"GEMINI_INVALID_PAGE_RESULT"
+    },502);
+    if(aborted)return respond({
+      error:"Gemini did not respond before the request deadline. The PDF is preserved for retry.",
+      code:"GEMINI_TIMEOUT"
+    },503);
     if (status === 429 && providerCode === 3036) return respond(
       { error: "Cloudflare's free daily AI allowance has been used. Keep the PDF and continue editing manually, or retry when the daily allocation resets.",
         code: "CLOUDFLARE_DAILY_LIMIT", retryAfterSeconds: 3600 }, 429
