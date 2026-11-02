@@ -151,6 +151,41 @@ const SYSTEM_INSTRUCTION = [
 // Cross-check AI-proposed grid positions against independent PDF text coordinates.
 // For a PDF with readable column headings, an unlocated grid lesson is uncertain,
 // not a saveable timetable entry. Explicit printed footer lessons are parsed below.
+// Build the subject picker from the PDF's real multi-line column headings,
+// rather than letting the model silently erase L1/L2 suffixes.
+export function extractPdfSubjectHeaders(evidence: string): string[] {
+  const page=(evidence||"").split(/PAGE 2 POSITIONED PDF TEXT/)[0];
+  const lines=page.split("\n");
+  const headerIndex=lines.findIndex(line=>/x=\d+:Day\b/i.test(line) && /x=\d+:(Math|Physic|Arabic|English|Chemist)/i.test(line));
+  if(headerIndex<0)return [];
+  const parse=(line:string)=>[...line.matchAll(/x=(\d+):([^|\n]+)/g)].map(m=>({x:Number(m[1]),text:m[2].trim()}));
+  const initial=parse(lines[headerIndex]).filter(x=>/^(Arabic|Math|Physic|Physics|Chemist|Chemistry|English|Biolog|Biology|ICT|Histor)/i.test(x.text));
+  if(initial.length<4)return [];
+  const columns=initial.map(c=>({x:c.x,words:[c.text]}));
+  // Header fragments wrap onto subsequent lines in the original school PDF.
+  for(let i=headerIndex+1;i<Math.min(lines.length,headerIndex+5);i++){
+    if(/x=\d+:(Sat|Sun|Mon|Tue|Wed|Thu|Fri)\b/i.test(lines[i]))break;
+    for(const part of parse(lines[i])){
+      const closest=columns.reduce((a,b)=>Math.abs(a.x-part.x)<=Math.abs(b.x-part.x)?a:b);
+      if(Math.abs(closest.x-part.x)<52 && /^(?:[a-z]{1,5}|l\s*[12]|[12])$/i.test(part.text))
+        closest.words.push(part.text);
+    }
+  }
+  const canonical=(raw:string)=>{
+    const t=raw.replace(/\s+/g,"").toLowerCase();
+    const names:[RegExp,string][]=[
+      [/^arabic/,"Arabic"],[/^math/,"Math"],[/^physics?|^physic/,"Physics"],
+      [/^chemist/,"Chemistry"],[/^english/,"English"],[/^biolog/,"Biology"],
+      [/^ict/,"ICT"],[/^histor/,"History"]];
+    const found=names.find(([re])=>re.test(t));
+    if(!found)return "";
+    const level=t.match(/l([12])\b/)||t.match(/(?:^|[^0-9])([12])$/);
+    return found[1]+(level?" L"+(level[1]):"");
+  };
+  const names=columns.map(c=>canonical(c.words.join(""))).filter(Boolean);
+  return names.length>=4?[...new Set(names)]:[];
+}
+
 export function verifyPdfGridLessons(
   lessons: unknown[],
   evidence: string,
@@ -445,8 +480,14 @@ Deno.serve(async (request: Request) => {
         "|" + String(r?.day_of_week ?? ""))),
       ...explicitNotes,
     ]);
+    const pdfHeaders=discoveryMode&&pdfEvidence?extractPdfSubjectHeaders(pdfEvidence):[];
+    const modelSubjects=(Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects : []).map(String);
+    // When PDF headings exist, they are authoritative over generic model labels.
+    // For example: "Physics" must not replace separate "Physics L1"/"Physics L2".
+    const knownBases=new Set(pdfHeaders.map(x=>x.toLowerCase().replace(/\\s+l[12]$/,"")));
     const detectedSubjects = [...new Set([
-      ...(Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects : []).map(String),
+      ...pdfHeaders,
+      ...modelSubjects.filter(x=>!knownBases.has(x.toLowerCase().replace(/\\s+l[12]$/,""))),
       ...explicitNotes.map((r) => String(r.title)),
     ])];
     return respond({
