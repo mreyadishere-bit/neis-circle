@@ -1,0 +1,97 @@
+name: OVH Deploy Gemini 3.8 Flash Timetable AI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ovh-timetable-ai-gemini-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-timetable-ai-gemini:
+    runs-on: ubuntu-latest
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies and run verification suite
+        run: |
+          npm ci
+          node qa/static-check.mjs
+          npm run qa:unit
+
+      - name: Verify Gemini 3.8 Flash model availability (metadata GET, non-logging)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "GEMINI_API_KEY_SECRET=MISSING" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+          key = os.environ["GEMINI_API_KEY"].strip()
+          req = urllib.request.Request(
+              "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash",
+              headers={"x-goog-api-key": key},
+              method="GET",
+          )
+          with urllib.request.urlopen(req, timeout=15) as resp:
+              data = json.loads(resp.read().decode("utf-8"))
+          methods = data.get("supportedGenerationMethods") or []
+          if "generateContent" not in methods:
+              raise SystemExit("GEMINI_3_8_FLASH_GENERATE_CONTENT_UNSUPPORTED")
+          print("GEMINI_MODEL_VERIFIED=gemini-3.8-flash")
+          PY
+
+      - name: Stage and activate Gemini 3.8 Flash Edge Function + Frontend on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_USER: ${{ vars.OVH_SSH_USER }}
+          OVH_SSH_PORT: ${{ vars.OVH_SSH_PORT }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          SSH_USER="${OVH_SSH_USER:-ubuntu}"
+          SSH_PORT="${OVH_SSH_PORT:-22}"
+          STAGE_DIR="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${OVH_SSH_KEY}" > ~/.ssh/ovh_id
+          chmod 600 ~/.ssh/ovh_id
+          printf '%s\n' "${OVH_SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          SSH_OPTS=(
+            -i ~/.ssh/ovh_id
+            -p "${SSH_PORT}"
+            -o BatchMode=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile=~/.ssh/known_hosts
+            -o ConnectTimeout=15
+          )
+
+          ssh "${SSH_OPTS[@]}" "${SSH_USER}@${OVH_HOST}" "mkdir -p '${STAGE_DIR}' && chmod 700 '${STAGE_DIR}'"
+          scp -P "${SSH_PORT}" -i ~/.ssh/ovh_id -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            scripts/timetable-ai-v1.js \
+            styles/timetable-ai-v1.css \
+            scripts/01-core.js \
+            supabase/functions/timetable-ai/index.ts \
+            scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py \
+            "${SSH_USER}@${OVH_HOST}:${STAGE_DIR}/"
+
+          ssh "${SSH_OPTS[@]}" "${SSH_USER}@${OVH_HOST}" \
+            "GEMINI_API_KEY='${GEMINI_API_KEY}' python3 '${STAGE_DIR}/ovh-deploy-timetable-ai-gemini-v1.py'"

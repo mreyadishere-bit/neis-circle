@@ -2,12 +2,16 @@
    Requires authenticated Edge Function timetable-ai and atomic RLS-backed save RPC. */
 (()=>{
 "use strict";
+if(typeof window!=="undefined"){
+  if(window.__neisTimetableAiMounted)return;
+  window.__neisTimetableAiMounted="timetable-ai-v1";
+}
 const ID="ttAiOpen";
 const editable=["title","day_of_week","start_time","end_time","location","notes","category"];
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
-    review:"Review changes",discard:"Discard draft",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
+    review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
     privacy:"AI timetable requests and attached PDF/image schedules are processed by Google Gemini (gemini-3.8-flash). Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 15 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
@@ -15,14 +19,14 @@ const labels={
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
   ar:{title:"مساعد الجدول الذكي",intro:"قولّي مواعيد حصصك أو ارفع صورة أو PDF، وأنا أجهز لك جدول تراجعه قبل الحفظ.",
     attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
-    review:"مراجعة التعديلات",discard:"إلغاء المسودة",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
+    review:"مراجعة التعديلات",discard:"إلغاء المسودة",undo:"تراجع",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
     privacy:"الرسائل وملفات الجدول (PDF أو صور) بتتبعت لـGoogle Gemini (gemini-3.8-flash) للمعالجة البصرية المباشرة. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 15 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
     error:"حصلت مشكلة في الطلب. جرّب تاني.",retry:"إعادة المحاولة",removeFile:"إزالة الملف",info:"خصوصية مساعد الجدول",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
-const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,original:[],baseline:[],
+const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,draftHistory:[],original:[],baseline:[],
   source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null};
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
@@ -41,6 +45,7 @@ function begin(reset=false){
     stateAI.original=rows();
     stateAI.baseline=(state.timetable.rows||[]).map(r=>({id:r.id,updated_at:r.updated_at}));
     stateAI.draft=structuredClone(stateAI.original);
+    stateAI.draftHistory=[];
     stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;
   }
 }
@@ -124,6 +129,9 @@ function draw(){
   const head=el("header","ttai-header");
   const title=el("div","ttai-heading");
   title.append(el("span","ttai-mark","✦"),el("strong",null,t("title")));
+  const clearBtn=el("button","ttai-link",t("clear"));
+  clearBtn.type="button";clearBtn.disabled=stateAI.busy||stateAI.saving;
+  clearBtn.onclick=()=>{begin(true);draw()};
   const info=el("button","ttai-info-btn","ⓘ");
   info.type="button";info.setAttribute("aria-label",t("info"));info.title=t("info");
   info.setAttribute("aria-expanded",String(stateAI.privacyOpen));
@@ -131,7 +139,7 @@ function draw(){
   const close=el("button","ttai-icon-btn","×");
   close.type="button";close.setAttribute("aria-label",t("close"));
   close.onclick=()=>{stateAI.open=false;draw()};
-  const controls=el("div","ttai-header-controls");controls.append(info,close);
+  const controls=el("div","ttai-header-controls");controls.append(clearBtn,info,close);
   head.append(title,controls);panel.append(head);
   if(stateAI.privacyOpen)panel.append(el("p","ttai-privacy-info",t("privacy")));
   const chat=el("div","ttai-chat");
@@ -167,9 +175,18 @@ function draw(){
     const action=el("button","ttai-apply",stateAI.saving?t("saving"):t("apply"));
     action.type="button";action.disabled=stateAI.busy||stateAI.saving;action.onclick=()=>{void applyPlan()};
     bar.append(action);
+    if(stateAI.draftHistory.length>0){
+      const undoBtn=el("button","ttai-link",t("undo"));
+      undoBtn.type="button";undoBtn.disabled=stateAI.busy||stateAI.saving;
+      undoBtn.onclick=()=>{
+        const prev=stateAI.draftHistory.pop();
+        if(prev){stateAI.draft=prev;draw()}
+      };
+      bar.append(undoBtn);
+    }
     const discard=el("button","ttai-link",t("discard"));
     discard.type="button";discard.disabled=stateAI.busy||stateAI.saving;
-    discard.onclick=()=>{stateAI.draft=structuredClone(stateAI.original);stateAI.preview=false;draw()};
+    discard.onclick=()=>{stateAI.draft=structuredClone(stateAI.original);stateAI.draftHistory=[];stateAI.preview=false;draw()};
     bar.append(discard);panel.append(bar);
   }
   const footer=el("div","ttai-footer");
@@ -249,6 +266,7 @@ async function submit(text,retrying=false){
     stateAI.history=stateAI.history.filter(x=>!x.isError && !x.failedPrompt);
   }
   const prior=stateAI.history.filter(x=>!x.isError).map(x=>({role:x.role,text:x.text,content:x.text}));
+  const prevDraft=stateAI.draftHistory.length>0?stateAI.draftHistory[stateAI.draftHistory.length-1]:null;
   stateAI.lastFailed=null;
   stateAI.history.push({role:"user",text:text+(file?(text?" · ":"")+file.name:""),failedPrompt:true});
   draw();
@@ -260,6 +278,7 @@ async function submit(text,retrying=false){
       currentEntries:stateAI.original,
       draft:stateAI.draft,
       draftEntries:stateAI.draft,
+      previousDraftEntries:prevDraft,
       source:stateAI.source,
       extracted:stateAI.source,
       history:prior,
@@ -275,7 +294,10 @@ async function submit(text,retrying=false){
       }
       throw new Error(description||error?.message||t("error"));
     }
-    if(data.changed)stateAI.draft=normalizeDraft(data.entries);
+    if(data.changed){
+      if(stateAI.draft)stateAI.draftHistory.push(structuredClone(stateAI.draft));
+      stateAI.draft=normalizeDraft(data.entries);
+    }
     if(Array.isArray(data.extracted))stateAI.source=data.extracted.slice(0,80);
     else if(data.extracted&&typeof data.extracted==="object")stateAI.source=data.extracted;
     stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,1200)});

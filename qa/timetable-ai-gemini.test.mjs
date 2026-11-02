@@ -6,6 +6,7 @@ import {
   createApp,
   processTimetableAiPayload,
   validateAndNormalizeEntries,
+  verifySupabaseSessionAndProfile,
 } from '../server.mjs';
 
 const TEST_USER_ID = '6c2d2e12-cccc-4acd-a000-d43fcedbbc73';
@@ -22,7 +23,19 @@ function makeValidJwt(sub = TEST_USER_ID, role = 'authenticated') {
   return `${header}.${payload}.signature`;
 }
 
-const VALID_AUTH_HEADER = `Bearer ${makeValidJwt()}`;
+const VALID_JWT = makeValidJwt();
+const VALID_AUTH_HEADER = `Bearer ${VALID_JWT}`;
+const mockAuthoritativeAuthVerifier = async (jwt) => {
+  if (jwt === VALID_JWT) {
+    return { status: 200, userId: TEST_USER_ID };
+  }
+  return {
+    status: 401,
+    code: 'AUTH_INVALID',
+    error: 'Invalid or expired authentication session. Please sign in again.',
+  };
+};
+
 const SAMPLE_PDF_BASE64 = Buffer.from(
   '%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n%%EOF',
   'utf8',
@@ -30,7 +43,7 @@ const SAMPLE_PDF_BASE64 = Buffer.from(
 const SAMPLE_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
-// 1. Static verification: OVH backend config + zero Groq references + Gemini 3.8 Flash configured
+// 1. Static verification: OVH backend config + PR #453 Auth Security + Single Frontend + Gemini 3.8 Flash configured
 const edgeSource = fs.readFileSync('supabase/functions/timetable-ai/index.ts', 'utf8');
 const frontendSource = fs.readFileSync('scripts/timetable-ai-gemini-v1.js', 'utf8');
 const liveFrontendSource = fs.readFileSync('scripts/timetable-ai-v1.js', 'utf8');
@@ -48,6 +61,18 @@ assert.ok(!/groq|qwen/i.test(liveFrontendSource), 'Live OVH timetable-ai-v1.js m
 assert.ok(!/pdfjs-dist|getTextContent/i.test(liveFrontendSource), 'Live OVH timetable-ai-v1.js must not flatten PDFs via PDF.js');
 assert.ok(!/groq|qwen/i.test(serverSource), 'Backend server must have zero Groq/Qwen references');
 
+// PR #453 security checks: never decode JWT payload locally without Supabase Auth verification
+assert.ok(!edgeSource.includes('decodeVerifiedJwtClaims'), 'Edge function must not use unverified local JWT decoding (PR #453)');
+assert.ok(!serverSource.includes('decodeVerifiedJwtClaims'), 'server.mjs must not use unverified local JWT decoding (PR #453)');
+assert.ok(edgeSource.includes('client.auth.getUser(jwt)'), 'Edge function must verify JWT with Supabase Auth getUser(jwt) (PR #453)');
+assert.ok(edgeSource.includes('AUTH_NOT_CONFIGURED'), 'Edge function must fail closed if SUPABASE_URL or SUPABASE_ANON_KEY is missing (PR #453)');
+assert.ok(edgeSource.includes('ACCOUNT_CHECK_UNAVAILABLE'), 'Edge function must fail closed if profile status check errors (PR #453)');
+
+// Single active Timetable AI frontend check (no duplicate AI scripts in index.html)
+assert.ok(indexHtml.includes('scripts/timetable-ai-v1.js'), 'index.html must load scripts/timetable-ai-v1.js');
+assert.ok(indexHtml.includes('styles/timetable-ai-v1.css'), 'index.html must load styles/timetable-ai-v1.css');
+assert.ok(!indexHtml.includes('timetable-ai-gemini-v1.js'), 'index.html must not load duplicate timetable-ai-gemini-v1.js');
+
 // Verify OVH self-hosted Supabase configuration in scripts/01-core.js and index.html
 assert.ok(coreSource.includes('supabaseUrl:"https://supabase.neiscircle.site"'), '01-core.js must use https://supabase.neiscircle.site');
 assert.ok(indexHtml.includes('supabaseUrl: "https://supabase.neiscircle.site"'), 'index.html must use https://supabase.neiscircle.site');
@@ -59,20 +84,64 @@ assert.ok(!indexHtml.includes("We'll be back soon"), 'index.html must not be the
 assert.ok(coreSource.includes("flowType:'pkce'"), '01-core.js must preserve PKCE OAuth flow');
 assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-core.js must enforce supabase.neiscircle.site OAuth host');
 
-// 2. Authentication & Missing GEMINI_API_KEY checks (never falls back to Groq)
+// 2. Authentication (PR #453 authoritative session & profile verification) & Missing GEMINI_API_KEY checks
 {
   const unauthRes = await processTimetableAiPayload({
     authorization: '',
     body: { prompt: 'Hello' },
     env: { GEMINI_API_KEY: 'test-key' },
+    authVerifier: mockAuthoritativeAuthVerifier,
   });
   assert.equal(unauthRes.status, 401);
   assert.equal(unauthRes.body.code, 'AUTH_REQUIRED');
+
+  // Forged JWT with valid-looking payload must be rejected by authoritative verifier
+  const forgedJwt = makeValidJwt('11111111-2222-4333-8444-555555555555', 'authenticated');
+  const forgedRes = await processTimetableAiPayload({
+    authorization: `Bearer ${forgedJwt}`,
+    body: { prompt: 'Hello' },
+    env: { GEMINI_API_KEY: 'test-key' },
+    authVerifier: mockAuthoritativeAuthVerifier,
+  });
+  assert.equal(forgedRes.status, 401);
+  assert.equal(forgedRes.body.code, 'AUTH_INVALID');
+
+  // Verify verifySupabaseSessionAndProfile fail-closed behavior (AUTH_NOT_CONFIGURED, ACCOUNT_CHECK_UNAVAILABLE, ACCOUNT_RESTRICTED)
+  const noConfigCheck = await verifySupabaseSessionAndProfile(VALID_JWT, { SUPABASE_URL: '', SUPABASE_ANON_KEY: '' });
+  assert.equal(noConfigCheck.status, 503);
+  assert.equal(noConfigCheck.code, 'AUTH_NOT_CONFIGURED');
+
+  const profileErrCheck = await verifySupabaseSessionAndProfile(
+    VALID_JWT,
+    { SUPABASE_URL: 'https://supabase.neiscircle.site', SUPABASE_ANON_KEY: 'anon' },
+    async (url) => {
+      if (String(url).includes('/auth/v1/user')) {
+        return { ok: true, json: async () => ({ id: TEST_USER_ID }) };
+      }
+      return { ok: false, status: 500, json: async () => ({ message: 'DB error' }) };
+    },
+  );
+  assert.equal(profileErrCheck.status, 503);
+  assert.equal(profileErrCheck.code, 'ACCOUNT_CHECK_UNAVAILABLE');
+
+  const restrictedCheck = await verifySupabaseSessionAndProfile(
+    VALID_JWT,
+    { SUPABASE_URL: 'https://supabase.neiscircle.site', SUPABASE_ANON_KEY: 'anon' },
+    async (url) => {
+      if (String(url).includes('/auth/v1/user')) {
+        return { ok: true, json: async () => ({ id: TEST_USER_ID }) };
+      }
+      return { ok: true, json: async () => ([{ id: TEST_USER_ID, account_status: 'suspended' }]) };
+    },
+  );
+  assert.equal(restrictedCheck.status, 403);
+  assert.equal(restrictedCheck.code, 'ACCOUNT_RESTRICTED');
 
   const missingKeyRes = await processTimetableAiPayload({
     authorization: VALID_AUTH_HEADER,
     body: { prompt: 'Analyze my timetable' },
     env: { GEMINI_API_KEY: '' },
+    authVerifier: mockAuthoritativeAuthVerifier,
   });
   assert.equal(missingKeyRes.status, 503);
   assert.equal(missingKeyRes.body.code, 'GEMINI_API_KEY_MISSING');
@@ -88,6 +157,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
       flattenedPdfText: 'Monday 8:00 Maths L1 Maths L2',
     },
     env: { GEMINI_API_KEY: 'test-key' },
+    authVerifier: mockAuthoritativeAuthVerifier,
   });
   assert.equal(flattenedRes.status, 400);
   assert.equal(flattenedRes.body.code, 'FLATTENED_TEXT_REJECTED');
@@ -194,6 +264,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
     authorization: VALID_AUTH_HEADER,
     env: { GEMINI_API_KEY: 'test-secret-gemini-key' },
     aiClientFactory: mockAiFactory,
+    authVerifier: mockAuthoritativeAuthVerifier,
     body: {
       prompt: "Here's my timetable. I only take English, Physics L2, Maths L2, and ICT.",
       attachments: [
@@ -265,6 +336,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
   const followUpRes = await processTimetableAiPayload({
     authorization: VALID_AUTH_HEADER,
     env: { GEMINI_API_KEY: 'test-secret-gemini-key' },
+    authVerifier: mockAuthoritativeAuthVerifier,
     aiClientFactory: () => ({
       models: {
         generateContent: async (req) => {
@@ -334,6 +406,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
   const rateLimitRes = await processTimetableAiPayload({
     authorization: VALID_AUTH_HEADER,
     env: { GEMINI_API_KEY: 'AIzaSySecretKeyShouldNeverLeak123456' },
+    authVerifier: mockAuthoritativeAuthVerifier,
     aiClientFactory: () => ({
       models: {
         generateContent: async () => {
@@ -361,6 +434,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
 
   const app = createApp({
     env: { GEMINI_API_KEY: 'test-browser-gemini-key' },
+    authVerifier: mockAuthoritativeAuthVerifier,
     aiClientFactory: () => ({
       models: {
         generateContent: async (req) => {
@@ -568,6 +642,67 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+}
+
+// 8. Single active AI button verification: loading timetable-ai-v1.js mounts #ttAiOpen and prevents duplicate #ttAiAssistantBtn
+{
+  const mountedButtons = [];
+  const actionsContainer = {
+    firstChild: null,
+    insertBefore: (btn) => {
+      mountedButtons.push(btn);
+    },
+  };
+  const viewContainer = {
+    querySelector: (sel) => (sel === '.tt-head-actions' ? actionsContainer : null),
+  };
+  const domContext = {
+    console,
+    crypto: globalThis.crypto,
+    structuredClone: globalThis.structuredClone,
+    requestAnimationFrame: (fn) => fn(),
+    MutationObserver: class {
+      observe() {}
+    },
+    authUser: { id: TEST_USER_ID },
+    state: {
+      lang: 'en',
+      view: 'timetable',
+      onboardingComplete: true,
+      timetable: {
+        ready: true,
+        rows: [],
+      },
+    },
+    document: {
+      readyState: 'complete',
+      documentElement: { lang: 'en' },
+      body: {
+        appendChild: () => {},
+        classList: { contains: () => false },
+      },
+      addEventListener: () => {},
+      createElement: (tag) => ({
+        tagName: tag.toUpperCase(),
+        id: '',
+        className: '',
+        dataset: {},
+        setAttribute: () => {},
+        addEventListener: () => {},
+        append: () => {},
+        replaceChildren: () => {},
+      }),
+      getElementById: (id) => mountedButtons.find((b) => b.id === id) || (id === 'view' ? viewContainer : null),
+      querySelector: (sel) => (sel === '#view .tt-head-actions' ? actionsContainer : sel === '#view' ? viewContainer : null),
+    },
+  };
+  domContext.window = domContext;
+  vm.createContext(domContext);
+  vm.runInContext(liveFrontendSource, domContext, { filename: 'timetable-ai-v1.js' });
+  vm.runInContext(frontendSource, domContext, { filename: 'timetable-ai-gemini-v1.js' });
+
+  assert.equal(mountedButtons.length, 1, 'Exactly one AI button must be mounted even if both scripts are evaluated');
+  assert.equal(mountedButtons[0].id, 'ttAiOpen', 'Active production AI button must be #ttAiOpen');
 }
 
 console.log('TIMETABLE_AI_GEMINI_3_8_FLASH_TESTS=PASS');

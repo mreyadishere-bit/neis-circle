@@ -32,21 +32,6 @@ export const PALETTE = [
 ];
 export const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
 
-export function decodeVerifiedJwtClaims(jwt) {
-  const parts = String(jwt || '').split('.');
-  if (parts.length !== 3 || !parts[1]) return null;
-  try {
-    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      '=',
-    );
-    return JSON.parse(Buffer.from(padded, 'base64').toString('utf8'));
-  } catch {
-    return null;
-  }
-}
-
 export function normalizeTime24(value) {
   const raw = String(value ?? '').trim();
   const match24 = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
@@ -284,11 +269,78 @@ CRITICAL RULES:
    - Treat follow-up instructions ("Actually, remove Wednesday's Physics lesson", "Move Maths to 10 AM", "I don't take that subject", "Undo the previous change", "Add an ICT lesson on Thursday from 12 to 1", "Keep everything else unchanged") as modifications to the active draft schedule ("draftEntries") using the conversation history and "extracted" document context.
    - Preserve all other draft entries unchanged unless the student asks to remove or replace them.`;
 
+export async function verifySupabaseSessionAndProfile(jwt, env = process.env, fetchImpl = globalThis.fetch) {
+  const supabaseUrl = String(env?.SUPABASE_URL ?? 'https://supabase.neiscircle.site').trim().replace(/\/+$/, '');
+  const anonKey = String(
+    env?.SUPABASE_ANON_KEY ??
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFYmFzZSIsImlhdCI6MTc3NTg0NjI0NSwiZXhwIjoyMDkxMjA2MjQ1fQ.ee23212759129f2d8fe77ffb61be9fd2ddcc5ba2ddce7dfe5fa54ebffac121a9',
+  ).trim();
+  if (!supabaseUrl || !anonKey) {
+    return { status: 503, code: 'AUTH_NOT_CONFIGURED', error: 'Supabase authentication is not configured in the backend environment.' };
+  }
+
+  let userRes;
+  try {
+    userRes = await fetchImpl(`${supabaseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${jwt}`,
+      },
+    });
+  } catch {
+    return { status: 401, code: 'AUTH_INVALID', error: 'Invalid or expired authentication session. Please sign in again.' };
+  }
+
+  if (!userRes || !userRes.ok) {
+    return { status: 401, code: 'AUTH_INVALID', error: 'Invalid or expired authentication session. Please sign in again.' };
+  }
+
+  const userData = await userRes.json().catch(() => null);
+  const userId = String(userData?.id ?? '').trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    return { status: 401, code: 'AUTH_INVALID', error: 'Invalid or expired authentication session. Please sign in again.' };
+  }
+
+  let profileRes;
+  try {
+    profileRes = await fetchImpl(
+      `${supabaseUrl}/rest/v1/profiles?select=id,account_status&id=eq.${encodeURIComponent(userId)}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${jwt}`,
+          Accept: 'application/json',
+        },
+      },
+    );
+  } catch {
+    return { status: 503, code: 'ACCOUNT_CHECK_UNAVAILABLE', error: 'Unable to verify account status right now. Please try again.' };
+  }
+
+  if (!profileRes || !profileRes.ok) {
+    return { status: 503, code: 'ACCOUNT_CHECK_UNAVAILABLE', error: 'Unable to verify account status right now. Please try again.' };
+  }
+
+  const rows = await profileRes.json().catch(() => null);
+  if (!Array.isArray(rows)) {
+    return { status: 503, code: 'ACCOUNT_CHECK_UNAVAILABLE', error: 'Unable to verify account status right now. Please try again.' };
+  }
+  const profile = rows[0] || null;
+  if (profile && profile.account_status && profile.account_status !== 'active') {
+    return { status: 403, code: 'ACCOUNT_RESTRICTED', error: 'Your account is not permitted to use Timetable AI.' };
+  }
+
+  return { status: 200, userId };
+}
+
 export async function processTimetableAiPayload({
   authorization = '',
   body = null,
   env = process.env,
   aiClientFactory = null,
+  authVerifier = null,
 }) {
   const jwt = String(authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!jwt) {
@@ -301,11 +353,24 @@ export async function processTimetableAiPayload({
     };
   }
 
-  const claims = decodeVerifiedJwtClaims(jwt);
-  const userId = String(claims?.sub ?? '').trim();
-  const role = String(claims?.role ?? '').trim();
+  const authCheck = authVerifier
+    ? await authVerifier(jwt, env)
+    : await verifySupabaseSessionAndProfile(jwt, env);
+
+  if (!authCheck || authCheck.status !== 200) {
+    return {
+      status: authCheck?.status || 401,
+      body: {
+        error:
+          authCheck?.error ||
+          'Invalid or expired authentication session. Please sign in again.',
+        code: authCheck?.code || 'AUTH_INVALID',
+      },
+    };
+  }
+
+  const userId = String(authCheck.userId ?? '').trim();
   if (
-    role !== 'authenticated' ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       userId,
     )
@@ -609,7 +674,7 @@ export async function processTimetableAiPayload({
   }
 }
 
-export function createApp({ env = process.env, aiClientFactory = null } = {}) {
+export function createApp({ env = process.env, aiClientFactory = null, authVerifier = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.use(express.json({ limit: '25mb' }));
@@ -620,6 +685,7 @@ export function createApp({ env = process.env, aiClientFactory = null } = {}) {
       body: req.body,
       env,
       aiClientFactory,
+      authVerifier,
     });
     res.status(result.status).json(result.body);
   };

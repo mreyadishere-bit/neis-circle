@@ -602,6 +602,7 @@
   }
 
   function ensureHeaderButton(){
+    if(window.__neisTimetableAiMounted==='timetable-ai-v1'||document.getElementById('ttAiOpen'))return;
     const actions=document.querySelector('#view .tt-head-actions');
     if(!actions||document.getElementById(OPEN_BUTTON_ID))return;
     const btn=document.createElement('button');
