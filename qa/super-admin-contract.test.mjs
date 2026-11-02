@@ -20,3 +20,11 @@ assert.match(js,/Protected account/);
 assert.match(js,/Final confirmation/);
 assert.match(index,/super-admin-management-v1\.js/);
 console.log('SUPER_ADMIN_GUARDS=PASS');
+
+const parity=readFileSync('supabase/migrations/20261103014000_super_admin_owner_console_parity.sql','utf8');
+for(const name of ['main_admin_server_usage','main_admin_auth_overview','main_admin_auth_users','main_admin_auth_user_detail','main_admin_auth_set_block','main_admin_database_storage']){
+  assert.ok(parity.includes('function public.'+name+'('),'missing super-admin parity '+name);
+}
+assert.ok((parity.match(/neis_admin_is_super\(\)/g)||[]).length>=6);
+assert.match(sql,/neis_admin_set_regular_admin/);
+assert.match(js,/neis_admin_set_regular_admin/);
