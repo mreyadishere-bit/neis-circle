@@ -882,10 +882,11 @@ async function submit(text,retrying=false){
         extractReadableTextFallback(prepared.textEvidence):null;
       if(partial?.all_detected_subjects?.length){
         stateAI.source=partial;
-        startWizard(partial);
+        stateAI.wizard=null;
+        stateAI.file=file;
         stateAI.history.push({role:"assistant",text:wizardText(
-          "Visual AI is unavailable, but I found subject names in the PDF text. Choose your subjects; times not reliably read must be entered in Review. You can also Retry the visual analysis.",
-          "التحليل البصري مش متاح حاليًا، لكن قدرت أقرأ أسماء مواد من نص الـPDF. اختار موادك وراجع الأوقات أو أدخلها يدويًا. تقدر تضغط إعادة المحاولة كمان."
+          "Visual analysis failed. No timetable draft was created. Your PDF is kept for Retry. Text-only subject names cannot verify lesson times.",
+          "فشل التحليل البصري. لم يتم إنشاء جدول قابل للحفظ؛ الملف محفوظ لإعادة المحاولة. النص وحده لا يثبت مواعيد الحصص."
         ),isError:true});
       }else{
         stateAI.history.push({role:"assistant",text:safe,isError:true});
