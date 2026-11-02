@@ -261,7 +261,11 @@ async function applyPlan(){
     // Update native timetable data; native renderer & realtime use the same RLS records.
     state.timetable.rows=data;
     state.timetable.ready=true;
+    const previousHistory=stateAI.history;
+    const previousSource=stateAI.source;
     begin(true);
+    stateAI.history=previousHistory;
+    stateAI.source=previousSource;
     stateAI.history.push({role:"assistant",text:t("success")});
     alertUser(t("success"));
     if(typeof render==="function")render();
@@ -296,9 +300,11 @@ function scheduleMount(){
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&stateAI.open){stateAI.open=false;draw()}
 });
-document.addEventListener("DOMContentLoaded",()=>{
+function start(){
   const root=document.querySelector("#view")||document.body;
   new MutationObserver(scheduleMount).observe(root,{childList:true});
   scheduleMount();
-});
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});
+else start();
 })();
