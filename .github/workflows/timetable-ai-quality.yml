@@ -1,0 +1,42 @@
+name: Timetable AI — isolated quality gate
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - 'scripts/timetable-ai-v1.js'
+      - 'styles/timetable-ai-v1.css'
+      - 'supabase/functions/timetable-ai/**'
+      - 'supabase/migrations/2026110210*_timetable_ai_*.sql'
+      - 'qa/timetable-ai.test.mjs'
+      - '.github/workflows/timetable-ai-quality.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/timetable-ai-v1.js'
+      - 'styles/timetable-ai-v1.css'
+      - 'supabase/functions/timetable-ai/**'
+      - 'supabase/migrations/2026110210*_timetable_ai_*.sql'
+      - 'qa/timetable-ai.test.mjs'
+      - '.github/workflows/timetable-ai-quality.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: |
+          node --check scripts/timetable-ai-v1.js
+          node --check qa/timetable-ai.test.mjs
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Test real mobile browser flow (no Gemini key needed)
+        run: node qa/timetable-ai.test.mjs
