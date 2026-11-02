@@ -1,0 +1,27 @@
+name: Verify Legacy Timetable Blue Color Recovery (No OVH)
+on:
+  push:
+    branches: [fix/timetable-legacy-blue-colors-20261102]
+    paths:
+      - scripts/timetable-ai-cloudflare-v1.js
+      - qa/timetable-guided-import-v2.test.mjs
+      - .github/workflows/verify-legacy-blue-timetable.yml
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - name: Verify per-subject palette and original timetable data
+        run: |
+          bun install --frozen-lockfile
+          node --check scripts/timetable-ai-cloudflare-v1.js
+          node qa/timetable-guided-import-v2.test.mjs
+          node qa/timetable-pdf-position-and-footnotes.test.mjs
+          node qa/static-check.mjs
+          npm run qa:unit

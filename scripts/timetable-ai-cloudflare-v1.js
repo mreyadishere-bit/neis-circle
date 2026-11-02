@@ -36,6 +36,7 @@ function suggestedColor(subject,index=0){
   if(/\bict\b|computer|حاسب|تكنولوج/.test(k))return "#10a879";
   if(/english|انجلي/.test(k))return "#efb83f";
   if(/religion|دين/.test(k))return "#5e6a78";
+  if(/french|français|فرنس/.test(k))return "#ec6fb7";
   return SUBJECT_COLORS[index%SUBJECT_COLORS.length];
 }
 const labels={
@@ -172,9 +173,16 @@ function startWizard(extracted){
     step:"subjects",subjects,lessons,selected:new Set(),locations:{},colors:{},mode:stateAI.original.length?"merge":"replace",
     warnings:Array.isArray(extracted?.ambiguous_items)?extracted.ambiguous_items.map(String).slice(0,20):[]
   };
+  const oldUniqueSubjects=new Set(stateAI.original.map(x=>subjectKey(x.title)));
+  const oldUniqueColors=new Set(stateAI.original.map(x=>String(x.color||"").toLowerCase()).filter(Boolean));
+  // Early AI imports could only save the hard-coded blue SQL default.
+  // Don't perpetuate that broken palette when the student re-imports.
+  const legacyAllBlue=oldUniqueSubjects.size>1&&oldUniqueColors.size===1&&
+    oldUniqueColors.has("#2f7db8");
   subjects.forEach((name,i)=>{
     const existing=stateAI.original.find(x=>subjectKey(x.title)===subjectKey(name));
-    wizard.colors[subjectKey(name)]=existing?.color||suggestedColor(name,i);
+    wizard.colors[subjectKey(name)]=(!legacyAllBlue&&existing?.color)||
+      suggestedColor(name,i);
   });
   stateAI.wizard=wizard;
 }
