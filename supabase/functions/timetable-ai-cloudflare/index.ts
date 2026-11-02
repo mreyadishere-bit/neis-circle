@@ -380,33 +380,41 @@ export function parseArabicDatedLessons(evidence:string):Array<Record<string,unk
   pageSections.forEach((page,pageIndex)=>{
     for(const line of page.split("\n")){
       const coords=[...line.matchAll(/x=(-?\d+):([^|\n]+)/g)]
-        .map(m=>({x:Number(m[1]),text:m[2].trim()})).sort((a,b)=>b.x-a.x);
+        .map(m=>({x:Number(m[1]),text:m[2].trim()}));
       if(coords.length<5)continue;
-      const words=coords.flatMap(item=>item.text.split(/\s+/).filter(Boolean));
-      const normalized=words.map(ar);
-      const dayIndex=normalized.findIndex(w=>dayMap[w.replace(/[^\p{L}]/gu,"")]!==undefined);
-      if(dayIndex<1)continue;
-      const day=dayMap[normalized[dayIndex].replace(/[^\p{L}]/gu,"")];
-      const title=words.slice(0,dayIndex).join(" ").replace(/[()*]/g,"").trim();
-      // Require a plausible Arabic subject name, not page headings or rules.
-      if(!/[\p{Script=Arabic}]/u.test(title)||title.length<6||/ملاحظات/.test(ar(title)))continue;
-      const times:Array<string>=[];
-      for(let i=dayIndex+1;i<words.length;i++){
-        const m=words[i].match(/(\d{1,2}:\d{2})/);
-        if(!m)continue;
-        const next=ar(words.slice(i+1,i+3).join(" "));
-        const local=ar(words[i]);
-        const period=/(?:^|\s)(ص|صباحا|am)(?:\s|$)/i.test(next)||/ص$/.test(local)?"AM":
-          /(?:^|\s)(م|مساء|pm)(?:\s|$)/i.test(next)||/م$/.test(local)?"PM":"";
-        if(period)times.push(normalizeTime24(m[1]+" "+period));
+      // PDF.js may emit right-to-left Arabic tokens either direction.
+      // Accept only the ordering that explicitly has subject, day, two times.
+      for(const descending of [true,false]){
+        const ordered=[...coords].sort((a,b)=>descending?b.x-a.x:a.x-b.x);
+        const words=ordered.flatMap(item=>item.text.split(/\s+/).filter(Boolean));
+        const normalized=words.map(ar);
+        const dayIndex=normalized.findIndex(w=>dayMap[w.replace(/[^\p{L}]/gu,"")]!==undefined);
+        if(dayIndex<1)continue;
+        const day=dayMap[normalized[dayIndex].replace(/[^\p{L}]/gu,"")];
+        const title=words.slice(0,dayIndex).join(" ").replace(/[()*]/g,"").trim();
+        if(!/[\p{Script=Arabic}]/u.test(title)||title.length<6||
+          /ملاحظات/.test(ar(title)))continue;
+        const times:Array<string>=[];
+        for(let i=dayIndex+1;i<words.length;i++){
+          const m=words[i].match(/(\d{1,2}:\d{2})/);
+          if(!m)continue;
+          const next=ar(words.slice(i+1,i+3).join(" "));
+          const local=ar(words[i]);
+          const period=/(?:^|\s)(ص|صباحا|am)(?:\s|$)/i.test(next)||/ص$/.test(local)?"AM":
+            /(?:^|\s)(م|مساء|pm)(?:\s|$)/i.test(next)||/م$/.test(local)?"PM":"";
+          if(period)times.push(normalizeTime24(m[1]+" "+period));
+        }
+        if(times.length!==2||!times[0]||!times[1]||times[1]<=times[0])continue;
+        const canonicalTitle=title.replace(/\s+/g," ");
+        const id=[day,ar(canonicalTitle),times.join("-")].join("|");
+        if(!seen.has(id)){
+          seen.add(id);
+          result.push({title:canonicalTitle,day_of_week:day,start_time:times[0],end_time:times[1],
+            location:/اونلاين|اونلين|online/i.test(ar(words.join(" ")))?"Online":"",
+            notes:"",source_page:pageIndex+1});
+        }
+        break;
       }
-      if(times.length!==2||!times[0]||!times[1]||times[1]<=times[0])continue;
-      const canonicalTitle=title.replace(/\s+/g," ");
-      const id=[day,ar(canonicalTitle),times.join("-")].join("|");
-      if(seen.has(id))continue;seen.add(id);
-      result.push({title:canonicalTitle,day_of_week:day,start_time:times[0],end_time:times[1],
-        location:/اونلاين|اونلين|online/i.test(ar(words.join(" ")))?"Online":"",
-        notes:"",source_page:pageIndex+1});
     }
   });
   return result.slice(0,25);
