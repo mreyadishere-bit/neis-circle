@@ -686,8 +686,20 @@ async function prepareVisualPages(file){
             const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
             const x=Math.round(point[0]/original.width*1000);
             const y=Math.round(point[1]/original.height*1000);
-            if(x>=-20&&x<=1020&&y>=-20&&y<=1020)
-              positioned.push({x,y,text:item.str.replace(/[\r\n]+/g," ").trim().slice(0,160)});
+            if(x>=-20&&x<=1020&&y>=-20&&y<=1020){
+              // PDF.js often combines adjacent visual columns into one text
+              // item (e.g. "Arabic Math" or "ICT L1 Histor"). Split words
+              // into individually positioned evidence tokens before AI review.
+              const raw=item.str.replace(/[\r\n]+/g," ");
+              const parts=[...raw.matchAll(/\S+/g)];
+              const fullWidth=Number(item.width)||0;
+              if(parts.length>1&&fullWidth>0){
+                for(const part of parts){
+                  const offset=part.index/Math.max(raw.length,1)*fullWidth/original.width*1000;
+                  positioned.push({x:Math.round(x+offset),y,text:part[0].slice(0,160)});
+                }
+              }else positioned.push({x,y,text:raw.trim().slice(0,160)});
+            }
           }
           positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
           const lines=[];
