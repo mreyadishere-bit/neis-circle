@@ -1,0 +1,75 @@
+name: Diagnose Timetable AI Gemini 500 (OVH read-only)
+on:
+  push:
+    branches: [diagnostics/timetable-ai-edge-errors-20261102]
+    paths:
+      - .github/workflows/diagnose-timetable-gemini-edge-errors.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Read sanitized OVH Edge logs and runtime status
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,re,subprocess,collections
+          args=['sudo','-n','/usr/bin/docker']
+          info=subprocess.run(args+['inspect','supabase-edge-functions'],capture_output=True,text=True,timeout=20)
+          if info.returncode:
+              print('EDGE_CONTAINER_INSPECT=FAIL')
+              raise SystemExit(1)
+          data=json.loads(info.stdout)[0]
+          print('EDGE_CONTAINER_RUNNING='+str(bool(data.get('State',{}).get('Running'))).upper())
+          env_names={s.split('=',1)[0] for s in data.get('Config',{}).get('Env',[]) if '=' in s}
+          print('EDGE_GEMINI_KEY_PRESENT='+str('GEMINI_API_KEY' in env_names).upper())
+          mounts=[m.get('Source') for m in data.get('Mounts',[]) if m.get('Destination')=='/home/deno/functions']
+          print('EDGE_FUNCTION_MOUNT_COUNT='+str(len(mounts)))
+          if len(mounts)==1:
+              from pathlib import Path
+              file=Path(mounts[0])/'timetable-ai'/'index.ts'
+              if file.is_file():
+                  source=file.read_text()
+                  print('EDGE_GEMINI_TIMEOUT_80S='+str('timeout: 80000' in source).upper())
+                  print('EDGE_GEMINI_MODEL_3_8_FLASH='+str('gemini-3.8-flash' in source).upper())
+                  print('EDGE_BACKEND_BYTES='+str(len(source)))
+          logs=subprocess.run(args+['logs','--since','4h','--timestamps','--tail','1800','supabase-edge-functions'],capture_output=True,text=True,timeout=45)
+          print('EDGE_LOGS_READ='+str(logs.returncode==0).upper())
+          if logs.returncode: raise SystemExit(1)
+          lines=(logs.stdout+'\n'+logs.stderr).splitlines()
+          matches=[line for line in lines if 'Timetable AI Gemini error:' in line]
+          print('TIMETABLE_GEMINI_ERROR_COUNT_LAST_4H='+str(len(matches)))
+          categories=['quota','resource_exhausted','rate limit','permission_denied','permission denied',
+           '403','404','400','429','401','503','504','500','502','timeout','timed out',
+           'deadline','request failed','fetch failed','network','dns','tls','cert',
+           'responseSchema','schema','unsupported','invalid','malformed','typeerror',
+           'api key','apikey','not found','not supported','internal','overloaded',
+           'bad request','token','quota exceeded','free tier','maxoutputtokens','mime',
+           'json','service unavailable','models/','model not found']
+          counter=collections.Counter()
+          for line in matches:
+              tail=line.split('Timetable AI Gemini error:',1)[1].lower()
+              found=[cat.lower() for cat in categories if cat.lower() in tail]
+              counter.update(found or ['unclassified'])
+          print('ERROR_CATEGORY_COUNTS='+json.dumps(dict(counter.most_common(25))))
+          for line in matches[-8:]:
+              tail=line.split('Timetable AI Gemini error:',1)[1]
+              matches_http=re.findall(r'(?<!\d)(?:400|401|403|404|408|413|422|429|500|502|503|504)(?!\d)',tail)
+              fixed=[cat for cat in categories if cat.lower() in tail.lower()]
+              # Never output raw error text, PDFs, prompts, JWTs, URLs or keys.
+              print('ERROR_EVENT status_codes='+','.join(matches_http[:3])+' hints='+','.join(fixed[:8]))
+          print('TIMETABLE_EDGE_LOG_CLASSIFICATION_COMPLETE=YES')
+          PY
