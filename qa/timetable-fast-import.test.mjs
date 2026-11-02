@@ -24,7 +24,7 @@ assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
 assert.match(server,/callGemini\(geminiKey,messages,GEMINI_MODEL/,"Gemini takes priority when configured");
 assert.match(server,/gemini-3-flash-preview/,"Gemini primary is the live-tested faster model");
-assert.match(server,/gemini-3.5-flash-lite/,"Gemini secondary is the live-tested fast fallback");
+assert.match(server,/gemini-3.1-flash-lite/,"Gemini secondary is the live-tested fast fallback");
 assert.match(server,/maxOutputTokens:8192/,"Gemini has enough response capacity");
 assert.match(server,/GEMINI_EMPTY_OUTPUT_/,"empty Gemini responses become classifiable fallback errors");
 assert.match(server,/actualProvider==="gemini"/,"provider is reported accurately");
