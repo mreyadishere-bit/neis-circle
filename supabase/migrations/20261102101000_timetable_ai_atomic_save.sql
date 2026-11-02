@@ -12,7 +12,6 @@ declare
   row_id uuid;
   kept uuid[] := array[]::uuid[];
   saved_count integer;
-  affected integer;
   raw_key text;
 begin
   if uid is null then raise exception 'Sign in required'; end if;
@@ -53,6 +52,12 @@ begin
     if raw_key ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
       row_id := raw_key::uuid;
       if row_id = any(kept) then raise exception 'Duplicate timetable entry'; end if;
+      if not exists (select 1 from public.user_timetable_entries
+        where id=row_id and user_id=uid) then
+        raise exception 'Unknown timetable entry';
+      end if;
+      -- Do not touch unchanged rows: preserves updated_at and avoids unnecessary
+      -- realtime events, push work and database writes on the OVH server.
       update public.user_timetable_entries set
         title=trim(item->>'title'),
         day_of_week=(item->>'day_of_week')::smallint,
@@ -61,9 +66,12 @@ begin
         location=coalesce(item->>'location',''),
         notes=coalesce(item->>'notes',''),
         category=coalesce(item->>'category','Class')
-      where id=row_id and user_id=uid;
-      get diagnostics affected = row_count;
-      if affected <> 1 then raise exception 'Unknown timetable entry'; end if;
+      where id=row_id and user_id=uid and
+        (title,day_of_week,start_time,end_time,location,notes,category) is distinct from
+        (trim(item->>'title'),(item->>'day_of_week')::smallint,
+         (item->>'start_time')::time,(item->>'end_time')::time,
+         coalesce(item->>'location',''),coalesce(item->>'notes',''),
+         coalesce(item->>'category','Class'));
     elsif raw_key = '' or raw_key ~ '^tmp_[a-f0-9-]{20,50}$' then
       insert into public.user_timetable_entries
         (user_id,title,day_of_week,start_time,end_time,location,notes,category,
