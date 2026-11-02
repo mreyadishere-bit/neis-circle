@@ -241,7 +241,7 @@ function buildWizardDraft(){
   const additions=generated.filter(x=>!existing.has([x.day_of_week,x.start_time,x.end_time,subjectKey(x.title)].join("|")));
   stateAI.draftHistory.push(structuredClone(stateAI.draft));
   stateAI.draft=normalizeDraft([...kept,...additions].slice(0,80));
-  stateAI.preview=true;w.step="review";
+  stateAI.preview=false;w.step="review";
 }
 function updateWizardRow(key,field,value){
   const row=stateAI.draft?.find(x=>x.key===key);
@@ -461,7 +461,7 @@ function draw(){
   head.append(title,controls);panel.append(head);
   if(stateAI.privacyOpen)panel.append(el("p","ttai-privacy-info",t("privacy")));
   const chat=el("div","ttai-chat");
-  chat.setAttribute("role","log");chat.setAttribute("aria-live","polite");
+  chat.setAttribute("role","region");chat.setAttribute("aria-label",wizardText("Timetable editor","محرر الجدول"));
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
   drawWizard(chat);
@@ -486,7 +486,7 @@ function draw(){
     const bar=el("div","ttai-reviewbar");
     const summary=el("button","ttai-review-toggle",t("review")+" · +"+changes.add.length+
       " / ~"+changes.update.length+" / −"+changes.remove.length);
-    summary.type="button";summary.onclick=()=>{stateAI.preview=!stateAI.preview;draw()};
+    summary.type="button";summary.setAttribute("aria-expanded",String(stateAI.preview));summary.onclick=()=>{stateAI.preview=!stateAI.preview;draw()};
     bar.append(summary);
     if(stateAI.preview){
       const items=el("div","ttai-diff");
@@ -554,7 +554,11 @@ function draw(){
   };
   footer.append(compose);
   panel.append(footer);
-  chat.scrollTop=chat.scrollHeight;
+  // Keep the current review position when editing. Do not jump to the bottom
+  // and hide the active lesson after every input change.
+  if(stateAI.wizard?.step==="review")chat.scrollTop=stateAI.reviewScroll||0;
+  else chat.scrollTop=chat.scrollHeight;
+  chat.addEventListener("scroll",()=>{if(stateAI.wizard?.step==="review")stateAI.reviewScroll=chat.scrollTop},{passive:true});
 }
 function setFile(file){
   if(!["application/pdf","image/png","image/jpeg","image/webp"].includes(file.type)){
