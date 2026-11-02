@@ -58,7 +58,10 @@ function diff(){
   return {add,update,remove};
 }
 function total(d){return d.add.length+d.update.length+d.remove.length}
-function tmpKey(){return "tmp_"+crypto.randomUUID()}
+function tmpKey(){
+  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+  return "tmp_"+Array.from(bytes,x=>x.toString(16).padStart(2,"0")).join("");
+}
 function normalizeDraft(input){
   if(!Array.isArray(input)||input.length>80)throw new Error("Invalid proposal");
   const saved=new Set(stateAI.original.map(r=>r.key));
