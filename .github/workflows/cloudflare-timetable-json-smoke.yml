@@ -1,0 +1,55 @@
+name: Cloudflare Timetable Structured Output Real API Smoke
+on:
+  push:
+    branches: [feature/cloudflare-timetable-ai-prod-20261102]
+    paths: [.github/workflows/cloudflare-timetable-json-smoke.yml]
+permissions:
+  contents: read
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 6
+    steps:
+      - run: python3 -m pip install --quiet pillow
+      - name: Test synthetic timetable images and JSON output (no student data)
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          python3 - <<'PY'
+          import os,json,base64,io,urllib.request,re
+          from PIL import Image,ImageDraw,ImageFont
+          token=os.environ['CF_TOKEN'];acct=os.environ['CF_ACCOUNT']
+          font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',28)
+          pages=[]
+          for day,rows in [('Monday',[('08:00','09:00','English'),('09:00','10:00','Maths L2')]),('Tuesday',[('10:00','11:00','Physics L2'),('11:00','12:00','Chemistry')])]:
+            im=Image.new('RGB',(980,350),'white');d=ImageDraw.Draw(im)
+            d.text((25,20),'School timetable — '+day,font=font,fill='black')
+            for j,(start,end,subject) in enumerate(rows):
+              y=75+j*125
+              d.rectangle((15,y,960,y+100),outline='black',width=4)
+              d.text((30,y+28),start+'–'+end+' | '+subject,font=font,fill='black')
+            b=io.BytesIO();im.save(b,format='JPEG',quality=83)
+            pages.append({'type':'image_url','image_url':{'url':'data:image/jpeg;base64,'+base64.b64encode(b.getvalue()).decode()}})
+          instructions='Return ONLY strict JSON: {"reply":string,"changed":boolean,"entries":array,"extracted":object}. Each entry: day_of_week (1 Monday, 2 Tuesday), title, start_time, end_time, location, notes, category, color. Select only English, Maths L2 and Physics L2 (exclude Chemistry). Use HH:MM; no invented lessons. extracted keys summary,document_language,page_count,all_detected_subjects,ambiguous_items,detected_lessons.'
+          messages=[{'role':'system','content':instructions},{'role':'user','content':[{'type':'text','text':'Read both timetable page images. Include all three selected lessons; exclude Chemistry.'},*pages]}]
+          req=urllib.request.Request('https://api.cloudflare.com/client/v4/accounts/'+acct+'/ai/run/@cf/meta/llama-4-scout-17b-16e-instruct',headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},data=json.dumps({'messages':messages,'max_tokens':1350,'temperature':0.1}).encode())
+          with urllib.request.urlopen(req,timeout=65) as r:data=json.load(r)
+          raw=data['result']['response'].strip()
+          raw=re.sub(r'^\x60{3}(?:json)?\s*','',raw,flags=re.I)
+          raw=re.sub(r'\s*\x60{3}$','',raw)
+          start,end=raw.find('{'),raw.rfind('}')
+          if start<0 or end<0:raise SystemExit('MODEL_RETURNED_NO_JSON')
+          obj=json.loads(raw[start:end+1])
+          assert isinstance(obj.get('reply'),str)
+          assert isinstance(obj.get('entries'),list)
+          entries=obj['entries']
+          found={str(e.get('title','')).lower() for e in entries}
+          assert 'english' in found and 'maths l2' in found and 'physics l2' in found,'MODEL_MISSED_SELECTED_LESSON'
+          assert not any('chemistry' in x for x in found),'MODEL_INCLUDED_EXCLUDED_SUBJECT'
+          assert all(isinstance(e.get('day_of_week'),int) for e in entries),'MODEL_MISSING_DAY'
+          print('CLOUDFLARE_MULTIPAGE_JSON_SMOKE=PASS')
+          print('CLOUDFLARE_SELECTED_LESSON_COUNT='+str(len(entries)))
+          print('STUDENT_DATA_USED=FALSE')
+          PY
