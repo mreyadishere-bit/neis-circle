@@ -23,6 +23,8 @@ assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.e
 assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
 assert.match(server,/verifyPdfGridLessons\(rawLessons,pdfEvidence\)/,"verify visual timetable proposals against extracted PDF coordinates");
+assert.match(server,/extractPdfSubjectHeaders\(pdfEvidence\)/,"preserve true PDF subject headings and separate L1 and L2");
+assert.match(server,/knownBases\.has/,"remove ambiguous AI subjects when authoritative PDF headings exist");
 assert.match(server,/source_page.*source_x/,"visual reader must cite page and grid cell position");
 assert.match(server,/checked\.rejected/,"uncertain grid cells must be disclosed");
 assert.match(server,/max_tokens: 2200/);
