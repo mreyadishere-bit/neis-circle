@@ -4,7 +4,12 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
+      - 'supabase/migrations/20261103014000_super_admin_owner_console_parity.sql'
       - 'scripts/super-admin-management-v1.js'
+      - 'scripts/server-usage-admin-v1.js'
+      - 'scripts/main-admin-auth-studio-v5.js'
+      - 'scripts/main-admin-db-storage-v1.js'
+      - 'index.html'
       - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
       - 'qa/super-admin-contract.test.mjs'
       - '.github/workflows/ovh-super-admin-permissions.yml'
@@ -12,7 +17,12 @@ on:
     branches: [main]
     paths:
       - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
+      - 'supabase/migrations/20261103014000_super_admin_owner_console_parity.sql'
       - 'scripts/super-admin-management-v1.js'
+      - 'scripts/server-usage-admin-v1.js'
+      - 'scripts/main-admin-auth-studio-v5.js'
+      - 'scripts/main-admin-db-storage-v1.js'
+      - 'index.html'
       - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
       - '.github/workflows/ovh-super-admin-permissions.yml'
 permissions:
@@ -28,6 +38,9 @@ jobs:
       - run: |
           set -euo pipefail
           node --check scripts/super-admin-management-v1.js
+          node --check scripts/server-usage-admin-v1.js
+          node --check scripts/main-admin-auth-studio-v5.js
+          node --check scripts/main-admin-db-storage-v1.js
           node qa/super-admin-contract.test.mjs
           python3 -m py_compile scripts/ops/ovh-deploy-super-admin-20261103.py
   database-dry-run:
@@ -59,11 +72,15 @@ jobs:
           stage=/home/ubuntu/neis-backups/super-admin-20261103
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103013000_super_admin_permissions.sql "$target:$stage/schema.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103014000_super_admin_owner_console_parity.sql "$target:$stage/owner-parity.sql"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -c '"'"'
           import pathlib,subprocess
-          p=pathlib.Path("/home/ubuntu/neis-backups/super-admin-20261103/schema.sql")
-          lines=[s for s in p.read_text().splitlines()
-            if s.strip().lower() not in ("begin;","commit;") and not s.lower().startswith("notify pgrst")]
+          root=pathlib.Path("/home/ubuntu/neis-backups/super-admin-20261103")
+          lines=[]
+          for name in ("schema.sql","owner-parity.sql"):
+            p=root/name
+            lines.extend(s for s in p.read_text().splitlines()
+              if s.strip().lower() not in ("begin;","commit;") and not s.lower().startswith("notify pgrst"))
           body="begin;\n"+"\n".join(lines)+"\nrollback;\n"
           base=["sudo","-n","/usr/bin/docker","exec","-i","supabase-db",
            "psql","-X","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres"]
@@ -102,4 +119,7 @@ jobs:
           target="ubuntu@$OVH_HOST"
           stage=/home/ubuntu/neis-backups/super-admin-20261103
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/super-admin-management-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/server-usage-admin-v1.js "$target:$stage/server-usage.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v5.js "$target:$stage/auth-studio.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-db-storage-v1.js "$target:$stage/db-storage.js"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-super-admin-20261103.py
