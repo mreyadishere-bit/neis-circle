@@ -27,6 +27,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 import urllib.error
 import urllib.request
@@ -136,6 +137,9 @@ def read_ovh_env():
 
 
 def verify_edge_endpoint(anon_key):
+    # The Supabase Edge runtime can temporarily respond 503 while its new
+    # function volume is bootstrapping. Probe with bounded retries rather
+    # than immediately rolling back a correctly deployed release.
     req = urllib.request.Request(
         'https://supabase.neiscircle.site/functions/v1/timetable-ai-cloudflare',
         data=b'{"prompt":"ping"}',
@@ -145,13 +149,23 @@ def verify_edge_endpoint(anon_key):
         },
         method='POST',
     )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            status = resp.status
-    except urllib.error.HTTPError as e:
-        status = e.code
+    status = None
+    for attempt in range(17):
+        try:
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                status = resp.status
+        except urllib.error.HTTPError as e:
+            status = e.code
+        except (urllib.error.URLError, TimeoutError):
+            status = 503
+        if status == 401:
+            print('TIMETABLE_AI_EDGE_AUTH_HEALTH=PASS')
+            return
+        if status not in (502, 503, 504) or attempt == 16:
+            break
+        time.sleep(3)
+    # The previous release remains available for automatic rollback.
     ensure(status == 401, f'EDGE_UNAUTH_STATUS_UNEXPECTED_{status}')
-
 
 def read_compose_config(include_cloudflare):
     # Parsed in-memory only: rendered Compose config contains secrets.
