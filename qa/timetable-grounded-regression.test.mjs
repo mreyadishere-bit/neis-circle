@@ -32,7 +32,7 @@ const evidence=[
  "y=427 x=339:2:00",
  "y=445 x=340:pm",
  "PAGE 3 POSITIONED PDF TEXT",
- "y=215 x=920:تربية | x=870:وطنية | x=808:للصف | x=757:الحادى | x=716:عشر | x=645:(الأربعاء | x=585:7:30 | x=555:ص | x=532:الى | x=490:8:30 | x=458:ص | x=395:اونلاين"
+ "y=215 x=920:تربية | x=870:وطنية | x=808:للصف | x=757:الحادى | x=716:عشر | x=645:(األربعاء | x=585:7:30 | x=555:ص | x=532:الى | x=490:8:30 | x=458:ص | x=395:اونالين"
 ].join("\n");
 const grid=api.parsePdfTextGridLessons(evidence);
 const wed=grid.find(x=>x.title==="Physics L2"&&x.day_of_week===3);
