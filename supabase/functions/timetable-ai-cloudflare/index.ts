@@ -170,7 +170,7 @@ export function verifyPdfGridLessons(
     .filter((h) => /^(arabic|math|physic|physics|chemist|english|biolog|ict|histor)/.test(h.word))
     .sort((a,b)=>a.x-b.x);
   if (headings.length < 3) return {accepted:rows.filter((r): r is Record<string, unknown>=>!!r&&typeof r==="object"),rejected:0};
-  const canonical=(t:string)=>t.toLowerCase().replace(/[^a-z0-9]/g,"").replace(/maths/g,"math").replace(/physicl/g,"physic");
+  const canonical=(t:string)=>t.toLowerCase().replace(/[^a-z0-9]/g,"").replace(/maths/g,"math").replace(/physics/g,"physic").replace(/chemistry/g,"chemist").replace(/biology/g,"biolog").replace(/history/g,"histor");
   const columns=headings.map((h,i)=>{
     const next=headings[i+1]?.x ?? 1050;
     const suffix=tokens.filter((t)=>t.x>=h.x-5&&t.x<next&&/^(l[12]|[12])$/.test(t.text))
