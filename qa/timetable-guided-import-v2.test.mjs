@@ -96,6 +96,19 @@ assert.equal(api.normalizeDraft(api.stateAI.original).find(x=>x.title==="Physics
 const edited=structuredClone(api.stateAI.original);edited[0].color="#ff0000";
 api.stateAI.draft=edited;
 assert.equal(api.diff().update.length,1,"Color-only changes count");
+// The historical SQL bug saved EVERY new lesson as blue. A fresh
+// import should seed distinct subject colors rather than copy that damage.
+const legacyBlue=structuredClone(api.stateAI.original);
+for(const row of legacyBlue)row.color="#2f7db8";
+api.stateAI.original=legacyBlue;
+api.startWizard({all_detected_subjects:["Physics L2","Maths L2","English L1","French Gr11","Religion Gr11"],detected_lessons:[]});
+const colors=["Physics L2","Maths L2","English L1","French Gr11","Religion Gr11"]
+  .map(name=>api.stateAI.wizard.colors[api.subjectKey(name)]);
+assert.equal(new Set(colors).size,5,"Every selected subject must have a distinct default color");
+assert.equal(api.stateAI.wizard.colors[api.subjectKey("French Gr11")],"#ec6fb7");
+assert.equal(api.stateAI.wizard.colors[api.subjectKey("Religion Gr11")],"#5e6a78");
+assert.equal(api.stateAI.wizard.colors[api.subjectKey("Physics L2")],"#7a52d8");
+console.log("LEGACY_BLUE_COLOR_RECOVERY=PASS");
 console.log("GUIDED_IMPORT_REGRESSION=PASS");
 console.log("SUBJECT_LEVEL_DISTINCTION=PASS");
 console.log("COLORS_MERGE_REPLACE=PASS");
