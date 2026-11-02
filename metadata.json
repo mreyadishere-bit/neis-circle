@@ -1,0 +1,8 @@
+{
+  "name": "NEIS Circle",
+  "description": "Private, bilingual (English / العربية) student knowledge network with Gemini 3.8 Flash Native Multimodal Timetable AI Assistant.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

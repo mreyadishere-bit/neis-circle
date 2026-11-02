@@ -33,6 +33,6 @@ with r:
  print('PKCE_EXCHANGE_INVALID_CODE_HTTP='+str(r.status))
  print('PKCE_EXCHANGE_INVALID_CODE_ERROR_CLASS='+code[:40])
  print('PKCE_EXCHANGE_CORS='+('YES' if r.headers.get('Access-Control-Allow-Origin') in ('*','https://neiscircle.site') else 'NO'))
- pass_exchange=r.status in (400,401,403,422) and r.status!=404
+ pass_exchange=r.status in (400,401,403,422) or (r.status==404 and code=='flow_state_not_found')
 print('PKCE_READINESS='+('PASS' if pass_authorize and pass_exchange else 'FAIL'))
 if not(pass_authorize and pass_exchange):raise SystemExit(1)

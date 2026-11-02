@@ -1,0 +1,209 @@
+/* NEIS Circle · Timetable AI Assistant (Gemini 3.8 Flash Multimodal) */
+.tt-ai-open-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent2) 68%, var(--card));
+  color: var(--accent);
+}
+.tt-ai-open-button:hover {
+  background: color-mix(in srgb, var(--accent2) 92%, var(--card));
+}
+.tt-ai-modal {
+  width: min(860px, 100%);
+  max-height: min(88dvh, 780px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 20px;
+}
+.tt-ai-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tt-ai-header h3 {
+  margin: 2px 0 4px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.tt-ai-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.tt-ai-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+  gap: 14px;
+  min-height: 360px;
+  overflow: hidden;
+}
+.tt-ai-chat-pane {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--soft);
+  padding: 12px;
+  overflow: hidden;
+}
+.tt-ai-messages {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-right: 4px;
+}
+.tt-ai-bubble {
+  max-width: 92%;
+  padding: 11px 13px;
+  border-radius: 15px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.tt-ai-bubble.assistant {
+  justify-self: start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.tt-ai-bubble.user {
+  justify-self: end;
+  background: var(--accent);
+  color: #fff;
+}
+.tt-ai-bubble.error {
+  border-color: color-mix(in srgb, #d64545 45%, var(--line));
+  background: color-mix(in srgb, #d64545 8%, var(--card));
+  color: var(--ink);
+}
+.tt-ai-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.14);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.tt-ai-bubble.assistant .tt-ai-file-chip {
+  background: var(--soft);
+  color: var(--accent);
+}
+.tt-ai-compose {
+  display: grid;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 9px 10px;
+}
+.tt-ai-attachment-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--accent2);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+}
+.tt-ai-compose-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.tt-ai-compose-row input[type="text"] {
+  height: 38px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12.5px;
+  padding: 0 6px;
+  outline: none;
+}
+.tt-ai-draft-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  padding: 13px;
+  overflow: hidden;
+}
+.tt-ai-draft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tt-ai-draft-head b {
+  font-size: 13px;
+}
+.tt-ai-draft-list {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+.tt-ai-draft-item {
+  display: grid;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--tt-color, var(--accent));
+  background: var(--soft);
+}
+.tt-ai-draft-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tt-ai-draft-item-top b {
+  font-size: 12px;
+  color: var(--ink);
+}
+.tt-ai-draft-item-top span {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent);
+}
+.tt-ai-draft-item small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.tt-ai-draft-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 760px) {
+  .tt-ai-body {
+    grid-template-columns: 1fr;
+    max-height: 70dvh;
+    overflow-y: auto;
+  }
+  .tt-ai-chat-pane {
+    min-height: 280px;
+  }
+}

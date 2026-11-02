@@ -1,6 +1,6 @@
 function lockDocumentTitle(){if(document.title!=='NEIS Circle')document.title='NEIS Circle'}
 /* Public project values only. Never put a Google Client Secret or Supabase service-role key here. */
-window.NEIS_CONFIG = window.NEIS_CONFIG || { supabaseUrl:"https://ydieijgynqlckaczalju.supabase.co", supabaseAnonKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkaWVpamd5bnFsY2thY3phbGp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MTA5OTcsImV4cCI6MjEwNTQ4Njk5N30.-R1cyhVDY1WqHBHmkqCH8Y9pR8Z5-CHOjs93g4ojd2A", allowedEmailDomain:"" };
+window.NEIS_CONFIG = { supabaseUrl:"https://supabase.neiscircle.site", supabaseAnonKey:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkxNTQyODk1LCJleHAiOjE5NDkyMjI4OTV9.OibkgXpWceohufjlCvrhJRH-t_ilYqQ9uJtehTtZl4E", allowedEmailDomain:window.NEIS_CONFIG?.allowedEmailDomain||"" };
 
 /* Legacy demo arrays are intentionally empty; authenticated database rows are the only source of truth. */
 const seed={posts:[],people:[],circles:[],opportunities:[],threads:[]};
@@ -23,7 +23,7 @@ const save=()=>{localStorage.setItem("neis-posts-v2",JSON.stringify(state.posts)
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),2200)}
 function applyPrefs(){document.documentElement.dataset.theme=state.theme;document.documentElement.dataset.styleTheme=state.styleTheme||"classic";const customColor=/^#[0-9a-f]{6}$/i.test(state.customThemeColor||"")?state.customThemeColor:"#256da8",rgb=[customColor.slice(1,3),customColor.slice(3,5),customColor.slice(5,7)].map(x=>parseInt(x,16)),luma=(.299*rgb[0]+.587*rgb[1]+.114*rgb[2]);document.documentElement.style.setProperty("--custom-accent",customColor);document.documentElement.style.setProperty("--custom-accent-contrast",luma>165?"#071923":"#ffffff");document.body.classList.toggle("rtl",state.lang==="ar");document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==="ar"?"rtl":"ltr";localStorage.setItem("neis-theme",state.theme);localStorage.setItem("neis-style-theme",state.styleTheme||"classic");localStorage.setItem("neis-custom-theme-color",customColor);localStorage.setItem("neis-lang",state.lang);try{window.NEISPWA?.syncTheme?.()}catch(_){}}
 function nav(v){state.view=v;state.query="";$("#globalSearch").value="";$$("[data-nav]").forEach(b=>b.classList.toggle("active",b.dataset.nav===v));render();scrollTo({top:0,behavior:"smooth"})}
-function setupBanner(){if(!sb)return `<div class="setup-banner"><span class="online-dot"></span><b>${L[state.lang].setup}</b><button data-action="setup">${L[state.lang].connect} →</button></div>`;if(!authUser)return `<div class="setup-banner"><span class="online-dot"></span><b>Sign in to publish, reply and sync your saved items on every device.</b><button data-action="login">Continue with Google →</button></div>`;return ""}
+function setupBanner(){if(!authUser)return `<div class="setup-banner"><span class="online-dot"></span><b>Sign in to publish, reply and sync your saved items on every device.</b><button data-action="login">Continue with Google →</button></div>`;return ""}
 function avatar(p,large=false){return `<span class="avatar ${large?"large":""}" style="--avatar:${p.color||"#7056d8"}">${esc(p.initials||p.name?.split(" ").map(x=>x[0]).join("").slice(0,2)||"ST")}</span>`}
 function postCard(p){const liked=state.liked.includes(p.id),saved=state.saved.includes(p.id);return `<article class="post" data-post="${p.id}">
   <div class="post-top">${avatar(p)}<div class="post-person"><b>${esc(p.user)}</b><small>${esc(p.meta)} · ${esc(p.time)}</small></div><span class="post-kind">${esc(p.kind)}</span></div>
@@ -85,7 +85,7 @@ create policy "users create comments" on comments for insert to authenticated wi
 create policy "private messages" on messages for select to authenticated using (auth.uid()=sender_id or auth.uid()=receiver_id);
 create policy "send messages" on messages for insert to authenticated with check (auth.uid()=sender_id);`;
 function setup(){
-  openModal(`<div class="modal-head"><div><h2>Connect the live platform</h2><p>Public project values are safe here. Keep Google Client Secret only in Supabase.</p></div><button class="close" data-close>×</button></div><div class="row"><label class="field">Supabase project URL<input id="sbUrl" placeholder="https://xxxx.supabase.co" value="${esc(window.NEIS_CONFIG?.supabaseUrl||"")}" readonly></label><label class="field">Supabase anon key<input id="sbKey" placeholder="eyJhbGci…" value="${esc(window.NEIS_CONFIG?.supabaseAnonKey||"")}" readonly></label></div><label class="field">Allowed school email domain (optional)<input id="sbDomain" placeholder="students.neis.edu" value="${esc(window.NEIS_CONFIG?.allowedEmailDomain||localStorage.getItem("neis-domain")||"")}"></label><div class="module-card" style="margin-top:14px"><b>1. Create the database tables and security rules</b><p>Open Supabase → SQL Editor → paste the prepared schema.</p><button class="secondary" type="button" id="copySql" style="margin-top:12px">Copy secure SQL schema</button></div><div class="module-card" style="margin-top:12px"><b>2. Enable Google</b><p>Supabase → Authentication → Providers → Google. Put the Client ID and Client Secret there, never in this file.</p><button class="secondary" type="button" id="googleAuth" style="margin-top:12px" ${sb?"":"disabled"}>Continue with Google</button></div><div class="modal-actions"><button class="secondary" type="button" data-close>Cancel</button><button class="primary" id="saveConnection">Save & test connection</button></div>`,true);
+  openModal(`<div class="modal-head"><div><h2>OVH production connection</h2><p>Connected to the self-hosted NEIS Circle Supabase backend (${esc(window.NEIS_CONFIG?.supabaseUrl||"https://supabase.neiscircle.site")}).</p></div><button class="close" data-close>×</button></div><label class="field">Allowed school email domain (optional)<input id="sbDomain" placeholder="students.neis.edu" value="${esc(window.NEIS_CONFIG?.allowedEmailDomain||localStorage.getItem("neis-domain")||"")}"></label><div class="module-card" style="margin-top:14px"><b>1. Database schema</b><p>Copy the reference SQL schema if needed for administrative audits.</p><button class="secondary" type="button" id="copySql" style="margin-top:12px">Copy secure SQL schema</button></div><div class="module-card" style="margin-top:12px"><b>2. Google OAuth (PKCE)</b><p>Configured on https://supabase.neiscircle.site. Client secrets stay server-side only.</p><button class="secondary" type="button" id="googleAuth" style="margin-top:12px" ${sb?"":"disabled"}>Continue with Google</button></div><div class="modal-actions"><button class="secondary" type="button" data-close>Cancel</button><button class="primary" id="saveConnection">Save & test connection</button></div>`,true);
   $("#copySql").onclick=async()=>{await navigator.clipboard.writeText(schemaSQL);toast("SQL schema copied")};
   $("#googleAuth").onclick=googleSignIn;
   $("#saveConnection").onclick=async()=>{const d=$("#sbDomain").value.trim();try{localStorage.removeItem("neis-sb-url");localStorage.removeItem("neis-sb-key");localStorage.setItem("neis-domain",d)}catch(_){}if(sb){try{await sb.auth.getSession()}catch(_){}}else await initSupabase();closeModal();render();toast(sb?"Connected successfully":"Connection failed — check the production project")};
@@ -283,13 +283,13 @@ const neisAuthStorage={
 
 async function initSupabase(){
   try{
-    if(localStorage.getItem("neis-sb-key")==="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYXNlIiwicmVmIjoieWRpZWlqZ3lucWxja2FjemFsanUiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc4OTkxMDk5NywiZXhwIjoyMTA1NDg2OTk3fQ.-R1cyhVDY1WqHBHmkqCH8Y9pR8Z5-CHOjs93g4ojd2A")localStorage.removeItem("neis-sb-key");
-    if(localStorage.getItem("neis-sb-url")&&localStorage.getItem("neis-sb-url")!=="https://ydieijgynqlckaczalju.supabase.co")localStorage.removeItem("neis-sb-url");
+    localStorage.removeItem("neis-sb-key");
+    localStorage.removeItem("neis-sb-url");
   }catch(_){}
   if(sb)return true;
   if(supabaseInitPromise)return supabaseInitPromise;
   supabaseInitPromise=(async()=>{
-    const config=window.NEIS_CONFIG||{};const u=config.supabaseUrl||localStorage.getItem("neis-sb-url"),k=config.supabaseAnonKey||localStorage.getItem("neis-sb-key");
+    const config=window.NEIS_CONFIG||{};const u=config.supabaseUrl||"https://supabase.neiscircle.site",k=config.supabaseAnonKey;
     if(!u||!k)return false;
     if(!window.supabase?.createClient){
       const loaded=await loadSupabaseLibrary();
@@ -373,7 +373,8 @@ async function loadLiveData(){
   if(realtimeChannel)await sb.removeChannel(realtimeChannel);realtimeChannel=sb.channel("neis-live").on("postgres_changes",{event:"*",schema:"public",table:"posts"},async()=>{await loadLiveData();render()}).on("postgres_changes",{event:"*",schema:"public",table:"comments"},async()=>{await loadLiveData();render()}).subscribe();
 }
 async function googleSignIn(){
-  if(!sb){setup();return}
+  if(!sb)await initSupabase();
+  if(!sb){if(typeof toast==="function")toast("Could not connect to NEIS Circle. Please refresh and try again.");return}
   try{
     // Capture the authorization URL first, so the verifier is durably stored
     // before leaving this exact browser origin for Google.
