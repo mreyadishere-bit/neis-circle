@@ -85,7 +85,18 @@ def compose_cmd(include_edge=True, include_cloudflare=None):
 def call(args, timeout=70, check=True):
     r = subprocess.run(args, text=True, capture_output=True, cwd=ROOT, timeout=timeout)
     if check and r.returncode:
-        raise RuntimeError('COMMAND_FAILED')
+        # Compose config/log output contains secrets; output a safe operation
+        # label and exit status, never stdout/stderr or any argument values.
+        label = 'OTHER'
+        if args and args[0] == 'node':
+            label = 'NODE_SYNTAX'
+        elif 'compose' in args and 'config' in args:
+            label = 'COMPOSE_CONFIG'
+        elif 'compose' in args and 'up' in args:
+            label = 'COMPOSE_UP'
+        elif 'exec' in args:
+            label = 'CONTAINER_EXEC'
+        raise RuntimeError('COMMAND_FAILED_' + label + '_EXIT_' + str(r.returncode))
     return r.stdout
 
 
