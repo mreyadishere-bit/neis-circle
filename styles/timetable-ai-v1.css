@@ -171,3 +171,20 @@
 .ttai-work-cancel:focus-visible{outline:2px solid #2f7db8;outline-offset:2px}
 @keyframes ttai-work-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.ttai-work-spinner{animation:none}}
+
+/* Timetable review: one predictable scroll area, compact sticky actions. */
+.ttai-panel{max-height:calc(100dvh - 20px)}
+.ttai-chat{scrollbar-gutter:stable;overscroll-behavior:contain}
+.ttai-wiz-lessons{max-height:none;overflow:visible;padding-inline-end:0}
+.ttai-reviewbar{max-height:min(38dvh,310px);overflow-y:auto;scrollbar-width:thin;padding:10px 14px;display:grid;gap:7px;box-shadow:0 -7px 20px rgba(18,41,63,.04)}
+.ttai-review-toggle{width:100%;text-align:start;font-size:12px;font-weight:700;min-height:32px}
+.ttai-review-toggle::after{content:"⌄";float:right;opacity:.7}
+.ttai-review-toggle[aria-expanded="true"]::after{content:"⌃"}
+.ttai-diff{max-height:116px;overflow-y:auto}
+.ttai-reviewbar .ttai-apply{margin:0}
+.ttai-reviewbar>.ttai-link{display:inline-flex;justify-self:center;padding:3px 8px;min-height:27px}
+.ttai-wiz-warnings{overflow-wrap:anywhere}
+.ttai-wiz-warnings summary{outline-offset:3px}
+.ttai-wiz-field input,.ttai-wiz-field select{font-size:13px;min-height:39px}
+.ttai-wiz-lesson{padding:13px;gap:11px}
+@media(max-width:600px){.ttai-reviewbar{max-height:32dvh}.ttai-wizard{padding:12px}.ttai-chat{padding:12px 10px}}
