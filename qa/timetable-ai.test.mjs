@@ -6,13 +6,13 @@ const FRONT = "scripts/timetable-ai-v1.js";
 const EDGE = "supabase/functions/timetable-ai/index.ts";
 const source = readFileSync(FRONT, "utf8");
 const server = readFileSync(EDGE, "utf8");
-assert(!/GEMINI_API_KEY/.test(source), "API key must never be in the browser script");
+assert(!/GROQ_API_KEY/.test(source), "API key must never be in the browser script");
 for (const required of ["sb.functions.invoke", "apply_timetable_ai_plan", "stateAI.history", "stateAI.source",
   "diff()", "window.confirm", "file.size>5*1024*1024"]) {
   assert(source.includes(required), "Missing timetable AI invariant: "+required);
 }
 for (const required of ["client.auth.getUser", "consume_timetable_ai_quota", "responseSchema",
-  "MAX_FILE_BYTES", "GEMINI_API_KEY"]) {
+  "MAX_FILE_BYTES", "GROQ_API_KEY"]) {
   assert(server.includes(required), "Missing server protection: "+required);
 }
 
@@ -38,7 +38,7 @@ try {
         const msg=(body.message||"").toLowerCase();
         const course={key:"",title:"Physics",day_of_week:1,start_time:"09:00",
           end_time:"10:00",location:"School",notes:"",category:"Class"};
-        if(body.file)return {data:{reply:"I found Physics and Chemistry. Which do you take?",
+        if(body.images?.length)return {data:{reply:"I found Physics and Chemistry. Which do you take?",
           changed:false,entries:body.draft,extracted:[course,{...course,title:"Chemistry",start_time:"10:00",end_time:"11:00"}]},error:null};
         if(msg.includes("cancel"))return {data:{reply:"Okay, canceled.",changed:true,
           entries:[],extracted:body.source},error:null};
@@ -71,6 +71,7 @@ try {
   await page.getByText("Added Physics to your draft.").waitFor();
   assert(await page.locator(".ttai-apply").isVisible(), "Proposed class must offer a save button");
   const calls=await page.evaluate(()=>window.__calls);
+  assert.equal(calls[0].body.images.length,1,"Image should be passed as inline vision input");
   assert.equal(calls[1].body.source.length,2,"Next turn must retain document extraction");
   assert.equal(calls[1].body.history.length,2,"Next turn must retain conversational context");
   // User can undo previous plan without affecting saved rows.
