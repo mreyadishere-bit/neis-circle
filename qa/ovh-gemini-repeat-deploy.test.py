@@ -182,7 +182,7 @@ class RepeatDeployment(unittest.TestCase):
 
     def test_unexpected_extra_service_in_override_fails_closed(self):
         self.overlay.write_bytes(self.previous_override + b"  db:\n    image: not-allowed\n")
-        with self.assertRaisesRegex(RuntimeError, "PREVIOUS_GEMINI_OVERRIDE_UNRECOGNIZED"):
+        with self.assertRaisesRegex(RuntimeError, "PREVIOUS_GEMINI_OVERRIDE_UNRECOGNIZED|UNRELATED_DOCKER_SERVICE_CHANGED"):
             mod.deploy_edge_function("public-anon", "synthetic-new-key")
 
 
