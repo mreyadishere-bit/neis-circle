@@ -43,5 +43,13 @@ jobs:
           except Exception:raise SystemExit('RPC_RESULT_UNPARSEABLE')
           for k,v in result.items():
             print(k.upper()+'='+str(v).upper() if isinstance(v,bool) else k.upper()+'='+str(v))
+          funcsql="""select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='apply_timetable_ai_plan' limit 1"""
+          fn=subprocess.run(Docker+['exec',name,'psql','-U','postgres','-d','postgres','-At','-c',funcsql],capture_output=True,text=True,timeout=25)
+          if fn.returncode:raise SystemExit('RPC_FUNCTION_READ_FAILED')
+          lines=fn.stdout.splitlines()
+          for i,line in enumerate(lines):
+            if 'color' in line.lower() or 'p_plan' in line.lower():
+              # Schema-only source definitions, not table rows or values.
+              print('RPC_DEF_'+str(i+1)+'='+line.strip()[:230])
           print('RPC_READ_ONLY_INSPECTION=PASS')
           PY
