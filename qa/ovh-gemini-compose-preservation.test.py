@@ -155,17 +155,6 @@ class GeminiComposePreservation(unittest.TestCase):
                 "    ports:\n"
                 '      - "9000:9000"\n'
             )
-            (root/"gemini.yml").write_text(
-                "services:\n"
-                "  functions:\n"
-                "    env_file:\n"
-                f"      - {secret}\n"
-                "    volumes:\n"
-                "      - type: bind\n"
-                f"        source: {new_dir}\n"
-                "        target: /home/deno/functions\n"
-                "        read_only: true\n"
-            )
             def config(paths):
                 args=["docker", "compose", "--project-name", "neis-compose-check"]
                 for path in paths:
@@ -176,6 +165,21 @@ class GeminiComposePreservation(unittest.TestCase):
                     "Docker Compose could not merge the fixture")
                 return json.loads(result.stdout)
             before=config(["base.yml","existing.yml"])
+            original_mount=next(v for v in before["services"]["functions"]["volumes"]
+                if v.get("target")=="/home/deno/functions")
+            # This option comes from Docker's short-bind notation and MUST
+            # survive an additive override even if the original YAML omits it.
+            self.assertTrue(original_mount.get("bind",{}).get("create_host_path"))
+            updated_mount=copy.deepcopy(original_mount)
+            updated_mount["source"]=str(new_dir)
+            (root/"gemini.yml").write_text(
+                "services:\n"
+                "  functions:\n"
+                "    env_file:\n"
+                f"      - {secret}\n"
+                "    volumes:\n"
+                "      - "+json.dumps(updated_mount,separators=(",",":"))+"\n"
+            )
             after=config(["base.yml","existing.yml","gemini.yml"])
             deploy.GEMINI_ENV_FILE = secret
             self.assertValidCompose(before,after,old_dir,new_dir)
