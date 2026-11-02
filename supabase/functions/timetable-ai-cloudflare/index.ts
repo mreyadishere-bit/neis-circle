@@ -162,6 +162,12 @@ export function extractPdfSubjectHeaders(evidence: string): string[] {
   const initial=parse(lines[headerIndex]).filter(x=>/^(Arabic|Math|Physic|Physics|Chemist|Chemistry|English|Biolog|Biology|ICT|Histor)/i.test(x.text));
   if(initial.length<4)return [];
   const columns=initial.map(c=>({x:c.x,words:[c.text]}));
+  // A level can also share the first header line with its subject (ICT L1).
+  for(const part of parse(lines[headerIndex])){
+    if(!/^l[12]$/i.test(part.text))continue;
+    const prior=[...columns].filter(c=>c.x<=part.x).sort((a,b)=>b.x-a.x)[0];
+    if(prior&&part.x-prior.x<60)prior.words.push(part.text);
+  }
   // Header fragments wrap onto subsequent lines in the original school PDF.
   for(let i=headerIndex+1;i<Math.min(lines.length,headerIndex+5);i++){
     if(/x=\d+:(Sat|Sun|Mon|Tue|Wed|Thu|Fri)\b/i.test(lines[i]))break;
