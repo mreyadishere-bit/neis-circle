@@ -586,7 +586,7 @@ async function toData(file){
           group.parts.sort((a,b)=>a.x-b.x);
           return "y="+group.y+" "+group.parts.map(part=>"x="+part.x+":"+part.text).join(" | ");
         });
-        textEvidence.push("PAGE "+pageNum+" POSITIONED PDF TEXT\\n"+lines.join("\\n").slice(0,11000));
+        textEvidence.push("PAGE "+pageNum+" POSITIONED PDF TEXT\n"+lines.join("\n").slice(0,11000));
       }catch{
         // Scanned PDFs have no text layer; visual extraction still works.
       }
@@ -606,7 +606,7 @@ async function toData(file){
         name:file.name+" — page "+pageNum, mimeType:"image/jpeg", data
       });
     }
-    return {attachments,textEvidence:textEvidence.join("\\n\\n").slice(0,38000)};
+    return {attachments,textEvidence:textEvidence.join("\n\n").slice(0,38000)};
   }finally{
     if(doc)await doc.destroy();
   }
