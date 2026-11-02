@@ -156,40 +156,42 @@ const SYSTEM_INSTRUCTION = [
 export function extractPdfSubjectHeaders(evidence: string): string[] {
   const page=(evidence||"").split(/PAGE 2 POSITIONED PDF TEXT/)[0];
   const lines=page.split("\n");
-  const headerIndex=lines.findIndex(line=>/x=\d+:Day\b/i.test(line) && /x=\d+:(Math|Physic|Arabic|English|Chemist)/i.test(line));
-  if(headerIndex<0)return [];
-  const parse=(line:string)=>[...line.matchAll(/x=(\d+):([^|\n]+)/g)].map(m=>({x:Number(m[1]),text:m[2].trim()}));
-  const initial=parse(lines[headerIndex]).filter(x=>/^(Arabic|Math|Physic|Physics|Chemist|Chemistry|English|Biolog|Biology|ICT|Histor)/i.test(x.text));
-  if(initial.length<4)return [];
-  const columns=initial.map(c=>({x:c.x,words:[c.text]}));
-  // A level can also share the first header line with its subject (ICT L1).
-  for(const part of parse(lines[headerIndex])){
-    if(!/^l[12]$/i.test(part.text))continue;
-    const prior=[...columns].filter(c=>c.x<=part.x).sort((a,b)=>b.x-a.x)[0];
-    if(prior&&part.x-prior.x<60)prior.words.push(part.text);
-  }
-  // Header fragments wrap onto subsequent lines in the original school PDF.
-  for(let i=headerIndex+1;i<Math.min(lines.length,headerIndex+5);i++){
-    if(/x=\d+:(Sat|Sun|Mon|Tue|Wed|Thu|Fri)\b/i.test(lines[i]))break;
-    for(const part of parse(lines[i])){
-      const closest=columns.reduce((a,b)=>Math.abs(a.x-part.x)<=Math.abs(b.x-part.x)?a:b);
-      if(Math.abs(closest.x-part.x)<52 && /^(?:[a-z]{1,5}|l\s*[12]|[12])$/i.test(part.text))
-        closest.words.push(part.text);
-    }
-  }
-  const canonical=(raw:string)=>{
-    const t=raw.replace(/\s+/g,"").toLowerCase();
-    const names:[RegExp,string][]=[
-      [/^arabic/,"Arabic"],[/^math/,"Math"],[/^physics?|^physic/,"Physics"],
-      [/^chemist/,"Chemistry"],[/^english/,"English"],[/^biolog/,"Biology"],
-      [/^ict/,"ICT"],[/^histor/,"History"]];
-    const found=names.find(([re])=>re.test(t));
-    if(!found)return "";
-    const level=t.match(/l([12])\b/)||t.match(/(?:^|[^0-9])([12])$/);
-    return found[1]+(level?" L"+(level[1]):"");
+  // PDF text may split words into different y groups. Find the header band by
+  // the FIRST timetable weekday, not by one exact "Day Math ..." text line.
+  const parsed=lines.flatMap(line=>{
+    const y=Number(line.match(/^y=(-?\d+)/)?.[1]);
+    return [...line.matchAll(/x=(-?\d+):([^|\n]+)/g)].map(m=>({
+      x:Number(m[1]),y,text:m[2].trim()
+    })).filter(t=>Number.isFinite(y)&&Number.isFinite(t.x));
+  });
+  const firstDay=parsed.find(t=>/^(Sat|Sun|Mon|Tue|Wed|Thu|Fri)$/i.test(t.text));
+  if(!firstDay)return [];
+  const candidates=parsed.filter(t=>t.y<firstDay.y && t.y>firstDay.y-160);
+  const headings=candidates.filter(t=>/^(Arabic|Math|Physic|Physics|Chemist|Chemistry|English|Biolog|Biology|ICT|Histor)$/i.test(t.text))
+    .sort((a,b)=>a.x-b.x);
+  if(headings.length<4)return [];
+  const pretty=(name:string)=>{
+    if(/^Math/i.test(name))return "Math";
+    if(/^Physic/i.test(name))return "Physics";
+    if(/^Chemist/i.test(name))return "Chemistry";
+    if(/^Biolog/i.test(name))return "Biology";
+    if(/^Histor/i.test(name))return "History";
+    if(/^English/i.test(name))return "English";
+    if(/^Arabic/i.test(name))return "Arabic";
+    if(/^ICT/i.test(name))return "ICT";
+    return "";
   };
-  const names=columns.map(c=>canonical(c.words.join(""))).filter(Boolean);
-  return names.length>=4?[...new Set(names)]:[];
+  const result:string[]=[];
+  for(const [i,h] of headings.entries()){
+    const next=headings[i+1]?.x??1050;
+    // A level sits below OR beside its heading, inside that subject's column.
+    const level=candidates.filter(t=>t.y>=h.y-5&&t.y<=h.y+55 &&
+       t.x>=h.x-12&&t.x<next&&/^l\s*[12]$/i.test(t.text))
+      .sort((a,b)=>Math.abs(a.y-h.y)-Math.abs(b.y-h.y))[0];
+    const title=pretty(h.text);
+    if(title)result.push(title+(level?" L"+level.text.replace(/\D/g,""):""));
+  }
+  return [...new Set(result)];
 }
 
 export function verifyPdfGridLessons(
