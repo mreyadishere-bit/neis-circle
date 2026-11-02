@@ -54,6 +54,13 @@ const expectedSelected=[
  ["French Gr11",0,"12:00","13:00"],
  ["Religion Gr11",1,"07:30","08:30"]
 ];
+// The user chose generic English, while the source PDF labels the
+// single available level as English L1. Do not erase level distinctions.
+const userScript=fs.readFileSync("scripts/timetable-ai-cloudflare-v1.js","utf8");
+assert.match(userScript,/function matchesSelectedSubject\(/);
+assert.match(userScript,/function subjectBase\(/);
+assert.match(userScript,/w\.missingSubjects=unavailable/);
+assert.match(userScript,/Add lessons for selected subjects before saving/);
 assert.equal(expectedSelected.length,9);
 assert.ok(expectedSelected.some(x=>x[0]==="Religion Gr11"&&x[2]==="07:30"));
 console.log("PDF_FOOTNOTE_RECOVERY=PASS");
