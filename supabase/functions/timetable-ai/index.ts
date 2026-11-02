@@ -275,11 +275,12 @@ CRITICAL RULES:
 async function callGeminiWithRetry(
   ai: GoogleGenAI,
   contents: Array<Record<string, unknown>>,
-  // A PDF request must never consume several multi-minute SDK attempts.
-  // Transient failures are returned to the UI, which preserves Retry + PDF.
-  maxRetries = 0,
+  // Retry only a *quick* 503 response, once. The 80s SDK deadline
+  // plus the 95s browser deadline must not turn into several minutes.
+  maxRetries = 1,
 ) {
   let lastError: unknown = null;
+  const requestStartedAt = Date.now();
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await ai.models.generateContent({
@@ -296,12 +297,17 @@ async function callGeminiWithRetry(
       lastError = err;
       const status = Number((err as { status?: number })?.status || 0);
       const msg = err instanceof Error ? err.message : String(err);
-      const isTransient = status === 503 || status === 504 ||
-        /overloaded|unavailable|timeout|network/i.test(msg);
-      if (!isTransient || attempt === maxRetries) {
+      // Google's 503 UNAVAILABLE signals temporary provider overload, not
+      // a bad PDF or exceeded user quota. One jittered backoff is appropriate
+      // only if the first 503 arrives quickly enough to fit the UI deadline.
+      const isProvider503 = status === 503 ||
+        (status === 0 && /503|high demand|service unavailable|overloaded/i.test(msg));
+      const canRetryWithinDeadline =
+        attempt < maxRetries && Date.now() - requestStartedAt < 10000;
+      if (!isProvider503 || !canRetryWithinDeadline) {
         throw err;
       }
-      const backoffMs = 450 * Math.pow(2, attempt) + Math.floor(Math.random() * 150);
+      const backoffMs = 1200 + Math.floor(Math.random() * 600);
       await new Promise((r) => setTimeout(r, backoffMs));
     }
   }
@@ -563,6 +569,17 @@ Deno.serve(async (request: Request) => {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Timetable AI Gemini error:", status, message.replace(/AIza[0-9A-Za-z-_]+/g, "[REDACTED]"));
 
+    if (status === 503 || /(?:503|high demand|UNAVAILABLE|service unavailable|overloaded)/i.test(message)) {
+      return respond(
+        {
+          error: "Gemini is temporarily overloaded (HTTP 503). Your PDF and message are saved in this chat. Please try Retry after about 20 seconds.",
+          code: "GEMINI_SERVICE_UNAVAILABLE_503",
+          retryAfterSeconds: 20,
+          provider: "gemini",
+        },
+        503,
+      );
+    }
     if (status === 429 || /429|quota|rate.?limit|resource_exhausted/i.test(message)) {
       return respond(
         {

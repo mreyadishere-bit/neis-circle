@@ -1,0 +1,33 @@
+name: Timetable Gemini 503 recovery regression (no OVH)
+on:
+  push:
+    branches: [fix/timetable-gemini-503-backoff-20261102]
+    paths:
+      - 'supabase/functions/timetable-ai/index.ts'
+      - 'qa/timetable-ai-gemini-503.test.mjs'
+      - '.github/workflows/verify-timetable-503-recovery.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/functions/timetable-ai/index.ts'
+      - 'qa/timetable-ai-gemini-503.test.mjs'
+      - '.github/workflows/verify-timetable-503-recovery.yml'
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install current tracked dependencies
+        run: bun install --frozen-lockfile
+      - name: Test 503 recovery logic and existing timetable functionality
+        run: |
+          node qa/timetable-ai-gemini-503.test.mjs
+          node qa/static-check.mjs
+          npm run qa:unit
