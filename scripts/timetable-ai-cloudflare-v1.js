@@ -184,6 +184,9 @@ function startWizard(extracted){
     wizard.colors[subjectKey(name)]=(!legacyAllBlue&&existing?.color)||
       suggestedColor(name,i);
   });
+  for(const name of subjects){
+    if(oldUniqueSubjects.has(subjectKey(name)))wizard.selected.add(subjectKey(name));
+  }
   stateAI.wizard=wizard;
 }
 function wizardButton(label,kind,onClick,disabled=false){
@@ -329,6 +332,13 @@ function drawWizard(chat){
       grid.append(chip);
     });
     panel.append(grid);
+    const shortcuts=el("div","ttai-wiz-toolbar");
+    shortcuts.append(wizardButton(wizardText("Select all","اختيار الكل"),"ttai-subtle",()=>{
+      w.subjects.forEach(name=>w.selected.add(subjectKey(name)));draw();
+    }),wizardButton(wizardText("Clear selection","إلغاء التحديد"),"ttai-subtle",()=>{
+      w.selected.clear();draw();
+    }));
+    panel.append(shortcuts);
     const count=w.selected.size;
     panel.append(el("p","ttai-wiz-count",count+" "+wizardText("subjects selected","مواد تم اختيارها")));
     wizardToolbar(panel,null,()=>{w.step="details";draw()},count===0);
@@ -389,9 +399,10 @@ function drawWizard(chat){
         "صحّح اليوم والوقت والمادة واللون والمكان. مش هنحفظ إلا بموافقتك.")
     ));
     if(w.warnings.length){
+      panel.append(el("p","ttai-wiz-hint",wizardText("Unverified lessons were not automatically added. Review the items below against your original PDF.", "الحصص غير المؤكدة لم تُضف تلقائيًا. راجعها مع ملفك الأصلي.")));
       const warning=el("details","ttai-wiz-warnings");
-      warning.append(el("summary",null,wizardText("Unclear cells — check the original file ("+w.warnings.length+")",
-        "تفاصيل غير واضحة — راجع الملف الأصلي ("+w.warnings.length+")")));
+      warning.append(el("summary",null,wizardText("AI could not verify "+w.warnings.length+" item(s) — tap to see why",
+        "في "+w.warnings.length+" تفاصيل لم يتأكد منها الذكاء الاصطناعي — اضغط للتفاصيل")));
       w.warnings.forEach(item=>warning.append(el("p",null,String(item).slice(0,220))));
       panel.append(warning);
     }
@@ -439,6 +450,11 @@ function drawWizard(chat){
 
 function draw(){
   const panel=ensurePanel();
+  const previousChat=panel.querySelector(".ttai-chat");
+  const previousTop=previousChat?previousChat.scrollTop:null;
+  const step=stateAI.wizard?.step||"none";
+  const stepChanged=step!==stateAI.lastDrawnWizardStep;
+  stateAI.lastDrawnWizardStep=step;
   if(!stateAI.open){panel.hidden=true;return}
   panel.hidden=false;
   panel.dir=lang()==="ar"?"rtl":"ltr";
@@ -556,9 +572,16 @@ function draw(){
   panel.append(footer);
   // Keep the current review position when editing. Do not jump to the bottom
   // and hide the active lesson after every input change.
-  if(stateAI.wizard?.step==="review")chat.scrollTop=stateAI.reviewScroll||0;
+  if(stateAI.wizard){
+    if(stepChanged){
+      const heading=chat.querySelector(".ttai-wizard");
+      chat.scrollTop=heading?Math.max(0,heading.offsetTop-chat.offsetTop-12):0;
+    }else chat.scrollTop=previousTop??stateAI.reviewScroll??0;
+  }else if(previousTop!==null&&!stateAI.busy)chat.scrollTop=previousTop;
   else chat.scrollTop=chat.scrollHeight;
-  chat.addEventListener("scroll",()=>{if(stateAI.wizard?.step==="review")stateAI.reviewScroll=chat.scrollTop},{passive:true});
+  chat.addEventListener("scroll",()=>{
+    if(stateAI.wizard)stateAI.reviewScroll=chat.scrollTop;
+  },{passive:true});
 }
 function setFile(file){
   if(!["application/pdf","image/png","image/jpeg","image/webp"].includes(file.type)){
