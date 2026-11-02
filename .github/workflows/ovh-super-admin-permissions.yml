@@ -1,0 +1,105 @@
+name: OVH Super Admin Permissions
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
+      - 'scripts/super-admin-management-v1.js'
+      - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
+      - 'qa/super-admin-contract.test.mjs'
+      - '.github/workflows/ovh-super-admin-permissions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
+      - 'scripts/super-admin-management-v1.js'
+      - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
+      - '.github/workflows/ovh-super-admin-permissions.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-super-admin-20261103
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          set -euo pipefail
+          node --check scripts/super-admin-management-v1.js
+          node qa/super-admin-contract.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-super-admin-20261103.py
+  database-dry-run:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up SSH with pinned host keys
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Test new SQL functions in a rolled-back database transaction
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/super-admin-20261103
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103013000_super_admin_permissions.sql "$target:$stage/schema.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -c '"'"'
+          import pathlib,subprocess
+          p=pathlib.Path("/home/ubuntu/neis-backups/super-admin-20261103/schema.sql")
+          lines=[s for s in p.read_text().splitlines()
+            if s.strip().lower() not in ("begin;","commit;") and not s.lower().startswith("notify pgrst")]
+          body="begin;\n"+"\n".join(lines)+"\nrollback;\n"
+          base=["sudo","-n","/usr/bin/docker","exec","-i","supabase-db",
+           "psql","-X","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres"]
+          run=subprocess.run(base,input=body,text=True,capture_output=True,timeout=55)
+          if run.returncode:
+            print("SUPER_ADMIN_DB_DRY_RUN=FAILED")
+            raise SystemExit(1)
+          print("SUPER_ADMIN_DB_DRY_RUN=PASS")
+          '"'"''
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: database-dry-run
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy and verify Super Admin controls
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage=/home/ubuntu/neis-backups/super-admin-20261103
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/super-admin-management-v1.js "$target:$stage/ui.js"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -' < scripts/ops/ovh-deploy-super-admin-20261103.py
