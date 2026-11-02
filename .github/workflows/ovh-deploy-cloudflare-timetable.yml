@@ -1,0 +1,82 @@
+name: OVH Deploy Cloudflare Workers AI Timetable
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/timetable-ai-cloudflare/index.ts'
+      - 'scripts/timetable-ai-cloudflare-v1.js'
+      - 'scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py'
+      - '.github/workflows/ovh-deploy-cloudflare-timetable.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-production-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Validate code and existing application before deploy
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          node --check scripts/timetable-ai-cloudflare-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
+          bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/cloudflare-ts-syntax-check
+          node qa/static-check.mjs
+          npm run qa:unit
+      - name: Confirm credentials are available without printing them
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$CF_TOKEN" && test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          [[ "$CF_ACCOUNT_ID" =~ ^[[:xdigit:]]{32}$ ]]
+          echo 'CLOUDFLARE_DEPLOY_CREDENTIALS=PRESENT'
+      - name: Stage protected assets and activate release on OVH
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          OVH_SSH_USER: ${{ vars.OVH_SSH_USER }}
+          OVH_SSH_PORT: ${{ vars.OVH_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          USER="${OVH_SSH_USER:-ubuntu}"
+          PORT="${OVH_SSH_PORT:-22}"
+          STAGE_DIR='/home/ubuntu/neis-backups/timetable-ai-cloudflare-20261102-v3'
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/neis_cloudflare_id
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/neis_cloudflare_id ~/.ssh/known_hosts
+          SSH=(-i ~/.ssh/neis_cloudflare_id -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15)
+          ssh "${SSH[@]}" "$USER@$OVH_HOST" "umask 077; mkdir -p '$STAGE_DIR'; chmod 700 '$STAGE_DIR'"
+          PRIVATE_ENV="$RUNNER_TEMP/cloudflare-deploy-secrets.env"
+          (umask 077; printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT_ID" > "$PRIVATE_ENV")
+          chmod 600 "$PRIVATE_ENV"
+          scp -P "$PORT" -i ~/.ssh/neis_cloudflare_id -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            scripts/timetable-ai-cloudflare-v1.js \
+            styles/timetable-ai-v1.css \
+            scripts/01-core.js \
+            supabase/functions/timetable-ai-cloudflare/index.ts \
+            scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py \
+            "$USER@$OVH_HOST:$STAGE_DIR/"
+          scp -P "$PORT" -i ~/.ssh/neis_cloudflare_id -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
+            "$PRIVATE_ENV" "$USER@$OVH_HOST:$STAGE_DIR/cloudflare-deploy-secrets.env"
+          rm -f "$PRIVATE_ENV"
+          ssh "${SSH[@]}" "$USER@$OVH_HOST" "chmod 600 '$STAGE_DIR/cloudflare-deploy-secrets.env' && python3 '$STAGE_DIR/ovh-deploy-timetable-ai-cloudflare-v1.py'"
+          echo 'OVH_CLOUDFLARE_RELEASE=SUCCESS'
