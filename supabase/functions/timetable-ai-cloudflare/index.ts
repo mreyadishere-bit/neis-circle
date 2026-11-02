@@ -359,10 +359,11 @@ async function callCloudflare(token: string, account: string, messages: unknown[
 // Gemini is the preferred multimodal reader if a server-side Gemini key exists.
 // Keep the current Cloudflare implementation as a safe fallback for unavailable
 // Gemini credentials/quotas; never expose either key in the browser.
-const GEMINI_MODEL = "gemini-3.8-flash";
-async function callGemini(key: string, messages: Array<{role:string;content:unknown}>) {
+const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_FAST_FALLBACK = "gemini-3.5-flash-lite";
+async function callGemini(key: string, messages: Array<{role:string;content:unknown}>, model=GEMINI_MODEL, timeoutMs=16000) {
   const controller=new AbortController();
-  const deadline=setTimeout(()=>controller.abort(),24000);
+  const deadline=setTimeout(()=>controller.abort(),timeoutMs);
   try{
     const system=String(messages[0]?.content||"");
     const content=messages[1]?.content;
@@ -374,10 +375,10 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
       if(!match)throw new Error("INVALID_GEMINI_IMAGE");
       return {inlineData:{mimeType:match[1],data:match[2]}};
     });
-    const url="https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent";
+    const url="https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent";
     const response=await fetch(url,{method:"POST",headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
       body:JSON.stringify({systemInstruction:{parts:[{text:system}]},
-        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:8192,thinkingConfig:{thinkingLevel:"LOW"}}}),
+        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:8192}}),
       signal:controller.signal});
     if(!response.ok){
       const err=new Error("GEMINI_HTTP_ERROR") as Error & {status?:number};
@@ -489,12 +490,24 @@ Deno.serve(async (request: Request) => {
     let actualProvider="cloudflare";
     let raw:string;
     if(geminiKey){
-      try{raw=await callGemini(geminiKey,messages);actualProvider="gemini"}
-      catch(e){
-        // 429 or provider outage: retain timetable import with existing relay.
-        const status=Number((e as {status?:number}).status||0);
-        if(status!==429&&status!==503&&status!==502&&status!==404)throw e;
-        raw=await callCloudflare(token,account,messages,16000);
+      try {
+        raw=await callGemini(geminiKey,messages,GEMINI_MODEL,17000);
+        actualProvider="gemini";
+      } catch(primaryError) {
+        // This faster model has passed a real multimodal API smoke test using
+        // the same configured key. Do not depend on the slow 3.8 model.
+        try {
+          raw=await callGemini(geminiKey,messages,GEMINI_FAST_FALLBACK,12000);
+          actualProvider="gemini-lite";
+        } catch(secondaryError) {
+          const primaryStatus=Number((primaryError as {status?:number}).status||0);
+          const secondaryStatus=Number((secondaryError as {status?:number}).status||0);
+          console.error("Timetable Gemini inference failed",JSON.stringify({
+            primaryStatus,secondaryStatus,primaryType:primaryError instanceof Error?primaryError.name:"unknown",
+            secondaryType:secondaryError instanceof Error?secondaryError.name:"unknown"
+          }));
+          raw=await callCloudflare(token,account,messages,12000);
+        }
       }
     }else raw=await callCloudflare(token,account,messages);
     const parsed = parseModelObject(raw);
@@ -561,7 +574,7 @@ Deno.serve(async (request: Request) => {
         ].slice(0, 40),
         detected_lessons: discoveryMode ? groundedLessons : (modelLessons.length ? validateAndNormalizeEntries(modelLessons) : entries),
       },
-      model: actualProvider==="gemini"?GEMINI_MODEL:PRIMARY_MODEL,
+      model: actualProvider==="gemini"?GEMINI_MODEL:actualProvider==="gemini-lite"?GEMINI_FAST_FALLBACK:PRIMARY_MODEL,
       provider: actualProvider,
     });
   } catch (error: unknown) {
