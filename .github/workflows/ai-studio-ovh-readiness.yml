@@ -1,0 +1,84 @@
+name: AI Studio Push — OVH Readiness (Read-only)
+on:
+  push:
+    branches:
+      - diagnostics/ai-studio-live-20261102
+    paths:
+      - .github/workflows/ai-studio-ovh-readiness.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static Gemini integration inspection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('index.html').read_text()
+          edge=Path('supabase/functions/timetable-ai/index.ts').read_text()
+          new=Path('scripts/timetable-ai-gemini-v1.js').read_text()
+          print('REPO_CURRENT_COMMIT='+__import__('subprocess').check_output(['git','rev-parse','--short','HEAD'],text=True).strip())
+          print('REPO_GEMINI_JS='+str('gemini-3.8-flash' in new).upper())
+          print('REPO_GEMINI_JS_REFERENCED_BY_HTML='+str('scripts/timetable-ai-gemini-v1.js' in html).upper())
+          print('REPO_OLD_AI_REFERENCED_BY_HTML='+str('scripts/timetable-ai-v1.js' in html).upper())
+          print('REPO_BACKEND_PROVIDER='+('GEMINI' if 'GoogleGenAI' in edge else 'OTHER'))
+          print('REPO_NODE_BACKEND_DECLARED='+str(Path('server.mjs').is_file()).upper())
+          print('REPO_SEPARATE_GEMINI_DEPLOY_WORKFLOW='+str(Path('.github/workflows/ovh-deploy-timetable-ai-gemini-v1.yml').exists()).upper())
+          PY
+      - name: Check connection and provider key presence (never print values)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          GEMINI: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$GEMINI" ]; then echo 'GITHUB_GEMINI_API_KEY=PRESENT'; else echo 'GITHUB_GEMINI_API_KEY=MISSING'; fi
+          if [ -z "$HOST" ] || [ -z "$KEY" ] || [ -z "$KNOWN" ]; then
+            echo 'OVH_SSH=NOT_CONFIGURED'
+            exit 0
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          echo 'OVH_SSH=CONFIGURED'
+          ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          def docker(container):
+              p=subprocess.run(['sudo','-n','/usr/bin/docker','inspect',container],
+                text=True,capture_output=True,timeout=25)
+              if p.returncode: return {}
+              try: return json.loads(p.stdout)[0]
+              except Exception:return {}
+          def mount(info,dest):
+              paths=[v.get('Source') for v in info.get('Mounts',[])
+                if v.get('Type')=='bind' and v.get('Destination')==dest]
+              return Path(paths[0]) if len(paths)==1 else None
+          frontend=docker('supabase-caddy')
+          edge=docker('supabase-edge-functions')
+          print('OVH_CADDY_RUNNING='+str(frontend.get('State',{}).get('Running') is True).upper())
+          print('OVH_EDGE_RUNNING='+str(edge.get('State',{}).get('Running') is True).upper())
+          f=mount(frontend,'/srv/neis-circle')
+          e=mount(edge,'/home/deno/functions')
+          if f and (f/'index.html').exists():
+              html=(f/'index.html').read_text()
+              print('OVH_GEMINI_SCRIPT_ACTIVE='+str('scripts/timetable-ai-gemini-v1.js' in html).upper())
+              print('OVH_OLD_TIMETABLE_AI_ACTIVE='+str('scripts/timetable-ai-v1.js' in html).upper())
+              print('OVH_TIMETABLE_PRESENT='+str('scripts/timetable-v147.js' in html).upper())
+          else: print('OVH_FRONTEND_MOUNT=UNKNOWN')
+          if e and (e/'timetable-ai'/'index.ts').is_file():
+              src=(e/'timetable-ai'/'index.ts').read_text()
+              print('OVH_AI_EDGE_BACKEND='+('GEMINI' if 'GoogleGenAI' in src
+                else 'GROQ' if 'api.groq.com' in src else 'UNKNOWN'))
+          else:print('OVH_AI_EDGE_BACKEND=MISSING')
+          env={x.split('=',1)[0] for x in edge.get('Config',{}).get('Env',[]) if '=' in x}
+          print('OVH_GEMINI_KEY_NAME_IN_EDGE_ENV='+str('GEMINI_API_KEY' in env).upper())
+          print('OVH_GROQ_KEY_NAME_IN_EDGE_ENV='+str('GROQ_API_KEY' in env).upper())
+          PY
