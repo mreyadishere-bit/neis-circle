@@ -1,0 +1,89 @@
+name: Timetable AI Groq Vision Integration Smoke
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - '.github/workflows/timetable-ai-vision-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install small image fixture generator
+        run: python3 -m pip install --quiet pillow
+      - name: Test REAL Groq vision and strict JSON with synthetic timetable only
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os,sys,json,base64,io,urllib.request,urllib.error
+          from PIL import Image,ImageDraw,ImageFont
+          if not os.environ.get('GROQ_API_KEY','').startswith('gsk_'):
+            print('VISION=BLOCKED_NO_VALID_SECRET');sys.exit(1)
+          im=Image.new('RGB',(1080,420),'white')
+          dr=ImageDraw.Draw(im)
+          font='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          f=ImageFont.truetype(font,34)
+          dr.rectangle((10,10,1070,410),outline='black',width=3)
+          dr.text((45,35),'WEEKLY TIMETABLE - TEST DATA',font=f,fill='black')
+          dr.text((45,145),'Monday | Physics L2 | 09:00 - 10:00',font=f,fill='black')
+          dr.text((45,245),'Tuesday | Maths L2 | 11:00 - 12:00',font=f,fill='black')
+          out=io.BytesIO();im.save(out,format='JPEG',quality=87)
+          image='data:image/jpeg;base64,'+base64.b64encode(out.getvalue()).decode()
+          row={'type':'object','additionalProperties':False,'properties':{
+            'key':{'type':'string'},'title':{'type':'string'},
+            'day_of_week':{'type':'integer'},'start_time':{'type':'string'},
+            'end_time':{'type':'string'},'location':{'type':'string'},
+            'category':{'type':'string'},'notes':{'type':'string'}
+            },'required':['key','title','day_of_week','start_time',
+            'end_time','location','category','notes']}
+          schema={'type':'object','additionalProperties':False,
+            'properties':{'reply':{'type':'string'},'changed':{'type':'boolean'},
+            'entries':{'type':'array','items':row},
+            'extracted':{'type':'array','items':row}},
+            'required':['reply','changed','entries','extracted']}
+          system=('You are a timetable assistant. Days Sunday=0 Monday=1 Tuesday=2. '
+            'Read the attached timetable. No saved entries currently. '
+            'The user asks to add ONLY Physics L2 and Maths L2. '
+            'Extract the rows from the image and propose entries for them with '
+            'accurate times and day_of_week. Return JSON matching the schema.')
+          payload={'model':'qwen/qwen3.8-27b',
+            'messages':[{'role':'system','content':system},
+             {'role':'user','content':[{'type':'text','text':
+             'Here is my timetable. I only take Physics L2 and Maths L2. Please add both.'},
+             {'type':'image_url','image_url':{'url':image}}]}],
+            'response_format':{'type':'json_schema',
+              'json_schema':{'name':'timetable_plan','schema':schema,'strict':True}},
+            'max_completion_tokens':850,'temperature':0.2,'reasoning_effort':'none'}
+          req=urllib.request.Request('https://api.groq.com/openai/v1/chat/completions',
+            data=json.dumps(payload).encode(),
+            headers={'Authorization':'Bearer '+os.environ['GROQ_API_KEY'],
+                     'Content-Type':'application/json','User-Agent':'NEIS-Circle-Visual-Smoke/1.0'},
+            method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=35) as res:
+              output=json.load(res)
+          except urllib.error.HTTPError as err:
+            print('GROQ_VISION=HTTP_'+str(err.code))
+            sys.exit(1)
+          except Exception:
+            print('GROQ_VISION=REQUEST_FAILED')
+            sys.exit(1)
+          try:
+            data=json.loads(output['choices'][0]['message']['content'])
+            rows=data['entries']
+            physics=[r for r in rows if 'Physics' in r['title']]
+            maths=[r for r in rows if 'Math' in r['title']]
+            assert physics and maths
+            assert physics[0]['day_of_week']==1 and physics[0]['start_time']=='09:00'
+            assert maths[0]['day_of_week']==2 and maths[0]['start_time']=='11:00'
+            print('GROQ_VISION=PASS_SYNTHETIC_TIMETABLE')
+            print('GROQ_OUTPUT=STRICT_JSON_2_ROWS')
+          except Exception:
+            print('GROQ_VISION=UNEXPECTED_SCHEMA_OR_OCR')
+            sys.exit(1)
+          PY
