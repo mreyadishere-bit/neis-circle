@@ -1,0 +1,59 @@
+name: Verify Guided Timetable Wizard live on OVH (read-only)
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-live-guided-timetable-v2.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Verify active frontend, color selection wizard and extraction-only backend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,urllib.request
+          from pathlib import Path
+          def inspect(name,destination):
+              p=subprocess.run(['sudo','-n','/usr/bin/docker','inspect',name],text=True,capture_output=True,timeout=25)
+              assert p.returncode==0
+              info=json.loads(p.stdout)[0]
+              assert info['State']['Running']
+              mounts=[m['Source'] for m in info['Mounts'] if m.get('Destination')==destination]
+              assert len(mounts)==1
+              return Path(mounts[0])
+          front=inspect('supabase-caddy','/srv/neis-circle')
+          edge=inspect('supabase-edge-functions','/home/deno/functions')
+          html=(front/'index.html').read_text()
+          js=(front/'scripts/timetable-ai-v1.js').read_text()
+          css=(front/'styles/timetable-ai-v1.css').read_text()
+          api=(edge/'timetable-ai-cloudflare/index.ts').read_text()
+          assert 'function drawWizard(chat)' in js
+          assert 'startWizard(data.extracted)' in js
+          assert 'mode:file?"discover":"edit"' in js
+          assert 'const editable=["title","day_of_week","start_time","end_time","location","notes","category","color"]' in js
+          assert 'SUBJECT_COLORS' in js and 'is-selected' in js
+          assert '.ttai-wiz-subjects' in css and '.ttai-wiz-lesson' in css
+          assert '?v=wizard-' in html and '?v=cloudflare-' in html
+          assert 'DISCOVERY_INSTRUCTION' in api and 'discoveryMode ? []' in api
+          assert 'client.auth.getUser(jwt)' in api
+          with urllib.request.urlopen('https://www.neiscircle.site/',timeout=20) as r:
+              assert r.status==200
+          print('LIVE_GUIDED_SUBJECT_SELECTION=PASS')
+          print('LIVE_COLOR_PRESERVATION_AND_EDITING=PASS')
+          print('LIVE_EXTRACTION_ONLY_BACKEND=PASS')
+          print('LIVE_STYLESHEET_CACHE_VERSION=PASS')
+          print('LIVE_PRODUCTION_HTTP_200=PASS')
+          PY
