@@ -266,10 +266,12 @@ async function invokeWithDeadline(body){
   let deadline;
   const timeout=new Promise((_,reject)=>{
     deadline=setTimeout(()=>{
-      controller.abort();
+      // Reject first so an AbortError from the SDK cannot hide our
+      // helpful timeout message or cause the UI to remain pending.
       reject(new Error(lang()==="ar"
         ?"استغرق تحليل الجدول وقتًا أطول من المتوقع. أعد المحاولة؛ الملف والرسالة ما زالا محفوظين."
         :"Timetable analysis timed out. Please retry; your PDF and message are preserved."));
+      controller.abort();
     },AI_REQUEST_DEADLINE_MS);
   });
   try{
