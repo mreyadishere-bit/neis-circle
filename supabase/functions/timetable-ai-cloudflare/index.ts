@@ -712,16 +712,28 @@ Deno.serve(async (request: Request) => {
         }
       }
     }else raw=await callCloudflare(token,account,messages);
-    const parsed = parseModelObject(raw);
+    let parsed = parseModelObject(raw);
     // Discovery returns "extracted", not a saveable "entries" array. The
     // previous check rejected correct extraction responses and wasted the
     // student's entire upload. Accept a direct extraction object as well.
-    const extractedObject = parsed?.extracted && typeof parsed.extracted === "object"
+    let extractedObject = parsed?.extracted && typeof parsed.extracted === "object"
       ? parsed.extracted as Record<string, unknown>
       : parsed;
-    const hasDiscovery = !!extractedObject &&
+    let hasDiscovery = !!extractedObject &&
       (Array.isArray(extractedObject.all_detected_subjects) ||
        Array.isArray(extractedObject.detected_lessons));
+    if(discoveryMode && !hasDiscovery){
+      const recovered=groundedFallback();
+      if(recovered){
+        parsed=parseModelObject(recovered);
+        extractedObject=parsed?.extracted && typeof parsed.extracted==="object" ?
+          parsed.extracted as Record<string,unknown> : parsed;
+        hasDiscovery=!!extractedObject &&
+          (Array.isArray(extractedObject.all_detected_subjects)||
+           Array.isArray(extractedObject.detected_lessons));
+        actualProvider="pdf-text";
+      }
+    }
     if (!parsed || (discoveryMode ? !hasDiscovery : !Array.isArray(parsed.entries))) {
       return respond({
         error: "AI returned an incomplete timetable. You can retry or use the PDF's readable text to choose subjects manually.",
