@@ -48,8 +48,8 @@ jobs:
           if fn.returncode:raise SystemExit('RPC_FUNCTION_READ_FAILED')
           lines=fn.stdout.splitlines()
           for i,line in enumerate(lines):
-            if 'color' in line.lower() or 'p_plan' in line.lower():
-              # Schema-only source definitions, not table rows or values.
+            if i>=28 and i<90:
+              # Only the static function's SQL, never student records.
               print('RPC_DEF_'+str(i+1)+'='+line.strip()[:230])
           print('RPC_READ_ONLY_INSPECTION=PASS')
           PY
