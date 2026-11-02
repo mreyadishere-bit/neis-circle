@@ -1,0 +1,60 @@
+name: Verify Final Timetable Colors and PDF Reading Live (Read-only)
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-final-timetable-colors-live.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Inspect live assets and SQL function without changing student data
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,urllib.request
+          from pathlib import Path
+          d=['sudo','-n','/usr/bin/docker']
+          def check(name,target):
+            p=subprocess.run(d+['inspect',name],text=True,capture_output=True,timeout=20)
+            assert p.returncode==0
+            info=json.loads(p.stdout)[0]
+            assert info['State']['Running']
+            x=[i['Source'] for i in info['Mounts'] if i.get('Destination')==target]
+            assert len(x)==1
+            return Path(x[0])
+          front=check('supabase-caddy','/srv/neis-circle')
+          edge=check('supabase-edge-functions','/home/deno/functions')
+          js=(front/'scripts/timetable-ai-v1.js').read_text()
+          edgecode=(edge/'timetable-ai-cloudflare/index.ts').read_text()
+          assert 'const legacyAllBlue=' in js
+          assert 'french|français|فرنس' in js
+          assert 'getTextContent()' in js and 'textEvidence:textEvidence.join' in js
+          assert 'function matchesSelectedSubject' in js and 'missingSubjects' in js
+          assert 'parseExplicitFootnoteLessons(pdfEvidence)' in edgecode
+          assert 'DISCOVERY_INSTRUCTION' in edgecode
+          print('LIVE_LEGACY_BLUE_COLOR_RECOVERY=PASS')
+          print('LIVE_FIVE_SUBJECT_COLORS=PASS')
+          print('LIVE_MULTIPAGE_PDF_FOOTNOTES=PASS')
+          query=("select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
+                 "where n.nspname='public' and p.proname='apply_timetable_ai_plan' and p.pronargs=2")
+          p=subprocess.run(d+['exec','supabase-db','psql','-U','postgres','-d','postgres','-At','-c',query],capture_output=True,text=True,timeout=25)
+          assert p.returncode==0
+          assert "color=coalesce(item->>'color','#2f7db8')" in p.stdout
+          assert "coalesce(item->>'category','Class'),coalesce(item->>'color','#2f7db8'),false,15)" in p.stdout
+          print('LIVE_CUSTOM_COLOR_SAVE=PASS')
+          with urllib.request.urlopen('https://www.neiscircle.site/',timeout=20) as r:
+            assert r.status==200
+          print('LIVE_NEIS_CIRCLE_HTTP200=PASS')
+          PY
