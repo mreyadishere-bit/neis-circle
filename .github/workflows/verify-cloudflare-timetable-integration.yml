@@ -38,7 +38,7 @@ jobs:
           assert 'client.auth.getUser(jwt)' in edge, 'missing verified Supabase auth'
           assert 'CLOUDFLARE_API_TOKEN' in edge and 'CLOUDFLARE_ACCOUNT_ID' in edge
           assert '@cf/meta/llama-4-scout-17b-16e-instruct' in edge
-          assert 'timetable-ai-cloudflare' in front and 'getDocument({data:bytes})' in front
+          assert 'timetable-ai-cloudflare' in front and 'getDocument({data:' in front and 'file.arrayBuffer()' in front
           assert 'GEMINI_API_KEY' not in edge and 'AIza' not in edge
           assert 'restore_previous_cloudflare_override' in ops
           assert 'PREVIOUS_GEMINI_OVERLAY' in ops
