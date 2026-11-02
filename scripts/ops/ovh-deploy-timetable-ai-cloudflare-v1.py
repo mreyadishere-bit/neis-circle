@@ -472,6 +472,14 @@ def main():
         'supabaseAnonKey: "' + ovh_anon + '"',
         index,
     )
+    # Force service-worker/browser caches to fetch the updated timetable AI
+    # without changing the rest of the application's asset versioning.
+    updated_index = re.sub(
+        r"(scripts/timetable-ai-v1[.]js)(?:[?][^\\\"']*)?",
+        lambda m: m.group(1) + "?v=cloudflare-" + RELEASE_ID,
+        updated_index,
+        count=1,
+    )
     # Remove any duplicate timetable-ai-cloudflare-v1 script/style references if present
     updated_index = re.sub(r'<script[^>]*timetable-ai-cloudflare-v1\.js[^>]*></script>\s*', '', updated_index)
     updated_index = re.sub(r'<link[^>]*timetable-ai-cloudflare-v1\.css[^>]*>\s*', '', updated_index)
