@@ -262,6 +262,41 @@ async function toData(file){
         lang()==="ar"?"الحد الحالي 3 صفحات PDF؛ قسّم الجدول لملف أصغر.":
           "PDF supports up to 3 pages. Please select a shorter timetable.");
       if(pdf.numPages<1)throw new Error("The PDF has no pages");
+      // Digital timetable PDFs already contain selectable text. Extract that
+      // locally first so Groq can work on text without costly image tokens.
+      // PDF scans still use the existing image/PDF.js conversion below.
+      const textPages=[];
+      for(let n=1;n<=pdf.numPages;n++){
+        const page=await pdf.getPage(n);
+        let items=[];
+        try{
+          const content=await page.getTextContent();
+          items=(content.items||[]).filter(item=>typeof item.str==="string" && item.str.trim())
+            .map(item=>({
+              x:Math.round(Number(item.transform?.[4]||0)),
+              y:Math.round(Number(item.transform?.[5]||0)),
+              str:item.str.replace(/\s+/g," ").trim()
+            }));
+        }catch(_){ /* Scanned files won't have extractable text. */ }
+        if(items.length){
+          items.sort((a,b)=>b.y-a.y||a.x-b.x);
+          const lines=[];
+          for(const item of items){
+            const last=lines[lines.length-1];
+            if(last && Math.abs(last.y-item.y)<5)last.words.push(item);
+            else lines.push({y:item.y,words:[item]});
+          }
+          const ordered=lines.map(line=>
+            line.words.sort((a,b)=>a.x-b.x).map(word=>word.str).join("  "));
+          textPages.push("Page "+n+"\n"+ordered.join("\n"));
+        }
+      }
+      const documentText=textPages.join("\n--- PAGE BREAK ---\n").slice(0,24000);
+      // Short fragments such as a lone page heading are not useful enough;
+      // fall back to image vision for those PDFs.
+      if(documentText.length>=120 && /(?:[0-2]?\d[:.][0-5]\d|physics|maths?|english|ict|الأحد|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|حص[ةص]|[1-9]\s*(?:am|pm))/i.test(documentText)){
+        return {documentText};
+      }
       const images=[];
       for(let n=1;n<=pdf.numPages;n++){
         const page=await pdf.getPage(n);
