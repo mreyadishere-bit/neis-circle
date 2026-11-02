@@ -98,6 +98,9 @@
     '#neisAuthStudio .st-state.bad{background:color-mix(in srgb,var(--coral) 16%,var(--card));color:var(--ink)}',
     '#neisAuthStudio .st-foot{display:flex;gap:9px;justify-content:space-between;align-items:center;flex-wrap:wrap;padding:13px 20px;border-top:1px solid var(--st-border);font-size:11px;color:var(--st-secondary)}',
     '#neisAuthStudio .st-meta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}',
+    '#neisAuthStudio .st-permanent-delete{border:1px solid #dc7474;background:transparent;color:#bf2b2b;border-radius:7px;padding:6px 9px;cursor:pointer;font:inherit;font-size:11px;white-space:nowrap}',
+    '#neisAuthStudio .st-permanent-delete:disabled{opacity:.45;cursor:wait}',
+    '#neisAuthStudio .st-moderation{display:flex;align-items:center;flex-wrap:wrap;gap:7px}',
     '#neisAuthStudio .st-detail{border-top:1px solid var(--st-border);padding:24px;background:var(--soft)}',
     '#neisAuthStudio .st-detail-head{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}',
     '#neisAuthStudio .st-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 0}',
@@ -212,6 +215,13 @@
         button.disabled=moderationPending.has(u.user_id);
         button.setAttribute('aria-label',(blocked?'Unblock ':'Block ')+(u.display_name||u.email||'account'));
         wrap.appendChild(button);
+        if(u.user_id!==authUser?.id){
+          const remove=el('button','st-permanent-delete','Delete permanently');
+          remove.type='button';remove.dataset.stDelete=u.user_id;
+          remove.disabled=moderationPending.has(u.user_id);
+          remove.setAttribute('aria-label','Delete '+(u.display_name||u.email||'account')+' permanently');
+          wrap.appendChild(remove);
+        }
       }
       td.appendChild(wrap);
     }else if(k==='user_id'||k==='email'||k==='display_name'){
@@ -372,6 +382,31 @@
     }catch(e){if(gen===detailsGeneration&&pane.isConnected)pane.replaceChildren(
       el('p','st-sub','Could not load details: '+(e?.message||'Retry')))}
   }
+  async function permanentlyDeleteAccount(id){
+    if(!isOwner()||!id||id===MAIN_ADMIN||id===authUser?.id||
+      moderationPending.has(id))return;
+    const user=(data?.users||[]).find(u=>u.user_id===id);
+    if(!user)return;
+    const subject=user.display_name||user.email||'this user';
+    const exact='DELETE '+id;
+    const typed=window.prompt('Permanently delete '+subject+'? This deletes the authentication account and can remove associated database records. This action cannot be undone.\n\nType exactly:\n'+exact,'');
+    if(typed!==exact)return;
+    if(!window.confirm('Final confirmation: permanently delete the account '+subject+'?'))return;
+    moderationPending.add(id);
+    render();message('Deleting '+subject+'…');
+    try{
+      const {error}=await sb.rpc('neis_admin_delete_account',
+        {p_user_id:id,p_confirmation:exact});
+      if(error)throw error;
+      clearSelection();overview=null;
+      message('Account permanently deleted.');
+      await load(true);
+    }catch(error){message('Permanent deletion failed: '+(error?.message||'Retry'))}
+    finally{
+      moderationPending.delete(id);
+      if(document.getElementById(rootId)&&isOwner())render();
+    }
+  }
   async function setAccountBlock(id,block){
     if(!isOwner()||!id||id===MAIN_ADMIN||moderationPending.has(id))return;
     const row=(data?.users||[]).find(u=>u.user_id===id);
@@ -521,6 +556,7 @@
     if(!isOwner())return;
     const root=e.target?.closest?.('#neisAuthStudio');if(!root)return;
     const button=e.target?.closest?.('button');if(!button)return;
+    if(button.dataset.stDelete){void permanentlyDeleteAccount(button.dataset.stDelete);return}
     if(button.dataset.stModerate){
       void setAccountBlock(button.dataset.stModerate,button.dataset.stBlock==='true');
       return;
