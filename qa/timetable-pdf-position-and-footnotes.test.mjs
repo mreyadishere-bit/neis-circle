@@ -16,7 +16,7 @@ assert.match(edge,/parseArabicDatedLessons/);
 assert.match(edge,/discoveryMode \? \[\]/);
 
 const beg=edge.indexOf("export function parseExplicitFootnoteLessons(");
-const end=edge.indexOf("\nfunction parseModelObject(",beg);
+const end=edge.indexOf("\n/**\n * Recover only independently readable",beg);
 assert.ok(beg>=0&&end>beg);
 let fn=edge.slice(beg,end);
 fn=fn.replace("export function parseExplicitFootnoteLessons(pdfEvidence: string): Array<Record<string, unknown>>","function parseExplicitFootnoteLessons(pdfEvidence)")
