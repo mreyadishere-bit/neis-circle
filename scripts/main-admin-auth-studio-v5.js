@@ -2,7 +2,7 @@
 (()=>{
   'use strict';
   const MAIN_ADMIN='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
-  const isOwner=()=>typeof authUser!=='undefined'&&authUser?.id===MAIN_ADMIN&&
+  const isOwner=()=>typeof authUser!=='undefined'&&(authUser?.id===MAIN_ADMIN || (window.neisSuperAdminGranted===true&&window.neisSuperAdminUser===authUser?.id))&&
     typeof state!=='undefined'&&state?.isAdmin===true;
   if(typeof admin!=='function')return;
   const rootId='neisAuthStudio';
