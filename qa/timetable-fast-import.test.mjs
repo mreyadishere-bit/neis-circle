@@ -23,6 +23,9 @@ assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.e
 assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
 assert.match(server,/verifyPdfGridLessons\(rawLessons,pdfEvidence\)/,"verify visual timetable proposals against extracted PDF coordinates");
+assert.match(server,/const firstDay=parsed\.find/,"subject headers must be found relative to first timetable day");
+assert.match(server,/const level=candidates\.filter/,"recover subject L1/L2 from positioned header text");
+assert.match(server,/qualifiedBases\.has\(base\(x\)\)/,"remove generic subject options when qualified ones exist");
 assert.match(server,/extractPdfSubjectHeaders\(pdfEvidence\)/,"preserve true PDF subject headings and separate L1 and L2");
 assert.match(server,/knownBases\.has/,"remove ambiguous AI subjects when authoritative PDF headings exist");
 assert.match(server,/source_page.*source_x/,"visual reader must cite page and grid cell position");
