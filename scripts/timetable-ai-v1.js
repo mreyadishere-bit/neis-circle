@@ -9,7 +9,7 @@ const labels={
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
     review:"Review changes",discard:"Discard draft",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
-    privacy:"Your schedule is sent to Google Gemini for analysis. Its free tier may use this content to improve Google products. Don't upload personal details; NEIS Circle doesn't store the file.",
+    privacy:"Your schedule is sent to Groq for AI analysis. Don't include personal details; NEIS Circle doesn't store uploaded files.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 5 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
     error:"Couldn't complete that request. Please retry.",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
@@ -17,7 +17,7 @@ const labels={
     attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
     review:"مراجعة التعديلات",discard:"إلغاء المسودة",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
-    privacy:"بيانات جدولك بتتبعت لـGoogle Gemini. النسخة المجانية ممكن تستخدم المحتوى لتحسين خدمات Google. متبعتش بيانات شخصية؛ NEIS Circle مش بيخزن الملف.",
+    privacy:"بيانات الجدول بتتبعت لـGroq للتحليل بالذكاء الاصطناعي. متبعتش بيانات شخصية؛ NEIS Circle مش بيخزن الملف.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 5 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
     error:"حصلت مشكلة في الطلب. جرّب تاني.",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
@@ -200,26 +200,59 @@ function setFile(file){
   if(file.size>5*1024*1024){alertUser(t("tooLarge"));return}
   stateAI.file=file;draw();
 }
+async function readData(blob){
+  return await new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
+    reader.onerror=()=>reject(new Error("Read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
 async function toData(file){
-  // File never goes to Supabase Storage; sent only to the authenticated AI function.
-  if(file.type.startsWith("image/")&&file.size>1600000){
+  // PDF pages are converted LOCALLY in the browser: only page images are sent
+  // to Groq. No PDF is stored in NEIS Circle, and no OCR load reaches OVH.
+  if(file.type==="application/pdf"){
+    const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/build/pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc=
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/build/pdf.worker.min.mjs";
+    const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    try{
+      if(pdf.numPages>3)throw new Error(
+        lang()==="ar"?"الحد الحالي 3 صفحات PDF؛ قسّم الجدول لملف أصغر.":
+          "PDF supports up to 3 pages. Please select a shorter timetable.");
+      const images=[];
+      for(let n=1;n<=pdf.numPages;n++){
+        const page=await pdf.getPage(n);
+        const base=page.getViewport({scale:1});
+        const scale=Math.min(2.1,1800/Math.max(base.width,base.height));
+        const viewport=page.getViewport({scale});
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.floor(viewport.width));
+        canvas.height=Math.max(1,Math.floor(viewport.height));
+        const context=canvas.getContext("2d",{alpha:false});
+        if(!context)throw new Error("PDF canvas unavailable");
+        await page.render({canvasContext:context,viewport}).promise;
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",.84));
+        if(!blob)throw new Error("PDF image conversion failed");
+        images.push({mime:"image/jpeg",data:await readData(blob)});
+        page.cleanup();
+      }
+      return {images};
+    }finally{await pdf.destroy()}
+  }
+  let blob=file;
+  if(file.type.startsWith("image/")&&file.size>1200000){
     const bitmap=await createImageBitmap(file);
-    const ratio=Math.min(1,2400/Math.max(bitmap.width,bitmap.height));
+    const ratio=Math.min(1,2000/Math.max(bitmap.width,bitmap.height));
     const canvas=document.createElement("canvas");
     canvas.width=Math.round(bitmap.width*ratio);
     canvas.height=Math.round(bitmap.height*ratio);
     canvas.getContext("2d").drawImage(bitmap,0,0,canvas.width,canvas.height);
     bitmap.close();
-    const compressed=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",0.9));
-    if(compressed&&compressed.size<file.size)file=compressed;
+    const compressed=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",.86));
+    if(compressed&&compressed.size<file.size)blob=compressed;
   }
-  const data=await new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
-    reader.onerror=()=>reject(new Error("Read failed"));
-    reader.readAsDataURL(file);
-  });
-  return {mime:file.type,data};
+  return {images:[{mime:blob.type,data:await readData(blob)}]};
 }
 async function submit(text){
   if(stateAI.busy||stateAI.saving)return;
@@ -230,7 +263,7 @@ async function submit(text){
   draw();
   try{
     const body={message:text,draft:stateAI.draft,source:stateAI.source,history:prior};
-    if(file)body.file=await toData(file);
+    if(file)Object.assign(body,await toData(file));
     const {data,error}=await sb.functions.invoke("timetable-ai",{body});
     if(error||!data||!Array.isArray(data.entries)){
       let description=data?.error||"";
