@@ -444,7 +444,9 @@ def main():
     for tok in ('@cf/meta/llama-4-scout', 'CLOUDFLARE_API_TOKEN', 'image_url', 'client.auth.getUser(jwt)'):
         ensure(tok in edge_code, 'EDGE_CODE_INVALID')
     ensure('decodeVerifiedJwtClaims' not in edge_code, 'UNVERIFIED_JWT_DECODE_FORBIDDEN')
-    ensure('gemini' not in js_code.lower() and 'gemini' not in edge_code.lower(), 'OLD_PROVIDER_REFERENCE_FOUND')
+    ensure('GEMINI_API_KEY' in edge_code and 'callGemini' in edge_code,
+           'GEMINI_PROVIDER_NOT_STAGED')
+    ensure('AIza' not in js_code, 'FRONTEND_EMBEDDED_API_KEY_FORBIDDEN')
 
     # Validate the actual staged Cloudflare UI, not the old Gemini filename.
     call(['node', '--check', str(STAGE / 'timetable-ai-cloudflare-v1.js')], timeout=15)
