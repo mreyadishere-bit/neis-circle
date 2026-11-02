@@ -492,7 +492,11 @@ function drawWizard(chat){
       // selected subjects. Other grades are informational, not missing tasks.
       return selectedNames.some(name=>str.toLowerCase().includes(name.toLowerCase()));
     });
-    if(actionable.length||missingNames.length||w.warnings.length){
+    const summaryWarnings=w.warnings.filter(item=>/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+    const otherWarnings=w.warnings.filter(item=>!actionable.includes(item)&&
+      !summaryWarnings.includes(item)&&
+      !/^(?:No readable lesson found for|لم أجد حصة واضحة لمادة)/i.test(String(item)));
+    if(actionable.length||missingNames.length||summaryWarnings.length||otherWarnings.length){
       const issues=el("section","ttai-issues");
       issues.id="ttai-needs-attention";
       issues.append(el("h3",null,wizardText("Needs your attention","يحتاج مراجعتك")));
@@ -512,12 +516,19 @@ function drawWizard(chat){
           suggested||wizardText("Unclear PDF entry "+(i+1),"خانة غير واضحة "+(i+1)),
           raw,suggested));
       });
-      const summary=w.warnings.filter(item=>/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+      const summary=summaryWarnings;
       if(summary.length){
         const note=el("details","ttai-wiz-warnings");
         note.append(el("summary",null,wizardText(
           "Other PDF grid verification details","تفاصيل التحقق من شبكة الجدول")));
         summary.forEach(item=>note.append(el("p",null,String(item))));
+        issues.append(note);
+      }
+      if(otherWarnings.length){
+        const note=el("details","ttai-wiz-warnings");
+        note.append(el("summary",null,wizardText(
+          "Other extraction notes","ملاحظات أخرى عن قراءة الملف")));
+        otherWarnings.forEach(item=>note.append(el("p",null,String(item).slice(0,260))));
         issues.append(note);
       }
       panel.append(issues);
@@ -1018,7 +1029,11 @@ async function submit(text,retrying=false){
       if(!data.extracted||typeof data.extracted!=="object")
         throw new Error(wizardText("Couldn't identify the timetable. Try a clearer scan.","مش قادر أقرأ الجدول. ارفع نسخة أوضح."));
       stateAI.source=data.extracted;startWizard(data.extracted);
-      stateAI.history.push({role:"assistant",text:wizardText(
+      const fromPdfText=data.provider==="pdf-text";
+      stateAI.history.push({role:"assistant",text:fromPdfText?wizardText(
+        "Visual AI was unavailable. I recovered only completely readable lessons from your PDF text. Please review missing sessions before saving.",
+        "التحليل البصري غير متاح؛ استخرجت فقط الحصص الواضحة من نص الـPDF. راجع الحصص الناقصة قبل الحفظ."
+      ):wizardText(
         "I found the subjects. Select yours below and review every lesson before saving.",
         "استخرجت المواد. اختار موادك تحت وبعدها راجع كل حصة قبل الحفظ.")});
     }else{
