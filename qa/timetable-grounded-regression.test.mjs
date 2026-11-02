@@ -54,3 +54,8 @@ assert.match(client,/const hasOption=options.some/,"known imported subjects stay
 assert.match(client,/remaining.length\?wizardText\("Review "/,"do not advertise Save on missing-subject drafts");
 assert.match(client,/const actionable=w.warnings.filter/,"filter ambiguous warnings against selected subjects");
 console.log("TIMETABLE_GROUNDED_REGRESSION=PASS");
+
+assert.match(server,/const groundedFallback=\(\)=>/,"PDF text-only recovery must work if Gemini times out");
+assert.match(server,/actualProvider="pdf-text"/,"fallback must explicitly identify its non-AI source");
+assert.match(client,/data\.provider==="pdf-text"/,"fallback must be labeled for users");
+assert.match(client,/w\.reviewExpanded\.has\(row\.key\)/,"verified rows must be collapsed by default");
