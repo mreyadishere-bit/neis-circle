@@ -9,7 +9,7 @@ const start=server.indexOf("function normalizeTime24(");
 const end=server.indexOf("function parseModelObject(",start);
 assert.ok(start>0&&end>start);
 const isolated=server.slice(start,end).replace(/^export /gm,"");
-const stripped=stripTypeScriptTypes(isolated);
+const stripped=stripTypeScriptTypes(isolated).replace(/\bexport\s+/g,"");
 const context=vm.createContext({console});
 const api=vm.runInContext(stripped+"\n({parsePdfTextGridLessons,parseArabicDatedLessons,extractPdfSubjectHeaders})",context);
 
