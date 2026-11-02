@@ -97,6 +97,28 @@ begin
  return true;
 end;$$;
 
+create or replace function public.neis_admin_set_regular_admin(
+ p_user_id uuid,p_make_admin boolean
+) returns boolean language plpgsql volatile security definer
+set search_path=pg_catalog,public,auth as $
+begin
+ if not public.neis_admin_is_super() then
+  raise exception 'Super admin required' using errcode='42501';
+ end if;
+ if p_user_id is null or p_make_admin is null or
+    p_user_id='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd'::uuid or
+    p_user_id=auth.uid() or
+    exists(select 1 from public.neis_super_admins where user_id=p_user_id)
+ then raise exception 'Protected account' using errcode='42501'; end if;
+ if not exists(select 1 from auth.users u join public.profiles p on p.id=u.id
+  where u.id=p_user_id and u.deleted_at is null) then
+  raise exception 'Account not found' using errcode='P0002'; end if;
+ update public.profiles
+ set role=case when p_make_admin then 'admin' else 'student' end
+ where id=p_user_id;
+ return true;
+end;$;
+
 create or replace function public.neis_admin_delete_account(
  p_user_id uuid,p_confirmation text
 ) returns boolean language plpgsql volatile security definer
@@ -129,11 +151,13 @@ revoke all on function public.neis_admin_capabilities() from public,anon;
 revoke all on function public.neis_admin_users(text) from public,anon;
 revoke all on function public.neis_admin_set_super(uuid,boolean) from public,anon;
 revoke all on function public.neis_admin_delete_account(uuid,text) from public,anon;
+revoke all on function public.neis_admin_set_regular_admin(uuid,boolean) from public,anon;
 grant execute on function public.neis_admin_is_owner() to authenticated;
 grant execute on function public.neis_admin_is_super() to authenticated;
 grant execute on function public.neis_admin_capabilities() to authenticated;
 grant execute on function public.neis_admin_users(text) to authenticated;
 grant execute on function public.neis_admin_set_super(uuid,boolean) to authenticated;
 grant execute on function public.neis_admin_delete_account(uuid,text) to authenticated;
+grant execute on function public.neis_admin_set_regular_admin(uuid,boolean) to authenticated;
 commit;
 notify pgrst,'reload schema';
