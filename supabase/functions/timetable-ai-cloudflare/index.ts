@@ -670,10 +670,31 @@ Deno.serve(async (request: Request) => {
     ];
     let actualProvider="cloudflare";
     let raw:string;
+    const groundedFallback=()=>{
+      if(!discoveryMode||!pdfEvidence)return null;
+      const verified=[...parsePdfTextGridLessons(pdfEvidence),
+        ...parseExplicitFootnoteLessons(pdfEvidence),...parseArabicDatedLessons(pdfEvidence)];
+      if(!verified.length)return null;
+      // This is never a complete AI extraction: only fully dated text-layer
+      // entries are offered for student review; no unverified times are filled.
+      return JSON.stringify({extracted:{
+        all_detected_subjects:[...extractPdfSubjectHeaders(pdfEvidence),
+          ...verified.map(x=>String(x.title))],
+        detected_lessons:[],
+        ambiguous_items:["Visual AI was unavailable. Only independently readable PDF text lessons were recovered; review missing sessions."],
+        summary:"Verified PDF text-layer fallback; incomplete sessions omitted",
+        page_count:parts.length,
+      }});
+    };
     if(geminiKey && discoveryMode && parts.length>1){
-      // Two-page requests run concurrently, not one three-page mega-request.
-      raw=await discoverGeminiByPageGroups(geminiKey,parts,pdfEvidence,DISCOVERY_INSTRUCTION);
-      actualProvider="gemini";
+      try{
+        raw=await discoverGeminiByPageGroups(geminiKey,parts,pdfEvidence,DISCOVERY_INSTRUCTION);
+        actualProvider="gemini";
+      }catch(error){
+        const recovered=groundedFallback();
+        if(!recovered)throw error;
+        raw=recovered;actualProvider="pdf-text";
+      }
     }else if(geminiKey){
       try{raw=await callGemini(geminiKey,messages,GEMINI_MODEL,33000);actualProvider="gemini"}
       catch(primaryError){
@@ -685,7 +706,9 @@ Deno.serve(async (request: Request) => {
             primaryType:primaryError instanceof Error?primaryError.name:"unknown",
             secondaryType:secondaryError instanceof Error?secondaryError.name:"unknown"
           }));
-          throw secondaryError;
+          const recovered=groundedFallback();
+          if(!recovered)throw secondaryError;
+          raw=recovered;actualProvider="pdf-text";
         }
       }
     }else raw=await callCloudflare(token,account,messages);
@@ -759,7 +782,8 @@ Deno.serve(async (request: Request) => {
         ].slice(0, 40),
         detected_lessons: discoveryMode ? groundedLessons : (modelLessons.length ? validateAndNormalizeEntries(modelLessons) : entries),
       },
-      model: actualProvider==="gemini"?GEMINI_MODEL:actualProvider==="gemini-lite"?GEMINI_FAST_FALLBACK:PRIMARY_MODEL,
+      model: actualProvider==="gemini"?GEMINI_MODEL:actualProvider==="gemini-lite"?GEMINI_FAST_FALLBACK:
+        actualProvider==="pdf-text"?"verified-positioned-pdf-text":PRIMARY_MODEL,
       provider: actualProvider,
     });
   } catch (error: unknown) {
