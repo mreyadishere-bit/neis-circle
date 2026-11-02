@@ -86,3 +86,8 @@ console.log("REUSED_CONVERSION_WITHOUT_REUPLOAD=PASS");
 console.log("SAFE_PARTIAL_PDF_TEXT_FALLBACK=PASS");
 console.log("CLOUD_FLARE_DISCOVERY_RESPONSE_FIX=PASS");
 console.log("LOADING_CANCEL_TIMEOUT_UI=PASS");
+
+assert.match(client,/previousChat=panel\.querySelector/,'capture previous scroll before DOM redraw');
+assert.match(client,/chat\.scrollTop=previousTop/,'preserve position when clicking wizard buttons');
+assert.match(client,/stepChanged/,'handle wizard transitions separately');
+assert.match(client,/Clear selection/,'offer simple selection controls');
