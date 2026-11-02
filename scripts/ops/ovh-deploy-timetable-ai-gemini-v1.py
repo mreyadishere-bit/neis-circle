@@ -229,6 +229,14 @@ def deploy_edge_function(anon_key, gemini_key):
         GEMINI_ENV_FILE.unlink(missing_ok=True)
         raise
 
+    # Preserve every Docker mount option, including implicit bind defaults
+    # such as bind.create_host_path. Docker Compose accepts JSON flow objects
+    # as valid YAML, so there is no lossy parsing or conversion.
+    current_mount = copy.deepcopy(edge_mount(previous))
+    ensure(current_mount.get('type') == 'bind' and
+           current_mount.get('read_only') is True,
+           'EDGE_CURRENT_MOUNT_UNSAFE')
+    current_mount['source'] = str(target_functions)
     # Docker Compose merges services: this additive override changes only the
     # /home/deno/functions mount and adds the Gemini env_file. Do not change
     # ports, command, image, other mounts, or existing environment settings.
@@ -238,10 +246,7 @@ def deploy_edge_function(anon_key, gemini_key):
         '    env_file:\n'
         f'      - {GEMINI_ENV_FILE}\n'
         '    volumes:\n'
-        '      - type: bind\n'
-        f'        source: {target_functions}\n'
-        '        target: /home/deno/functions\n'
-        '        read_only: true\n'
+        f'      - {json.dumps(current_mount, separators=(",", ":"))}\n'
     )
     fd = os.open(str(GEMINI_OVERLAY),
                  os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
