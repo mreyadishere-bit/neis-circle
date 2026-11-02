@@ -1,0 +1,34 @@
+name: Guided Timetable Import V2 QA (No OVH)
+on:
+  push:
+    branches: [feature/timetable-guided-import-v2-20261102]
+    paths:
+      - 'scripts/timetable-ai-cloudflare-v1.js'
+      - 'styles/timetable-ai-v1.css'
+      - 'supabase/functions/timetable-ai-cloudflare/index.ts'
+      - 'scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py'
+      - 'qa/timetable-guided-import-v2.test.mjs'
+      - '.github/workflows/verify-guided-timetable-import-v2.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - name: Install using frozen Bun lock
+        run: bun install --frozen-lockfile
+      - name: Validate guided subject picker, colors, and safe saving
+        run: |
+          node --check scripts/timetable-ai-cloudflare-v1.js
+          node qa/timetable-guided-import-v2.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
+          bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/guided-edge-ts-check
+          node qa/static-check.mjs
+          npm run qa:unit
