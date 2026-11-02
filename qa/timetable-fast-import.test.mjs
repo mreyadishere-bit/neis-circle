@@ -22,7 +22,7 @@ assert.match(css,/ttai-work-cancel/);
 assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.entries\)/);
 assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
-assert.match(server,/callGemini\(geminiKey,messages,GEMINI_MODEL/,"Gemini takes priority when configured");
+assert.match(server,/discoverGeminiByPageGroups\(geminiKey,parts,pdfEvidence,DISCOVERY_INSTRUCTION\)/,"parallel multi-page Gemini extraction");
 assert.match(server,/gemini-3-flash-preview/,"Gemini primary is the live-tested faster model");
 assert.match(server,/gemini-3.1-flash-lite/,"Gemini secondary is the live-tested fast fallback");
 assert.match(server,/maxOutputTokens:8192/,"Gemini has enough response capacity");
@@ -103,3 +103,8 @@ assert.match(client,/const actions=el\("div","ttai-issue-actions"\)/,"issue acti
 assert.match(client,/card\.append\(actions\)/,"each unresolved lesson has its own action at card end");
 assert.match(client,/Done editing/,"inline editor can collapse");
 assert.doesNotMatch(client,/const info=el\("button","ttai-info-btn"/,"chat info button removed");
+
+assert.match(server,/for\(let i=0;i<imageParts\.length;i\+=2\)/,"bound Gemini requests to two PDF pages");
+assert.match(server,/Promise\.all\(groups\.map/,"analyze PDF chunks concurrently");
+assert.match(server,/GEMINI_QUOTA_LIMIT/,"report Gemini quota errors");
+assert.match(client,/Visual analysis failed: "\+safe/,"surface server failure reason to student");
