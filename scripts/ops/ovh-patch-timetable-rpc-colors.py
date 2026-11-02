@@ -101,6 +101,9 @@ def main() -> None:
     if new == old:
         print("TIMETABLE_RPC_COLORS=ALREADY_FIXED")
         return
+    if os.environ.get("TIMETABLE_RPC_DRY_RUN") == "1":
+        print("TIMETABLE_RPC_PATCH_PREFLIGHT=READY")
+        return
 
     BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     backup = BACKUP_ROOT / ("timetable-rpc-before-color-fix-" + uuid.uuid4().hex[:16] + ".sql")
