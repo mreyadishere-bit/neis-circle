@@ -108,3 +108,9 @@ assert.match(server,/for\(let i=0;i<imageParts\.length;i\+=2\)/,"bound Gemini re
 assert.match(server,/Promise\.all\(groups\.map/,"analyze PDF chunks concurrently");
 assert.match(server,/GEMINI_QUOTA_LIMIT/,"report Gemini quota errors");
 assert.match(client,/Visual analysis failed: "\+safe/,"surface server failure reason to student");
+
+assert.match(client,/function pendingIssue\(/,"unverified sessions have separate editable state");
+assert.match(client,/function validIssueLesson\(/,"adding requires explicit valid lesson information");
+assert.match(client,/!validIssueLesson\(pending\)/,"Add remains disabled until valid editing");
+assert.match(client,/w\.addedIssues\[issueId\]=row\.key/,"Add commits one lesson to timetable draft");
+assert.match(client,/w\.editingLesson=expanded\?null:issueId/,"Edit opens and closes without adding");
