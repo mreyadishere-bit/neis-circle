@@ -24,7 +24,7 @@ function getCaller(now=0) {
     SYSTEM_INSTRUCTION: 'synthetic test instruction',
     TIMETABLE_RESPONSE_SCHEMA: {},
     Date: {now: () => now},
-    Math: {random: () => 0},
+    Math: {random: () => 0, floor: Math.floor},
     setTimeout: callback => {callback(); return 1},
     Promise,
     Error,
@@ -67,7 +67,7 @@ const quota = Object.assign(new Error('Quota exhausted'), {status:429});
 }
 {
   let now=0;
-  const context={PRIMARY_MODEL:'gemini-3.8-flash',SYSTEM_INSTRUCTION:'synthetic',TIMETABLE_RESPONSE_SCHEMA:{},Date:{now:()=>now},Math:{random:()=>0},setTimeout:cb=>{cb();return 1},Promise,Error,Number,String};
+  const context={PRIMARY_MODEL:'gemini-3.8-flash',SYSTEM_INSTRUCTION:'synthetic',TIMETABLE_RESPONSE_SCHEMA:{},Date:{now:()=>now},Math:{random:()=>0,floor:Math.floor},setTimeout:cb=>{cb();return 1},Promise,Error,Number,String};
   const fn=vm.runInNewContext(source + '; callGeminiWithRetry',context);
   let calls=0;
   const api={models:{generateContent:async () => {calls++;now=11000;throw unavailable}}};
