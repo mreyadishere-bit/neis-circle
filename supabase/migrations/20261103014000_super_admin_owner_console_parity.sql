@@ -443,7 +443,7 @@ returns table (user_id uuid, full_name text, username text, branch text, grade t
 language plpgsql
 security definer
 set search_path = pg_catalog, public, auth
-as $
+as $$
 declare normalized text := btrim(coalesce(search_input,''));
 begin
   if not public.neis_admin_is_super() then raise exception 'Not authorized' using errcode='42501'; end if;
@@ -457,7 +457,7 @@ begin
   order by case when lower(p.full_name)=lower(normalized) then 0 else 1 end,p.full_name
   limit 20;
 end;
-$;
+$$;
 
 -- Super admins retain bounded, audited DM safety-review workflow.
 create or replace function public.admin_list_user_dm_conversations(user_id_input uuid)
@@ -468,7 +468,7 @@ returns table (
 language plpgsql
 security definer
 set search_path = pg_catalog, public, auth
-as $
+as $$
 begin
   if not public.neis_admin_is_super() then raise exception 'Not authorized' using errcode='42501'; end if;
 
@@ -484,7 +484,7 @@ begin
   order by coalesce((select max(m2.created_at) from public.messages m2 where m2.conversation_id=c.id),c.updated_at) desc
   limit 100;
 end;
-$;
+$$;
 
 -- Super admins retain bounded, audited DM safety-review workflow.
 create or replace function public.admin_create_dm_review_request(
@@ -494,7 +494,7 @@ returns uuid
 language plpgsql
 security definer
 set search_path = pg_catalog, public, auth
-as $
+as $$
 declare
   request_id uuid;
   normalized_reason text := btrim(coalesce(reason_input,''));
@@ -516,7 +516,7 @@ begin
   values (request_id,auth.uid(),'request',target_user_id_input,conversation_id_input,jsonb_build_object('reason',normalized_reason));
   return request_id;
 end;
-$;
+$$;
 
 -- Super admins retain bounded, audited DM safety-review workflow.
 create or replace function public.admin_get_dm_review_messages(request_id_input uuid)
@@ -528,7 +528,7 @@ returns table (
 language plpgsql
 security definer
 set search_path = pg_catalog, public, auth
-as $
+as $$
 declare review public.admin_dm_review_requests%rowtype;
 begin
   if not public.neis_admin_is_super() then raise exception 'Not authorized' using errcode='42501'; end if;
@@ -559,6 +559,6 @@ begin
   left join public.profiles p on p.id=x.sender_id
   order by x.created_at asc;
 end;
-$;
+$$;
 commit;
 notify pgrst, 'reload schema';
