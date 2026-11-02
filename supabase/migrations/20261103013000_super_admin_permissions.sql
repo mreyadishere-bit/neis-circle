@@ -100,7 +100,7 @@ end;$$;
 create or replace function public.neis_admin_set_regular_admin(
  p_user_id uuid,p_make_admin boolean
 ) returns boolean language plpgsql volatile security definer
-set search_path=pg_catalog,public,auth as $
+set search_path=pg_catalog,public,auth as $$
 begin
  if not public.neis_admin_is_super() then
   raise exception 'Super admin required' using errcode='42501';
@@ -119,7 +119,7 @@ begin
   update public.profiles set role='student' where id=p_user_id;
  end if;
  return true;
-end;$;
+end;$$;
 
 create or replace function public.neis_admin_delete_account(
  p_user_id uuid,p_confirmation text
