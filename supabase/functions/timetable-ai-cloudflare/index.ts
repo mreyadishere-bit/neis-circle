@@ -360,7 +360,7 @@ async function callCloudflare(token: string, account: string, messages: unknown[
 // Keep the current Cloudflare implementation as a safe fallback for unavailable
 // Gemini credentials/quotas; never expose either key in the browser.
 const GEMINI_MODEL = "gemini-3-flash-preview";
-const GEMINI_FAST_FALLBACK = "gemini-3.5-flash-lite";
+const GEMINI_FAST_FALLBACK = "gemini-3.1-flash-lite";
 async function callGemini(key: string, messages: Array<{role:string;content:unknown}>, model=GEMINI_MODEL, timeoutMs=16000) {
   const controller=new AbortController();
   const deadline=setTimeout(()=>controller.abort(),timeoutMs);
