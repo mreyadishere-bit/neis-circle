@@ -10,7 +10,9 @@ assert.match(frontend,/convertToViewportPoint/);
 assert.match(edge,/DISCOVERY_INSTRUCTION/);
 assert.match(edge,/POSITIONED PDF EVIDENCE/);
 assert.match(edge,/parseExplicitFootnoteLessons\(pdfEvidence\)/);
-assert.match(edge,/noteKeys/);
+assert.match(edge,/groundedKeys/,'confirmed PDF evidence must take priority over conflicting AI lessons');
+assert.match(edge,/parsePdfTextGridLessons/);
+assert.match(edge,/parseArabicDatedLessons/);
 assert.match(edge,/discoveryMode \? \[\]/);
 
 const beg=edge.indexOf("export function parseExplicitFootnoteLessons(");
