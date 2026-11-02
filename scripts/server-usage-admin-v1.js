@@ -2,7 +2,7 @@
 (()=>{
   'use strict';
   const OWNER_ID='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
-  const isOwner=()=>typeof authUser!=='undefined'&&authUser?.id===OWNER_ID &&
+  const isOwner=()=>typeof authUser!=='undefined'&&(authUser?.id===OWNER_ID || (window.neisSuperAdminGranted===true&&window.neisSuperAdminUser===authUser?.id)) &&
     typeof state!=='undefined'&&state?.isAdmin;
   const originalAdmin=typeof admin==='function'?admin:null;
   if(!originalAdmin)return;
