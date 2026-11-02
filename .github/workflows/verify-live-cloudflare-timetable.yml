@@ -1,0 +1,65 @@
+name: Verify live Cloudflare timetable release (read-only)
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-live-cloudflare-timetable.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Verify active Docker mounts and timetable UI, without exposing secrets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,urllib.request
+          from pathlib import Path
+          def inspect(container):
+              x=subprocess.run(['sudo','-n','/usr/bin/docker','inspect',container],capture_output=True,text=True,timeout=20)
+              if x.returncode:raise SystemExit(container+'_INSPECT_FAIL')
+              return json.loads(x.stdout)[0]
+          edge=inspect('supabase-edge-functions')
+          caddy=inspect('supabase-caddy')
+          assert edge['State']['Running'] and caddy['State']['Running']
+          envkeys={s.partition('=')[0] for s in edge['Config']['Env']}
+          print('CLOUDFLARE_RUNTIME_CREDENTIALS='+str({'CLOUDFLARE_API_TOKEN','CLOUDFLARE_ACCOUNT_ID'}<=envkeys).upper())
+          assert {'CLOUDFLARE_API_TOKEN','CLOUDFLARE_ACCOUNT_ID'}<=envkeys
+          mount=[m['Source'] for m in edge['Mounts'] if m.get('Destination')=='/home/deno/functions']
+          assert len(mount)==1
+          edge_file=Path(mount[0])/'timetable-ai-cloudflare'/'index.ts'
+          assert edge_file.is_file()
+          src=edge_file.read_text()
+          assert '@cf/meta/llama-4-scout-17b-16e-instruct' in src
+          assert 'client.auth.getUser(jwt)' in src
+          print('CLOUDFLARE_EDGE_ACTIVE=TRUE')
+          mounts=[m['Source'] for m in caddy['Mounts'] if m.get('Destination')=='/srv/neis-circle']
+          assert len(mounts)==1
+          root=Path(mounts[0])
+          index=(root/'index.html').read_text()
+          js=(root/'scripts/timetable-ai-v1.js').read_text()
+          assert '?v=cloudflare-' in index
+          assert 'timetable-ai-cloudflare' in js
+          assert 'pdfjs-dist@' in js
+          assert 'supabase.neiscircle.site' in index
+          print('CLOUDFLARE_FRONTEND_ACTIVE=TRUE')
+          try:
+              with urllib.request.urlopen('https://www.neiscircle.site/',timeout=20) as resp:
+                  status=resp.status
+          except Exception:
+              status=0
+          print('NEIS_PRODUCTION_HTTP='+str(status))
+          assert status==200
+          print('CLOUDFLARE_LIVE_SMOKE=PASS')
+          PY
