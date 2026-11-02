@@ -317,9 +317,9 @@ function parseModelObject(raw: string): Record<string, unknown> | null {
   } catch { return null; }
 }
 
-async function callCloudflare(token: string, account: string, messages: unknown[]) {
+async function callCloudflare(token: string, account: string, messages: unknown[], timeoutMs=40000) {
   const controller = new AbortController();
-  const deadline = setTimeout(() => controller.abort(), 40000);
+  const deadline = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const url = "https://api.cloudflare.com/client/v4/accounts/" + account + "/ai/run/" + PRIMARY_MODEL;
     const result = await fetch(url, {
@@ -362,7 +362,7 @@ async function callCloudflare(token: string, account: string, messages: unknown[
 const GEMINI_MODEL = "gemini-3.8-flash";
 async function callGemini(key: string, messages: Array<{role:string;content:unknown}>) {
   const controller=new AbortController();
-  const deadline=setTimeout(()=>controller.abort(),38000);
+  const deadline=setTimeout(()=>controller.abort(),24000);
   try{
     const system=String(messages[0]?.content||"");
     const content=messages[1]?.content;
@@ -494,7 +494,7 @@ Deno.serve(async (request: Request) => {
         // 429 or provider outage: retain timetable import with existing relay.
         const status=Number((e as {status?:number}).status||0);
         if(status!==429&&status!==503&&status!==502&&status!==404)throw e;
-        raw=await callCloudflare(token,account,messages);
+        raw=await callCloudflare(token,account,messages,16000);
       }
     }else raw=await callCloudflare(token,account,messages);
     const parsed = parseModelObject(raw);
