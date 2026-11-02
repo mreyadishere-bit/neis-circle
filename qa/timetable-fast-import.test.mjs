@@ -16,6 +16,7 @@ assert.match(client,/fileBytesCache\.get\(file\)/,"PDF bytes reused for hashing 
 assert.match(client,/canvas\.toBlob\(/,"avoid synchronous canvas-to-data-url");
 assert.match(client,/AI_REQUEST_DEADLINE_MS=52000/);
 assert.match(client,/stateAI\.abort\?\.abort\(\)/);
+assert.match(client,/mode:"replace"/,"New PDF imports must not silently retain stale subjects");
 assert.match(client,/extractReadableTextFallback\(prepared\.textEvidence\)/);
 assert.match(css,/ttai-work-cancel/);
 assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.entries\)/);
