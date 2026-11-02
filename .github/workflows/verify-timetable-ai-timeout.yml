@@ -1,0 +1,37 @@
+name: Timetable AI Request Timeout Regression (No OVH)
+on:
+  push:
+    branches: [fix/timetable-ai-stuck-loading-20261102]
+    paths:
+      - 'scripts/timetable-ai-v1.js'
+      - 'supabase/functions/timetable-ai/index.ts'
+      - 'qa/timetable-ai-timeout.test.mjs'
+      - '.github/workflows/verify-timetable-ai-timeout.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/timetable-ai-v1.js'
+      - 'supabase/functions/timetable-ai/index.ts'
+      - 'qa/timetable-ai-timeout.test.mjs'
+      - '.github/workflows/verify-timetable-ai-timeout.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Install current tracked dependencies
+        run: bun install --frozen-lockfile
+      - name: Test timeout/abort, message retention, and existing Gemini timetable behavior
+        run: |
+          node --check scripts/timetable-ai-v1.js
+          node qa/timetable-ai-timeout.test.mjs
+          node qa/static-check.mjs
+          npm run qa:unit
