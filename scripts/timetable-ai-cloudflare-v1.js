@@ -591,80 +591,129 @@ async function loadPdfRenderer(){
   }
   return pdfjsPromise;
 }
-async function toData(file){
-  // Cloudflare vision consumes images, not native PDFs. Render locally so
-  // days, grid borders, merged cells, and subject levels remain visible.
-  if(file.type!=="application/pdf"){
-    return {attachments:[{
-      name:file.name, mimeType:file.type, data:await readData(file)
-    }]};
+// Never persist student documents. A two-file in-memory LRU avoids repeated
+// PDF rendering on Retry, without cookies, IndexedDB or database uploads.
+const preparedFileCache=new Map();
+const fileKeyCache=new WeakMap();
+async function fileFingerprint(file){
+  if(fileKeyCache.has(file))return fileKeyCache.get(file);
+  const bytes=await file.arrayBuffer();
+  const hash=await crypto.subtle.digest("SHA-256",bytes);
+  const key=Array.from(new Uint8Array(hash),n=>n.toString(16).padStart(2,"0")).join("");
+  fileKeyCache.set(file,key);return key;
+}
+function extractReadableTextFallback(evidence){
+  // Local fallback is only a SUBJECT PICKER. A visual grid's day/time may
+  // be impossible to reconstruct from text order, so NEVER guess sessions.
+  const found=new Map();
+  const pattern=/\b(?:Mathematics|Maths?|Physics|English|French|Religion|ICT|Chemistry|Biology|Arabic|German|Spanish|History|Geography|Economics|Business|Computer Science|Computer|Science|Statistics|Psychology|Accounting|Art|Music|PE|Digital Marketing)(?:\s*(?:L\s*[12]|Gr(?:ade)?\s*(?:11|12)|G\s*(?:11|12)))?\b/gi;
+  for(const match of String(evidence||"").matchAll(pattern)){
+    const title=match[0].replace(/\s+/g," ").trim();
+    if(!found.has(subjectKey(title)))found.set(subjectKey(title),title);
   }
+  return {
+    all_detected_subjects:[...found.values()].slice(0,60),
+    detected_lessons:[],
+    ambiguous_items:[wizardText(
+      "Only subject names were read from the PDF text. The visual AI did not verify days or times; add/confirm each class before saving.",
+      "تمت قراءة أسماء المواد فقط من نص الـPDF. لم يتم التأكد من الأيام والأوقات بصريًا؛ لازم تدخل كل حصة أو تراجعها قبل الحفظ.")],
+    summary:"Partial local text extraction only; no AI timetable mapping",
+    source:"local-text-fallback"
+  };
+}
+async function prepareVisualPages(file){
+  if(file.type!=="application/pdf"){
+    setPhase(wizardText("Preparing image…","بجهز الصورة…"));
+    return {attachments:[{name:file.name,mimeType:file.type,data:await readData(file)}]};
+  }
+  setPhase(wizardText("Opening PDF…","بفتح ملف الـPDF…"));
   const pdfjs=await loadPdfRenderer();
   let doc;
   try{
-    const bytes=new Uint8Array(await file.arrayBuffer());
-    doc=await pdfjs.getDocument({data:bytes}).promise;
-    if(doc.numPages>MAX_RENDERED_PAGES){
-      throw new Error(lang()==="ar"
-        ?"الملف فيه أكتر من 5 صفحات. ارفع جزءًا من الجدول لا يزيد عن خمس صفحات."
-        :"This PDF has more than 5 pages. Please upload a PDF containing up to five timetable pages.");
-    }
-    const attachments=[];
-    const textEvidence=[];
-    for(let pageNum=1;pageNum<=doc.numPages;pageNum++){
+    doc=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    if(doc.numPages>MAX_RENDERED_PAGES)
+      throw new Error(wizardText(
+        "This PDF has more than five pages. Please split it into sections of five pages.",
+        "الـPDF فيه أكتر من 5 صفحات. قسمه لمجموعات من 5 صفحات."));
+    const result=new Array(doc.numPages);
+    async function onePage(pageNum){
+      if(stateAI.cancelled)throw new Error("Cancelled");
       const page=await doc.getPage(pageNum);
-      const original=page.getViewport({scale:1});
-      // Read embedded PDF text with positions as independent evidence,
-      // preserving spatial relationships. Never replace visual analysis
-      // with flattened plain text: combine BOTH sources.
       try{
-        const textContent=await page.getTextContent();
-        const positioned=[];
-        for(const item of textContent.items||[]){
-          if(typeof item.str!=="string"||!item.str.trim()||!item.transform)continue;
-          const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
-          const x=Math.round(1000*point[0]/original.width);
-          const y=Math.round(1000*point[1]/original.height);
-          if(x>=-20&&x<=1020&&y>=-20&&y<=1020)
-            positioned.push({x,y,text:item.str.replace(/[\\r\\n]+/g," ").trim().slice(0,180)});
-        }
-        positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
-        const groups=[];
-        for(const part of positioned){
-          let group=groups[groups.length-1];
-          if(!group||Math.abs(part.y-group.y)>7){
-            group={y:part.y,parts:[]};groups.push(group);
+        const original=page.getViewport({scale:1});
+        const textEvidence=[];
+        // PDF text and image are complementary: images retain the grid;
+        // normalized XY coordinates clarify repeating day headings.
+        try{
+          const content=await page.getTextContent();
+          const positioned=[];
+          for(const item of content.items||[]){
+            if(typeof item.str!=="string"||!item.str.trim()||!item.transform)continue;
+            const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
+            const x=Math.round(point[0]/original.width*1000);
+            const y=Math.round(point[1]/original.height*1000);
+            if(x>=-20&&x<=1020&&y>=-20&&y<=1020)
+              positioned.push({x,y,text:item.str.replace(/[\r\n]+/g," ").trim().slice(0,160)});
           }
-          group.parts.push(part);
+          positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
+          const lines=[];
+          for(const item of positioned){
+            const last=lines[lines.length-1];
+            if(!last||Math.abs(last.y-item.y)>6)lines.push({y:item.y,parts:[item]});
+            else last.parts.push(item);
+          }
+          for(const line of lines){
+            line.parts.sort((a,b)=>a.x-b.x);
+            textEvidence.push("y="+line.y+" "+
+              line.parts.map(item=>"x="+item.x+":"+item.text).join(" | "));
+          }
+        }catch{ /* Scanned image PDF: visual path still works. */ }
+        if(stateAI.cancelled)throw new Error("Cancelled");
+        // Keep small images for affordable, quick Workers AI inference.
+        // Two pages at a time balances CPU time and mobile memory.
+        const scale=Math.min(2.2,1400/original.width,1900/original.height);
+        const viewport=page.getViewport({scale});
+        const canvas=document.createElement("canvas");
+        canvas.width=Math.max(1,Math.round(viewport.width));
+        canvas.height=Math.max(1,Math.round(viewport.height));
+        const context=canvas.getContext("2d",{alpha:false});
+        if(!context)throw new Error("Canvas rendering unavailable");
+        try{
+          await page.render({canvasContext:context,viewport}).promise;
+          const blob=await new Promise((resolve,reject)=>canvas.toBlob(
+            result=>result?resolve(result):reject(new Error("Image compression failed")),
+            "image/jpeg",0.72));
+          const data=await readData(blob);
+          result[pageNum-1]={
+            attachment:{name:"page-"+pageNum+".jpg",mimeType:"image/jpeg",data},
+            evidence:"PAGE "+pageNum+" POSITIONED PDF TEXT\n"+textEvidence.join("\n").slice(0,10000)
+          };
+        }finally{
+          canvas.width=0;canvas.height=0;
         }
-        const lines=groups.map(group=>{
-          group.parts.sort((a,b)=>a.x-b.x);
-          return "y="+group.y+" "+group.parts.map(part=>"x="+part.x+":"+part.text).join(" | ");
-        });
-        textEvidence.push("PAGE "+pageNum+" POSITIONED PDF TEXT\n"+lines.join("\n").slice(0,11000));
-      }catch{
-        // Scanned PDFs have no text layer; visual extraction still works.
-      }
-      const scale=Math.min(2.5,1600/original.width,2100/original.height);
-      const viewport=page.getViewport({scale});
-      const canvas=document.createElement("canvas");
-      canvas.width=Math.max(1,Math.floor(viewport.width));
-      canvas.height=Math.max(1,Math.floor(viewport.height));
-      const context=canvas.getContext("2d",{alpha:false});
-      if(!context)throw new Error("Canvas rendering is not available");
-      await page.render({canvasContext:context,viewport}).promise;
-      const url=canvas.toDataURL("image/jpeg",0.78);
-      canvas.width=0;canvas.height=0;page.cleanup();
-      const data=url.split(",")[1]||"";
-      if(!data)throw new Error("Page rendering produced an empty image.");
-      attachments.push({
-        name:file.name+" — page "+pageNum, mimeType:"image/jpeg", data
-      });
+      }finally{page.cleanup()}
     }
-    return {attachments,textEvidence:textEvidence.join("\n\n").slice(0,38000)};
-  }finally{
-    if(doc)await doc.destroy();
+    for(let i=1;i<=doc.numPages;i+=2){
+      setPhase(wizardText("Preparing pages ","بجهز الصفحات ")+i+
+        (i+1<=doc.numPages?"–"+(i+1):"")+"/"+doc.numPages+"…");
+      await Promise.all(Array.from({length:Math.min(2,doc.numPages-i+1)},
+        (_,j)=>onePage(i+j)));
+    }
+    return {attachments:result.map(x=>x.attachment),
+      textEvidence:result.map(x=>x.evidence).join("\n\n").slice(0,38000)};
+  }finally{if(doc)await doc.destroy()}
+}
+async function toData(file){
+  const hash=await fileFingerprint(file);
+  if(preparedFileCache.has(hash)){
+    setPhase(wizardText("Using prepared pages…","بستخدم الصفحات المجهزة…"));
+    return await preparedFileCache.get(hash);
   }
+  const prepared=prepareVisualPages(file);
+  preparedFileCache.set(hash,prepared);
+  while(preparedFileCache.size>2)preparedFileCache.delete(preparedFileCache.keys().next().value);
+  try{return await prepared}
+  catch(error){preparedFileCache.delete(hash);throw error}
 }
 // Keep the chat responsive even if a large PDF or the Edge relay stalls.
 // Supabase supports AbortSignal; Promise.race is a second safety net if
