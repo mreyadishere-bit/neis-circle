@@ -9,21 +9,21 @@ const labels={
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
     review:"Review changes",discard:"Discard draft",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
-    privacy:"Your schedule is sent to Groq for AI analysis. Don't include personal details; NEIS Circle doesn't store uploaded files.",
+    privacy:"AI timetable requests and attached page images are processed by Groq. Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 5 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
-    error:"Couldn't complete that request. Please retry.",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
+    error:"Couldn't complete that request. Please retry.",retry:"Retry",removeFile:"Remove attachment",info:"AI data handling",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
   ar:{title:"مساعد الجدول الذكي",intro:"قولّي مواعيد حصصك أو ارفع صورة أو PDF، وأنا أجهز لك جدول تراجعه قبل الحفظ.",
     attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
     review:"مراجعة التعديلات",discard:"إلغاء المسودة",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
-    privacy:"بيانات الجدول بتتبعت لـGroq للتحليل بالذكاء الاصطناعي. متبعتش بيانات شخصية؛ NEIS Circle مش بيخزن الملف.",
+    privacy:"الرسائل وصور صفحات الجدول بتتبعت لـGroq للمعالجة. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 5 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
-    error:"حصلت مشكلة في الطلب. جرّب تاني.",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
+    error:"حصلت مشكلة في الطلب. جرّب تاني.",retry:"إعادة المحاولة",removeFile:"إزالة الملف",info:"خصوصية مساعد الجدول",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
 const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,original:[],baseline:[],
-  source:[],file:null,preview:false,scheduled:false};
+  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null};
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
 function isTimetable(){return typeof state!=="undefined" && state.view==="timetable"&&
@@ -41,7 +41,7 @@ function begin(reset=false){
     stateAI.original=rows();
     stateAI.baseline=(state.timetable.rows||[]).map(r=>({id:r.id,updated_at:r.updated_at}));
     stateAI.draft=structuredClone(stateAI.original);
-    stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;
+    stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;
   }
 }
 function diff(){
@@ -124,15 +124,27 @@ function draw(){
   const head=el("header","ttai-header");
   const title=el("div","ttai-heading");
   title.append(el("span","ttai-mark","✦"),el("strong",null,t("title")));
+  const info=el("button","ttai-info-btn","ⓘ");
+  info.type="button";info.setAttribute("aria-label",t("info"));info.title=t("info");
+  info.setAttribute("aria-expanded",String(stateAI.privacyOpen));
+  info.onclick=()=>{stateAI.privacyOpen=!stateAI.privacyOpen;draw()};
   const close=el("button","ttai-icon-btn","×");
   close.type="button";close.setAttribute("aria-label",t("close"));
   close.onclick=()=>{stateAI.open=false;draw()};
-  head.append(title,close);panel.append(head);
+  const controls=el("div","ttai-header-controls");controls.append(info,close);
+  head.append(title,controls);panel.append(head);
+  if(stateAI.privacyOpen)panel.append(el("p","ttai-privacy-info",t("privacy")));
   const chat=el("div","ttai-chat");
   chat.setAttribute("role","log");chat.setAttribute("aria-live","polite");
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
   if(stateAI.busy)chat.append(message(t("busy"),"pending"));
+  if(stateAI.lastFailed && !stateAI.busy){
+    const retry=el("button","ttai-retry",t("retry"));
+    retry.type="button";
+    retry.onclick=()=>{const draft=stateAI.lastFailed;void submit(draft.text,true)};
+    chat.append(retry);
+  }
   panel.append(chat);
   const changes=diff();
   if(total(changes)>0){
@@ -163,6 +175,13 @@ function draw(){
   const footer=el("div","ttai-footer");
   const fileLabel=el("span","ttai-file-name",stateAI.file?t("file")+" "+stateAI.file.name:"");
   footer.append(fileLabel);
+  if(stateAI.file){
+    const remove=el("button","ttai-file-remove","×");
+    remove.type="button";remove.title=t("removeFile");
+    remove.setAttribute("aria-label",t("removeFile"));
+    remove.onclick=()=>{stateAI.file=null;draw()};
+    footer.append(remove);
+  }
   const compose=el("form","ttai-compose");
   const attach=el("label","ttai-attach","＋");
   attach.title=t("attach");attach.setAttribute("aria-label",t("attach"));
@@ -189,7 +208,7 @@ function draw(){
     if(!text&&!stateAI.file)return;
     void submit(text);
   };
-  footer.append(compose,el("p","ttai-privacy",t("privacy")));
+  footer.append(compose);
   panel.append(footer);
   chat.scrollTop=chat.scrollHeight;
 }
@@ -208,23 +227,46 @@ async function readData(blob){
     reader.readAsDataURL(blob);
   });
 }
+async function compactJpeg(canvas,maxBytes=1250000){
+  // Stay under the total Edge request-size limit after base64 encoding.
+  // Retain legible timetable text wherever possible.
+  let quality=.86;
+  for(let attempt=0;attempt<6;attempt++){
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
+    if(!blob)throw new Error("Could not prepare a timetable page");
+    if(blob.size<=maxBytes)return blob;
+    quality=Math.max(.48,quality-.085);
+    if(attempt===4){
+      const scaled=document.createElement("canvas");
+      scaled.width=Math.max(1,Math.floor(canvas.width*.8));
+      scaled.height=Math.max(1,Math.floor(canvas.height*.8));
+      const ctx=scaled.getContext("2d");
+      if(!ctx)throw new Error("Image conversion unavailable");
+      ctx.drawImage(canvas,0,0,scaled.width,scaled.height);
+      canvas=scaled;
+    }
+  }
+  throw new Error(lang()==="ar"?"الملف كبير جدًا بعد التحويل. جرّب صورة أو PDF أصغر.":"Converted image is too large. Try a smaller PDF or image.");
+}
 async function toData(file){
-  // PDF pages are converted LOCALLY in the browser: only page images are sent
-  // to Groq. No PDF is stored in NEIS Circle, and no OCR load reaches OVH.
+  // PDF pages are rendered locally in the browser. Never upload the source PDF.
   if(file.type==="application/pdf"){
     const pdfjs=await import("https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/build/pdf.min.mjs");
     pdfjs.GlobalWorkerOptions.workerSrc=
       "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/build/pdf.worker.min.mjs";
-    const pdf=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;
+    const task=pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer())});
+    let pdf=null;
     try{
+      pdf=await task.promise;
       if(pdf.numPages>3)throw new Error(
         lang()==="ar"?"الحد الحالي 3 صفحات PDF؛ قسّم الجدول لملف أصغر.":
           "PDF supports up to 3 pages. Please select a shorter timetable.");
+      if(pdf.numPages<1)throw new Error("The PDF has no pages");
       const images=[];
       for(let n=1;n<=pdf.numPages;n++){
         const page=await pdf.getPage(n);
         const base=page.getViewport({scale:1});
-        const scale=Math.min(2.1,1800/Math.max(base.width,base.height));
+        const scale=Math.min(2,2050/Math.max(base.width,base.height));
         const viewport=page.getViewport({scale});
         const canvas=document.createElement("canvas");
         canvas.width=Math.max(1,Math.floor(viewport.width));
@@ -232,34 +274,49 @@ async function toData(file){
         const context=canvas.getContext("2d",{alpha:false});
         if(!context)throw new Error("PDF canvas unavailable");
         await page.render({canvasContext:context,viewport}).promise;
-        const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",.84));
-        if(!blob)throw new Error("PDF image conversion failed");
+        const blob=await compactJpeg(canvas);
         images.push({mime:"image/jpeg",data:await readData(blob)});
-        page.cleanup();
+        if(typeof page.cleanup==="function")page.cleanup();
+        canvas.width=canvas.height=1;
       }
       return {images};
-    }finally{await pdf.destroy()}
+    }finally{
+      // PDF.js versions expose teardown on the loading task; never allow cleanup
+      // to replace the real result/error with "pdf.destroy is not a function".
+      try{
+        if(typeof task.destroy==="function")await task.destroy();
+        else if(typeof pdf?.cleanup==="function")await pdf.cleanup();
+      }catch(_){}
+    }
   }
   let blob=file;
   if(file.type.startsWith("image/")&&file.size>1200000){
     const bitmap=await createImageBitmap(file);
-    const ratio=Math.min(1,2000/Math.max(bitmap.width,bitmap.height));
-    const canvas=document.createElement("canvas");
-    canvas.width=Math.round(bitmap.width*ratio);
-    canvas.height=Math.round(bitmap.height*ratio);
-    canvas.getContext("2d").drawImage(bitmap,0,0,canvas.width,canvas.height);
-    bitmap.close();
-    const compressed=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",.86));
-    if(compressed&&compressed.size<file.size)blob=compressed;
+    try{
+      const ratio=Math.min(1,2050/Math.max(bitmap.width,bitmap.height));
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.max(1,Math.round(bitmap.width*ratio));
+      canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw new Error("Image conversion unavailable");
+      ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+      const compressed=await compactJpeg(canvas);
+      if(compressed.size<file.size)blob=compressed;
+    }finally{bitmap.close()}
   }
   return {images:[{mime:blob.type,data:await readData(blob)}]};
 }
-async function submit(text){
+async function submit(text,retrying=false){
   if(stateAI.busy||stateAI.saving)return;
   const file=stateAI.file;
   stateAI.busy=true;
-  const prior=stateAI.history.map(x=>({role:x.role,text:x.text}));
-  stateAI.history.push({role:"user",text:text+(file?(text?" · ":"")+file.name:"")});
+  const prior=stateAI.history.filter(x=>!x.isError).map(x=>({role:x.role,text:x.text}));
+  if(retrying && stateAI.lastFailed){
+    // Do not duplicate a failed prompt in conversational memory.
+    stateAI.history=stateAI.history.filter(x=>!x.isError && !x.failedPrompt);
+  }
+  stateAI.lastFailed=null;
+  stateAI.history.push({role:"user",text:text+(file?(text?" · ":"")+file.name:""),failedPrompt:true});
   draw();
   try{
     const body={message:text,draft:stateAI.draft,source:stateAI.source,history:prior};
@@ -276,9 +333,12 @@ async function submit(text){
     if(data.changed)stateAI.draft=normalizeDraft(data.entries);
     if(Array.isArray(data.extracted))stateAI.source=data.extracted.slice(0,80);
     stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,1200)});
+    stateAI.history[stateAI.history.length-2].failedPrompt=false;
     stateAI.file=null;
   }catch(e){
-    stateAI.history.push({role:"assistant",text:e.message||t("error")});
+    stateAI.lastFailed={text};
+    const safe=String(e?.message||t("error"));
+    stateAI.history.push({role:"assistant",text:safe,isError:true});
   }finally{
     stateAI.busy=false;draw();
   }
