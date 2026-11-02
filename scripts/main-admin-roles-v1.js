@@ -101,7 +101,14 @@
     const page=baseAdmin.apply(this,arguments);
     if(!active())return page;
     queueMicrotask(()=>{if(state.view==='admin')void loadRoles()});
-    return page+`<section class="module-card main-admin-panel" id="mainAdminRoles" hidden>
+    return page+`<style>
+      #mainAdminRoles[hidden]{display:none!important}
+      #mainAdminRoles .main-admin-role-pill.is-super{background:#eee7ff;color:#6945a2}
+      #mainAdminRoles .main-admin-role-action{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+      #mainAdminRoles .main-admin-toolbar>button{height:36px;border-radius:9px;padding:0 14px}
+      #mainAdminRoles .main-admin-role-action button{min-width:110px}
+      @media(max-width:680px){#mainAdminRoles .main-admin-role-action{justify-content:flex-start}}
+    </style><section class="module-card main-admin-panel" id="mainAdminRoles" hidden>
       <div class="main-admin-header">
         <div><span class="main-admin-eyebrow">ACCESS CONTROL</span>
           <h2>Manage Administrators</h2>
