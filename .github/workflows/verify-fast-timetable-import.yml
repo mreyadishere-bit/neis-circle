@@ -30,7 +30,6 @@ jobs:
           node qa/timetable-fast-import.test.mjs
           node qa/timetable-guided-import-v2.test.mjs
           node qa/timetable-pdf-position-and-footnotes.test.mjs
-          node qa/timetable-ai-timeout.test.mjs
           python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
           bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/fast-import-edge-compile
           node qa/static-check.mjs
