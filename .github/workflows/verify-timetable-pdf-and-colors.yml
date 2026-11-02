@@ -27,7 +27,7 @@ jobs:
           node --check scripts/timetable-ai-cloudflare-v1.js
           node qa/timetable-pdf-position-and-footnotes.test.mjs
           node qa/timetable-guided-import-v2.test.mjs
-          python3 -m unittest discover -s qa -p 'timetable-rpc-color-patch.test.py'
+          python3 qa/timetable-rpc-color-patch.test.py
           python3 -m py_compile scripts/ops/ovh-patch-timetable-rpc-colors.py
           bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/timetable-ts-check
           node qa/static-check.mjs
