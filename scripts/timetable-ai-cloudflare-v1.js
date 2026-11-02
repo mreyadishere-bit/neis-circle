@@ -405,6 +405,7 @@ function draw(){
   chat.setAttribute("role","log");chat.setAttribute("aria-live","polite");
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
+  drawWizard(chat);
   if(stateAI.busy)chat.append(message(t("busy"),"pending"));
   if(stateAI.lastFailed && !stateAI.busy){
     const retry=el("button","ttai-retry",t("retry"));
@@ -414,7 +415,7 @@ function draw(){
   }
   panel.append(chat);
   const changes=diff();
-  if(total(changes)>0){
+  if(total(changes)>0&&(!stateAI.wizard||stateAI.wizard.step==="review")){
     const bar=el("div","ttai-reviewbar");
     const summary=el("button","ttai-review-toggle",t("review")+" · +"+changes.add.length+
       " / ~"+changes.update.length+" / −"+changes.remove.length);
@@ -493,7 +494,10 @@ function setFile(file){
     alertUser(t("invalidFile"));return;
   }
   if(file.size>15*1024*1024){alertUser(t("tooLarge"));return}
+  if(stateAI.busy||stateAI.saving)return;
   stateAI.file=file;draw();
+  // Upload starts visual discovery, not an immediate write.
+  void submit("");
 }
 async function readData(blob){
   return await new Promise((resolve,reject)=>{
@@ -613,6 +617,7 @@ async function submit(text,retrying=false){
       previousDraftEntries:prevDraft,
       source:stateAI.source,
       extracted:stateAI.source,
+      mode:file?"discover":"edit",
       history:prior,
       messages:prior
     };
@@ -626,13 +631,27 @@ async function submit(text,retrying=false){
       }
       throw new Error(description||error?.message||t("error"));
     }
-    if(data.changed){
-      if(stateAI.draft)stateAI.draftHistory.push(structuredClone(stateAI.draft));
-      stateAI.draft=normalizeDraft(data.entries);
+    if(file){
+      // An uploaded document only discovers subjects and source lessons.
+      // AI must not write into the timetable before the wizard review.
+      if(!data.extracted||typeof data.extracted!=="object")
+        throw new Error(wizardText("Couldn't identify the timetable. Try a clearer scan.","مش قادر أقرأ الجدول. ارفع نسخة أوضح."));
+      stateAI.source=data.extracted;startWizard(data.extracted);
+      stateAI.history.push({role:"assistant",text:wizardText(
+        "I found the subjects. Select yours below and review every lesson before saving.",
+        "استخرجت المواد. اختار موادك تحت وبعدها راجع كل حصة قبل الحفظ.")});
+    }else{
+      if(data.changed){
+        if(stateAI.draft)stateAI.draftHistory.push(structuredClone(stateAI.draft));
+        const colors=stateAI.wizard?.colors||{};
+        stateAI.draft=normalizeDraft(data.entries.map(row=>({
+          ...row,color:colors[subjectKey(row.title)]||
+            stateAI.draft?.find(item=>item.key===row.key)?.color||suggestedColor(row.title)
+        })));
+      }
+      if(data.extracted&&typeof data.extracted==="object")stateAI.source=data.extracted;
+      stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,1200)});
     }
-    if(Array.isArray(data.extracted))stateAI.source=data.extracted.slice(0,80);
-    else if(data.extracted&&typeof data.extracted==="object")stateAI.source=data.extracted;
-    stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,1200)});
     stateAI.history[stateAI.history.length-2].failedPrompt=false;
     stateAI.file=null;
   }catch(e){
@@ -646,6 +665,21 @@ async function submit(text,retrying=false){
 async function applyPlan(){
   if(stateAI.busy||stateAI.saving)return;
   const d=diff();if(!total(d))return;
+  if(stateAI.wizard&&stateAI.wizard.step!=="review")return;
+  try{
+    const unique=new Set();
+    for(const row of stateAI.draft){
+      const start=String(row.start_time||"").slice(0,5),end=String(row.end_time||"").slice(0,5);
+      if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)||!/^([01]\d|2[0-3]):[0-5]\d$/.test(end)||end<=start)
+        throw new Error(wizardText("Fix lesson times before saving.","صحّح أوقات الحصص قبل الحفظ."));
+      if(!String(row.title||"").trim()||!Number.isInteger(Number(row.day_of_week))||Number(row.day_of_week)<0||Number(row.day_of_week)>6)
+        throw new Error(wizardText("Each lesson needs a subject and valid day.","كل حصة لازم ليها مادة ويوم صحيح."));
+      const key=[row.day_of_week,start,end,subjectKey(row.title)].join("|");
+      if(unique.has(key))throw new Error(wizardText("Remove duplicate lessons before saving.","احذف الحصص المكررة قبل الحفظ."));
+      unique.add(key);
+    }
+    normalizeDraft(stateAI.draft);
+  }catch(e){alertUser(e.message||t("error"));return}
   stateAI.preview=true;draw();
   if(!window.confirm(t("confirm")))return;
   stateAI.saving=true;draw();
