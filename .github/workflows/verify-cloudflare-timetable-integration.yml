@@ -6,6 +6,7 @@ on:
       - 'scripts/timetable-ai-cloudflare-v1.js'
       - 'supabase/functions/timetable-ai-cloudflare/index.ts'
       - 'scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py'
+      - 'qa/ovh-cloudflare-compose-preservation.test.py'
       - '.github/workflows/verify-cloudflare-timetable-integration.yml'
   pull_request:
     branches: [main]
@@ -27,6 +28,7 @@ jobs:
         run: |
           node --check scripts/timetable-ai-cloudflare-v1.js
           python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-cloudflare-v1.py
+          python3 qa/ovh-cloudflare-compose-preservation.test.py
           bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/cloudflare-ts-syntax-check
           python3 - <<'PY'
           from pathlib import Path
