@@ -217,3 +217,18 @@
 .ttai-icon-btn{display:flex!important;align-items:center!important;justify-content:center!important;line-height:1!important;padding:0!important;box-sizing:border-box;font-family:Arial,sans-serif;font-weight:400}
 .ttai-header-controls{align-items:center}
 @media(max-width:440px){.ttai-issue-actions{display:block}.ttai-issue-action{width:100%}}
+
+/* Timetable review: keep verified lessons compact; expand only on request. */
+.ttai-verified-card{border:1px solid var(--line,#d6e2ec);border-radius:13px;background:var(--card,#fff);padding:11px;display:grid;gap:10px;margin-bottom:7px}
+.ttai-verified-heading,.ttai-verified-subject{display:flex;align-items:center;gap:10px;min-width:0}
+.ttai-verified-heading{justify-content:space-between}
+.ttai-verified-subject{flex:1}
+.ttai-verified-dot{width:10px;height:34px;flex:0 0 10px;border-radius:6px}
+.ttai-verified-copy{display:grid;gap:4px;min-width:0}
+.ttai-verified-copy strong{font-size:12px;overflow-wrap:anywhere;color:var(--ink,#1b2939)}
+.ttai-verified-copy>span{font-size:11px;color:var(--muted,#65758a);overflow-wrap:anywhere}
+.ttai-verified-edit{min-width:60px;min-height:34px!important}
+.ttai-verified-card>.ttai-wiz-lesson{margin:0;background:var(--soft,#f0f5fa);box-shadow:none;border:1px solid var(--line,#d6e2ec)}
+.ttai-save-warning{margin:0 0 5px;font-size:11px;line-height:1.5;color:var(--muted,#65758a);text-align:center}
+.ttai-issues{scroll-margin-top:12px}
+.ttai-issue-card{scroll-margin-top:12px}

@@ -39,6 +39,7 @@ jobs:
           done
           node qa/timetable-fast-import.test.mjs
           node qa/timetable-pdf-position-and-footnotes.test.mjs
+          node qa/timetable-grounded-regression.test.mjs
       - name: Confirm credentials are available without printing them
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}

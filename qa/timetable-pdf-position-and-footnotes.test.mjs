@@ -10,11 +10,13 @@ assert.match(frontend,/convertToViewportPoint/);
 assert.match(edge,/DISCOVERY_INSTRUCTION/);
 assert.match(edge,/POSITIONED PDF EVIDENCE/);
 assert.match(edge,/parseExplicitFootnoteLessons\(pdfEvidence\)/);
-assert.match(edge,/noteKeys/);
+assert.match(edge,/groundedKeys/,'confirmed PDF evidence must take priority over conflicting AI lessons');
+assert.match(edge,/parsePdfTextGridLessons/);
+assert.match(edge,/parseArabicDatedLessons/);
 assert.match(edge,/discoveryMode \? \[\]/);
 
 const beg=edge.indexOf("export function parseExplicitFootnoteLessons(");
-const end=edge.indexOf("\nfunction parseModelObject(",beg);
+const end=edge.indexOf("\n/**\n * Recover only independently readable",beg);
 assert.ok(beg>=0&&end>beg);
 let fn=edge.slice(beg,end);
 fn=fn.replace("export function parseExplicitFootnoteLessons(pdfEvidence: string): Array<Record<string, unknown>>","function parseExplicitFootnoteLessons(pdfEvidence)")

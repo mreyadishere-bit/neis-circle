@@ -11,7 +11,10 @@ const editable=["title","day_of_week","start_time","end_time","location","notes"
 const SUBJECT_COLORS=["#2f7db8","#7a52d8","#10a879","#efb83f","#ec6fb7","#e56d57","#5e6a78","#22a6b3"];
 function subjectKey(title){
   return String(title||"").normalize("NFKC").trim().replace(/\s+/g," ")
-    .toLocaleLowerCase().replace(/\bgr\s*([0-9]{1,2})\b/g,"gr$1")
+    .toLocaleLowerCase().replace(/[\u064b-\u065f\u0670\u0640]/g,"")
+    .replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه")
+    .replace(/^physic(?:s)?\b/g,"physics").replace(/^maths\b/g,"math")
+    .replace(/\bgr(?:ade)?\s*([0-9]{1,2})\b/g,"gr$1")
     .replace(/\bg\s*(11|12)\b/g,"gr$1")
     .replace(/\bl\s*([12])\b/g,"l$1");
 }
@@ -173,6 +176,7 @@ function startWizard(extracted){
     step:"subjects",subjects,lessons,selected:new Set(),locations:{},colors:{},mode:"replace",
     warnings:Array.isArray(extracted?.ambiguous_items)?extracted.ambiguous_items.map(String).slice(0,20):[]
   };
+  wizard.sourceWarnings=[...wizard.warnings];
   const oldUniqueSubjects=new Set(stateAI.original.map(x=>subjectKey(x.title)));
   const oldUniqueColors=new Set(stateAI.original.map(x=>String(x.color||"").toLowerCase()).filter(Boolean));
   // Early AI imports could only save the hard-coded blue SQL default.
@@ -209,6 +213,9 @@ function buildWizardDraft(){
   const w=stateAI.wizard;
   if(!w)return;
   const selected=w.selected;
+  // Re-entering Review must not append the same warning again.
+  w.warnings=[...(w.sourceWarnings||[])];
+  w.addedIssues={};w.pendingIssues={};w.editingLesson=null;
   const generated=[],seen=new Set();
   for(const lesson of w.lessons){
     const key=subjectKey(lesson.title);
@@ -235,10 +242,8 @@ function buildWizardDraft(){
     !generated.some(lesson=>subjectKey(lesson.title)===choice||
       (subjectBase(lesson.title)===choice&&matchesSelectedSubject(lesson.title,w))));
   w.missingSubjects=unavailable;
-  if(unavailable.length)w.warnings.push(wizardText(
-    "No readable lesson found for: ","لم أجد حصة واضحة لمادة: ")+
-    unavailable.join(", ")+wizardText(". Add or verify these manually.",
-      ". ضيف الحصص دي أو راجع الملف بنفسك."));
+  // Missing subjects already have dedicated issue cards. Do not create a
+  // second generic warning/card describing the same missing sessions.
   const kept=w.mode==="merge"?structuredClone(stateAI.original):[];
   const existing=new Set(kept.map(x=>[x.day_of_week,x.start_time,x.end_time,subjectKey(x.title)].join("|")));
   const additions=generated.filter(x=>!existing.has([x.day_of_week,x.start_time,x.end_time,subjectKey(x.title)].join("|")));
@@ -261,7 +266,9 @@ function pendingIssue(issueId,suggestedTitle=""){
   w.pendingIssues=w.pendingIssues||{};
   if(!w.pendingIssues[issueId]){
     const selected=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
-    const title=selected.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||suggestedTitle||"";
+    // An unrelated warning (e.g. History) may not silently create a lesson
+    // when History isn't one of the student's selected subjects.
+    const title=selected.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||"";
     w.pendingIssues[issueId]={key:"pending:"+issueId,title,day_of_week:-1,
       start_time:"",end_time:"",location:"",notes:"",category:"Class",
       color:w.colors[subjectKey(title)]||suggestedColor(title)};
@@ -340,9 +347,12 @@ function editWizardRow(row,compact=false){
     let input;
     if(options){
       input=el("select");
-      for(const [v,label] of options){
+      const hasOption=options.some(([v])=>subjectKey(v)===subjectKey(value));
+      const choices=!hasOption&&String(value||"").trim()
+        ?[...options,[String(value),String(value)]]:options;
+      for(const [v,label] of choices){
         const option=el("option",null,label);option.value=String(v);
-        option.selected=String(v)===String(value);input.append(option);
+        option.selected=subjectKey(v)===subjectKey(value);input.append(option);
       }
     }else{
       input=el("input");input.type=type;input.value=String(value||"");
@@ -472,11 +482,23 @@ function drawWizard(chat){
     // Individual review cards appear before the list of verified lessons.
     // Summary-only warnings remain informational; they aren't fake sessions.
     const selectedNames=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
-    const missingNames=selectedNames.filter(name=>w.issueRows?.["missing:"+subjectKey(name)] || !stateAI.draft.some(row=>
+    const missingNames=selectedNames.filter(name=>!stateAI.draft.some(row=>
       subjectKey(row.title)===subjectKey(name)));
-    const actionable=w.warnings.filter(item=>!/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
-    if(actionable.length||missingNames.length||w.warnings.length){
+    const actionable=w.warnings.filter(item=>{
+      const str=String(item).trim();
+      if(/^\\d+ grid lesson\\(s\\) need manual review/i.test(str)||
+        /^(?:No readable lesson found for|لم أجد حصة واضحة لمادة)/i.test(str))return false;
+      // Only offer Add/Edit for warnings that name one of the student's
+      // selected subjects. Other grades are informational, not missing tasks.
+      return selectedNames.some(name=>str.toLowerCase().includes(name.toLowerCase()));
+    });
+    const summaryWarnings=w.warnings.filter(item=>/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+    const otherWarnings=w.warnings.filter(item=>!actionable.includes(item)&&
+      !summaryWarnings.includes(item)&&
+      !/^(?:No readable lesson found for|لم أجد حصة واضحة لمادة)/i.test(String(item)));
+    if(actionable.length||missingNames.length||summaryWarnings.length||otherWarnings.length){
       const issues=el("section","ttai-issues");
+      issues.id="ttai-needs-attention";
       issues.append(el("h3",null,wizardText("Needs your attention","يحتاج مراجعتك")));
       issues.append(el("p","ttai-wiz-hint",wizardText(
         "Each issue has its own editor. No unconfirmed time will be filled in automatically.",
@@ -494,7 +516,7 @@ function drawWizard(chat){
           suggested||wizardText("Unclear PDF entry "+(i+1),"خانة غير واضحة "+(i+1)),
           raw,suggested));
       });
-      const summary=w.warnings.filter(item=>/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+      const summary=summaryWarnings;
       if(summary.length){
         const note=el("details","ttai-wiz-warnings");
         note.append(el("summary",null,wizardText(
@@ -502,9 +524,17 @@ function drawWizard(chat){
         summary.forEach(item=>note.append(el("p",null,String(item))));
         issues.append(note);
       }
+      if(otherWarnings.length){
+        const note=el("details","ttai-wiz-warnings");
+        note.append(el("summary",null,wizardText(
+          "Other extraction notes","ملاحظات أخرى عن قراءة الملف")));
+        otherWarnings.forEach(item=>note.append(el("p",null,String(item).slice(0,260))));
+        issues.append(note);
+      }
       panel.append(issues);
     }
     const lessons=el("div","ttai-wiz-lessons");
+    w.reviewExpanded=w.reviewExpanded||new Set();
     const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
     let lastDay=-1;
     for(const row of ordered){
@@ -512,7 +542,28 @@ function drawWizard(chat){
         lastDay=row.day_of_week;
         lessons.append(el("h4","ttai-wiz-day",dayName(lastDay)));
       }
-      lessons.append(editWizardRow(row));
+      const compact=el("section","ttai-verified-card");
+      const heading=el("div","ttai-verified-heading");
+      const identification=el("div","ttai-verified-subject");
+      const dot=el("span","ttai-verified-dot");
+      dot.style.background=row.color||suggestedColor(row.title);
+      const summary=el("div","ttai-verified-copy");
+      summary.append(el("strong",null,row.title),
+        el("span",null,String(row.start_time)+" – "+String(row.end_time)+
+          (row.location?" · "+row.location:"")));
+      identification.append(dot,summary);
+      const expanded=w.reviewExpanded.has(row.key);
+      const toggle=wizardButton(expanded?wizardText("Done","تم"):
+        wizardText("Edit","تعديل"),"ttai-subtle ttai-verified-edit",()=>{
+          if(expanded)w.reviewExpanded.delete(row.key);
+          else w.reviewExpanded.add(row.key);
+          draw();
+        });
+      toggle.setAttribute("aria-expanded",String(expanded));
+      heading.append(identification,toggle);
+      compact.append(heading);
+      if(expanded)compact.append(editWizardRow(row));
+      lessons.append(compact);
     }
     if(!ordered.length)lessons.append(el("p","ttai-wiz-warning",wizardText(
       "No readable times found. Add lessons manually or upload a clearer timetable.",
@@ -602,8 +653,24 @@ function draw(){
       }
       bar.append(items);
     }
-    const action=el("button","ttai-apply",stateAI.saving?t("saving"):t("apply"));
-    action.type="button";action.disabled=stateAI.busy||stateAI.saving;action.onclick=()=>{void applyPlan()};
+    const remaining=stateAI.wizard?.step==="review"
+      ?stateAI.wizard.subjects.filter(name=>stateAI.wizard.selected.has(subjectKey(name))&&
+        !stateAI.draft.some(row=>subjectKey(row.title)===subjectKey(name))):[];
+    const action=el("button","ttai-apply",
+      remaining.length?wizardText("Review "+remaining.length+" missing subject(s)","راجع "+remaining.length+" مواد ناقصة"):
+        (stateAI.saving?t("saving"):t("apply")));
+    action.type="button";action.disabled=stateAI.busy||stateAI.saving;
+    if(remaining.length){
+      const hint=el("p","ttai-save-warning",wizardText(
+        changes.add.length+" lesson(s) ready. Finish or deselect the missing subjects before saving.",
+        changes.add.length+" حصص جاهزة. أكمل المواد الناقصة أو ألغِ اختيارها قبل الحفظ."));
+      bar.append(hint);
+      action.onclick=()=>{
+        const issues=chat.querySelector("#ttai-needs-attention");
+        if(issues)chat.scrollTop=Math.max(0,issues.offsetTop-chat.offsetTop-16);
+        else alertUser(wizardText("Return to Subjects and review your choices.","ارجع لاختيار المواد وراجعها."));
+      };
+    }else action.onclick=()=>{void applyPlan()};
     bar.append(action);
     if(stateAI.draftHistory.length>0){
       const undoBtn=el("button","ttai-link",t("undo"));
@@ -962,7 +1029,11 @@ async function submit(text,retrying=false){
       if(!data.extracted||typeof data.extracted!=="object")
         throw new Error(wizardText("Couldn't identify the timetable. Try a clearer scan.","مش قادر أقرأ الجدول. ارفع نسخة أوضح."));
       stateAI.source=data.extracted;startWizard(data.extracted);
-      stateAI.history.push({role:"assistant",text:wizardText(
+      const fromPdfText=data.provider==="pdf-text";
+      stateAI.history.push({role:"assistant",text:fromPdfText?wizardText(
+        "Visual AI was unavailable. I recovered only completely readable lessons from your PDF text. Please review missing sessions before saving.",
+        "التحليل البصري غير متاح؛ استخرجت فقط الحصص الواضحة من نص الـPDF. راجع الحصص الناقصة قبل الحفظ."
+      ):wizardText(
         "I found the subjects. Select yours below and review every lesson before saving.",
         "استخرجت المواد. اختار موادك تحت وبعدها راجع كل حصة قبل الحفظ.")});
     }else{
