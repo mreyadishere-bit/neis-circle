@@ -4,8 +4,10 @@
 1. Validates staged frontend (`timetable-ai-v1.js`, `timetable-ai-v1.css`, `01-core.js`)
    and Edge Function (`timetable-ai/index.ts` with PR #453 authoritative `client.auth.getUser(jwt)`).
 2. Builds an immutable OVH Edge Runtime release directory preserving `main/index.ts` and all
-   existing functions, stages `timetable-ai/index.ts`, injects `GEMINI_API_KEY` into
-   `docker-compose.edge-integrations.yml` (mode 0600), recreates `functions`, and verifies
+   existing functions, stages `timetable-ai/index.ts`, creates a PRIVATE additive
+   Compose override and env file WITHOUT editing `docker-compose.edge-integrations.yml`,
+   checks all existing services/environment/mounts are preserved, then recreates only
+   `functions` and verifies
    `https://supabase.neiscircle.site/functions/v1/timetable-ai` responds with 401 on unauthenticated
    POST (with automatic rollback on failure).
 3. Builds an immutable OVH Frontend release from the active `/srv/neis-circle` bind mount,
@@ -17,6 +19,7 @@
 Never deploys a maintenance page and never logs secret values.
 """
 from pathlib import Path
+import copy
 import base64
 import json
 import os
@@ -32,6 +35,11 @@ ENV_FILE = ROOT / '.env'
 STAGE = Path('/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3')
 EDGE_REL = Path('/home/ubuntu/neis-backups/edge-runtime-release-gemini-20261102-v3')
 EDGE_OVERLAY = ROOT / 'docker-compose.edge-integrations.yml'
+# This deployment owns ONLY this additive override; never rewrite the shared
+# Edge integrations overlay containing secrets and unrelated service settings.
+GEMINI_OVERLAY = ROOT / 'docker-compose.timetable-ai-gemini.yml'
+GEMINI_ENV_FILE = STAGE / 'gemini-provider.env'
+EXISTING_TIMETABLE_OVERLAY = ROOT / 'docker-compose.timetable-ai.yml'
 FRONTEND_DEST = Path('/home/ubuntu/neis-frontend/releases/timetable-ai-gemini-20261102-v3')
 FRONTEND_OVERLAY = ROOT / 'docker-compose.frontend-public.yml'
 DOCKER = ['sudo', '-n', '/usr/bin/docker']
@@ -47,10 +55,19 @@ CSS = 'styles/timetable-ai-v1.css'
 phase = 'preflight'
 
 
-def compose_cmd(include_edge=True):
+def compose_cmd(include_edge=True, include_gemini=None):
     files = list(COMPOSE_FILES)
-    if include_edge and EDGE_OVERLAY.is_file():
-        files.append('docker-compose.edge-integrations.yml')
+    if include_edge:
+        if EDGE_OVERLAY.is_file():
+            files.append('docker-compose.edge-integrations.yml')
+        # An existing timetable overlay may hold the *active* Edge code mount.
+        # Excluding it would silently discard active service configuration.
+        if EXISTING_TIMETABLE_OVERLAY.is_file():
+            files.append('docker-compose.timetable-ai.yml')
+        if include_gemini is None:
+            include_gemini = GEMINI_OVERLAY.is_file()
+        if include_gemini:
+            files.append('docker-compose.timetable-ai-gemini.yml')
     return DOCKER + ['compose'] + [s for f in files for s in ('-f', f)]
 
 
@@ -103,10 +120,85 @@ def verify_edge_endpoint(anon_key):
     ensure(status == 401, f'EDGE_UNAUTH_STATUS_UNEXPECTED_{status}')
 
 
+def read_compose_config(include_gemini):
+    # Parsed in-memory only: rendered Compose config contains secrets.
+    # Never print the returned object or a failed command's stdout/stderr.
+    rendered = call(compose_cmd(True, include_gemini) +
+                    ['config', '--format', 'json'], timeout=50)
+    return json.loads(rendered)
+
+
+def edge_mount(config):
+    entries = config['services']['functions'].get('volumes', [])
+    matches = [v for v in entries if v.get('target') == '/home/deno/functions']
+    ensure(len(matches) == 1, 'EDGE_MOUNT_CONFIG_AMBIGUOUS')
+    return matches[0]
+
+
+def verify_edge_config_preserved(before, after, old_mount_source,
+                                 new_mount_source, gemini_key):
+    """Prove that ONLY Gemini env + the one Edge source mount changed."""
+    before_services = copy.deepcopy(before['services'])
+    after_services = copy.deepcopy(after['services'])
+    ensure(before_services.keys() == after_services.keys(),
+           'DOCKER_SERVICE_SET_CHANGED')
+    for name in before_services:
+        if name != 'functions':
+            ensure(before_services[name] == after_services[name],
+                   'UNRELATED_DOCKER_SERVICE_CHANGED')
+    old = before_services['functions']
+    new = after_services['functions']
+    old_env = old.pop('environment', {}) or {}
+    new_env = new.pop('environment', {}) or {}
+    ensure(new_env.get('GEMINI_API_KEY') == gemini_key,
+           'GEMINI_SECRET_ENV_NOT_EFFECTIVE')
+    new_env.pop('GEMINI_API_KEY')
+    old_env.pop('GEMINI_API_KEY', None)
+    ensure(old_env == new_env, 'EDGE_OTHER_ENV_CHANGED')
+    old_mounts = old.pop('volumes', []) or []
+    new_mounts = new.pop('volumes', []) or []
+    ensure(len(old_mounts) == len(new_mounts),
+           'EDGE_OTHER_MOUNTS_CHANGED')
+    for o, n in zip(old_mounts, new_mounts):
+        if o.get('target') == '/home/deno/functions':
+            ensure(n.get('target') == o.get('target') and
+                   o.get('source') == str(old_mount_source) and
+                   n.get('source') == str(new_mount_source) and
+                   n.get('read_only') is True,
+                   'EDGE_CODE_MOUNT_INVALID')
+            old_mounts_item = dict(o)
+            new_mounts_item = dict(n)
+            old_mounts_item.pop('source', None)
+            new_mounts_item.pop('source', None)
+            ensure(old_mounts_item == new_mounts_item,
+                   'EDGE_MOUNT_OPTIONS_CHANGED')
+        else:
+            ensure(o == n, 'EDGE_OTHER_MOUNTS_CHANGED')
+    # Docker Compose may surface env_file metadata even after expanding its
+    # contents. The additional private env_file is the ONLY permitted new field.
+    old_files = old.pop('env_file', []) or []
+    new_files = new.pop('env_file', []) or []
+    ensure(new_files in (old_files, old_files + [str(GEMINI_ENV_FILE)]),
+           'EDGE_ENV_FILE_LIST_CHANGED')
+    ensure(old == new, 'EDGE_OTHER_CONFIGURATION_CHANGED')
+
+
 def deploy_edge_function(anon_key, gemini_key):
     global phase
     phase = 'edge_stage'
+    ensure(EDGE_OVERLAY.is_file() and not EDGE_OVERLAY.is_symlink(),
+           'EDGE_ORIGINAL_OVERLAY_MISSING')
+    ensure((EDGE_OVERLAY.stat().st_mode & 0o777) == 0o600,
+           'EDGE_ORIGINAL_OVERLAY_PERMISSIONS')
+    ensure(not GEMINI_OVERLAY.exists() and not GEMINI_OVERLAY.is_symlink(),
+           'GEMINI_OVERRIDE_ALREADY_EXISTS')
+    ensure(not GEMINI_ENV_FILE.exists() and not GEMINI_ENV_FILE.is_symlink(),
+           'GEMINI_SECRET_FILE_ALREADY_EXISTS')
+    ensure(not EDGE_REL.exists(), 'EDGE_RELEASE_ALREADY_EXISTS')
+
     edge_inspect = json.loads(call(DOCKER + ['inspect', 'supabase-edge-functions'], timeout=20))[0]
+    ensure(edge_inspect.get('State', {}).get('Running') is True,
+           'EDGE_SERVICE_NOT_RUNNING')
     edge_mounts = [
         m.get('Source')
         for m in edge_inspect.get('Mounts', [])
@@ -114,55 +206,78 @@ def deploy_edge_function(anon_key, gemini_key):
     ]
     ensure(len(edge_mounts) == 1, 'EDGE_FUNCTIONS_MOUNT_NOT_FOUND')
     src_functions = Path(edge_mounts[0])
-    ensure((src_functions / 'main' / 'index.ts').is_file(), 'EDGE_MAIN_ROUTER_MISSING')
+    ensure((src_functions / 'main' / 'index.ts').is_file(),
+           'EDGE_MAIN_ROUTER_MISSING')
+    previous_overlay_bytes = EDGE_OVERLAY.read_bytes()
+    previous = read_compose_config(include_gemini=False)
+    ensure(edge_mount(previous).get('source') == str(src_functions),
+           'LIVE_EDGE_MOUNT_DIFFERS_FROM_COMPOSE')
 
-    if EDGE_REL.exists():
-        shutil.rmtree(EDGE_REL)
     target_functions = EDGE_REL / 'functions'
     shutil.copytree(src_functions, target_functions)
     (target_functions / 'timetable-ai').mkdir(parents=True, exist_ok=True)
     shutil.copy2(STAGE / 'index.ts', target_functions / 'timetable-ai' / 'index.ts')
 
-    prev_edge_overlay = EDGE_OVERLAY.read_text() if EDGE_OVERLAY.is_file() else None
-    if prev_edge_overlay is not None:
-        (STAGE / 'edge-overlay.before-timetable-ai.yml').write_text(prev_edge_overlay)
+    # A private 0600 env_file avoids putting the Gemini credential into
+    # Git-tracked or existing shared Compose YAML files.
+    secret_fd = os.open(str(GEMINI_ENV_FILE),
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(secret_fd, 'w', encoding='utf-8') as f:
+            f.write('GEMINI_API_KEY=' + json.dumps(gemini_key) + '\n')
+    except Exception:
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        raise
 
-    # Preserve existing environment entries in docker-compose.edge-integrations.yml while setting GEMINI_API_KEY
-    env_map = {}
-    if prev_edge_overlay:
-        for line in prev_edge_overlay.splitlines():
-            m = re.match(r'^\s{6}([A-Z0-9_]+):\s*(.+?)\s*$', line)
-            if m:
-                k, val = m.group(1), m.group(2)
-                try:
-                    env_map[k] = json.loads(val)
-                except Exception:
-                    env_map[k] = val.strip('"').strip("'")
-    env_map['GEMINI_API_KEY'] = gemini_key
-
-    env_lines = '\n'.join(f'      {k}: {json.dumps(v)}' for k, v in sorted(env_map.items()))
-    new_edge_overlay = (
+    # Docker Compose merges services: this additive override changes only the
+    # /home/deno/functions mount and adds the Gemini env_file. Do not change
+    # ports, command, image, other mounts, or existing environment settings.
+    override = (
         'services:\n'
         '  functions:\n'
+        '    env_file:\n'
+        f'      - {GEMINI_ENV_FILE}\n'
         '    volumes:\n'
-        f'      - {target_functions}:/home/deno/functions:ro\n'
-        '    environment:\n'
-        f'{env_lines}\n'
+        '      - type: bind\n'
+        f'        source: {target_functions}\n'
+        '        target: /home/deno/functions\n'
+        '        read_only: true\n'
     )
+    fd = os.open(str(GEMINI_OVERLAY),
+                 os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, 'w', encoding='utf-8') as f:
+        f.write(override)
+
+    phase = 'edge_preflight'
+    try:
+        candidate = read_compose_config(include_gemini=True)
+        verify_edge_config_preserved(previous, candidate,
+                                     src_functions, target_functions, gemini_key)
+        ensure(EDGE_OVERLAY.read_bytes() == previous_overlay_bytes,
+               'EXISTING_EDGE_OVERLAY_MODIFIED')
+        call(compose_cmd(True, True) + ['config', '--quiet'], timeout=40)
+    except Exception:
+        GEMINI_OVERLAY.unlink(missing_ok=True)
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        raise
 
     phase = 'edge_activate'
     try:
-        EDGE_OVERLAY.write_text(new_edge_overlay)
-        os.chmod(EDGE_OVERLAY, 0o600)
-        call(compose_cmd(True) + ['config', '--quiet'], timeout=40)
-        call(compose_cmd(True) + ['up', '-d', '--no-deps', '--force-recreate', 'functions'], timeout=120)
+        call(compose_cmd(True, True) +
+             ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
+             timeout=120)
         verify_edge_endpoint(anon_key)
+        ensure(EDGE_OVERLAY.read_bytes() == previous_overlay_bytes,
+               'EXISTING_EDGE_OVERLAY_MODIFIED')
     except Exception:
-        if prev_edge_overlay is not None:
-            EDGE_OVERLAY.write_text(prev_edge_overlay)
-            os.chmod(EDGE_OVERLAY, 0o600)
-            call(compose_cmd(True) + ['up', '-d', '--no-deps', '--force-recreate', 'functions'], timeout=100, check=False)
-            print('TIMETABLE_AI_EDGE=ROLLED_BACK')
+        # The original overlay is untouched. Remove our new override and
+        # recreate only functions from the previous, complete Compose stack.
+        GEMINI_OVERLAY.unlink(missing_ok=True)
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        call(compose_cmd(True, False) +
+             ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
+             timeout=100, check=False)
+        print('TIMETABLE_AI_EDGE=ROLLED_BACK')
         raise
 
 
