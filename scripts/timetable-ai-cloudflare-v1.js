@@ -555,9 +555,41 @@ async function toData(file){
         :"This PDF has more than 5 pages. Please upload a PDF containing up to five timetable pages.");
     }
     const attachments=[];
+    const textEvidence=[];
     for(let pageNum=1;pageNum<=doc.numPages;pageNum++){
       const page=await doc.getPage(pageNum);
       const original=page.getViewport({scale:1});
+      // Read embedded PDF text with positions as independent evidence,
+      // preserving spatial relationships. Never replace visual analysis
+      // with flattened plain text: combine BOTH sources.
+      try{
+        const textContent=await page.getTextContent();
+        const positioned=[];
+        for(const item of textContent.items||[]){
+          if(typeof item.str!=="string"||!item.str.trim()||!item.transform)continue;
+          const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
+          const x=Math.round(1000*point[0]/original.width);
+          const y=Math.round(1000*point[1]/original.height);
+          if(x>=-20&&x<=1020&&y>=-20&&y<=1020)
+            positioned.push({x,y,text:item.str.replace(/[\\r\\n]+/g," ").trim().slice(0,180)});
+        }
+        positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
+        const groups=[];
+        for(const part of positioned){
+          let group=groups[groups.length-1];
+          if(!group||Math.abs(part.y-group.y)>7){
+            group={y:part.y,parts:[]};groups.push(group);
+          }
+          group.parts.push(part);
+        }
+        const lines=groups.map(group=>{
+          group.parts.sort((a,b)=>a.x-b.x);
+          return "y="+group.y+" "+group.parts.map(part=>"x="+part.x+":"+part.text).join(" | ");
+        });
+        textEvidence.push("PAGE "+pageNum+" POSITIONED PDF TEXT\\n"+lines.join("\\n").slice(0,11000));
+      }catch{
+        // Scanned PDFs have no text layer; visual extraction still works.
+      }
       const scale=Math.min(2.5,1600/original.width,2100/original.height);
       const viewport=page.getViewport({scale});
       const canvas=document.createElement("canvas");
@@ -574,7 +606,7 @@ async function toData(file){
         name:file.name+" — page "+pageNum, mimeType:"image/jpeg", data
       });
     }
-    return {attachments};
+    return {attachments,textEvidence:textEvidence.join("\\n\\n").slice(0,38000)};
   }finally{
     if(doc)await doc.destroy();
   }
