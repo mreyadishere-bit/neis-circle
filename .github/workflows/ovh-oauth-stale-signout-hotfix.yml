@@ -4,6 +4,9 @@ on:
     branches: [feature/timetable-ai-assistant-20261102]
     paths:
       - '.github/workflows/ovh-oauth-stale-signout-hotfix.yml'
+      - 'qa/oauth-stale-signout.test.mjs'
+      - 'scripts/identity-v15.js'
+      - 'scripts/ops/ovh-oauth-stale-logout-hotfix.py'
   workflow_dispatch:
 permissions:
   contents: read
