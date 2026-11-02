@@ -400,12 +400,12 @@ async function discoverGeminiByPageGroups(
   systemInstruction: string,
 ): Promise<string> {
   const pages=evidence.split(/(?=PAGE \d+ POSITIONED PDF TEXT)/).filter(Boolean);
-  const header=(pages[0]||"").slice(0,4500);
+  const header=(pages[0]||"").slice(0,2400);
   const groups:Array<{start:number;images:Array<Record<string,unknown>>}>=[];
-  for(let i=0;i<imageParts.length;i+=2)groups.push({start:i,images:imageParts.slice(i,i+2)});
+  for(let i=0;i<imageParts.length;i++)groups.push({start:i,images:imageParts.slice(i,i+1)});
   const responses=await Promise.all(groups.map(async group=>{
     const pageNumbers=group.images.map((_,i)=>group.start+i+1);
-    const localEvidence=pageNumbers.map(n=>(pages[n-1]||"").slice(0,9000)).join("\n\n");
+    const localEvidence=pageNumbers.map(n=>(pages[n-1]||"").slice(0,6500)).join("\n\n");
     const instruction="Analyze ONLY original PDF page(s) "+pageNumbers.join(", ")+
       ". Every detected lesson must use ORIGINAL source_page numbering "+pageNumbers.join(" or ")+
       " and its source_x coordinate. Do not reinterpret the attached images as page 1 unless it is original page 1."+
@@ -418,9 +418,9 @@ async function discoverGeminiByPageGroups(
       {role:"user",content:[{type:"text",text:instruction},...group.images]},
     ];
     let raw:string;
-    try{raw=await callGemini(key,messages,GEMINI_MODEL,29000);}
+    try{raw=await callGemini(key,messages,GEMINI_MODEL,20000);}
     catch{
-      raw=await callGemini(key,messages,GEMINI_FAST_FALLBACK,13000);
+      raw=await callGemini(key,messages,GEMINI_FAST_FALLBACK,11000);
     }
     const parsed=parseModelObject(raw);
     const item=parsed?.extracted && typeof parsed.extracted==="object"?parsed.extracted:parsed;
