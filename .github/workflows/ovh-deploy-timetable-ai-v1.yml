@@ -1,0 +1,97 @@
+name: Deploy Timetable AI to OVH (One-time)
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - '.github/workflows/ovh-deploy-timetable-ai-v1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-prod
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JS, Python, SQL and secret exclusion
+        run: |
+          set -euo pipefail
+          node --check scripts/timetable-ai-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-v1.py scripts/ops/ovh-timetable-ai-preflight.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/timetable-ai-v1.js').read_text()
+          ts=Path('supabase/functions/timetable-ai/index.ts').read_text()
+          d=Path('scripts/ops/ovh-deploy-timetable-ai-v1.py').read_text()
+          assert 'GROQ_API_KEY' not in js
+          assert 'Deno.env.get("GROQ_API_KEY")' in ts
+          assert 'apply_timetable_ai_plan' in js
+          assert 'GROQ_API_KEY' in d and 'ROLLBACK' in d.upper()
+          assert 'docker-compose.timetable-ai.yml' in d
+          assert 'timetable-ai-v1.js' in d and 'user_timetable_entries' in ts
+          print('TIMETABLE_AI_VALIDATION=PASS')
+          PY
+      - name: Install browser
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test contextual AI frontend with mock provider (no real user data)
+        run: node qa/timetable-ai.test.mjs
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/feature/timetable-ai-assistant-20261102'
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up pinned SSH without logging secrets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          GROQ: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN" && test -n "$GROQ"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          echo 'DEPLOY_SECRETS=SET'
+      - name: Stage signed-off source + private Groq key on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/timetable-ai-20261102-v1
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/functions/timetable-ai/index.ts "$target:$stage/ai.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/timetable-ai-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            styles/timetable-ai-v1.css "$target:$stage/ui.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/migrations/20261102100000_timetable_ai_quota.sql "$target:$stage/quota.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/migrations/20261102101000_timetable_ai_atomic_save.sql "$target:$stage/apply.sql"
+          # Secret goes only through SSH stdin to a mode-0600 server file, never to stdout.
+          printf 'GROQ_API_KEY=%s\n' "$GROQ_API_KEY" | \
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+              "umask 077; cat > $stage/groq.env; chmod 600 $stage/groq.env"
+          echo 'PRIVATE_STAGING=READY'
+      - name: Deploy immutable Edge and frontend releases with automatic rollback
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-deploy-timetable-ai-v1.py

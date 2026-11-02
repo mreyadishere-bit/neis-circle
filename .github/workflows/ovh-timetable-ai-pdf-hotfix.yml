@@ -1,0 +1,80 @@
+name: OVH Timetable AI PDF + UI Hotfix
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - '.github/workflows/ovh-timetable-ai-pdf-hotfix.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-pdf-hotfix
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate JS, Python and PDF regression coverage
+        run: |
+          set -euo pipefail
+          node --check scripts/timetable-ai-v1.js
+          node --check qa/timetable-ai.test.mjs
+          python3 -m py_compile scripts/ops/ovh-timetable-ai-pdf-hotfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/timetable-ai-v1.js').read_text()
+          qa=Path('qa/timetable-ai.test.mjs').read_text()
+          deploy=Path('scripts/ops/ovh-timetable-ai-pdf-hotfix.py').read_text()
+          assert 'pdf.destroy()' not in js
+          assert 'typeof task.destroy==="function"' in js
+          assert 'compactJpeg(canvas)' in js
+          assert 'footer.append(compose);' in js
+          assert 'ttai-info-btn' in js
+          assert 'fixturePDF' in qa and 'images[0].mime' in qa
+          assert 'AUTH_CORE_MODIFIED' in deploy and 'ROLLBACK' in deploy.upper()
+          print('TIMETABLE_AI_PDF_STATIC=PASS')
+          PY
+      - name: Browser dependencies
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test real PDF.js page rendering, chat and safe save
+        run: node qa/timetable-ai.test.mjs
+  deploy:
+    needs: test
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          echo 'SSH=PINNED_READY'
+      - name: Deploy from current live frontend with exact rollback guard
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/timetable-ai-pdf-fix-20261102-v2"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/timetable-ai-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            styles/timetable-ai-v1.css "$target:$stage/ui.css"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$target" 'python3 -' < scripts/ops/ovh-timetable-ai-pdf-hotfix.py

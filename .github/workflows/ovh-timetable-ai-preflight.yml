@@ -1,0 +1,77 @@
+name: OVH Timetable AI Deploy Preflight
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - 'scripts/ops/ovh-timetable-ai-preflight.py'
+      - '.github/workflows/ovh-timetable-ai-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate source and secrets exist without disclosing values
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          GROQ: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN" && test -n "$GROQ"
+          echo "OVH_SSH_AND_GROQ_SECRETS=PRESENT"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Inspect active OVH front end, Edge runtime and timetable DB (read-only)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-timetable-ai-preflight.py
+      - name: Verify real Groq free-model API and strict JSON response
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.error,sys
+          body={
+            "model":"qwen/qwen3.8-27b",
+            "messages":[{"role":"user","content":"Return OK as reply."}],
+            "reasoning_effort":"none","temperature":0.2,
+            "max_completion_tokens":100,
+            "response_format":{"type":"json_schema","json_schema":{"name":"probe",
+              "strict":True,"schema":{"type":"object",
+                "properties":{"reply":{"type":"string"}},"required":["reply"],
+                "additionalProperties":False}}}
+          }
+          try:
+            req=urllib.request.Request("https://api.groq.com/openai/v1/chat/completions",
+              data=json.dumps(body).encode(),headers={
+              "Authorization":"Bearer "+os.environ['GROQ_API_KEY'],
+              "Content-Type":"application/json", "User-Agent":"NEIS-Circle-Staging-Probe/1.0"},method="POST")
+            with urllib.request.urlopen(req,timeout=30) as res:
+              result=json.load(res)
+            answer=json.loads(result['choices'][0]['message']['content'])
+            assert answer.get('reply')
+            print("GROQ_AUTH_AND_JSON_SCHEMA=PASS")
+          except urllib.error.HTTPError as e:
+            try:
+              error=json.loads(e.read(2048)).get('error',{})
+              subtype=str(error.get('code') or error.get('type') or '').replace(' ','_')[:55]
+            except Exception:
+              subtype='UNKNOWN'
+            print("GROQ_AUTH_AND_JSON_SCHEMA=FAIL_HTTP_"+str(e.code)+"_"+subtype)
+            sys.exit(1)
+          except Exception:
+            print("GROQ_AUTH_AND_JSON_SCHEMA=FAIL_NO_SECRET_OUTPUT")
+            sys.exit(1)
+          PY

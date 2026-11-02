@@ -1,0 +1,77 @@
+name: OVH Timetable AI Free Tier Fix v3
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - '.github/workflows/ovh-timetable-ai-free-tier-v3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-v3
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate source contracts without provider keys
+        run: |
+          set -euo pipefail
+          node --check scripts/timetable-ai-v1.js
+          node --check qa/timetable-ai.test.mjs
+          python3 -m py_compile scripts/ops/ovh-timetable-ai-free-tier-hotfix-v3.py
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/timetable-ai-v1.js').read_text()
+          edge=Path('supabase/functions/timetable-ai/index.ts').read_text()
+          ops=Path('scripts/ops/ovh-timetable-ai-free-tier-hotfix-v3.py').read_text()
+          assert 'getTextContent' in js and 'documentText' in js
+          assert 'retryAfterSeconds' in edge and 'completionLimit' in edge
+          assert 'GEMINI_API_KEY' not in js and 'GEMINI_API_KEY' not in edge
+          assert 'GROQ_API_KEY' in edge
+          assert 'AI_V3_EDGE=LIVE_ANON_401' in ops
+          print('AI_V3_STATIC_CHECKS=PASS')
+          PY
+      - name: Install browser
+        run: npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: Test PDF rendering/text extraction and schedule review in browser
+        run: node qa/timetable-ai.test.mjs
+  deploy:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage vetted files and deploy with rollback on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/timetable-ai-20261102-v3"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/timetable-ai-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/functions/timetable-ai/index.ts "$target:$stage/ai.ts"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            'python3 -' < scripts/ops/ovh-timetable-ai-free-tier-hotfix-v3.py

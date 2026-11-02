@@ -26,7 +26,7 @@
     document.body.classList.remove('app-ready');
     var failed=oauthError();
     var safeReason=String(window.__NEISOAuthRecoveryReason||'');
-    if(!failed&&/^oauth_[a-z_]{1,48}(?:_[45][0-9]{2})?$/.test(safeReason)){
+    if(!failed&&window.__NEISOAuthRecoveryFailed===true&&/^oauth_[a-z_]{1,48}(?:_[45][0-9]{2})?$/.test(safeReason)){
       failed=tr('Google could not finish sign-in ('+safeReason+'). Please retry.','تعذر إكمال تسجيل الدخول باستخدام Google ('+safeReason+'). حاول مرة أخرى.');
     }
     authRoot.innerHTML=`<section class="auth-shell">${story()}<div class="auth-panel">${authTools()}<h2>${tr('Welcome to NEIS Circle','مرحبًا بك في NEIS Circle')}</h2><p>${tr('Sign in with your Google account to continue.','سجّل الدخول بحساب Google للمتابعة.')}</p>${failed?`<div class="form-error" role="alert">${esc(tr('Sign-in failed','فشل تسجيل الدخول'))}: ${esc(failed)}</div>`:''}<label class="auth-stay-signed"><input type="checkbox" data-auth-stay ${localStorage.getItem('neis-auth-stay-signed-in')==='0'?'':'checked'}><span>${tr('Stay signed in on this device','البقاء مسجّل الدخول على هذا الجهاز')}</span></label><button class="google-btn" data-auth-google><span class="google-mark">G</span>${tr('Continue with Google','المتابعة باستخدام Google')}</button><p class="auth-note">${tr('After signing in, you will register your mobile number once before entering.','بعد تسجيل الدخول، ستسجّل رقم هاتفك مرة واحدة قبل الدخول.')}</p></div></section>`;
@@ -109,6 +109,14 @@
     return previousRender();
   };
   var previousSignOut=signOut;
-  signOut=async function(){state.identityVerification={};await previousSignOut();authScreen()};
+  signOut=async function(){
+    // A previous OAuth callback diagnostic must never survive a successful
+    // session and reappear as a false sign-in failure after explicit logout.
+    window.__NEISOAuthRecoveryReason='';
+    window.__NEISOAuthRecoveryFailed=false;
+    state.identityVerification={};
+    await previousSignOut();
+    authScreen();
+  };
   if(!authUser){setTimeout(authScreen,0);setTimeout(function(){if(!authUser)authScreen()},600)}
 })();

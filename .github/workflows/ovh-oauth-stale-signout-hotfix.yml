@@ -1,0 +1,78 @@
+name: OVH OAuth Stale Sign-Out Error Hotfix
+on:
+  push:
+    branches: [feature/timetable-ai-assistant-20261102]
+    paths:
+      - '.github/workflows/ovh-oauth-stale-signout-hotfix.yml'
+      - 'qa/oauth-stale-signout.test.mjs'
+      - 'scripts/identity-v15.js'
+      - 'scripts/ops/ovh-oauth-stale-logout-hotfix.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-oauth-stale-signout-20261102
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate auth script and immutable release patch
+        run: |
+          set -euo pipefail
+          node --check scripts/identity-v15.js
+          node --check qa/oauth-stale-signout.test.mjs
+          python3 -m py_compile scripts/ops/ovh-oauth-stale-logout-hotfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/identity-v15.js').read_text()
+          assert 'window.__NEISOAuthRecoveryFailed===true' in s
+          assert "window.__NEISOAuthRecoveryReason='';" in s
+          x=Path('scripts/ops/ovh-oauth-stale-logout-hotfix.py').read_text()
+          assert 'CURRENT_RELEASE_FEATURES_MISSING' in x
+          assert 'AUTH_CORE_CHANGED' in x
+          assert 'LOGOUT_CLEARS_STALE_ERROR' in x
+          print('OAUTH_LOGOUT_HOTFIX_STATIC=PASS')
+          PY
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Test stale signout and fresh OAuth failure in real browser
+        run: node qa/oauth-stale-signout.test.mjs
+  deploy:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          echo 'SSH_CONFIGURATION=READY'
+      - name: Activate auth-only immutable release on live OVH (rollback on failure)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            'install -d -m 700 /home/ubuntu/neis-backups/oauth-logout-stale-error-20261102-v1'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" \
+            'python3 -' < scripts/ops/ovh-oauth-stale-logout-hotfix.py
