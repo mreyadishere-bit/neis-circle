@@ -7,6 +7,8 @@ on:
       - 'supabase/functions/timetable-ai-cloudflare/index.ts'
       - 'styles/timetable-ai-v1.css'
       - 'qa/timetable-fast-import.test.mjs'
+      - 'qa/timetable-pdf-position-and-footnotes.test.mjs'
+      - 'qa/timetable-guided-import-v2.test.mjs'
       - '.github/workflows/verify-fast-timetable-import.yml'
   pull_request:
     branches: [main]
