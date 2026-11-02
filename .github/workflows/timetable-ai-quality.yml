@@ -38,5 +38,5 @@ jobs:
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - name: Test real mobile browser flow (no Gemini key needed)
+      - name: Test real mobile browser flow (no provider key needed)
         run: node qa/timetable-ai.test.mjs
