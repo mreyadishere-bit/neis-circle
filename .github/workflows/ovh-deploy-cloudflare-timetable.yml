@@ -75,6 +75,7 @@ jobs:
           PY
       - name: Stage protected assets and activate release on OVH
         env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           OVH_HOST: ${{ secrets.OVH_HOST }}
