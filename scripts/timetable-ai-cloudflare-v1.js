@@ -399,9 +399,10 @@ function drawWizard(chat){
         "صحّح اليوم والوقت والمادة واللون والمكان. مش هنحفظ إلا بموافقتك.")
     ));
     if(w.warnings.length){
+      panel.append(el("p","ttai-wiz-hint",wizardText("Unverified lessons were not automatically added. Review the items below against your original PDF.", "الحصص غير المؤكدة لم تُضف تلقائيًا. راجعها مع ملفك الأصلي.")));
       const warning=el("details","ttai-wiz-warnings");
-      warning.append(el("summary",null,wizardText("Unclear cells — check the original file ("+w.warnings.length+")",
-        "تفاصيل غير واضحة — راجع الملف الأصلي ("+w.warnings.length+")")));
+      warning.append(el("summary",null,wizardText("AI could not verify "+w.warnings.length+" item(s) — tap to see why",
+        "في "+w.warnings.length+" تفاصيل لم يتأكد منها الذكاء الاصطناعي — اضغط للتفاصيل")));
       w.warnings.forEach(item=>warning.append(el("p",null,String(item).slice(0,220))));
       panel.append(warning);
     }
