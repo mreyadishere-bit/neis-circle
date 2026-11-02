@@ -311,14 +311,14 @@ export function parseExplicitFootnoteLessons(pdfEvidence: string): Array<Record<
  * Page 2 can continue page 1's columns without repeating its headings.
  */
 export function parsePdfTextGridLessons(evidence: string): Array<Record<string, unknown>> {
-  const sections=(evidence.match(/PAGE \\d+ POSITIONED PDF TEXT[\\s\\S]*?(?=PAGE \\d+ POSITIONED PDF TEXT|$)/g)||[]);
+  const sections=(evidence.match(/PAGE \d+ POSITIONED PDF TEXT[\s\S]*?(?=PAGE \d+ POSITIONED PDF TEXT|$)/g)||[]);
   if(!sections.length)return [];
   const tokenize=(source:string)=>{
     const found:Array<{x:number;y:number;text:string}>=[];
     for(const line of source.split("\n")){
-      const y=Number(line.match(/^y=(-?\\d+)/)?.[1]);
+      const y=Number(line.match(/^y=(-?\d+)/)?.[1]);
       if(!Number.isFinite(y))continue;
-      for(const m of line.matchAll(/x=(-?\\d+):([^|\\n]+)/g)){
+      for(const m of line.matchAll(/x=(-?\d+):([^|\n]+)/g)){
         found.push({x:Number(m[1]),y,text:m[2].trim()});
       }
     }
@@ -348,7 +348,7 @@ export function parsePdfTextGridLessons(evidence: string): Array<Record<string, 
         const cell=tokens.filter(t=>t.y>=anchor.y-4&&t.y<nextY-4&&t.x>=left&&t.x<right)
           .sort((a,b)=>a.y-b.y||a.x-b.x).map(t=>t.text).join(" ");
         // Do not repair ambiguous 10 AM -> 12:30 AM, or broken time digits.
-        const times=[...cell.matchAll(/\\b(\\d{1,2}:\\d{2})\\s*(am|pm)\\b/gi)];
+        const times=[...cell.matchAll(/\b(\d{1,2}:\d{2})\s*(am|pm)\b/gi)];
         if(times.length!==2)continue;
         const start=normalizeTime24(times[0][1]+" "+times[0][2]);
         const end=normalizeTime24(times[1][1]+" "+times[1][2]);
@@ -374,34 +374,34 @@ export function parseArabicDatedLessons(evidence:string):Array<Record<string,unk
     "الاحد":0,"الاثنين":1,"الاثنين":1,"الثلاثاء":2,
     "الاربعاء":3,"الخميس":4,"الجمعة":5,"السبت":6,
   };
-  const ar=(value:string)=>value.normalize("NFKC").replace(/[\\u064b-\\u065f\\u0670\\u0640]/g,"")
+  const ar=(value:string)=>value.normalize("NFKC").replace(/[\u064b-\u065f\u0670\u0640]/g,"")
     .replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه");
-  const pageSections=(evidence.match(/PAGE \\d+ POSITIONED PDF TEXT[\\s\\S]*?(?=PAGE \\d+ POSITIONED PDF TEXT|$)/g)||[]);
+  const pageSections=(evidence.match(/PAGE \d+ POSITIONED PDF TEXT[\s\S]*?(?=PAGE \d+ POSITIONED PDF TEXT|$)/g)||[]);
   pageSections.forEach((page,pageIndex)=>{
     for(const line of page.split("\n")){
-      const coords=[...line.matchAll(/x=(-?\\d+):([^|\\n]+)/g)]
+      const coords=[...line.matchAll(/x=(-?\d+):([^|\n]+)/g)]
         .map(m=>({x:Number(m[1]),text:m[2].trim()})).sort((a,b)=>b.x-a.x);
       if(coords.length<5)continue;
-      const words=coords.flatMap(item=>item.text.split(/\\s+/).filter(Boolean));
+      const words=coords.flatMap(item=>item.text.split(/\s+/).filter(Boolean));
       const normalized=words.map(ar);
-      const dayIndex=normalized.findIndex(w=>dayMap[w.replace(/[^\\p{L}]/gu,"")]!==undefined);
+      const dayIndex=normalized.findIndex(w=>dayMap[w.replace(/[^\p{L}]/gu,"")]!==undefined);
       if(dayIndex<1)continue;
-      const day=dayMap[normalized[dayIndex].replace(/[^\\p{L}]/gu,"")];
+      const day=dayMap[normalized[dayIndex].replace(/[^\p{L}]/gu,"")];
       const title=words.slice(0,dayIndex).join(" ").replace(/[()*]/g,"").trim();
       // Require a plausible Arabic subject name, not page headings or rules.
-      if(!/[\\p{Script=Arabic}]/u.test(title)||title.length<6||/ملاحظات/.test(ar(title)))continue;
+      if(!/[\p{Script=Arabic}]/u.test(title)||title.length<6||/ملاحظات/.test(ar(title)))continue;
       const times:Array<string>=[];
       for(let i=dayIndex+1;i<words.length;i++){
-        const m=words[i].match(/(\\d{1,2}:\\d{2})/);
+        const m=words[i].match(/(\d{1,2}:\d{2})/);
         if(!m)continue;
         const next=ar(words.slice(i+1,i+3).join(" "));
         const local=ar(words[i]);
-        const period=/(?:^|\\s)(ص|صباحا|am)(?:\\s|$)/i.test(next)||/ص$/.test(local)?"AM":
-          /(?:^|\\s)(م|مساء|pm)(?:\\s|$)/i.test(next)||/م$/.test(local)?"PM":"";
+        const period=/(?:^|\s)(ص|صباحا|am)(?:\s|$)/i.test(next)||/ص$/.test(local)?"AM":
+          /(?:^|\s)(م|مساء|pm)(?:\s|$)/i.test(next)||/م$/.test(local)?"PM":"";
         if(period)times.push(normalizeTime24(m[1]+" "+period));
       }
       if(times.length!==2||!times[0]||!times[1]||times[1]<=times[0])continue;
-      const canonicalTitle=title.replace(/\\s+/g," ");
+      const canonicalTitle=title.replace(/\s+/g," ");
       const id=[day,ar(canonicalTitle),times.join("-")].join("|");
       if(seen.has(id))continue;seen.add(id);
       result.push({title:canonicalTitle,day_of_week:day,start_time:times[0],end_time:times[1],
