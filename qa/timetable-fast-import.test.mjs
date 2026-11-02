@@ -104,7 +104,7 @@ assert.match(client,/card\.append\(actions\)/,"each unresolved lesson has its ow
 assert.match(client,/Close editor/,"inline editor can collapse");
 assert.doesNotMatch(client,/const info=el\("button","ttai-info-btn"/,"chat info button removed");
 
-assert.match(server,/for\(let i=0;i<imageParts\.length;i\+=2\)/,"bound Gemini requests to two PDF pages");
+assert.match(server,/for\(let i=0;i<imageParts\.length;i\+\+\)/,"parallel single-page Gemini analysis");
 assert.match(server,/Promise\.all\(groups\.map/,"analyze PDF chunks concurrently");
 assert.match(server,/GEMINI_QUOTA_LIMIT/,"report Gemini quota errors");
 assert.match(client,/Visual analysis failed: "\+safe/,"surface server failure reason to student");
