@@ -980,8 +980,8 @@ async function submit(text,retrying=false){
         stateAI.wizard=null;
         stateAI.file=file;
         stateAI.history.push({role:"assistant",text:wizardText(
-          "Visual analysis failed. No timetable draft was created. Your PDF is kept for Retry. Text-only subject names cannot verify lesson times.",
-          "فشل التحليل البصري. لم يتم إنشاء جدول قابل للحفظ؛ الملف محفوظ لإعادة المحاولة. النص وحده لا يثبت مواعيد الحصص."
+          "Visual analysis failed: "+safe+". Your PDF is kept for Retry. No incomplete timetable was saved.",
+          "فشل التحليل البصري: "+safe+". الملف محفوظ لإعادة المحاولة، ولم يتم حفظ جدول ناقص."
         ),isError:true});
       }else{
         stateAI.history.push({role:"assistant",text:safe,isError:true});
