@@ -23,6 +23,9 @@ assert.match(server,/discoveryMode \? !hasDiscovery : !Array\.isArray\(parsed\.e
 assert.match(server,/CLOUDFLARE_DAILY_LIMIT/);
 assert.match(server,/CLOUDFLARE_CAPACITY/);
 assert.match(server,/callGemini\(geminiKey,messages\)/,"Gemini takes priority when configured");
+assert.match(server,/thinkingLevel:"LOW"/,"Gemini limits thinking time");
+assert.match(server,/maxOutputTokens:8192/,"Gemini has enough response capacity");
+assert.match(server,/GEMINI_EMPTY_OUTPUT_/,"empty Gemini responses become classifiable fallback errors");
 assert.match(server,/actualProvider==="gemini"/,"provider is reported accurately");
 assert.match(server,/verifyPdfGridLessons\(rawLessons,pdfEvidence\)/,"verify visual timetable proposals against extracted PDF coordinates");
 assert.match(server,/const firstDay=parsed\.find/,"subject headers must be found relative to first timetable day");

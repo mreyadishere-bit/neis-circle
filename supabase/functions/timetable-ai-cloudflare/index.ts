@@ -377,7 +377,7 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
     const url="https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent";
     const response=await fetch(url,{method:"POST",headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
       body:JSON.stringify({systemInstruction:{parts:[{text:system}]},
-        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:3500,temperature:0}}),
+        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:8192,thinkingConfig:{thinkingLevel:"LOW"}}}),
       signal:controller.signal});
     if(!response.ok){
       const err=new Error("GEMINI_HTTP_ERROR") as Error & {status?:number};
@@ -385,7 +385,7 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
     }
     const result=await response.json();
     const text=(result.candidates?.[0]?.content?.parts||[]).map((p:{text?:string})=>p.text||"").join("");
-    if(!text)throw new Error("GEMINI_EMPTY_OUTPUT");
+    if(!text){const reason=String(result.candidates?.[0]?.finishReason||"UNKNOWN").replace(/[^A-Z_]/g,"").slice(0,32);const err=new Error("GEMINI_EMPTY_OUTPUT_"+reason) as Error & {status?:number};err.status=502;throw err;}
     return text;
   }finally{clearTimeout(deadline)}
 }
