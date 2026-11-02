@@ -272,27 +272,42 @@ function addUnverifiedLesson(issueId, suggestedTitle=""){
 }
 function issueCard(issueId,title,description,subject=""){
   const w=stateAI.wizard;
-  const card=el("div","ttai-issue-card");
+  const card=el("section","ttai-issue-card");
   const heading=el("div","ttai-issue-head");
   heading.append(el("strong",null,title));
+  card.append(heading);
   const existing=stateAI.draft.find(x=>x.key===w.issueRows?.[issueId]);
-  const action=wizardButton(existing?
-    wizardText("Editing below","يتم التعديل أدناه"):
-    wizardText("Add this lesson","إضافة هذه الحصة"),
-    existing?"ttai-subtle":"ttai-primary",()=>{
-      if(existing){w.editingLesson=existing.key;draw()}
-      else addUnverifiedLesson(issueId,subject);
-    },Boolean(existing)||stateAI.draft.length>=80);
-  heading.append(action);card.append(heading);
+  // Keep the source explanation legible and move actions under each issue.
   card.append(el("p","ttai-issue-desc",description));
-  if(existing){
-    card.append(el("p","ttai-issue-hint",wizardText("Enter the correct day and both times from the PDF. Nothing is assumed.","اكتب اليوم والموعدين الصحيحين من الملف، من غير تخمين.")));
-    card.append(editWizardRow(existing));
+  const actions=el("div","ttai-issue-actions");
+  if(!existing){
+    const add=wizardButton(wizardText("+ Add this lesson","+ إضافة هذه الحصة"),
+      "ttai-primary ttai-issue-action",()=>addUnverifiedLesson(issueId,subject),
+      stateAI.draft.length>=80);
+    actions.append(add);
+  }else{
+    const complete=Boolean(existing.title&&existing.day_of_week>=0&&
+      existing.start_time&&existing.end_time&&existing.end_time>existing.start_time);
+    const expanded=w.editingLesson===existing.key;
+    if(complete)card.append(el("p","ttai-issue-complete",
+      wizardText("Lesson details entered — review or adjust below.","تم إدخال بيانات الحصة — راجعها أو عدّلها.")));
+    const toggle=wizardButton(expanded?
+      wizardText("Done editing","إنهاء التعديل"):
+      wizardText("Edit this lesson","تعديل هذه الحصة"),
+      "ttai-subtle ttai-issue-action",()=>{
+        w.editingLesson=expanded?null:existing.key;draw();
+      });
+    actions.append(toggle);
+    if(expanded){
+      const editor=editWizardRow(existing,true);
+      card.append(editor);
+    }
   }
+  card.append(actions);
   return card;
 }
-function editWizardRow(row){
-  const article=el("article","ttai-wiz-lesson");
+function editWizardRow(row,compact=false){
+  const article=el("article","ttai-wiz-lesson"+(compact?" ttai-wiz-compact":""));
   const top=el("div","ttai-wiz-lesson-top");
   top.append(el("strong",null,row.title));
   const remove=wizardButton("×","ttai-lesson-remove",()=>{
@@ -327,13 +342,13 @@ function editWizardRow(row){
     [[-1,wizardText("Choose day","اختر اليوم")],...Array.from({length:7},(_,n)=>[n,dayName(n)])]);
   makeInput(wizardText("From","من"),"time",row.start_time,"start_time");
   makeInput(wizardText("To","إلى"),"time",row.end_time,"end_time");
-  makeInput(wizardText("Where","المكان"),"text",row.location,"location");
-  makeInput(wizardText("Color","اللون"),"color",row.color||suggestedColor(row.title),"color");
-  makeInput(wizardText("Type","النوع"),"select",row.category||"Class","category",
+  if(!compact)makeInput(wizardText("Where","المكان"),"text",row.location,"location");
+  if(!compact)makeInput(wizardText("Color","اللون"),"color",row.color||suggestedColor(row.title),"color");
+  if(!compact)makeInput(wizardText("Type","النوع"),"select",row.category||"Class","category",
     [["Class",wizardText("Class","حصة")],["Lab",wizardText("Lab","معمل")],
       ["Study",wizardText("Study","مذاكرة")],["Exam",wizardText("Exam","امتحان")],
       ["Activity",wizardText("Activity","نشاط")],["Other",wizardText("Other","أخرى")]]);
-  makeInput(wizardText("Notes","ملاحظات"),"text",row.notes,"notes");
+  if(!compact)makeInput(wizardText("Notes","ملاحظات"),"text",row.notes,"notes");
   article.append(form);
   if(!row.start_time||!row.end_time||row.end_time<=row.start_time){
     article.append(el("p","ttai-wiz-warning",wizardText("Fix this lesson's time before saving.","صحّح وقت الحصة قبل الحفظ.")));
@@ -527,16 +542,12 @@ function draw(){
   const clearBtn=el("button","ttai-link",t("clear"));
   clearBtn.type="button";clearBtn.disabled=stateAI.busy||stateAI.saving;
   clearBtn.onclick=()=>{begin(true);draw()};
-  const info=el("button","ttai-info-btn","ⓘ");
-  info.type="button";info.setAttribute("aria-label",t("info"));info.title=t("info");
-  info.setAttribute("aria-expanded",String(stateAI.privacyOpen));
-  info.onclick=()=>{stateAI.privacyOpen=!stateAI.privacyOpen;draw()};
   const close=el("button","ttai-icon-btn","×");
   close.type="button";close.setAttribute("aria-label",t("close"));
   close.onclick=()=>{stateAI.open=false;draw()};
-  const controls=el("div","ttai-header-controls");controls.append(clearBtn,info,close);
+  const controls=el("div","ttai-header-controls");controls.append(clearBtn,close);
   head.append(title,controls);panel.append(head);
-  if(stateAI.privacyOpen)panel.append(el("p","ttai-privacy-info",t("privacy")));
+
   const chat=el("div","ttai-chat");
   chat.setAttribute("role","region");chat.setAttribute("aria-label",wizardText("Timetable editor","محرر الجدول"));
   chat.append(message(t("intro"),"assistant"));

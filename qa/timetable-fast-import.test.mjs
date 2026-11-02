@@ -97,3 +97,9 @@ assert.match(client,/function addUnverifiedLesson\(/,"each issue gets its own ad
 assert.match(client,/day_of_week:-1,start_time:"",end_time:""/,"new lessons never invent day or times");
 assert.match(client,/w\.issueRows\?\.\["missing:"\+subjectKey\(name\)\]/,"inline editor persists after adding it");
 assert.match(client,/const issueKeys=new Set/,"inline rows are not duplicated in regular lesson list");
+
+assert.match(client,/function editWizardRow\(row,compact=false\)/,"issue editor supports compact mode");
+assert.match(client,/const actions=el\("div","ttai-issue-actions"\)/,"issue action is placed after explanation");
+assert.match(client,/card\.append\(actions\)/,"each unresolved lesson has its own action at card end");
+assert.match(client,/Done editing/,"inline editor can collapse");
+assert.doesNotMatch(client,/const info=el\("button","ttai-info-btn"/,"chat info button removed");
