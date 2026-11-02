@@ -86,7 +86,8 @@ jobs:
            "psql","-X","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres"]
           run=subprocess.run(base,input=body,text=True,capture_output=True,timeout=55)
           if run.returncode:
-            print("SUPER_ADMIN_DB_DRY_RUN=FAILED")
+            errors=[line.strip()[:350] for line in run.stderr.splitlines() if ("ERROR:" in line or "HINT:" in line or "DETAIL:" in line)]
+            print("SUPER_ADMIN_DB_DRY_RUN=FAILED "+str(errors[:3]))
             raise SystemExit(1)
           print("SUPER_ADMIN_DB_DRY_RUN=PASS")
           '"'"''
