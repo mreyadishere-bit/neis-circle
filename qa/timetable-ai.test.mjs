@@ -29,20 +29,20 @@ function fixturePDF(){
     "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    "<< /Length "+Buffer.byteLength(stream)+" >>\\nstream\\n"+stream+"\\nendstream"
+    "<< /Length "+Buffer.byteLength(stream)+" >>\nstream\n"+stream+"\nendstream"
   ];
-  let doc="%PDF-1.4\\n";
+  let doc="%PDF-1.4\n";
   const offsets=[0];
   for(let i=0;i<objects.length;i++){
     offsets.push(Buffer.byteLength(doc));
-    doc+=(i+1)+" 0 obj\\n"+objects[i]+"\\nendobj\\n";
+    doc+=(i+1)+" 0 obj\n"+objects[i]+"\nendobj\n";
   }
   const xref=Buffer.byteLength(doc);
-  doc+="xref\\n0 "+(objects.length+1)+"\\n0000000000 65535 f \\n";
+  doc+="xref\n0 "+(objects.length+1)+"\n0000000000 65535 f \n";
   for(const offset of offsets.slice(1))
-    doc+=String(offset).padStart(10,"0")+" 00000 n \\n";
-  doc+="trailer\\n<< /Size "+(objects.length+1)+" /Root 1 0 R >>\\nstartxref\\n"+xref+"\\n%%EOF\\n";
-  return Buffer.from(doc.replaceAll("\\n","\n"),"binary");
+    doc+=String(offset).padStart(10,"0")+" 00000 n \n";
+  doc+="trailer\n<< /Size "+(objects.length+1)+" /Root 1 0 R >>\nstartxref\n"+xref+"\n%%EOF\n";
+  return Buffer.from(doc,"binary");
 }
 const browser = await chromium.launch({headless:true});
 try {
