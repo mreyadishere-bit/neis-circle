@@ -5,6 +5,11 @@ import { chromium } from "playwright";
 const FRONT = "scripts/timetable-ai-v1.js";
 const EDGE = "supabase/functions/timetable-ai/index.ts";
 const source = readFileSync(FRONT, "utf8");
+const freePlanQuota = readFileSync("supabase/migrations/20261102100000_timetable_ai_quota.sql","utf8");
+assert(freePlanQuota.includes("timetable_ai_global_usage"),"Project-wide free-plan limit must exist");
+assert(freePlanQuota.includes("global_daily >= 600"),"Global daily cap must be below free-plan 1000 RPD");
+assert(freePlanQuota.includes("global_minute >= 15"),"Global minute cap must be below free-plan 30 RPM");
+assert(freePlanQuota.includes("usage.requests < 25"),"Per-user limit required");
 const server = readFileSync(EDGE, "utf8");
 assert(!/GROQ_API_KEY/.test(source), "API key must never be in the browser script");
 for (const required of ["sb.functions.invoke", "apply_timetable_ai_plan", "stateAI.history", "stateAI.source",
