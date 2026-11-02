@@ -341,7 +341,7 @@ Deno.serve(async (request: Request) => {
       })),
     });
     const messageText = discoveryMode
-      ? "Read the attached timetable page images AND the independently extracted positioned PDF text below. The PDF spans multiple pages: page 2 may CONTINUE the same column headers from page 1 rather than starting a new table. Match the exact subject column and row for each lesson; do not transfer a neighbor's time to another subject. CRITICAL: also read footnotes below the grid, including French, Religion, or Grade 11 subjects. Only include lessons supported by their correct column/day or explicit standalone note. If the source has impossible AM/PM (such as 10:00 AM to 12:30 AM), flag it as ambiguous instead of guessing. No draft generation. Return JSON extraction only.\\n\\nPOSITIONED PDF EVIDENCE:\\n" + pdfEvidence
+      ? "Read the attached timetable page images AND the independently extracted positioned PDF text below. The PDF spans multiple pages: page 2 may CONTINUE the same column headers from page 1 rather than starting a new table. Match the exact subject column and row for each lesson; do not transfer a neighbor's time to another subject. CRITICAL: also read footnotes below the grid, including French, Religion, or Grade 11 subjects. Only include lessons supported by their correct column/day or explicit standalone note. If the source has impossible AM/PM (such as 10:00 AM to 12:30 AM), flag it as ambiguous instead of guessing. No draft generation. Return JSON extraction only.\n\nPOSITIONED PDF EVIDENCE:\n" + pdfEvidence
       : "Context JSON:\n" + contextSummary + "\n\nRequest: " + (prompt || "Update this timetable draft.");
     const textPart = { type: "text", text: messageText };
     const messages = [
@@ -363,10 +363,10 @@ Deno.serve(async (request: Request) => {
     // Explicit single-day printed notes outrank model guesses for that same
     // subject/day, while never touching unrelated grid lessons.
     const noteKeys = new Set(explicitNotes.map((r) =>
-      String(r.title).toLowerCase().replace(/\\s+/g, "") + "|" + r.day_of_week));
+      String(r.title).toLowerCase().replace(/\s+/g, "") + "|" + r.day_of_week));
     const groundedLessons = validateAndNormalizeEntries([
       ...modelLessons.filter((r: Record<string, unknown>) =>
-        !noteKeys.has(String(r?.title ?? "").toLowerCase().replace(/\\s+/g, "") +
+        !noteKeys.has(String(r?.title ?? "").toLowerCase().replace(/\s+/g, "") +
         "|" + String(r?.day_of_week ?? ""))),
       ...explicitNotes,
     ]);
