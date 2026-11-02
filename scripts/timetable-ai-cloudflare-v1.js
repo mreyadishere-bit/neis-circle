@@ -254,6 +254,43 @@ function updateWizardRow(key,field,value){
   else if(field==="color")row[field]=/^#[\da-f]{6}$/i.test(value)?value:row[field];
   else row[field]=String(value).slice(0,field==="notes"?1000:120);
 }
+// A flagged PDF fragment is NOT a verified lesson. Create a deliberately
+// incomplete editor next to that issue, never a guessed time or day.
+function addUnverifiedLesson(issueId, suggestedTitle=""){
+  const w=stateAI.wizard;
+  if(!w || stateAI.draft.length>=80)return;
+  const permitted=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
+  const title=permitted.find(name=>subjectKey(name)===subjectKey(suggestedTitle))||permitted[0]||"";
+  stateAI.draftHistory.push(structuredClone(stateAI.draft));
+  const row={key:tmpKey(),title,day_of_week:-1,start_time:"",end_time:"",
+    location:"",notes:"",category:"Class",color:w.colors[subjectKey(title)]||suggestedColor(title)};
+  stateAI.draft.push(row);
+  w.issueRows=w.issueRows||{};
+  w.issueRows[issueId]=row.key;
+  w.editingLesson=row.key;
+  draw();
+}
+function issueCard(issueId,title,description,subject=""){
+  const w=stateAI.wizard;
+  const card=el("div","ttai-issue-card");
+  const heading=el("div","ttai-issue-head");
+  heading.append(el("strong",null,title));
+  const existing=stateAI.draft.find(x=>x.key===w.issueRows?.[issueId]);
+  const action=wizardButton(existing?
+    wizardText("Editing below","يتم التعديل أدناه"):
+    wizardText("Add this lesson","إضافة هذه الحصة"),
+    existing?"ttai-subtle":"ttai-primary",()=>{
+      if(existing){w.editingLesson=existing.key;draw()}
+      else addUnverifiedLesson(issueId,subject);
+    },Boolean(existing)||stateAI.draft.length>=80);
+  heading.append(action);card.append(heading);
+  card.append(el("p","ttai-issue-desc",description));
+  if(existing){
+    card.append(el("p","ttai-issue-hint",wizardText("Enter the correct day and both times from the PDF. Nothing is assumed.","اكتب اليوم والموعدين الصحيحين من الملف، من غير تخمين.")));
+    card.append(editWizardRow(existing));
+  }
+  return card;
+}
 function editWizardRow(row){
   const article=el("article","ttai-wiz-lesson");
   const top=el("div","ttai-wiz-lesson-top");
@@ -265,6 +302,7 @@ function editWizardRow(row){
   remove.setAttribute("aria-label",wizardText("Remove lesson","حذف الحصة"));
   top.append(remove);article.append(top);
   const form=el("div","ttai-wiz-edit-grid");
+  if(!row.start_time||!row.end_time)article.classList.add("ttai-incomplete-lesson");
   const makeInput=(caption,type,value,field,options)=>{
     const wrap=el("label","ttai-wiz-field");
     wrap.append(el("span",null,caption));
@@ -282,9 +320,11 @@ function editWizardRow(row){
     input.onchange=()=>{updateWizardRow(row.key,field,input.value);draw()};
     wrap.append(input);form.append(wrap);
   };
-  makeInput(wizardText("Subject","المادة"),"text",row.title,"title");
+  const availableSubjects=stateAI.wizard?.subjects||[];
+  makeInput(wizardText("Subject","المادة"),"text",row.title,"title",
+    availableSubjects.length?[[ "",wizardText("Choose subject","اختر المادة")],...availableSubjects.map(name=>[name,name])]:null);
   makeInput(wizardText("Day","اليوم"),"select",row.day_of_week,"day_of_week",
-    Array.from({length:7},(_,n)=>[n,dayName(n)]));
+    [[-1,wizardText("Choose day","اختر اليوم")],...Array.from({length:7},(_,n)=>[n,dayName(n)])]);
   makeInput(wizardText("From","من"),"time",row.start_time,"start_time");
   makeInput(wizardText("To","إلى"),"time",row.end_time,"end_time");
   makeInput(wizardText("Where","المكان"),"text",row.location,"location");
@@ -398,16 +438,44 @@ function drawWizard(chat){
       wizardText("Adjust incorrect days, times, subjects, colors and locations. The AI won't save anything without your confirmation.",
         "صحّح اليوم والوقت والمادة واللون والمكان. مش هنحفظ إلا بموافقتك.")
     ));
-    if(w.warnings.length){
-      panel.append(el("p","ttai-wiz-hint",wizardText("Unverified lessons were not automatically added. Review the items below against your original PDF.", "الحصص غير المؤكدة لم تُضف تلقائيًا. راجعها مع ملفك الأصلي.")));
-      const warning=el("details","ttai-wiz-warnings");
-      warning.append(el("summary",null,wizardText("AI could not verify "+w.warnings.length+" item(s) — tap to see why",
-        "في "+w.warnings.length+" تفاصيل لم يتأكد منها الذكاء الاصطناعي — اضغط للتفاصيل")));
-      w.warnings.forEach(item=>warning.append(el("p",null,String(item).slice(0,220))));
-      panel.append(warning);
+    // Individual review cards appear before the list of verified lessons.
+    // Summary-only warnings remain informational; they aren't fake sessions.
+    const selectedNames=w.subjects.filter(name=>w.selected.has(subjectKey(name)));
+    const missingNames=selectedNames.filter(name=>w.issueRows?.["missing:"+subjectKey(name)] || !stateAI.draft.some(row=>
+      subjectKey(row.title)===subjectKey(name)));
+    const actionable=w.warnings.filter(item=>!/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+    if(actionable.length||missingNames.length||w.warnings.length){
+      const issues=el("section","ttai-issues");
+      issues.append(el("h3",null,wizardText("Needs your attention","يحتاج مراجعتك")));
+      issues.append(el("p","ttai-wiz-hint",wizardText(
+        "Each issue has its own editor. No unconfirmed time will be filled in automatically.",
+        "لكل مشكلة نموذج مستقل، ومفيش وقت غير مؤكد هيتضاف تلقائيًا.")));
+      missingNames.forEach(name=>{
+        const id="missing:"+subjectKey(name);
+        issues.append(issueCard(id,name,
+          wizardText("No verified session found for this selected subject. Copy the day and times from your PDF.",
+            "لا توجد حصة مؤكدة لهذه المادة. أدخل اليوم والوقت من ملفك الأصلي."),name));
+      });
+      actionable.forEach((item,i)=>{
+        const raw=String(item).slice(0,240);
+        const suggested=selectedNames.find(name=>raw.toLowerCase().includes(name.toLowerCase()))||"";
+        issues.append(issueCard("warning:"+i,
+          suggested||wizardText("Unclear PDF entry "+(i+1),"خانة غير واضحة "+(i+1)),
+          raw,suggested));
+      });
+      const summary=w.warnings.filter(item=>/^\\d+ grid lesson\\(s\\) need manual review/i.test(String(item)));
+      if(summary.length){
+        const note=el("details","ttai-wiz-warnings");
+        note.append(el("summary",null,wizardText(
+          "Other PDF grid verification details","تفاصيل التحقق من شبكة الجدول")));
+        summary.forEach(item=>note.append(el("p",null,String(item))));
+        issues.append(note);
+      }
+      panel.append(issues);
     }
     const lessons=el("div","ttai-wiz-lessons");
-    const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
+    const issueKeys=new Set(Object.values(w.issueRows||{}));
+    const ordered=[...(stateAI.draft||[])].filter(x=>!issueKeys.has(x.key)).sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
     let lastDay=-1;
     for(const row of ordered){
       if(row.day_of_week!==lastDay){
@@ -434,13 +502,6 @@ function drawWizard(chat){
     }
     const controls=el("div","ttai-wiz-toolbar");
     controls.append(wizardButton(wizardText("Back","رجوع"),"ttai-subtle",()=>{w.step="details";draw()}));
-    controls.append(wizardButton(wizardText("+ Add lesson","+ إضافة حصة"),"ttai-subtle",()=>{
-      stateAI.draftHistory.push(structuredClone(stateAI.draft));
-      stateAI.draft.push({key:tmpKey(),title:w.subjects.find(x=>w.selected.has(subjectKey(x)))||"Class",
-        day_of_week:0,start_time:"08:00",end_time:"09:00",location:"",notes:"",category:"Class",
-        color:suggestedColor("Class")});
-      draw();
-    },stateAI.draft.length>=80));
     panel.append(controls);
     panel.append(el("p","ttai-wiz-hint",wizardText("Use “Save to my timetable” below only after checking every row.",
       "بعد ما تتأكد من كل حصة، اضغط «حفظ في جدولي» تحت.")));
