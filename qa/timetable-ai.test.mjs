@@ -21,6 +21,29 @@ for (const required of ["client.auth.getUser", "consume_timetable_ai_quota", "ou
   assert(server.includes(required), "Missing server protection: "+required);
 }
 
+// A real, valid one-page PDF fixture, built without third-party libraries.
+function fixturePDF(){
+  const stream="BT /F1 19 Tf 35 730 Td (Physics L2 Monday 09:00-10:00) Tj ET";
+  const objects=[
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Length "+Buffer.byteLength(stream)+" >>\\nstream\\n"+stream+"\\nendstream"
+  ];
+  let doc="%PDF-1.4\\n";
+  const offsets=[0];
+  for(let i=0;i<objects.length;i++){
+    offsets.push(Buffer.byteLength(doc));
+    doc+=(i+1)+" 0 obj\\n"+objects[i]+"\\nendobj\\n";
+  }
+  const xref=Buffer.byteLength(doc);
+  doc+="xref\\n0 "+(objects.length+1)+"\\n0000000000 65535 f \\n";
+  for(const offset of offsets.slice(1))
+    doc+=String(offset).padStart(10,"0")+" 00000 n \\n";
+  doc+="trailer\\n<< /Size "+(objects.length+1)+" /Root 1 0 R >>\\nstartxref\\n"+xref+"\\n%%EOF\\n";
+  return Buffer.from(doc.replaceAll("\\n","\n"),"binary");
+}
 const browser = await chromium.launch({headless:true});
 try {
   const page = await browser.newPage({viewport:{width:420,height:850}});
@@ -102,8 +125,30 @@ try {
   await page.evaluate(()=>window.render());
   await page.locator("#ttAiOpen").waitFor({timeout:4000});
   assert(await page.locator("#ttAiPanel").isVisible(),"Conversation should survive native re-render");
+  // Real PDF.js conversion, not a mocked PDF client. This used to fail with
+  // "pdf.destroy is not a function" after rendering the page.
+  await page.locator("#ttAiPanel input[type=file]").setInputFiles({
+    name:"physics-l2.pdf",mimeType:"application/pdf",buffer:fixturePDF()
+  });
+  await page.locator(".ttai-compose button[type=submit]").click();
+  await page.getByText("I found Physics and Chemistry. Which do you take?").last().waitFor({timeout:45000});
+  const pdfCalls=await page.evaluate(()=>window.__calls);
+  const final=pdfCalls.at(-1);
+  assert.equal(final.body.images.length,1,"One-page PDF should render as one image");
+  assert.equal(final.body.images[0].mime,"image/jpeg");
+  assert(final.body.images[0].data.length>150,"PDF image should contain real pixels");
+  assert.equal(await page.getByText("pdf.destroy is not a function").count(),0,
+    "PDF cleanup must never throw the former error");
+  assert.equal(await page.locator(".ttai-privacy").count(),0,
+    "Remove always-visible privacy footer text");
+  assert.equal(await page.locator(".ttai-info-btn").count(),1);
+  await page.locator(".ttai-info-btn").click();
+  assert(await page.locator(".ttai-privacy-info").isVisible(),
+    "Keep external processing disclosure accessible under info");
+  await page.locator(".ttai-info-btn").click();
+  assert.equal(await page.locator(".ttai-privacy-info").count(),0);
   await page.close();
-  console.log("TIMETABLE_AI_BROWSER=PASS (image, context, undo, review, atomic save, rerender)");
+  console.log("TIMETABLE_AI_BROWSER=PASS (real PDF.js, image, context, undo, review, atomic save, rerender)");
 } finally {
   await browser.close();
 }
