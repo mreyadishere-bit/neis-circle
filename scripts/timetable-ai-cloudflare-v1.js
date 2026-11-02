@@ -9,7 +9,26 @@ if(typeof window!=="undefined"){
 const ID="ttAiOpen";
 const editable=["title","day_of_week","start_time","end_time","location","notes","category","color"];
 const SUBJECT_COLORS=["#2f7db8","#7a52d8","#10a879","#efb83f","#ec6fb7","#e56d57","#5e6a78","#22a6b3"];
-function subjectKey(title){return String(title||"").normalize("NFKC").trim().replace(/\s+/g," ").toLocaleLowerCase()}
+function subjectKey(title){
+  return String(title||"").normalize("NFKC").trim().replace(/\s+/g," ")
+    .toLocaleLowerCase().replace(/\bgr\s*([0-9]{1,2})\b/g,"gr$1")
+    .replace(/\bg\s*(11|12)\b/g,"gr$1")
+    .replace(/\bl\s*([12])\b/g,"l$1");
+}
+function subjectBase(title){
+  return subjectKey(title).replace(/\s+(?:l[12]|gr(?:11|12))$/,"").trim();
+}
+function matchesSelectedSubject(title,w){
+  const key=subjectKey(title);
+  if(w.selected.has(key))return true;
+  const base=subjectBase(title);
+  if(!w.selected.has(base)||base===key)return false;
+  // Generic English can safely match English L1 only when that is the
+  // single documented level. Never merge L1 and L2 silently.
+  const levels=[...new Set(w.subjects.filter(x=>
+    subjectBase(x)===base&&subjectKey(x)!==base).map(subjectKey))];
+  return levels.length===1&&levels[0]===key;
+}
 function suggestedColor(subject,index=0){
   const k=subjectKey(subject);
   if(/math|رياض/.test(k))return "#2f7db8";
@@ -182,7 +201,7 @@ function buildWizardDraft(){
   const generated=[],seen=new Set();
   for(const lesson of w.lessons){
     const key=subjectKey(lesson.title);
-    if(!selected.has(key))continue;
+    if(!matchesSelectedSubject(lesson.title,w))continue;
     const day=Number(lesson.day_of_week);
     const start=String(lesson.start_time||"").slice(0,5),end=String(lesson.end_time||"").slice(0,5);
     if(!Number.isInteger(day)||day<0||day>6||!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)||
@@ -200,6 +219,15 @@ function buildWizardDraft(){
       notes:String(lesson.notes||"").slice(0,1000),category:"Class"
     });
   }
+  // Never let the AI silently omit subjects chosen by the student.
+  const unavailable=[...selected].filter(choice=>
+    !generated.some(lesson=>subjectKey(lesson.title)===choice||
+      (subjectBase(lesson.title)===choice&&matchesSelectedSubject(lesson.title,w))));
+  w.missingSubjects=unavailable;
+  if(unavailable.length)w.warnings.push(wizardText(
+    "No readable lesson found for: ","لم أجد حصة واضحة لمادة: ")+
+    unavailable.join(", ")+wizardText(". Add or verify these manually.",
+      ". ضيف الحصص دي أو راجع الملف بنفسك."));
   const kept=w.mode==="merge"?structuredClone(stateAI.original):[];
   const existing=new Set(kept.map(x=>[x.day_of_week,x.start_time,x.end_time,subjectKey(x.title)].join("|")));
   const additions=generated.filter(x=>!existing.has([x.day_of_week,x.start_time,x.end_time,subjectKey(x.title)].join("|")));
@@ -374,6 +402,17 @@ function drawWizard(chat){
       "مفيش أوقات واضحة. ضيف الحصص يدويًا أو ارفع جدول أوضح."
     )));
     panel.append(lessons);
+    if(w.missingSubjects?.length){
+      const missing=w.missingSubjects.filter(key=>
+        !stateAI.draft.some(lesson=>subjectKey(lesson.title)===key||
+          (subjectBase(lesson.title)===key&&matchesSelectedSubject(lesson.title,w))));
+      if(missing.length){
+        panel.append(el("p","ttai-wiz-warning",wizardText(
+          "Selected subjects missing sessions: ","مواد اخترتها لكن حصصها ناقصة: ")+missing.join(", ")+
+          wizardText(". Add the missing lessons before saving, or go Back to deselect them.",
+            ". ضيف الحصص الناقصة قبل الحفظ أو ارجع وشيل اختيارها.")));
+      }
+    }
     const controls=el("div","ttai-wiz-toolbar");
     controls.append(wizardButton(wizardText("Back","رجوع"),"ttai-subtle",()=>{w.step="details";draw()}));
     controls.append(wizardButton(wizardText("+ Add lesson","+ إضافة حصة"),"ttai-subtle",()=>{
@@ -555,9 +594,41 @@ async function toData(file){
         :"This PDF has more than 5 pages. Please upload a PDF containing up to five timetable pages.");
     }
     const attachments=[];
+    const textEvidence=[];
     for(let pageNum=1;pageNum<=doc.numPages;pageNum++){
       const page=await doc.getPage(pageNum);
       const original=page.getViewport({scale:1});
+      // Read embedded PDF text with positions as independent evidence,
+      // preserving spatial relationships. Never replace visual analysis
+      // with flattened plain text: combine BOTH sources.
+      try{
+        const textContent=await page.getTextContent();
+        const positioned=[];
+        for(const item of textContent.items||[]){
+          if(typeof item.str!=="string"||!item.str.trim()||!item.transform)continue;
+          const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
+          const x=Math.round(1000*point[0]/original.width);
+          const y=Math.round(1000*point[1]/original.height);
+          if(x>=-20&&x<=1020&&y>=-20&&y<=1020)
+            positioned.push({x,y,text:item.str.replace(/[\\r\\n]+/g," ").trim().slice(0,180)});
+        }
+        positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
+        const groups=[];
+        for(const part of positioned){
+          let group=groups[groups.length-1];
+          if(!group||Math.abs(part.y-group.y)>7){
+            group={y:part.y,parts:[]};groups.push(group);
+          }
+          group.parts.push(part);
+        }
+        const lines=groups.map(group=>{
+          group.parts.sort((a,b)=>a.x-b.x);
+          return "y="+group.y+" "+group.parts.map(part=>"x="+part.x+":"+part.text).join(" | ");
+        });
+        textEvidence.push("PAGE "+pageNum+" POSITIONED PDF TEXT\n"+lines.join("\n").slice(0,11000));
+      }catch{
+        // Scanned PDFs have no text layer; visual extraction still works.
+      }
       const scale=Math.min(2.5,1600/original.width,2100/original.height);
       const viewport=page.getViewport({scale});
       const canvas=document.createElement("canvas");
@@ -574,7 +645,7 @@ async function toData(file){
         name:file.name+" — page "+pageNum, mimeType:"image/jpeg", data
       });
     }
-    return {attachments};
+    return {attachments,textEvidence:textEvidence.join("\n\n").slice(0,38000)};
   }finally{
     if(doc)await doc.destroy();
   }
@@ -679,6 +750,12 @@ async function applyPlan(){
   const d=diff();if(!total(d))return;
   if(stateAI.wizard&&stateAI.wizard.step!=="review")return;
   try{
+    const missing=(stateAI.wizard?.missingSubjects||[]).filter(key=>
+      !stateAI.draft.some(row=>subjectKey(row.title)===key||
+        (subjectBase(row.title)===key&&matchesSelectedSubject(row.title,stateAI.wizard))));
+    if(missing.length)throw new Error(wizardText(
+      "Add lessons for selected subjects before saving: ",
+      "ضيف حصص المواد اللي اخترتها قبل الحفظ: ")+missing.join(", "));
     const unique=new Set();
     for(const row of stateAI.draft){
       const start=String(row.start_time||"").slice(0,5),end=String(row.end_time||"").slice(0,5);

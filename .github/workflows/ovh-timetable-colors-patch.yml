@@ -1,0 +1,39 @@
+name: OVH Repair Timetable Lesson Colors (Transactional)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-patch-timetable-rpc-colors.py'
+      - '.github/workflows/ovh-timetable-colors-patch.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-production-release
+  cancel-in-progress: false
+jobs:
+  patch-timetable-rpc:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile safe color migration
+        run: |
+          python3 -m py_compile scripts/ops/ovh-patch-timetable-rpc-colors.py
+          python3 qa/timetable-rpc-color-patch.test.py
+      - name: Run atomic and backed-up OVH timetable color RPC patch
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" \
+            'python3 -' < scripts/ops/ovh-patch-timetable-rpc-colors.py
+          echo 'TIMETABLE_RPC_COLOR_FIX_DEPLOYED=YES'

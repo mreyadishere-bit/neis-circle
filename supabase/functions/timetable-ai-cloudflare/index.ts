@@ -159,11 +159,52 @@ const DISCOVERY_INSTRUCTION = [
   "Do NOT include a lesson in detected_lessons when its day, start, end, or subject level is unreadable. Describe the missing data in extracted.ambiguous_items.",
   "Do not infer missing AM/PM or durations unless unequivocally printed in the source grid.",
   "One subject can occur several times; include ALL weekly occurrences without confusing adjacent cells. Preserve source locations only when printed.",
+  "The timetable may CONTINUE across pages. Match x-positions and inherited column headings from previous pages, not only visible row labels.",
+  "Explicit notes below the main grid may contain French Gr11, Religion Gr11, or other subjects. Extract those even if absent from main headers.",
+  "Never confuse 11 AM with 11 PM or change AM/PM to fit expectations. If a printed time is internally contradictory, report it as ambiguous.",
   "Return ONLY strict JSON: reply (brief), changed (false), entries (empty array), extracted.",
   "extracted must have summary, document_language, page_count, all_detected_subjects, ambiguous_items, detected_lessons.",
   "Every detected lesson must have day_of_week, title, start_time, end_time, location, notes. All values must come from visible source evidence.",
   "Use the user's Arabic or English language. Avoid adding timetable events or choosing subjects.",
 ].join("\n");
+
+
+// Text-layer notes are evidence only. Only parse explicit standalone lines
+// with a single weekday and two written times; never guess grid locations.
+// This catches subjects printed BELOW the main grid such as French Gr11.
+export function parseExplicitFootnoteLessons(pdfEvidence: string): Array<Record<string, unknown>> {
+  const days: Record<string, number> = {
+    sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+  };
+  const found: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+  for (const rawLine of pdfEvidence.split(/\r?\n/).slice(0, 750)) {
+    const line = rawLine.replace(/\bx=-?\d+:/g, "").replace(/\s*\|\s*/g, " ")
+      .replace(/\s+/g, " ").trim();
+    // Require a visible leading asterisk: prevents treating unrelated grid
+    // row fragments or position markers as separately scheduled lessons.
+    const lead = line.match(/(?:^|\s)\*\s*([^()]{2,85})\s*\(\s*(.{5,120})\)/);
+    if (!lead) continue;
+    const title = lead[1].replace(/^[^\p{L}\p{N}]+/u, "").trim();
+    const schedule = lead[2];
+    const dayMatch = schedule.match(/\b(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:rs(?:day)?)?|fri(?:day)?|sat(?:urday)?)\b/i);
+    const times = [...schedule.matchAll(/\b(\d{1,2}:\d{2})\s*(am|pm)\b/gi)];
+    if (!title || !dayMatch || times.length !== 2 ||
+        /\b(?:and|&|sun|mon|tue|wed|thu|fri|sat)\b.*\b(?:sun|mon|tue|wed|thu|fri|sat)\b/i.test(schedule.slice(dayMatch.index! + dayMatch[0].length))) continue;
+    const day = days[dayMatch[1].slice(0, 3).toLowerCase()];
+    const start = normalizeTime24(times[0][1] + " " + times[0][2]);
+    const end = normalizeTime24(times[1][1] + " " + times[1][2]);
+    if (day === undefined || !start || !end || end <= start) continue;
+    const key = [title.toLowerCase().replace(/\s+/g, ""), day].join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push({
+      title, day_of_week: day, start_time: start, end_time: end,
+      category: "Class", location: "", notes: "",
+    });
+  }
+  return found.slice(0, 30);
+}
 
 function parseModelObject(raw: string): Record<string, unknown> | null {
   const trimmed = raw.trim().replace(/^~~~json\s*/i, "").replace(/^`{3}(?:json)?\s*/i, "").replace(/\s*`{3}$/i, "");
@@ -251,6 +292,8 @@ Deno.serve(async (request: Request) => {
     }
     const prompt = String(body.message ?? body.prompt ?? "").trim().slice(0, 1600);
     const discoveryMode = body.mode === "discover";
+    const pdfEvidence = discoveryMode && typeof body.textEvidence === "string"
+      ? body.textEvidence.slice(0, 38000) : "";
     const attachments = Array.isArray(body.attachments) ? body.attachments : [];
     if (attachments.length > MAX_ATTACHMENT_COUNT) {
       return respond({ error: "Up to five timetable pages per upload. Please split a larger PDF.", code: "TOO_MANY_PAGES" }, 413);
@@ -298,7 +341,7 @@ Deno.serve(async (request: Request) => {
       })),
     });
     const messageText = discoveryMode
-      ? "Read ONLY the attached timetable page images. Find ALL distinct subjects and all unambiguously timed lessons. No draft generation. Output JSON extraction only."
+      ? "Read the attached timetable page images AND the independently extracted positioned PDF text below. The PDF spans multiple pages: page 2 may CONTINUE the same column headers from page 1 rather than starting a new table. Match the exact subject column and row for each lesson; do not transfer a neighbor's time to another subject. CRITICAL: also read footnotes below the grid, including French, Religion, or Grade 11 subjects. Only include lessons supported by their correct column/day or explicit standalone note. If the source has impossible AM/PM (such as 10:00 AM to 12:30 AM), flag it as ambiguous instead of guessing. No draft generation. Return JSON extraction only.\n\nPOSITIONED PDF EVIDENCE:\n" + pdfEvidence
       : "Context JSON:\n" + contextSummary + "\n\nRequest: " + (prompt || "Update this timetable draft.");
     const textPart = { type: "text", text: messageText };
     const messages = [
@@ -315,6 +358,22 @@ Deno.serve(async (request: Request) => {
     const entries = discoveryMode ? [] : validateAndNormalizeEntries(parsed.entries);
     const extracted = parsed.extracted && typeof parsed.extracted === "object" && !Array.isArray(parsed.extracted)
       ? parsed.extracted as Record<string, unknown> : {};
+    const explicitNotes = discoveryMode ? parseExplicitFootnoteLessons(pdfEvidence) : [];
+    const modelLessons = Array.isArray(extracted.detected_lessons) ? extracted.detected_lessons : [];
+    // Explicit single-day printed notes outrank model guesses for that same
+    // subject/day, while never touching unrelated grid lessons.
+    const noteKeys = new Set(explicitNotes.map((r) =>
+      String(r.title).toLowerCase().replace(/\s+/g, "") + "|" + r.day_of_week));
+    const groundedLessons = validateAndNormalizeEntries([
+      ...modelLessons.filter((r: Record<string, unknown>) =>
+        !noteKeys.has(String(r?.title ?? "").toLowerCase().replace(/\s+/g, "") +
+        "|" + String(r?.day_of_week ?? ""))),
+      ...explicitNotes,
+    ]);
+    const detectedSubjects = [...new Set([
+      ...(Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects : []).map(String),
+      ...explicitNotes.map((r) => String(r.title)),
+    ])];
     return respond({
       reply: String(parsed.reply || (body.lang === "ar" ? "تم تحليل الجدول." : "Timetable analyzed. Review your draft.")).slice(0, 1400),
       changed: discoveryMode ? false : Boolean(parsed.changed),
@@ -323,9 +382,9 @@ Deno.serve(async (request: Request) => {
         summary: String(extracted.summary ?? "").slice(0, 1200),
         document_language: String(extracted.document_language ?? (body.lang === "ar" ? "ar" : "en")),
         page_count: Math.max(1, Math.min(5, Number(extracted.page_count || attachments.length || 1))),
-        all_detected_subjects: Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects.map(String).slice(0, 80) : [],
+        all_detected_subjects: detectedSubjects.slice(0, 80),
         ambiguous_items: Array.isArray(extracted.ambiguous_items) ? extracted.ambiguous_items.map(String).slice(0, 40) : [],
-        detected_lessons: Array.isArray(extracted.detected_lessons) ? validateAndNormalizeEntries(extracted.detected_lessons) : entries,
+        detected_lessons: discoveryMode ? groundedLessons : (modelLessons.length ? validateAndNormalizeEntries(modelLessons) : entries),
       },
       model: PRIMARY_MODEL,
       provider: "cloudflare",

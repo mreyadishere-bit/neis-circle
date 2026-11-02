@@ -1,0 +1,55 @@
+name: Diagnose Timetable RPC Color Handling (Read-only)
+on:
+  push:
+    branches: [fix/timetable-pdf-accuracy-colors-20261102]
+    paths: [.github/workflows/diagnose-timetable-rpc-colors.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 5
+    steps:
+      - name: Inspect DB schema and RPC color handling without reading rows
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import subprocess,json,re
+          Docker=['sudo','-n','/usr/bin/docker']
+          ps=subprocess.run(Docker+['ps','--format','{{.Names}}'],capture_output=True,text=True,timeout=20)
+          if ps.returncode:raise SystemExit('DOCKER_READ_FAILED')
+          names=ps.stdout.splitlines()
+          databases=[x for x in names if 'db' in x and 'postgres' not in x]
+          if not databases:databases=[x for x in names if 'postgres' in x]
+          if not databases:raise SystemExit('DATABASE_CONTAINER_NOT_FOUND')
+          name=next((x for x in databases if 'supabase' in x),databases[0])
+          sql="""select json_build_object('rpc_exists',count(*)>0,'rpc_color_mentions',coalesce(bool_or(lower(pg_get_functiondef(p.oid)) like '%color%'),false),'rpc_json_color_extraction',coalesce(bool_or(pg_get_functiondef(p.oid) ~* '->>.*color|->.*color'),false),'rpc_dynamic_color_default',coalesce(bool_or(pg_get_functiondef(p.oid) ~* '#2f7db8'),false),'rpc_src_lines',coalesce(max(array_length(regexp_split_to_array(pg_get_functiondef(p.oid),E'\\n'),1)),0))::text from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='apply_timetable_ai_plan';"""
+          cmd=Docker+['exec',name,'psql','-U','postgres','-d','postgres','-At','-c',sql]
+          out=subprocess.run(cmd,capture_output=True,text=True,timeout=25)
+          if out.returncode:
+            print('RPC_INSPECTION=FAILED')
+            print('RPC_INSPECTION_EXIT='+str(out.returncode))
+            raise SystemExit(1)
+          try:result=json.loads(out.stdout.strip().splitlines()[-1])
+          except Exception:raise SystemExit('RPC_RESULT_UNPARSEABLE')
+          for k,v in result.items():
+            print(k.upper()+'='+str(v).upper() if isinstance(v,bool) else k.upper()+'='+str(v))
+          funcsql="""select pg_get_functiondef(p.oid) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='apply_timetable_ai_plan' limit 1"""
+          fn=subprocess.run(Docker+['exec',name,'psql','-U','postgres','-d','postgres','-At','-c',funcsql],capture_output=True,text=True,timeout=25)
+          if fn.returncode:raise SystemExit('RPC_FUNCTION_READ_FAILED')
+          lines=fn.stdout.splitlines()
+          for i,line in enumerate(lines):
+            if i>=28 and i<90:
+              # Only the static function's SQL, never student records.
+              print('RPC_DEF_'+str(i+1)+'='+line.strip()[:230])
+          print('RPC_READ_ONLY_INSPECTION=PASS')
+          PY
