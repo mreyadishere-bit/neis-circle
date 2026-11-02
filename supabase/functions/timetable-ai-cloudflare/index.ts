@@ -490,12 +490,15 @@ Deno.serve(async (request: Request) => {
     const modelSubjects=(Array.isArray(extracted.all_detected_subjects) ? extracted.all_detected_subjects : []).map(String);
     // When PDF headings exist, they are authoritative over generic model labels.
     // For example: "Physics" must not replace separate "Physics L1"/"Physics L2".
-    const knownBases=new Set(pdfHeaders.map(x=>x.toLowerCase().replace(/\\s+l[12]$/,"")));
-    const detectedSubjects = [...new Set([
-      ...pdfHeaders,
-      ...modelSubjects.filter(x=>!knownBases.has(x.toLowerCase().replace(/\\s+l[12]$/,""))),
-      ...explicitNotes.map((r) => String(r.title)),
-    ])];
+    // Never let a generic model label erase a more specific PDF level.
+    // The previous regex accidentally matched a literal backslash rather than
+    // whitespace, and discarded qualified model labels when a header was generic.
+    const allCandidates=[...pdfHeaders,...modelSubjects,...explicitNotes.map(r=>String(r.title))];
+    const base=(x:string)=>x.trim().toLowerCase().replace(/\\s+(?:l[12]|gr\\s*1[12])$/i,"").replace(/\\s+/g," ");
+    const isQualified=(x:string)=>/\\s+(?:l[12]|gr\\s*1[12])$/i.test(x.trim());
+    const qualifiedBases=new Set(allCandidates.filter(isQualified).map(base));
+    const detectedSubjects=[...new Set(allCandidates.filter(x=>
+      !qualifiedBases.has(base(x))||isQualified(x)))];
     return respond({
       reply: String(parsed.reply || (body.lang === "ar" ? "تم تحليل الجدول." : "Timetable analyzed. Review your draft.")).slice(0, 1400),
       changed: discoveryMode ? false : Boolean(parsed.changed),
