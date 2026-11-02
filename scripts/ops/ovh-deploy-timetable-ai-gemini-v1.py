@@ -140,7 +140,8 @@ def edge_mount(config):
 
 
 def verify_edge_config_preserved(before, after, old_mount_source,
-                                 new_mount_source, gemini_key):
+                                 new_mount_source, gemini_key,
+                                 previous_gemini_env_file=None):
     """Prove that ONLY Gemini env + the one Edge source mount changed."""
     before_services = copy.deepcopy(before['services'])
     after_services = copy.deepcopy(after['services'])
@@ -182,8 +183,16 @@ def verify_edge_config_preserved(before, after, old_mount_source,
     # contents. The additional private env_file is the ONLY permitted new field.
     old_files = old.pop('env_file', []) or []
     new_files = new.pop('env_file', []) or []
-    ensure(new_files in (old_files, old_files + [str(GEMINI_ENV_FILE)]),
-           'EDGE_ENV_FILE_LIST_CHANGED')
+    allowed_env_lists = (old_files, old_files + [str(GEMINI_ENV_FILE)])
+    if previous_gemini_env_file is not None:
+        # Replacing the prior Gemini-owned env file is safe. Do NOT discard
+        # any existing unrelated env files inherited from base Compose.
+        ensure(previous_gemini_env_file in old_files,
+               'PREVIOUS_GEMINI_ENV_FILE_NOT_ACTIVE')
+        replacement = [str(GEMINI_ENV_FILE) if p == previous_gemini_env_file
+                       else p for p in old_files]
+        allowed_env_lists += (replacement,)
+    ensure(new_files in allowed_env_lists, 'EDGE_ENV_FILE_LIST_CHANGED')
     ensure(old == new, 'EDGE_OTHER_CONFIGURATION_CHANGED')
 
 
@@ -253,6 +262,242 @@ def deploy_edge_function(anon_key, gemini_key):
            'EDGE_MAIN_ROUTER_MISSING')
     previous_overlay_bytes = EDGE_OVERLAY.read_bytes()
     previous_gemini_bytes = GEMINI_OVERLAY.read_bytes() if old_gemini_exists else None
+    previous_owned_env_file = None
+    if previous_gemini_bytes is not None:
+        # Only replace the known minimal Gemini override created by us;
+        # fail closed on unexpected edits or extra service configuration.
+        original_gemini_text = previous_gemini_bytes.decode('utf-8')
+        expected_prefix = 'services:\n  functions:\n    env_file:\n'
+        ensure(original_gemini_text.startswith(expected_prefix) and
+               original_gemini_text.count('    env_file:\n') == 1 and
+               original_gemini_text.count('    volumes:\n') == 1 and
+               original_gemini_text.count('services:\n') == 1,
+               'PREVIOUS_GEMINI_OVERRIDE_UNRECOGNIZED')
+        env_file_match = re.search(r'^      - (.+\.env)
+    # An immutable, private backup lets operators restore this exact release.
+    if previous_gemini_bytes is not None:
+        fd = os.open(str(GEMINI_OVERRIDE_BACKUP),
+                     os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as f:
+            f.write(previous_gemini_bytes)
+    ensure(edge_mount(previous).get('source') == str(src_functions),
+           'LIVE_EDGE_MOUNT_DIFFERS_FROM_COMPOSE')
+
+    target_functions = EDGE_REL / 'functions'
+    shutil.copytree(src_functions, target_functions)
+    (target_functions / 'timetable-ai').mkdir(parents=True, exist_ok=True)
+    shutil.copy2(STAGE / 'index.ts', target_functions / 'timetable-ai' / 'index.ts')
+
+    # A private 0600 env_file avoids putting the Gemini credential into
+    # Git-tracked or existing shared Compose YAML files.
+    secret_fd = os.open(str(GEMINI_ENV_FILE),
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(secret_fd, 'w', encoding='utf-8') as f:
+            f.write('GEMINI_API_KEY=' + json.dumps(gemini_key) + '\n')
+    except Exception:
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        raise
+
+    # Preserve every Docker mount option, including implicit bind defaults
+    # such as bind.create_host_path. Docker Compose accepts JSON flow objects
+    # as valid YAML, so there is no lossy parsing or conversion.
+    current_mount = copy.deepcopy(edge_mount(previous))
+    ensure(current_mount.get('type') == 'bind' and
+           current_mount.get('read_only') is True,
+           'EDGE_CURRENT_MOUNT_UNSAFE')
+    current_mount['source'] = str(target_functions)
+    # Docker Compose merges services: this additive override changes only the
+    # /home/deno/functions mount and adds the Gemini env_file. Do not change
+    # ports, command, image, other mounts, or existing environment settings.
+    override = (
+        'services:\n'
+        '  functions:\n'
+        '    env_file:\n'
+        f'      - {GEMINI_ENV_FILE}\n'
+        '    volumes:\n'
+        f'      - {json.dumps(current_mount, separators=(",", ":"))}\n'
+    )
+    # The previous override may still be referenced by the running container.
+    # Atomic replacement does not disturb it until Compose explicitly recreates
+    # only the Edge service. The previous bytes remain available for rollback.
+    write_gemini_override_atomic(override)
+
+    phase = 'edge_preflight'
+    try:
+        candidate = read_compose_config(include_gemini=True)
+        verify_edge_config_preserved(previous, candidate,
+                                     src_functions, target_functions, gemini_key,
+                                     previous_owned_env_file)
+        ensure(EDGE_OVERLAY.read_bytes() == previous_overlay_bytes,
+               'EXISTING_EDGE_OVERLAY_MODIFIED')
+        call(compose_cmd(True, True) + ['config', '--quiet'], timeout=40)
+    except Exception:
+        restore_previous_gemini_override(previous_gemini_bytes)
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        raise
+
+    phase = 'edge_activate'
+    try:
+        call(compose_cmd(True, True) +
+             ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
+             timeout=120)
+        verify_edge_endpoint(anon_key)
+        ensure(EDGE_OVERLAY.read_bytes() == previous_overlay_bytes,
+               'EXISTING_EDGE_OVERLAY_MODIFIED')
+    except Exception:
+        # The original overlay is untouched. Remove our new override and
+        # recreate only functions from the previous, complete Compose stack.
+        restore_previous_gemini_override(previous_gemini_bytes)
+        GEMINI_ENV_FILE.unlink(missing_ok=True)
+        call(compose_cmd(True, old_gemini_exists) +
+             ['up', '-d', '--no-deps', '--force-recreate', 'functions'],
+             timeout=100, check=False)
+        print('TIMETABLE_AI_EDGE=ROLLED_BACK')
+        raise
+
+
+def main():
+    global phase
+    ovh_anon, gemini_key = read_ovh_env()
+    ensure(
+        FRONTEND_OVERLAY.is_file()
+        and (STAGE / 'timetable-ai-v1.js').is_file()
+        and (STAGE / 'timetable-ai-v1.css').is_file()
+        and (STAGE / '01-core.js').is_file()
+        and (STAGE / 'index.ts').is_file(),
+        'STAGING_MISSING',
+    )
+    js_code = (STAGE / 'timetable-ai-v1.js').read_text()
+    core_code = (STAGE / '01-core.js').read_text()
+    edge_code = (STAGE / 'index.ts').read_text()
+    for tok in ('gemini-3.8-flash', 'application/pdf', 'timetable-ai', '__neisTimetableAiMounted'):
+        ensure(tok in js_code, 'FRONTEND_CODE_INVALID')
+    for tok in ('https://supabase.neiscircle.site', "flowType:'pkce'"):
+        ensure(tok in core_code, 'CORE_CONFIG_INVALID')
+    ensure('ydieijgynqlckaczalju' not in core_code, 'OLD_CLOUD_URL_FOUND_IN_CORE')
+    for tok in ('gemini-3.8-flash', 'GEMINI_API_KEY', 'inlineData', 'responseSchema', 'client.auth.getUser(jwt)'):
+        ensure(tok in edge_code, 'EDGE_CODE_INVALID')
+    ensure('decodeVerifiedJwtClaims' not in edge_code, 'UNVERIFIED_JWT_DECODE_FORBIDDEN')
+    ensure('groq' not in js_code.lower() and 'groq' not in edge_code.lower(), 'GROQ_REFERENCE_FOUND')
+
+    call(['node', '--check', str(STAGE / 'timetable-ai-v1.js')], timeout=15)
+    call(['node', '--check', str(STAGE / '01-core.js')], timeout=15)
+    call(compose_cmd(True) + ['config', '--quiet'], timeout=40)
+
+    # 1. Deploy and verify OVH Edge Function (`timetable-ai`)
+    deploy_edge_function(ovh_anon, gemini_key)
+
+    # 2. Deploy and verify OVH Frontend Release
+    phase = 'frontend_preflight'
+    mounts = [
+        m.get('Source')
+        for m in json.loads(call(DOCKER + ['inspect', 'supabase-caddy'], timeout=20))[0].get('Mounts', [])
+        if m.get('Type') == 'bind' and m.get('Destination') == '/srv/neis-circle'
+    ]
+    ensure(len(mounts) == 1, 'CADDY_FRONTEND_BIND_NOT_FOUND')
+    src = Path(mounts[0])
+    ensure(src.is_dir() and str(src).startswith('/home/ubuntu/neis-frontend/releases/'), 'INVALID_RELEASE')
+
+    index = (src / 'index.html').read_text()
+    ensure(
+        "We'll be back soon" not in index
+        and index.count('</head>') == 1
+        and index.count('</body>') == 1
+        and 'scripts/01-core.js' in index
+        and 'scripts/timetable-v147.js' in index,
+        'MAINTENANCE_OR_INVALID_INDEX_BLOCKED',
+    )
+    original_overlay = FRONTEND_OVERLAY.read_text()
+    ensure(original_overlay.count(str(src)) == 1, 'OVERLAY_BIND_CHANGED')
+    # Never delete any previously published frontend release. A repeated
+    # workflow dispatch receives a new RELEASE_ID instead.
+    ensure(not FRONTEND_DEST.exists() and not FRONTEND_DEST.is_symlink(),
+           'FRONTEND_RELEASE_COLLISION')
+    tmp = Path(str(FRONTEND_DEST) + '.building')
+    ensure(not tmp.exists() and not tmp.is_symlink(),
+           'FRONTEND_STAGING_COLLISION')
+
+    phase = 'frontend_copy'
+    shutil.copytree(src, tmp)
+    shutil.copy2(STAGE / 'timetable-ai-v1.js', tmp / JS)
+    shutil.copy2(STAGE / 'timetable-ai-v1.css', tmp / CSS)
+    patched_core = re.sub(
+        r'supabaseAnonKey\s*:\s*"[^"]+"',
+        'supabaseAnonKey:"' + ovh_anon + '"',
+        core_code,
+    )
+    (tmp / 'scripts/01-core.js').write_text(patched_core)
+
+    updated_index = re.sub(
+        r'supabaseAnonKey\s*:\s*"[^"]+"',
+        'supabaseAnonKey: "' + ovh_anon + '"',
+        index,
+    )
+    # Remove any duplicate timetable-ai-gemini-v1 script/style references if present
+    updated_index = re.sub(r'<script[^>]*timetable-ai-gemini-v1\.js[^>]*></script>\s*', '', updated_index)
+    updated_index = re.sub(r'<link[^>]*timetable-ai-gemini-v1\.css[^>]*>\s*', '', updated_index)
+    ensure(
+        'sb_publishable_' not in updated_index
+        and 'ydieijgynqlckaczalju' not in updated_index
+        and 'https://supabase.neiscircle.site' in updated_index
+        and 'scripts/timetable-ai-v1.js' in updated_index,
+        'INDEX_CONFIG_VALIDATION_FAILED',
+    )
+    (tmp / 'index.html').write_text(updated_index)
+    tmp.rename(FRONTEND_DEST)
+    (STAGE / 'frontend-overlay.before-timetable-ai.yml').write_text(original_overlay)
+
+    phase = 'frontend_activate'
+    applied = False
+    try:
+        FRONTEND_OVERLAY.write_text(original_overlay.replace(str(src), str(FRONTEND_DEST)))
+        applied = True
+        call(compose_cmd(True) + ['config', '--quiet'], timeout=40)
+        call(compose_cmd(True) + ['up', '-d', '--no-deps', 'caddy'], timeout=125)
+        cid = call(compose_cmd(True) + ['ps', '-q', 'caddy'], timeout=22).strip()
+        ensure(bool(cid), 'CADDY_DOWN')
+        html = call(DOCKER + ['exec', cid, 'cat', '/srv/neis-circle/index.html'], timeout=22)
+        ensure(
+            'https://supabase.neiscircle.site' in html
+            and 'sb_publishable_' not in html
+            and "We'll be back soon" not in html
+            and 'scripts/timetable-ai-v1.js' in html
+            and 'timetable-ai-gemini-v1.js' not in html,
+            'LIVE_ASSET_VERIFICATION_FAILED',
+        )
+    except Exception:
+        if applied:
+            FRONTEND_OVERLAY.write_text(original_overlay)
+            call(compose_cmd(True) + ['up', '-d', '--no-deps', 'caddy'], timeout=100, check=False)
+            print('TIMETABLE_AI_FRONTEND=ROLLED_BACK')
+        raise
+
+    print('OVH_BACKEND_CONFIG=FIXED_VERIFIED')
+    print('TIMETABLE_AI_REPEAT_DEPLOY_SAFE=YES')
+    print('TIMETABLE_AI_RELEASE_ID=' + RELEASE_ID)
+    print('TIMETABLE_AI_EDGE_DEPLOY=SUCCESS')
+    print('TIMETABLE_AI_FRONTEND_DEPLOY=SUCCESS')
+    print('TIMETABLE_AI_PROVIDER=GEMINI_3_8_FLASH')
+    print('TIMETABLE_AI_AUTH_SECURITY=PR_453_SUPABASE_AUTH_GETUSER_ENFORCED')
+    print('TIMETABLE_AI_MULTIMODAL_PDF_VISION=ENABLED')
+    print('TIMETABLE_AI_SECRET_VALUES_LOGGED=NO')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as error:
+        print('TIMETABLE_AI_DEPLOY=FAILED_' + phase.upper() + '_' + str(error), file=sys.stderr)
+        raise SystemExit(1)
+,
+                                   original_gemini_text, re.MULTILINE)
+        ensure(env_file_match is not None,
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
+        previous_owned_env_file = env_file_match.group(1)
+        ensure(previous_owned_env_file.startswith(str(STAGE) + '/') and
+               Path(previous_owned_env_file).name.startswith('gemini-provider'),
+               'PREVIOUS_GEMINI_SECRET_FILE_UNRECOGNIZED')
     previous = read_compose_config(include_gemini=old_gemini_exists)
     # An immutable, private backup lets operators restore this exact release.
     if previous_gemini_bytes is not None:
