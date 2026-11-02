@@ -257,6 +257,30 @@ async function toData(file){
     }]
   };
 }
+// Keep the chat responsive even if a large PDF or the Edge relay stalls.
+// Supabase supports AbortSignal; Promise.race is a second safety net if
+// a browser/network implementation ignores the abort request.
+const AI_REQUEST_DEADLINE_MS=95000;
+async function invokeWithDeadline(body){
+  const controller=new AbortController();
+  let deadline;
+  const timeout=new Promise((_,reject)=>{
+    deadline=setTimeout(()=>{
+      controller.abort();
+      reject(new Error(lang()==="ar"
+        ?"استغرق تحليل الجدول وقتًا أطول من المتوقع. أعد المحاولة؛ الملف والرسالة ما زالا محفوظين."
+        :"Timetable analysis timed out. Please retry; your PDF and message are preserved."));
+    },AI_REQUEST_DEADLINE_MS);
+  });
+  try{
+    return await Promise.race([
+      sb.functions.invoke("timetable-ai",{body,signal:controller.signal}),
+      timeout
+    ]);
+  }finally{
+    clearTimeout(deadline);
+  }
+}
 async function submit(text,retrying=false){
   if(stateAI.busy||stateAI.saving)return;
   const file=stateAI.file;
@@ -285,7 +309,7 @@ async function submit(text,retrying=false){
       messages:prior
     };
     if(file)Object.assign(body,await toData(file));
-    const {data,error}=await sb.functions.invoke("timetable-ai",{body});
+    const {data,error}=await invokeWithDeadline(body);
     if(error||!data||!Array.isArray(data.entries)){
       let description=data?.error||"";
       if(error?.context?.json){
