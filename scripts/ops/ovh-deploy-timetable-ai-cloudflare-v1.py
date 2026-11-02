@@ -488,6 +488,12 @@ def main():
         updated_index,
         count=1,
     )
+    updated_index = re.sub(
+        r"(styles/timetable-ai-v1[.]css)(?:[?][^\\\"']*)?",
+        lambda m: m.group(1) + "?v=wizard-" + RELEASE_ID,
+        updated_index,
+        count=1,
+    )
     # Remove any duplicate timetable-ai-cloudflare-v1 script/style references if present
     updated_index = re.sub(r'<script[^>]*timetable-ai-cloudflare-v1\.js[^>]*></script>\s*', '', updated_index)
     updated_index = re.sub(r'<link[^>]*timetable-ai-cloudflare-v1\.css[^>]*>\s*', '', updated_index)
