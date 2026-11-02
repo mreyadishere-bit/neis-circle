@@ -202,8 +202,10 @@ def verify_edge_config_preserved(before, after, old_mount_source,
            'CLOUDFLARE_SECRET_ENV_NOT_EFFECTIVE')
     ensure(new_env.get('CLOUDFLARE_ACCOUNT_ID') == account_id,
            'CLOUDFLARE_ACCOUNT_ENV_NOT_EFFECTIVE')
+    new_env.pop('GEMINI_API_KEY', None)
     new_env.pop('CLOUDFLARE_API_TOKEN')
     new_env.pop('CLOUDFLARE_ACCOUNT_ID')
+    old_env.pop('GEMINI_API_KEY', None)
     old_env.pop('CLOUDFLARE_API_TOKEN', None)
     old_env.pop('CLOUDFLARE_ACCOUNT_ID', None)
     ensure(old_env == new_env, 'EDGE_OTHER_ENV_CHANGED')
@@ -358,6 +360,11 @@ def deploy_edge_function(anon_key, cloudflare_key, account_id):
         with os.fdopen(secret_fd, 'w', encoding='utf-8') as f:
             f.write('CLOUDFLARE_API_TOKEN=' + json.dumps(cloudflare_key) + '\n')
             f.write('CLOUDFLARE_ACCOUNT_ID=' + json.dumps(account_id) + '\n')
+            # Preserve Gemini key privately if the repository secret is set.
+            staged = (STAGE / 'cloudflare-deploy-secrets.env').read_text()
+            gm = next((line.partition('=')[2].strip() for line in staged.splitlines()
+                       if line.startswith('GEMINI_API_KEY=')), '')
+            if gm: f.write('GEMINI_API_KEY=' + json.dumps(gm) + '\n')
     except Exception:
         CLOUDFLARE_ENV_FILE.unlink(missing_ok=True)
         raise

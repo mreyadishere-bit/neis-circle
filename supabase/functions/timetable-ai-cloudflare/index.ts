@@ -356,6 +356,40 @@ async function callCloudflare(token: string, account: string, messages: unknown[
   } finally { clearTimeout(deadline); }
 }
 
+// Gemini is the preferred multimodal reader if a server-side Gemini key exists.
+// Keep the current Cloudflare implementation as a safe fallback for unavailable
+// Gemini credentials/quotas; never expose either key in the browser.
+const GEMINI_MODEL = "gemini-3.8-flash";
+async function callGemini(key: string, messages: Array<{role:string;content:unknown}>) {
+  const controller=new AbortController();
+  const deadline=setTimeout(()=>controller.abort(),38000);
+  try{
+    const system=String(messages[0]?.content||"");
+    const content=messages[1]?.content;
+    const pieces=Array.isArray(content)?content:[{type:"text",text:String(content||"")}];
+    const parts=pieces.map((p:Record<string,unknown>)=>{
+      if(p.type==="text")return {text:String(p.text||"")};
+      const uri=String((p.image_url as {url?:string})?.url||"");
+      const match=uri.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+      if(!match)throw new Error("INVALID_GEMINI_IMAGE");
+      return {inlineData:{mimeType:match[1],data:match[2]}};
+    });
+    const url="https://generativelanguage.googleapis.com/v1beta/models/"+GEMINI_MODEL+":generateContent";
+    const response=await fetch(url,{method:"POST",headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
+      body:JSON.stringify({systemInstruction:{parts:[{text:system}]},
+        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:3500,temperature:0}}),
+      signal:controller.signal});
+    if(!response.ok){
+      const err=new Error("GEMINI_HTTP_ERROR") as Error & {status?:number};
+      err.status=response.status;throw err;
+    }
+    const result=await response.json();
+    const text=(result.candidates?.[0]?.content?.parts||[]).map((p:{text?:string})=>p.text||"").join("");
+    if(!text)throw new Error("GEMINI_EMPTY_OUTPUT");
+    return text;
+  }finally{clearTimeout(deadline)}
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: jsonHeaders });
   if (request.method !== "POST") return respond({ error: "Method not allowed" }, 405);
@@ -381,6 +415,7 @@ Deno.serve(async (request: Request) => {
     if (profile?.account_status && profile.account_status !== "active") {
       return respond({ error: "Account is restricted.", code: "ACCOUNT_RESTRICTED" }, 403);
     }
+    const geminiKey=(Deno.env.get("GEMINI_API_KEY")||"").trim();
     const token = (Deno.env.get("CLOUDFLARE_API_TOKEN") || "").trim();
     const account = (Deno.env.get("CLOUDFLARE_ACCOUNT_ID") || "").trim();
     if (!token || !/^[a-f0-9]{32}$/i.test(account)) {
@@ -451,7 +486,17 @@ Deno.serve(async (request: Request) => {
       { role: "system", content: discoveryMode ? DISCOVERY_INSTRUCTION : SYSTEM_INSTRUCTION },
       { role: "user", content: parts.length ? [textPart, ...parts] : textPart.text },
     ];
-    const raw = await callCloudflare(token, account, messages);
+    let actualProvider="cloudflare";
+    let raw:string;
+    if(geminiKey){
+      try{raw=await callGemini(geminiKey,messages);actualProvider="gemini"}
+      catch(e){
+        // 429 or provider outage: retain timetable import with existing relay.
+        const status=Number((e as {status?:number}).status||0);
+        if(status!==429&&status!==503&&status!==502&&status!==404)throw e;
+        raw=await callCloudflare(token,account,messages);
+      }
+    }else raw=await callCloudflare(token,account,messages);
     const parsed = parseModelObject(raw);
     // Discovery returns "extracted", not a saveable "entries" array. The
     // previous check rejected correct extraction responses and wasted the
@@ -516,8 +561,8 @@ Deno.serve(async (request: Request) => {
         ].slice(0, 40),
         detected_lessons: discoveryMode ? groundedLessons : (modelLessons.length ? validateAndNormalizeEntries(modelLessons) : entries),
       },
-      model: PRIMARY_MODEL,
-      provider: "cloudflare",
+      model: actualProvider==="gemini"?GEMINI_MODEL:PRIMARY_MODEL,
+      provider: actualProvider,
     });
   } catch (error: unknown) {
     const status = Number((error as {status?: number})?.status ?? 0);

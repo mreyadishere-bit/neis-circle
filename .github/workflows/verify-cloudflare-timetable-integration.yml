@@ -39,10 +39,10 @@ jobs:
           assert 'CLOUDFLARE_API_TOKEN' in edge and 'CLOUDFLARE_ACCOUNT_ID' in edge
           assert '@cf/meta/llama-4-scout-17b-16e-instruct' in edge
           assert 'timetable-ai-cloudflare' in front and 'getDocument({data:' in front and 'file.arrayBuffer()' in front
-          assert 'GEMINI_API_KEY' not in edge and 'AIza' not in edge
+          assert 'GEMINI_API_KEY' in edge and 'callGemini' in edge and 'AIza' not in edge
           assert 'restore_previous_cloudflare_override' in ops
           assert 'PREVIOUS_GEMINI_OVERLAY' in ops
-          assert 'CLOUDFLARE_API_TOKEN' in ops and 'CLOUDFLARE_ACCOUNT_ID' in ops
+          assert 'CLOUDFLARE_API_TOKEN' in ops and 'CLOUDFLARE_ACCOUNT_ID' in ops and 'GEMINI_API_KEY' in ops
           assert 'client.auth.getUser(jwt)' in ops
           print('CLOUDFLARE_INTEGRATION_STATIC=PASS')
           PY

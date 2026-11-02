@@ -41,6 +41,7 @@ jobs:
           node qa/timetable-pdf-position-and-footnotes.test.mjs
       - name: Confirm credentials are available without printing them
         env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -51,6 +52,27 @@ jobs:
           test -n "$CF_TOKEN" && test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
           [[ "$CF_ACCOUNT_ID" =~ ^[[:xdigit:]]{32}$ ]]
           echo 'CLOUDFLARE_DEPLOY_CREDENTIALS=PRESENT'
+      - name: Verify Gemini credential and model before production activation
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GEMINI_KEY:-}" ]; then
+            echo "GEMINI_API_KEY_MISSING: production remains unchanged" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+          request=urllib.request.Request(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash",
+            headers={"x-goog-api-key":os.environ["GEMINI_KEY"]},
+          )
+          with urllib.request.urlopen(request, timeout=15) as response:
+            metadata=json.load(response)
+          if "generateContent" not in metadata.get("supportedGenerationMethods", []):
+            raise SystemExit("GEMINI_MODEL_NOT_AVAILABLE")
+          print("GEMINI_MODEL_AUTH_VALID=YES")
+          PY
       - name: Stage protected assets and activate release on OVH
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -72,7 +94,7 @@ jobs:
           SSH=(-i ~/.ssh/neis_cloudflare_id -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=15)
           ssh "${SSH[@]}" "$USER@$OVH_HOST" "umask 077; mkdir -p '$STAGE_DIR'; chmod 700 '$STAGE_DIR'"
           PRIVATE_ENV="$RUNNER_TEMP/cloudflare-deploy-secrets.env"
-          (umask 077; printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\n' "$CF_TOKEN" "$CF_ACCOUNT_ID" > "$PRIVATE_ENV")
+          (umask 077; printf 'CLOUDFLARE_API_TOKEN=%s\nCLOUDFLARE_ACCOUNT_ID=%s\nGEMINI_API_KEY=%s\n' "$CF_TOKEN" "$CF_ACCOUNT_ID" "$GEMINI_KEY" > "$PRIVATE_ENV")
           chmod 600 "$PRIVATE_ENV"
           scp -P "$PORT" -i ~/.ssh/neis_cloudflare_id -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts \
             scripts/timetable-ai-cloudflare-v1.js \
