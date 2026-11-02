@@ -6,6 +6,12 @@ const ORIGINS = new Set(["https://www.neiscircle.site", "https://neiscircle.site
 const MODEL = "qwen/qwen3.8-27b";
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 3;
+const MAX_TEXT_LENGTH = 24000;
+// Free-tier Qwen vision counts ~2,048 tokens per image. The Groq account is
+// limited by tokens PER MINUTE as well as requests; never reserve 4,500 output
+// tokens for a 2-page timetable and trigger 429 before inference starts.
+const completionLimit = (numImages: number) =>
+  numImages >= 3 ? 900 : numImages === 2 ? 2100 : numImages === 1 ? 3200 : 3800;
 const MAX_ENTRIES = 80;
 const UUID = /^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i;
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -129,7 +135,8 @@ Deno.serve(async (req: Request) => {
     const input = JSON.parse(raw);
     const message = safeString(input.message, 1600);
     const images = input.images;
-    if (!message && (!Array.isArray(images) || !images.length))
+    const documentText = safeString(input.documentText, MAX_TEXT_LENGTH);
+    if (!message && !documentText && (!Array.isArray(images) || !images.length))
       return response(req, { error: "Type a message or upload your timetable" }, 400);
     if (images !== undefined && (!Array.isArray(images) || !images.length || images.length > MAX_IMAGES ||
         images.some((x: unknown) => !isFile(x) || Math.floor((x as {data:string}).data.length * 3 / 4) > MAX_FILE_BYTES + 2)))
@@ -165,7 +172,8 @@ Deno.serve(async (req: Request) => {
 
     const payload = JSON.stringify({
       user_message: message || "Please analyze this attached timetable. What subjects are included? Ask which I take.",
-      current, draft, extracted: source, history
+      current, draft, extracted: source, history,
+      document_text: documentText || undefined
     });
     const content: Record<string, unknown>[] = [{ type: "text", text: payload }];
     for (const f of (images || []) as Array<{mime: string;data: string}>) {
@@ -184,19 +192,51 @@ Deno.serve(async (req: Request) => {
           type: "json_schema",
           json_schema: { name: "timetable_plan", schema: outputSchema, strict: true }
         },
-        max_completion_tokens: 4500,
+        max_completion_tokens: completionLimit(images?.length || 0),
         temperature: 0.2,
         reasoning_effort: "none"
       }),
       signal: AbortSignal.timeout(25000)
     });
     if (!upstream.ok) {
-      const status = upstream.status === 429 ? 429 : 502;
-      return response(req, { error: status === 429 ? "AI is busy or the free quota is reached." : "AI provider temporarily unavailable." }, status);
+      let type = "";
+      let code = "";
+      try {
+        const detail = await upstream.json();
+        type = safeString(detail?.error?.type, 75);
+        code = safeString(detail?.error?.code, 75);
+      } catch (_) { /* Never log or expose provider body or student data. */ }
+      // Explicit, safe statuses distinguish malformed images/context from a
+      // busy provider. A provider 400 is NOT a network 502.
+      const rateLimited = upstream.status === 429;
+      const invalid = [400, 413, 422].includes(upstream.status);
+      const status = rateLimited ? 429 : invalid ? 422 : 503;
+      const upstreamRetry = Number(upstream.headers.get("retry-after"));
+      const retryAfterSeconds = rateLimited && Number.isFinite(upstreamRetry) && upstreamRetry > 0
+        ? Math.min(300, Math.ceil(upstreamRetry)) : 0;
+      const error = rateLimited ? "Groq free tier is temporarily rate-limited. Try again shortly." :
+        invalid ? "AI could not process this timetable. Try one PDF page or a clearer image." :
+        "AI provider is temporarily unavailable. Try again shortly.";
+      console.warn("[timetable-ai-provider]", {
+        http: upstream.status,
+        type: /^[a-z_]{1,70}$/.test(type) ? type : "unknown",
+        code: /^[a-z_]{1,70}$/.test(code) ? code : "unknown"
+      });
+      return response(req, { error, retryAfterSeconds }, status);
     }
     const answer = await upstream.json();
     const output = String(answer?.choices?.[0]?.message?.content || "");
-    const parsed = JSON.parse(output);
+    if (!output) return response(req, {
+      error: "The AI returned an empty response. Try fewer classes or one page."
+    }, 503);
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(output);
+    } catch (_) {
+      return response(req, {
+        error: "The AI response was incomplete. Try one page at a time."
+      }, 503);
+    }
     const resultEntries = list(parsed.entries, allowed);
     const extracted = list(parsed.extracted, new Set());
     // Never allow the model to silently erase timetable rows on a non-edit turn.
