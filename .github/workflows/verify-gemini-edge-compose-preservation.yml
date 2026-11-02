@@ -1,0 +1,29 @@
+name: Verify Gemini Edge Docker Configuration Preservation
+on:
+  push:
+    branches: [fix/preserve-edge-compose-gemini-20261102]
+    paths:
+      - 'scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py'
+      - 'qa/ovh-gemini-compose-preservation.test.py'
+      - '.github/workflows/verify-gemini-edge-compose-preservation.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py'
+      - 'qa/ovh-gemini-compose-preservation.test.py'
+      - '.github/workflows/verify-gemini-edge-compose-preservation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python syntax
+        run: |
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py
+          python3 -m py_compile qa/ovh-gemini-compose-preservation.test.py
+      - name: Test lossless Compose merge using actual Docker Compose
+        run: python3 qa/ovh-gemini-compose-preservation.test.py
