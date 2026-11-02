@@ -385,7 +385,7 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
     }
     const result=await response.json();
     const text=(result.candidates?.[0]?.content?.parts||[]).map((p:{text?:string})=>p.text||"").join("");
-    if(!text)throw new Error("GEMINI_EMPTY_OUTPUT");
+    if(!text){const reason=String(result.candidates?.[0]?.finishReason||"UNKNOWN").replace(/[^A-Z_]/g,"").slice(0,32);const err=new Error("GEMINI_EMPTY_OUTPUT_"+reason) as Error & {status?:number};err.status=502;throw err;}
     return text;
   }finally{clearTimeout(deadline)}
 }
