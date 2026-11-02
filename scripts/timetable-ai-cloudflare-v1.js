@@ -7,7 +7,18 @@ if(typeof window!=="undefined"){
   window.__neisTimetableAiMounted="timetable-ai-v1";
 }
 const ID="ttAiOpen";
-const editable=["title","day_of_week","start_time","end_time","location","notes","category"];
+const editable=["title","day_of_week","start_time","end_time","location","notes","category","color"];
+const SUBJECT_COLORS=["#2f7db8","#7a52d8","#10a879","#efb83f","#ec6fb7","#e56d57","#5e6a78","#22a6b3"];
+function subjectKey(title){return String(title||"").normalize("NFKC").trim().replace(/\s+/g," ").toLocaleLowerCase()}
+function suggestedColor(subject,index=0){
+  const k=subjectKey(subject);
+  if(/math|رياض/.test(k))return "#2f7db8";
+  if(/phys|فيزي/.test(k))return "#7a52d8";
+  if(/\bict\b|computer|حاسب|تكنولوج/.test(k))return "#10a879";
+  if(/english|انجلي/.test(k))return "#efb83f";
+  if(/religion|دين/.test(k))return "#5e6a78";
+  return SUBJECT_COLORS[index%SUBJECT_COLORS.length];
+}
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
@@ -27,7 +38,7 @@ const labels={
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
 const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,draftHistory:[],original:[],baseline:[],
-  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null};
+  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,wizard:null};
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
 function isTimetable(){return typeof state!=="undefined" && state.view==="timetable"&&
@@ -36,7 +47,7 @@ function isTimetable(){return typeof state!=="undefined" && state.view==="timeta
 function rows(){return (state.timetable?.rows||[]).map(r=>({
   key:String(r.id),title:r.title,day_of_week:Number(r.day_of_week),
   start_time:String(r.start_time).slice(0,5),end_time:String(r.end_time).slice(0,5),
-  location:r.location||"",notes:r.notes||"",category:r.category||"Class"
+  location:r.location||"",notes:r.notes||"",category:r.category||"Class",color:r.color||suggestedColor(r.title)
 }))}
 function begin(reset=false){
   const uid=String(authUser.id);
@@ -46,7 +57,7 @@ function begin(reset=false){
     stateAI.baseline=(state.timetable.rows||[]).map(r=>({id:r.id,updated_at:r.updated_at}));
     stateAI.draft=structuredClone(stateAI.original);
     stateAI.draftHistory=[];
-    stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;
+    stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;stateAI.wizard=null;
   }
 }
 function diff(){
@@ -85,7 +96,8 @@ function normalizeDraft(input){
       throw new Error("Incomplete entry");
     return {key:assigned,title:String(raw.title).trim().slice(0,100),day_of_week:day,
       start_time:start,end_time:end,category:String(raw.category||"Class"),
-      location:String(raw.location||"").slice(0,120),notes:String(raw.notes||"").slice(0,1000)};
+      location:String(raw.location||"").slice(0,120),notes:String(raw.notes||"").slice(0,1000),
+      color:/^#[\da-f]{6}$/i.test(String(raw.color||""))?String(raw.color).toLowerCase():suggestedColor(raw.title)};
   });
 }
 function el(tag,cls,textValue){
