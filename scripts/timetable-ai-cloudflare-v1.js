@@ -313,7 +313,7 @@ function issueCard(issueId,title,description,subject=""){
   if(added)card.append(el("p","ttai-issue-complete",
     wizardText("Added to your draft. You can review it below before saving.","الحصة أُضيفت للمسودة، ويمكن مراجعتها قبل الحفظ.")));
   if(expanded){
-    const form=editWizardRow(pendingIssue(issueId,subject),true);
+    const form=editWizardRow(added||pendingIssue(issueId,subject),true);
     card.append(form);
   }
   if(!added&&!validIssueLesson(pending))card.append(el("p","ttai-issue-hint",
