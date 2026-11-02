@@ -113,9 +113,11 @@ begin
  if not exists(select 1 from auth.users u join public.profiles p on p.id=u.id
   where u.id=p_user_id and u.deleted_at is null) then
   raise exception 'Account not found' using errcode='P0002'; end if;
- update public.profiles
- set role=case when p_make_admin then 'admin' else 'student' end
- where id=p_user_id;
+ if p_make_admin then
+  update public.profiles set role='admin' where id=p_user_id;
+ else
+  update public.profiles set role='student' where id=p_user_id;
+ end if;
  return true;
 end;$;
 
