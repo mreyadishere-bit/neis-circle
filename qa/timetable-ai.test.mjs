@@ -22,8 +22,8 @@ for (const required of ["client.auth.getUser", "consume_timetable_ai_quota", "ou
 }
 
 // A real, valid one-page PDF fixture, built without third-party libraries.
-function fixturePDF(){
-  const stream="BT /F1 19 Tf 35 730 Td (Physics L2 Monday 09:00-10:00) Tj ET";
+function fixturePDF(longText=false){
+  const stream=longText ? "BT /F1 12 Tf 35 730 Td (Monday 09:00 Physics L2 at School) Tj 0 -32 Td (Tuesday 10:00 Maths L2 at School) Tj 0 -32 Td (Wednesday 11:00 English at School) Tj 0 -32 Td (Thursday 12:00 ICT at School) Tj 0 -32 Td (Friday 13:00 Science at School) Tj ET" : "BT /F1 19 Tf 35 730 Td (Physics L2 Monday 09:00-10:00) Tj ET";
   const objects=[
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Count 1 /Kids [3 0 R] >>",
@@ -151,6 +151,20 @@ try {
     "Keep external processing disclosure accessible under info");
   await page.locator(".ttai-info-btn").click();
   assert.equal(await page.locator(".ttai-privacy-info").count(),0);
+  // Digital PDF text must be sent as text, without spending 2,048 vision
+  // tokens per page or rendering a page-sized image.
+  const beforeTextCalls=(await page.evaluate(()=>window.__calls.length));
+  await page.locator("#ttAiPanel input[type=file]").setInputFiles({
+    name:"typed-school-timetable.pdf",mimeType:"application/pdf",buffer:fixturePDF(true)
+  });
+  await page.locator(".ttai-compose button[type=submit]").click();
+  await page.waitForFunction(()=>!document.querySelector(".ttai-pending"),null,{timeout:45000});
+  const textPayload=await page.evaluate(()=>window.__calls.at(-1)?.body);
+  assert.equal((await page.evaluate(()=>window.__calls.length)),beforeTextCalls+1,
+    "Text PDF must invoke assistant exactly once");
+  assert.equal(textPayload.images,undefined,"Text PDF must not be converted to expensive image");
+  assert.match(textPayload.documentText,/Physics L2/);
+  assert.match(textPayload.documentText,/Maths L2/);
   await page.close();
   console.log("TIMETABLE_AI_BROWSER=PASS (real PDF.js, image, context, undo, review, atomic save, rerender)");
 } finally {
