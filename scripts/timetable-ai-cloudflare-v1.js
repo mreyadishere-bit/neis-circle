@@ -523,6 +523,7 @@ function drawWizard(chat){
       panel.append(issues);
     }
     const lessons=el("div","ttai-wiz-lessons");
+    w.reviewExpanded=w.reviewExpanded||new Set();
     const ordered=[...(stateAI.draft||[])].sort((a,b)=>a.day_of_week-b.day_of_week||a.start_time.localeCompare(b.start_time));
     let lastDay=-1;
     for(const row of ordered){
@@ -530,7 +531,28 @@ function drawWizard(chat){
         lastDay=row.day_of_week;
         lessons.append(el("h4","ttai-wiz-day",dayName(lastDay)));
       }
-      lessons.append(editWizardRow(row));
+      const compact=el("section","ttai-verified-card");
+      const heading=el("div","ttai-verified-heading");
+      const identification=el("div","ttai-verified-subject");
+      const dot=el("span","ttai-verified-dot");
+      dot.style.background=row.color||suggestedColor(row.title);
+      const summary=el("div","ttai-verified-copy");
+      summary.append(el("strong",null,row.title),
+        el("span",null,String(row.start_time)+" – "+String(row.end_time)+
+          (row.location?" · "+row.location:"")));
+      identification.append(dot,summary);
+      const expanded=w.reviewExpanded.has(row.key);
+      const toggle=wizardButton(expanded?wizardText("Done","تم"):
+        wizardText("Edit","تعديل"),"ttai-subtle ttai-verified-edit",()=>{
+          if(expanded)w.reviewExpanded.delete(row.key);
+          else w.reviewExpanded.add(row.key);
+          draw();
+        });
+      toggle.setAttribute("aria-expanded",String(expanded));
+      heading.append(identification,toggle);
+      compact.append(heading);
+      if(expanded)compact.append(editWizardRow(row));
+      lessons.append(compact);
     }
     if(!ordered.length)lessons.append(el("p","ttai-wiz-warning",wizardText(
       "No readable times found. Add lessons manually or upload a clearer timetable.",
