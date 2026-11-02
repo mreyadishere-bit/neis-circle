@@ -39,21 +39,6 @@ const jsonHeaders = {
 const respond = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: jsonHeaders });
 
-function decodeVerifiedJwtClaims(jwt: string): Record<string, unknown> | null {
-  const payload = jwt.split(".")[1];
-  if (!payload) return null;
-  try {
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      "=",
-    );
-    return JSON.parse(atob(padded));
-  } catch {
-    return null;
-  }
-}
-
 function normalizeTime24(value: unknown): string {
   const raw = String(value ?? "").trim();
   const match24 = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/);
@@ -339,41 +324,47 @@ Deno.serve(async (request: Request) => {
       );
     }
 
-    const claims = decodeVerifiedJwtClaims(jwt);
-    const userId = String(claims?.sub ?? "").trim();
-    const role = String(claims?.role ?? "").trim();
-    if (
-      role !== "authenticated" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        userId,
-      )
-    ) {
+    // SECURITY: Never trust a JWT by base64-decoding its payload. The
+    // self-hosted Supabase Auth service must independently verify its
+    // signature, expiry, audience and revocation before any AI call.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    if (!supabaseUrl || !anonKey) {
+      return respond(
+        { error: "Authentication service is unavailable.", code: "AUTH_NOT_CONFIGURED" },
+        503,
+      );
+    }
+    const client = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: sessionError } = await client.auth.getUser(jwt);
+    const userId = String(authData?.user?.id ?? "").trim();
+    if (sessionError || !authData?.user ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
       return respond(
         { error: "Invalid or expired authentication session. Please sign in again.", code: "AUTH_INVALID" },
         401,
       );
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    if (supabaseUrl && anonKey) {
-      const client = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: `Bearer ${jwt}` } },
-        auth: { persistSession: false, autoRefreshToken: false },
-      });
-      const { data: profile, error: profileError } = await client
-        .from("profiles")
-        .select("id,account_status")
-        .eq("id", userId)
-        .maybeSingle();
-      if (profileError) {
-        console.error("Timetable AI profile verification error:", profileError.message);
-      } else if (profile && profile.account_status && profile.account_status !== "active") {
-        return respond(
-          { error: "Your account is not permitted to use Timetable AI.", code: "ACCOUNT_RESTRICTED" },
-          403,
-        );
-      }
+    const { data: profile, error: profileError } = await client
+      .from("profiles")
+      .select("id,account_status")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profileError) {
+      // Fail closed when user/account status is unavailable.
+      return respond(
+        { error: "Could not verify account status.", code: "ACCOUNT_CHECK_UNAVAILABLE" },
+        503,
+      );
+    }
+    if (profile?.account_status && profile.account_status !== "active") {
+      return respond(
+        { error: "Your account is not permitted to use Timetable AI.", code: "ACCOUNT_RESTRICTED" },
+        403,
+      );
     }
 
     const geminiApiKey = (Deno.env.get("GEMINI_API_KEY") ?? "").trim();
