@@ -11,7 +11,7 @@ for (const required of ["sb.functions.invoke", "apply_timetable_ai_plan", "state
   "diff()", "window.confirm", "file.size>5*1024*1024"]) {
   assert(source.includes(required), "Missing timetable AI invariant: "+required);
 }
-for (const required of ["client.auth.getUser", "consume_timetable_ai_quota", "responseSchema",
+for (const required of ["client.auth.getUser", "consume_timetable_ai_quota", "outputSchema",
   "MAX_FILE_BYTES", "GROQ_API_KEY"]) {
   assert(server.includes(required), "Missing server protection: "+required);
 }
