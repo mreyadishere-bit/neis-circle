@@ -372,7 +372,7 @@ export function parseArabicDatedLessons(evidence:string):Array<Record<string,unk
   const seen=new Set<string>();
   const dayMap:Record<string,number>={
     "الاحد":0,"الاثنين":1,"الاثنين":1,"الثلاثاء":2,
-    "الاربعاء":3,"الخميس":4,"الجمعة":5,"السبت":6,
+    "الاربعاء":3,"االربعاء":3,"الخميس":4,"الجمعة":5,"السبت":6,
   };
   const ar=(value:string)=>value.normalize("NFKC").replace(/[\u064b-\u065f\u0670\u0640]/g,"")
     .replace(/[أإآ]/g,"ا").replace(/ى/g,"ي").replace(/ة/g,"ه");
@@ -410,7 +410,7 @@ export function parseArabicDatedLessons(evidence:string):Array<Record<string,unk
         if(!seen.has(id)){
           seen.add(id);
           result.push({title:canonicalTitle,day_of_week:day,start_time:times[0],end_time:times[1],
-            location:/اونلاين|اونلين|online/i.test(ar(words.join(" ")))?"Online":"",
+            location:/اونلاين|اونالين|اونلين|online/i.test(ar(words.join(" ")))?"Online":"",
             notes:"",source_page:pageIndex+1});
         }
         break;
