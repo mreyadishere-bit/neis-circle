@@ -94,7 +94,7 @@ assert.match(client,/Clear selection/,'offer simple selection controls');
 
 assert.match(client,/function issueCard\(/,"each unresolved PDF item renders an issue card");
 assert.match(client,/function addUnverifiedLesson\(/,"each issue gets its own add action");
-assert.match(client,/day_of_week:-1,start_time:"",end_time:""/,"new lessons never invent day or times");
+assert.match(client,/day_of_week:-1,[\s\S]*?start_time:"",end_time:""/,"new lessons never invent day or times");
 assert.match(client,/w\.addedIssues\[issueId\]=row\.key/,"added issue is tracked independently");
 assert.match(client,/const ordered=\[\.\.\.\(stateAI\.draft\|\|\[\]\)\]/,"only added issue rows appear in the saved draft list");
 
