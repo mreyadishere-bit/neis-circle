@@ -17,7 +17,7 @@ assert.match(roles,/user\.user_id===MAIN_ID\|\|user\.is_owner===true/);
 assert.doesNotMatch(roles,/Delete permanently/);
 assert.doesNotMatch(legacy,/id="neisSuperAdmin"/);
 assert.doesNotMatch(legacy,/admin=function/);
-assert.match(studio,/data\.stDelete/);
+assert.match(studio,/dataset\.stDelete/);
 assert.match(studio,/neis_admin_delete_account/);
 assert.match(studio,/id===MAIN_ADMIN\|\|id===authUser\?\.id/);
 assert.match(studio,/window\.confirm\('Final confirmation/);
