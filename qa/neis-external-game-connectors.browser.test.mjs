@@ -7,8 +7,9 @@ const css=fs.readFileSync('styles/neis-game-connectors-v1.css','utf8');
 const html=fs.readFileSync('index.html','utf8');
 assert.ok(html.includes('scripts/neis-game-connectors-v1.js')&&!html.includes('<script src="scripts/neis-play-v1.js'),'legacy in-app game engine is no longer loaded');
 assert.ok(js.includes('start_direct_conversation')&&js.includes('circle_messages'),'DM and Circle invites retained');
-assert.ok(!js.includes('neis-game-provider'),'no popup window reused');
-assert.ok(js.includes("window.open(url,'_blank','noopener,noreferrer')"),'all external games open in safe new tabs');
+assert.ok(!js.includes('neis-game-provider')&&!js.includes('window.open('),'no popup/window.open for external games');
+assert.ok(js.includes('target="_blank" rel="noopener noreferrer"'),'game launch links use native secure new-tab navigation');
+assert.ok(js.includes('class="neis-rail-label"'),'Games button has expanded-sidebar label');
 
 assert.ok(!js.includes('setInterval(')&&!js.includes('chess.js@'),'no game polling or local chess engine');
 assert.ok(css.includes('@media(max-width:560px)')&&css.includes('@media(max-width:800px)'),'responsive modal sizes');
@@ -16,7 +17,7 @@ assert.ok(js.includes('enhanceChatMessageText')&&js.includes('neis-connect-recip
 assert.ok(js.includes('if(language===currentGameLanguage)return'),'ignore redundant language mutations');
 assert.ok(js.includes('if(!inChat&&!fullViewChange)'),'ignore unrelated post/feed changes');
 assert.ok(js.includes('void loadRecipients();'),'lazy recipients available when invited');
-assert.ok(html.includes('neis-game-connectors-v1.js?v=gamehub-no-chat-button-20261103" async'),'nonessential Games script does not block DOMContentLoaded');
+assert.match(html,/<script[^>]*src="scripts\/neis-game-connectors-v1\.js\?v=[^"]+"[^>]*\basync\b/,'nonessential Games script does not block DOMContentLoaded');
 assert.ok(/neis-game-connectors-v1\.css[^>]+media="print"/.test(html),'nonessential Games stylesheet does not block the initial paint');
 assert.ok(fs.readFileSync('scripts/navigation-v14.js','utf8').includes('neis-mobile-game-entry'),'Games appears in mobile More menu');
 
@@ -60,6 +61,7 @@ try {
   assert.equal(await page.locator('.bottom-nav').evaluate(el=>el.parentElement.querySelectorAll(':scope > button[data-neis-connect-open]').length),0,'remove duplicate buttons outside the nav');
   assert.equal(await page.locator('.bottom-nav > [data-neis-connect-open]').count(),0,'keep original five-button mobile navigation');
   assert.equal(await page.locator('#liveChatForm [data-neis-connect-open],#circleChatForm [data-neis-connect-open]').count(),0,'Games button removed from both chat composers');
+  assert.equal(await page.locator('.rail-nav [data-neis-connect-open] .neis-rail-label').innerText(),'Games','desktop Games sidebar label is visible in the markup');
   await page.locator('[data-neis-connect-open]').first().click();
   await page.locator('#neisGamesOverlay').waitFor();
   assert.equal(await page.locator('.neis-connect-card').count(),13,'thirteen carefully chosen games in catalog');
@@ -69,6 +71,17 @@ try {
 
   await page.locator('[data-game="choose:chesscom"]').click();
   assert.ok((await page.locator('.neis-connect-selected').innerText()).includes('Chess.com'));
+  const launch=page.locator('.neis-connect-selected a.neis-connect-launch');
+  assert.equal(await launch.getAttribute('href'),'https://www.chess.com/play/online/friend','launch targets official game URL');
+  assert.equal(await launch.getAttribute('target'),'_blank','launch opens native new tab');
+  assert.equal(await launch.getAttribute('rel'),'noopener noreferrer','launch isolates tab from NEIS Circle');
+  assert.equal(await page.locator('.neis-connect-selected [data-game="start"]').count(),0,'no JavaScript popup launcher remains');
+  const account=page.locator('.neis-connect-selected a.neis-connect-account');
+  assert.equal(await account.getAttribute('target'),'_blank','account link opens new tab');
+  await page.locator('[data-game="choose:wayground"]').click();
+  const join=page.locator('.neis-connect-selected a.neis-connect-secondary');
+  assert.equal(await join.getAttribute('target'),'_blank','join-game link opens new tab');
+  await page.locator('[data-game="choose:chesscom"]').click();
   await page.locator('#neisGameLink').fill('https://evil.example/?to=chess.com');
   await page.locator('[data-game="invite"]').click();
   assert.ok((await page.locator('.neis-connect-notice').innerText()).includes('does not belong'),'reject misleading off-domain links without closing invite panel');
@@ -102,8 +115,9 @@ try {
   assert.ok((await page.locator('#chatFlow .neis-chat-game-card').first().innerText()).includes('Join game'),'English chat game CTA');
   assert.equal(await page.locator('#chatFlow .neis-chat-game-copy').count(),1,'copy link is a chat button');
 
-  await page.evaluate(()=>{window.state.lang='ar'});
+  await page.evaluate(()=>{window.state.lang='ar';document.documentElement.lang='ar';document.documentElement.dir='rtl'});
   await page.locator('[data-game="filter:chess"]').click();
+  assert.equal(await page.locator('.rail-nav [data-neis-connect-open] .neis-rail-label').innerText(),'الألعاب','sidebar Games label follows Arabic locale');
   assert.match(await page.locator('.neis-connect-card-caption').first().innerText(),/[\u0600-\u06ff]/,'Arabic tags');
   await page.locator('[data-game="filter:all"]').click();
   assert.ok((await page.locator('.neis-connect-card-caption').allTextContents()).every(label=>/[\u0600-\u06ff]/.test(label)),'all 13 games have Arabic descriptions');
