@@ -14,12 +14,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
-      - 'scripts/main-admin-auth-studio-v5.js'
-      - 'supabase/functions/neis-quiz-ai/index.ts'
       - 'scripts/ops/ovh-deploy-neis-play-v2.py'
-      - '.github/workflows/ovh-neis-play-v2.yml'
+      - 'supabase/functions/neis-quiz-ai/index.ts'
+      - 'supabase/migrations/2026110321*.sql'
 permissions:
   contents: read
 concurrency:
