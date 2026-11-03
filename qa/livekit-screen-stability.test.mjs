@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const source=readFileSync('scripts/05-social.js','utf8');
+const fn=source.slice(source.indexOf('function renderMeetingParticipants(runtime)'),source.indexOf('function meetingAudioHolder(runtime)'));
+assert.ok(fn.includes('tile.dataset.meetingIdentity=identity'));
+assert.ok(fn.includes('tile._neisMeetingTrack!==nextTrack'));
+assert.ok(fn.includes('tile._neisMeetingVideo=element'));
+assert.ok(fn.includes("if(active.has(tile.dataset?.meetingIdentity))return"));
+assert.ok(!fn.includes("grid.innerHTML=''"), 'do not clear video tracks on speaker events');
+assert.ok(fn.includes('tile.className='));
+assert.ok(fn.includes('focusedStillAvailable'));
+assert.ok(source.includes('RoomEvent.ActiveSpeakersChanged'));
+const deploy=readFileSync('scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py','utf8');
+assert.ok(deploy.includes('LIVEKIT_SCREEN_STABILITY=ROLLED_BACK'));
+assert.ok(deploy.includes("cmd(COMPOSE+['up','-d','--no-deps','caddy']"));
+console.log('SCREEN_SHARE_STABILITY_REGRESSION=PASS');
