@@ -8,7 +8,11 @@ OVERLAY=ROOT/'docker-compose.frontend-public.yml'
 DOCKER=['sudo','-n','/usr/bin/docker']
 FILES={'neis-game-connectors-v1.js':'scripts/neis-game-connectors-v1.js',
        'neis-game-connectors-v1.css':'styles/neis-game-connectors-v1.css',
-       'navigation-v14.js':'scripts/navigation-v14.js'}
+       'navigation-v14.js':'scripts/navigation-v14.js',
+       'ui-v14.css':'styles/ui-v14.css',
+       '05-social.js':'scripts/05-social.js',
+       'magnus-neis-v1.js':'scripts/magnus-neis-v1.js',
+       'timetable-ai-v1.js':'scripts/timetable-ai-v1.js'}
 COMPOSE=DOCKER+['compose']+[x for f in ('docker-compose.yml','docker-compose.security.yml',
  'docker-compose.caddy.yml','docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml')
  for x in ('-f',f)]
@@ -33,7 +37,16 @@ def main():
  check('window.NEISPlayConnectors' in js and 'start_direct_conversation' in js and 'circle_messages' in js,'CONNECTOR_FUNCTIONS_MISSING')
  check('.neis-connect-dialog' in css and '@media(max-width:560px)' in css,'RESPONSIVE_CSS_MISSING')
  check('neis-mobile-game-entry' in (STAGE/'navigation-v14.js').read_text(),'MOBILE_GAME_ENTRY_MISSING')
- call(['node','--check',str(STAGE/'neis-game-connectors-v1.js')],timeout=25)
+ check('list.scrollTop=0' in (STAGE/'navigation-v14.js').read_text(),'MOBILE_NAV_SCROLL_FIX_MISSING')
+ check('overflow-anchor:none' in (STAGE/'ui-v14.css').read_text(),'MOBILE_NAV_CSS_FIX_MISSING')
+ chat_js=(STAGE/'05-social.js').read_text()
+ magnus_js=(STAGE/'magnus-neis-v1.js').read_text()
+ timetable_js=(STAGE/'timetable-ai-v1.js').read_text()
+ check('dismissSoftKeyboardOnSend()' in chat_js and 'if(dismissSoftKeyboardOnSend())input.blur()' in chat_js,'CHAT_KEYBOARD_FIX_MISSING')
+ check('if(mobileSend())input.blur()' in magnus_js,'MAGNUS_KEYBOARD_FIX_MISSING')
+ check('input.blur()' in timetable_js,'TIMETABLE_KEYBOARD_FIX_MISSING')
+ for filename in ('neis-game-connectors-v1.js','navigation-v14.js','05-social.js','magnus-neis-v1.js','timetable-ai-v1.js'):
+  call(['node','--check',str(STAGE/filename)],timeout=35)
  call(COMPOSE+['config','--quiet'],timeout=45)
  previous=active();check(previous.parent==RELEASES,'FRONTEND_RELEASE_NOT_PINNED')
  original_overlay=OVERLAY.read_text()
@@ -66,6 +79,10 @@ def main():
  html=swap(html,old_styles,'styles/neis-game-connectors-v1.css')
  html=swap(html,old_scripts,'scripts/neis-game-connectors-v1.js')
  html=swap(html,['scripts/navigation-v14.js'],'scripts/navigation-v14.js')
+ # Publish the mobile navigation and message composers in the same atomic release.
+ # Update their query strings to avoid serving stale JavaScript/CSS from PWA caches.
+ for path in ('styles/ui-v14.css','scripts/05-social.js','scripts/magnus-neis-v1.js','scripts/timetable-ai-v1.js'):
+  html=swap(html,[path],path)
  # The release is cloned from the active OVH site, not the repository index.html.
  # Make Game Hub resources non-blocking on the *deployed* HTML as well.
  stylesheet='<link rel="stylesheet" href="styles/neis-game-connectors-v1.css?v='+revision+'" media="print" onload="this.media=\'all\'">'
@@ -77,6 +94,8 @@ def main():
  check(html.count('scripts/neis-game-connectors-v1.js')==1,'GAME_SCRIPT_DUPLICATE')
  check(html.count('scripts/navigation-v14.js')==1,'MOBILE_NAV_SCRIPT_DUPLICATE')
  check(html.count('styles/neis-game-connectors-v1.css')==1,'GAME_STYLE_DUPLICATE')
+ for path in ('styles/ui-v14.css','scripts/05-social.js','scripts/magnus-neis-v1.js','scripts/timetable-ai-v1.js'):
+  check(html.count(path)==1,'MOBILE_RUNTIME_DUPLICATE_'+path)
  check('scripts/neis-play-v1.js' not in html,'OLD_GAME_ENGINE_STILL_LOADED')
  check(html.index('scripts/neis-game-connectors-v1.js')<html.index('scripts/data-coordinator-v171.js'),'LOAD_ORDER_CHANGED')
  (building/'index.html').write_text(html)
@@ -106,7 +125,8 @@ def main():
   raise
  print('NEIS_CONNECTORS=DEPLOYED_AND_VERIFIED')
  print('GAME_ENGINES=DISABLED')
- print('DATABASE_EDGE_AND_CHAT=UNTOUCHED')
+ print('DATABASE_AND_EDGE=UNTOUCHED')
+ print('MOBILE_CHAT_INPUT_FOCUS=FIXED')
  print('RELEASE='+revision)
 if __name__=='__main__':
  try:main()
