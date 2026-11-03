@@ -183,7 +183,9 @@ async function action(value){
  if(value.startsWith('choose:')){
   if(!byId(value.slice(7)))return;
   UI.links[UI.selected]=UI.link;UI.selected=value.slice(7);UI.link=UI.links[UI.selected]||'';
-  UI.panel='setup';UI.notice='';UI.query='';UI.selectedTargets.clear();render();return;
+  UI.panel='setup';UI.notice='';UI.query='';UI.selectedTargets.clear();render();
+  if(window.innerWidth<=800)overlay()?.querySelector('.neis-connect-selected')?.scrollIntoView({block:'start',behavior:'smooth'});
+  return;
  }
  const svc=byId(UI.selected);
  if(!svc)return;
