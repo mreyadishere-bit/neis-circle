@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const base=readFileSync('scripts/01-core.js','utf8');
+const override=readFileSync('scripts/04-permissions-ux.js','utf8');
+const css=readFileSync('styles/app.css','utf8');
+assert.match(base,/function library\(\)/);
+const active=override.slice(override.indexOf('library=function()'));
+assert.ok(active.startsWith('library=function()'), 'active renderer must exist');
+assert.ok(active.includes('<div class="feed saved-home-width-feed">'),'active renderer must use Saved width class');
+assert.ok(active.includes('items.map(postCard)'), 'do not change post layout functionality');
+assert.ok(css.includes('#view .saved-home-width-feed'));
+assert.ok(css.includes('width:calc(100% - 352px)'));
+const deploy=readFileSync('scripts/ops/ovh-deploy-saved-renderer-width-20261103.py','utf8');
+assert.ok(deploy.includes('SAVED_RENDERER_WIDTH=ROLLED_BACK'));
+console.log('ACTIVE_SAVED_RENDERER_WIDTH=PASS');
