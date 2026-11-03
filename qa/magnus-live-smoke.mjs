@@ -19,17 +19,18 @@ async function call(path,method,body,headers=adminHeaders){
   return {status:0,data:{code:error?.name||"network_error"}};
  }
 }
+async function runSmoke(){
 let userId=null;
 try{
  const created=await call("/auth/v1/admin/users","POST",
   {email,password:pass,email_confirm:true});
  console.log("MAGNUS_E2E_CREATE_STATUS="+created.status);
  userId=created.data?.id||created.data?.user?.id||null;
- if(created.status>=300||!userId)Deno.exit(0);
+ if(created.status>=300||!userId)return;
  const login=await call("/auth/v1/token?grant_type=password","POST",{email,password:pass},
   {"Content-Type":"application/json",apikey:anon});
  console.log("MAGNUS_E2E_LOGIN_STATUS="+login.status);
- if(login.status!==200||!login.data?.access_token)Deno.exit(0);
+ if(login.status!==200||!login.data?.access_token)return;
  const result=await call("/functions/v1/magnus-chat","POST",
   {message:"Hi",request_id:crypto.randomUUID()},
   {"Content-Type":"application/json",apikey:anon,Authorization:"Bearer "+login.data.access_token});
@@ -42,3 +43,6 @@ try{
   console.log("MAGNUS_E2E_CLEANUP_STATUS="+deleted.status);
  }
 }
+
+}
+await runSmoke();
