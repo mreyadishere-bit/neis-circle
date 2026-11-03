@@ -1,148 +1,289 @@
-/* NEIS Play Connectors: external games, zero local game engines/polling. */
+/* NEIS Game Hub v2 — external browser games and native NEIS Circle invitations.
+   No embedded third-party iframes, accounts, game engines or polling loops. */
 (()=>{
 'use strict';
 if(window.NEISPlayConnectors)return;
 const SERVICES=[
- {id:'lichess',name:'Lichess',category:'chess',icon:'♞',color:'chess',home:'https://lichess.org/',start:'https://lichess.org/setup/friend',account:'https://lichess.org/signup',access:'Free; guest games available',hint:'Create a friend challenge on Lichess, copy its game link, and invite someone here.'},
- {id:'chesscom',name:'Chess.com',category:'chess',icon:'♟',color:'chess',home:'https://www.chess.com/',start:'https://www.chess.com/play/online/friend',account:'https://www.chess.com/register',access:'Free basic play; account may be needed',hint:'Choose Play a Friend on Chess.com, then share the challenge link.'},
- {id:'endgame',name:'Endgame',category:'chess',icon:'♜',color:'chess',home:'https://endgame.ai/',start:'https://endgame.ai/',account:'https://endgame.ai/',access:'Free play options',hint:'Create a game on Endgame and paste the resulting invite URL.'},
- {id:'skribbl',name:'skribbl.io',category:'drawing',icon:'✎',color:'draw',home:'https://skribbl.io/',start:'https://skribbl.io/',account:'',access:'No account required',hint:'Choose Create Private Room, copy its invite URL, then send it from NEIS Circle.'},
- {id:'gartic',name:'Gartic Phone',category:'drawing',icon:'✐',color:'draw',home:'https://garticphone.com/',start:'https://garticphone.com/',account:'',access:'Guest play',hint:'Create a room on Gartic Phone and copy the room invitation link.'},
- {id:'wayground',name:'Wayground (Quizizz)',category:'quiz',icon:'◈',color:'quiz',home:'https://wayground.com/',start:'https://wayground.com/',join:'https://wayground.com/join',account:'https://wayground.com/',access:'Free features; host sign-in may be required',hint:'Host your quiz on Wayground (formerly Quizizz), then copy its join link or send the join code.'},
- {id:'kahoot',name:'Kahoot!',category:'quiz',icon:'◎',color:'quiz',home:'https://kahoot.com/',start:'https://create.kahoot.it/',join:'https://kahoot.it/',account:'https://create.kahoot.it/',access:'Free basic quizzes; players can join as guests',hint:'Host a Kahoot, then share its join link or PIN.'}
+ {id:'skribbl',name:'skribbl.io',category:'drawing',mark:'✎',art:'draw',colors:['#1b88aa','#06466a','#6be0cb'],home:'https://skribbl.io/',start:'https://skribbl.io/',access:'No account needed',tag:'Draw & guess',hint:'Create a Private Room, then copy the invitation link from skribbl.io.',hosts:['skribbl.io','www.skribbl.io']},
+ {id:'lichess',name:'Lichess',category:'chess',mark:'♞',art:'chess',colors:['#24465f','#112337','#c6dca6'],home:'https://lichess.org/',start:'https://lichess.org/setup/friend',account:'https://lichess.org/signup',access:'Free · Guests welcome',tag:'Classic chess',hint:'Create a challenge for a friend and copy the game URL.',hosts:['lichess.org','www.lichess.org']},
+ {id:'gartic',name:'Gartic Phone',category:'drawing',mark:'✦',art:'draw',colors:['#9d4c83','#4a2a66','#ffa6ce'],home:'https://garticphone.com/',start:'https://garticphone.com/',access:'Free guest play',tag:'Drawing chain',hint:'Start a room and copy its invitation link to share with your friends.',hosts:['garticphone.com','www.garticphone.com']},
+ {id:'chesscom',name:'Chess.com',category:'chess',mark:'♟',art:'chess',colors:['#45713c','#203d2a','#d5e692'],home:'https://www.chess.com/',start:'https://www.chess.com/play/online/friend',account:'https://www.chess.com/register',access:'Free basic play',tag:'Challenge a friend',hint:'Choose Play a Friend and paste the challenge invitation URL, including link.chess.com links.',hosts:['chess.com','www.chess.com','link.chess.com','www.link.chess.com','play.chess.com']},
+ {id:'codenames',name:'Codenames',category:'party',mark:'⌘',art:'secret',colors:['#c95b48','#622a3a','#ffd58e'],home:'https://codenames.game/',start:'https://codenames.game/',access:'Free · No account',tag:'Team word game',hint:'Enter a nickname, create a room, and share its room URL.',hosts:['codenames.game','www.codenames.game']},
+ {id:'jklm',name:'BombParty',category:'party',mark:'✳',art:'word',colors:['#a64f58','#43244a','#ffd16c'],home:'https://jklm.fun/',start:'https://jklm.fun/',access:'Free browser play',tag:'Fast word game',hint:'Create a private BombParty room on JKLM.FUN and share its link.',hosts:['jklm.fun','www.jklm.fun']},
+ {id:'makeitmeme',name:'Make it Meme',category:'party',mark:'☺',art:'meme',colors:['#dc8d3c','#87434c','#ffe5a0'],home:'https://makeitmeme.com/',start:'https://makeitmeme.com/',access:'Free · Guest play',tag:'Meme party',hint:'Select Private Game and copy the lobby invite link.',hosts:['makeitmeme.com','www.makeitmeme.com']},
+ {id:'wayground',name:'Wayground',category:'quiz',mark:'?',art:'quiz',colors:['#654cc9','#2d2267','#e9b5ff'],home:'https://wayground.com/',start:'https://wayground.com/',join:'https://wayground.com/join',account:'https://wayground.com/',access:'Free features available',tag:'Class quizzes',hint:'Host a Wayground (Quizizz) game, then share its join link. A host account may be needed.',hosts:['wayground.com','www.wayground.com','quizizz.com','www.quizizz.com','joinmyquiz.com','www.joinmyquiz.com']},
+ {id:'kahoot',name:'Kahoot!',category:'quiz',mark:'!',art:'quiz',colors:['#7851ae','#372277','#f4bbff'],home:'https://kahoot.com/',start:'https://create.kahoot.it/',join:'https://kahoot.it/',account:'https://create.kahoot.it/',access:'Free basic quizzes',tag:'Live quiz battle',hint:'Host a game and share its player join link. Players may also use a PIN at kahoot.it.',hosts:['kahoot.com','www.kahoot.com','create.kahoot.it','kahoot.it','www.kahoot.it']},
+ {id:'spyfall',name:'Spyfall',category:'party',mark:'◈',art:'secret',colors:['#3b7298','#162d55','#94daf6'],home:'https://thespyfall.com/',start:'https://thespyfall.com/',access:'Free · No account',tag:'Find the spy',hint:'Choose Online Play, create a room and share its invitation link.',hosts:['thespyfall.com','www.thespyfall.com']},
+ {id:'partyden',name:'PartyDen',category:'party',mark:'✹',art:'party',colors:['#5b6bbc','#2c386e','#bce7fe'],home:'https://partyden.app/',start:'https://partyden.app/',access:'Free · No signup',tag:'Dozens of party games',hint:'Create a party room, then share the invite link or room code.',hosts:['partyden.app','www.partyden.app']},
+ {id:'bonk',name:'Bonk.io',category:'party',mark:'◎',art:'arcade',colors:['#127f93','#173b63','#9ff7fa'],home:'https://bonk.io/',start:'https://bonk.io/',access:'Free browser play',tag:'Physics arcade',hint:'Create or join a private game and share the room invitation.',hosts:['bonk.io','www.bonk.io']},
+ {id:'endgame',name:'Endgame',category:'chess',mark:'♜',art:'chess',colors:['#425b87','#172b4b','#d2d5ff'],home:'https://endgame.ai/',start:'https://endgame.ai/',access:'Check available modes',tag:'Chess alternative',hint:'Open Endgame and share a game URL if its current mode supports invitations.',hosts:['endgame.ai','www.endgame.ai']}
 ];
-const allowed=new Set(['lichess.org','chess.com','www.chess.com','endgame.ai','www.endgame.ai','skribbl.io','www.skribbl.io','garticphone.com','www.garticphone.com','wayground.com','www.wayground.com','quizizz.com','www.quizizz.com','joinmyquiz.com','www.joinmyquiz.com','kahoot.com','www.kahoot.com','create.kahoot.it','kahoot.it','www.kahoot.it']);
-const stateUI={open:false,filter:'all',selected:null,link:'',panel:'catalog',notice:'',pending:false};
-const lang=(a,b)=>typeof state!=='undefined'&&state.lang==='ar'?b:a;
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const user=()=>typeof authUser!=='undefined'?authUser?.id:null;
-const db=()=>typeof sb!=='undefined'?sb:null;
+const UI={open:false,selected:'skribbl',filter:'all',query:'',links:{},link:'',panel:'setup',notice:'',noticeType:'info',busy:false,selectedTargets:new Set(),cachedFollows:[],cachedCircles:[],cachedProfiles:[],recipientLoaded:false,recipientLoading:false,returnFocus:null};
+const tr=(en,ar)=>typeof state!=='undefined'&&state.lang==='ar'?ar:en;
+const app=()=>typeof state==='undefined'?{}:state;
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+const who=()=>typeof authUser!=='undefined'?authUser?.id:null;
+const database=()=>typeof sb!=='undefined'?sb:null;
 const byId=id=>SERVICES.find(s=>s.id===id);
-function verify(raw){
- const u=new URL(String(raw||'').trim());
- if(u.protocol!=='https:'||u.username||u.password||!allowed.has(u.hostname.toLowerCase())||u.href.length>1800)throw Error(lang('Enter a valid HTTPS game invitation link from one of the listed platforms.','أدخل رابط دعوة HTTPS صحيح من إحدى منصات الألعاب المذكورة.'));
- return u.toString();
-}
-function external(url){
- const safe=verify(url);
- // Open a blank, same-origin popup on a direct user click; sever opener before
- // navigating to the provider. On devices that block popups, open a normal tab.
- if(window.innerWidth>700){
-  const popup=window.open('', 'neis-game-window','width=1050,height=780,resizable=yes,scrollbars=yes');
-  if(popup){popup.opener=null;popup.location.replace(safe);return}
+const overlay=()=>document.getElementById('neisGamesOverlay');
+const identity=x=>String(x??'');
+function verify(raw,service){
+ let url;
+ try{url=new URL(String(raw||'').trim())}catch(_){throw Error(tr('Paste a full HTTPS invitation link first.','الصق رابط دعوة HTTPS كامل أولًا.'))}
+ const hosts=service?.hosts||SERVICES.flatMap(s=>s.hosts);
+ if(url.protocol!=='https:'||url.username||url.password||url.href.length>1800||!hosts.includes(url.hostname.toLowerCase())){
+  throw Error(tr('This link does not belong to the selected game. Paste a secure invitation URL from its official site.','هذا الرابط ليس من موقع اللعبة المختارة. الصق رابط دعوة آمن من موقعها الرسمي.'));
  }
- window.open(safe,'_blank','noopener,noreferrer');
+ return url.toString();
 }
-function notice(message){stateUI.notice=message;render()}
-function reset(){stateUI.open=false;stateUI.pending=false;document.querySelector('#neisGamesOverlay')?.remove();document.body.classList.remove('neis-games-open')}
-function open(selected){
- if(selected&&byId(selected))stateUI.selected=selected;
- stateUI.open=true;stateUI.notice='';
- if(!document.querySelector('#neisGamesOverlay')){
-  const overlay=document.createElement('div');overlay.id='neisGamesOverlay';overlay.className='neis-games-overlay';
-  document.body.appendChild(overlay);
- }
- document.body.classList.add('neis-games-open');render();
+function activeLink(){return verify(UI.link,byId(UI.selected))}
+function setNotice(message,type){
+ UI.notice=message;UI.noticeType=type||'info';render();
 }
-function mutual(){
- const list=Array.isArray(state?.follows)?state.follows:[];
- const me=user();if(!me)return [];
- const outgoing=new Set(list.filter(r=>r.follower_id===me&&r.status==='accepted').map(r=>r.following_id));
- return [...new Set(list.filter(r=>r.following_id===me&&r.status==='accepted'&&outgoing.has(r.follower_id)).map(r=>r.follower_id))];
+function external(raw){
+ const url=verify(raw);
+ const win=window.innerWidth>760?window.open('','neis-game-provider','width=1080,height=780,scrollbars=yes,resizable=yes'):window.open('','_blank');
+ if(!win){setNotice(tr('Your browser blocked the game window. Allow pop-ups for NEIS Circle and try again.','المتصفح منع فتح اللعبة. اسمح بالنوافذ المنبثقة لموقع NEIS Circle وحاول مجددًا.'),'error');return}
+ try{win.opener=null}catch(_){}
+ win.location.replace(url);
+}
+function connections(){
+ const me=identity(who()),rels=[...(app().follows||[]),...UI.cachedFollows].filter(x=>x.status==='accepted');
+ const ids=new Set();
+ rels.forEach(r=>{if(identity(r.follower_id)===me&&identity(r.following_id)!==me)ids.add(identity(r.following_id));
+  if(identity(r.following_id)===me&&identity(r.follower_id)!==me)ids.add(identity(r.follower_id))});
+ const profiles=[...(app().members||[]),...UI.cachedProfiles];
+ return [...ids].map(id=>profiles.find(p=>identity(p.id)===id)||{id,full_name:tr('NEIS student','طالب NEIS')}).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
 }
 function circles(){
- const me=user();
- return (state?.circleMembers||[]).filter(r=>r.user_id===me&&r.status==='active')
- .map(r=>(state?.circleRows||[]).find(c=>c.id===r.circle_id)).filter(Boolean);
+ const me=identity(who()),ids=new Set();
+ [...(app().circleMembers||[]),...UI.cachedCircles].forEach(r=>{if(identity(r.user_id)===me&&r.status==='active')ids.add(identity(r.circle_id))});
+ (app().circleRows||[]).forEach(c=>{if(identity(c.owner_id)===me)ids.add(identity(c.id))});
+ const result=[...(app().circleRows||[]),...UI.cachedCircles.filter(r=>r.name)];
+ return [...ids].map(id=>result.find(c=>identity(c.id)===id)).filter(Boolean);
+}
+async function loadRecipients(){
+ const uid=who(),db=database();
+ if(!uid||!db||UI.recipientLoading||UI.recipientLoaded)return;
+ UI.recipientLoading=true;
+ try{
+  const [follows,members]=await Promise.all([
+   db.from('follows').select('follower_id,following_id,status').or('follower_id.eq.'+uid+',following_id.eq.'+uid).eq('status','accepted'),
+   db.from('circle_members').select('circle_id,user_id,status').eq('user_id',uid).eq('status','active')
+  ]);
+  if(!follows.error&&Array.isArray(follows.data))UI.cachedFollows=follows.data;
+  if(!members.error&&Array.isArray(members.data))UI.cachedCircles=members.data;
+  const ids=[...new Set(UI.cachedFollows.map(r=>identity(r.follower_id)===identity(uid)?r.following_id:r.follower_id))].filter(Boolean);
+  const circleIds=[...new Set(UI.cachedCircles.map(r=>r.circle_id))].filter(Boolean);
+  const [profiles,rooms]=await Promise.all([
+   ids.length?db.from('profiles').select('id,full_name,username').in('id',ids):Promise.resolve({data:[]}),
+   circleIds.length?db.from('circles').select('id,name,owner_id').in('id',circleIds):Promise.resolve({data:[]})
+  ]);
+  if(!profiles.error&&Array.isArray(profiles.data))UI.cachedProfiles=profiles.data;
+  if(!rooms.error&&Array.isArray(rooms.data))UI.cachedCircles.push(...rooms.data);
+  UI.recipientLoaded=true;
+ }catch(err){console.warn('[NEIS Games] recipient refresh failed',err)}
+ finally{UI.recipientLoading=false;if(UI.open)render()}
 }
 function invitationText(url){
- const svc=byId(stateUI.selected);
- return lang('🎮 Let’s play ', '🎮 يلا نلعب ')+(svc?.name||'online')+'\n'+url+'\n'+lang('Open the link to join. An account may be required by the game provider.','افتح الرابط للانضمام. قد تتطلب منصة اللعبة حسابًا.');
+ const svc=byId(UI.selected);
+ return tr('🎮 Join me for ', '🎮 يلا نلعب ')+(svc?.name||'a game')+'\n'+url+'\n'+tr('Tap the link to join our game.', 'اضغط على الرابط عشان تنضم للعبة.');
 }
-async function send(kind,id){
- if(!user()||!db())throw Error(lang('Please sign in to NEIS Circle first.','سجّل الدخول إلى NEIS Circle أولًا.'));
- const url=verify(stateUI.link),text=invitationText(url);
+async function send(kind,id,url){
+ const uid=who(),db=database();
+ if(!uid||!db)throw Error(tr('Sign in to NEIS Circle to send invitations.','سجّل الدخول إلى NEIS Circle لإرسال الدعوات.'));
+ const body=invitationText(url);
  if(kind==='circle'){
-  if(!circles().some(c=>c.id===id))throw Error(lang('You are not an active member of that Circle.','أنت لست عضوًا نشطًا في المجتمع.'));
-  const {error}=await db().from('circle_messages').insert({circle_id:id,sender_id:user(),body:text});
-  if(error)throw error;
+  if(!circles().some(c=>identity(c.id)===identity(id)))throw Error(tr('You are not a member of this Circle.','أنت لست عضوًا في هذا المجتمع.'));
+  const r=await db.from('circle_messages').insert({circle_id:id,sender_id:uid,body});
+  if(r.error)throw r.error;
  }else if(kind==='user'){
-  if(!mutual().includes(id))throw Error(lang('Only mutual connections can receive direct invites.','يمكن إرسال الدعوات المباشرة للأصدقاء المتبادلين فقط.'));
-  const res=await db().rpc('start_direct_conversation',{target_user:id});
-  if(res.error||!res.data)throw res.error||Error('Conversation unavailable');
-  const msg=await db().from('messages').insert({conversation_id:res.data,sender_id:user(),body:text});
-  if(msg.error)throw msg.error;
- }else throw Error('Invalid invitation target');
- notice(lang('Invitation sent successfully.','تم إرسال الدعوة بنجاح.'));
+  if(!connections().some(p=>identity(p.id)===identity(id)))throw Error(tr('This account is not one of your connections.','هذا الحساب ليس من قائمة أصدقائك.'));
+  const conversation=await db.rpc('start_direct_conversation',{target_user:id});
+  if(conversation.error||!conversation.data)throw conversation.error||Error('Unable to open conversation');
+  await db.rpc('restore_own_conversation',{conversation_id_input:conversation.data});
+  const r=await db.from('messages').insert({conversation_id:conversation.data,sender_id:uid,body});
+  if(r.error)throw r.error;
+ }else throw Error('Unknown recipient');
+}
+function cover(s,large){
+ const col=s.colors;
+ const art={
+  chess:'<g opacity=".24" transform="translate(232 32) rotate(-19 100 85)"><path fill="#fff" d="M0 0h236v160H0z"/>'+Array.from({length:20},(_,i)=>'<rect x="'+(i%5*47.2)+'" y="'+(Math.floor(i/5)*40)+'" width="47.2" height="40" fill="'+((i+Math.floor(i/5))%2?'#20364b':'#fff')+'"/>').join('')+'</g><text x="127" y="181" font-size="148" font-family="Georgia,serif" fill="#fff" opacity=".92">'+esc(s.mark)+'</text>',
+  draw:'<circle cx="390" cy="34" r="90" fill="#fff" opacity=".08"/><path d="M200 130Q263 8 331 102T450 76" fill="none" stroke="'+col[2]+'" stroke-width="13" stroke-linecap="round"/><path d="M235 185l95-145 29 23-96 145z" fill="#fff" opacity=".78" transform="rotate(12 300 125)"/><path d="M119 92q-42-40 0-54t64 25" fill="none" stroke="#fff" opacity=".6" stroke-width="8" stroke-linecap="round"/><circle cx="412" cy="162" r="19" fill="'+col[2]+'"/><circle cx="89" cy="165" r="10" fill="#fff" opacity=".5"/>',
+  quiz:'<g transform="rotate(-12 310 103)"><rect x="216" y="21" width="186" height="179" rx="20" fill="#fff" opacity=".24"/><rect x="235" y="43" width="146" height="136" rx="13" fill="#fff" opacity=".18"/><path d="M255 142h103M255 164h66" stroke="#fff" opacity=".62" stroke-width="9" stroke-linecap="round"/><text x="278" y="123" fill="#fff" font-size="77" font-weight="900" font-family="Arial,sans-serif">'+esc(s.mark)+'</text></g><circle cx="148" cy="65" r="24" fill="'+col[2]+'" opacity=".75"/>',
+  secret:'<g transform="translate(234 22) rotate(-9 100 90)"><rect x="0" y="0" width="132" height="172" rx="16" fill="#fff" opacity=".82"/><rect x="13" y="13" width="106" height="146" rx="9" fill="'+col[1]+'" opacity=".75"/><path d="M67 37l31 36-31 36-31-36z" fill="'+col[2]+'"/><circle cx="67" cy="74" r="14" fill="#fff"/></g><g opacity=".65"><circle cx="405" cy="77" r="42" fill="none" stroke="#fff" stroke-width="8"/><path d="M437 110l26 27" stroke="#fff" stroke-width="12" stroke-linecap="round"/></g>',
+  word:'<circle cx="346" cy="106" r="76" fill="#fff" opacity=".17"/><path d="M335 55q22 18 3 45t5 42" stroke="'+col[2]+'" stroke-width="19" fill="none" stroke-linecap="round"/><path d="M243 165h170" stroke="#fff" stroke-width="9" opacity=".72" stroke-linecap="round"/><circle cx="150" cy="69" r="26" fill="'+col[2]+'" opacity=".74"/>',
+  meme:'<g transform="rotate(10 320 110)"><rect x="219" y="23" width="194" height="160" rx="19" fill="#fff" opacity=".82"/><circle cx="283" cy="82" r="12" fill="'+col[1]+'"/><circle cx="356" cy="82" r="12" fill="'+col[1]+'"/><path d="M265 112q52 58 107-3" stroke="'+col[1]+'" stroke-width="12" stroke-linecap="round" fill="none"/><rect x="244" y="160" width="141" height="9" rx="4" fill="'+col[1]+'" opacity=".4"/></g>',
+  party:'<g transform="translate(238 26)"><rect x="12" y="20" width="121" height="133" rx="20" fill="#fff" opacity=".21" transform="rotate(-18 73 86)"/><rect x="102" y="0" width="124" height="146" rx="19" fill="#fff" opacity=".45" transform="rotate(14 162 74)"/><path d="M112 99l40-37 42 40" fill="none" stroke="'+col[2]+'" stroke-width="14" stroke-linecap="round"/><circle cx="78" cy="58" r="20" fill="'+col[2]+'"/><path d="M183 146l18-22 18 22" fill="none" stroke="#fff" stroke-width="10"/></g>',
+  arcade:'<circle cx="339" cy="105" r="93" fill="none" stroke="#fff" opacity=".26" stroke-width="24"/><circle cx="339" cy="105" r="54" fill="none" stroke="'+col[2]+'" opacity=".85" stroke-width="21"/><circle cx="339" cy="105" r="19" fill="#fff"/><path d="M205 173l58-35M392 29l43-24" stroke="#fff" stroke-width="8" opacity=".65" stroke-linecap="round"/>'
+ }[s.art]||'';
+ return '<div class="neis-connect-cover'+(large?' is-large':'')+'" style="--coverA:'+col[0]+';--coverB:'+col[1]+';--coverC:'+col[2]+'"><svg viewBox="0 0 480 210" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><path d="M0 0h480v210H0z" fill="transparent"/><path d="M0 159Q130 84 256 178T480 111" fill="none" stroke="#fff" stroke-width="60" opacity=".045"/><circle cx="44" cy="45" r="93" fill="#fff" opacity=".045"/>'+art+'</svg><span class="neis-connect-cover-mark">'+esc(s.mark)+'</span><span class="neis-connect-cover-glint"></span></div>';
+}
+function recipientRows(){
+ const people=connections(),groups=circles(),query=UI.query.trim().toLowerCase();
+ const match=x=>!query||String(x||'').toLowerCase().includes(query);
+ const all=[
+  ...people.filter(p=>match(p.full_name||p.username)).map(p=>({key:'user:'+p.id,name:p.full_name||p.username||tr('Student','طالب'),sub:'@'+(p.username||'student'),icon:(p.full_name||p.username||'?').slice(0,1)})),
+  ...groups.filter(c=>match(c.name)).map(c=>({key:'circle:'+c.id,name:c.name,sub:tr('Circle group chat','شات المجتمع'),icon:'◈'}))
+ ];
+ const parts=[['user',tr('Connections','الأصدقاء')],['circle',tr('My Circles','مجتمعاتي')]];
+ return '<div class="neis-connect-recipients">'+parts.map(([kind,title])=>{
+  const rows=all.filter(x=>x.key.startsWith(kind+':'));
+  return '<section class="neis-connect-recipient-group"><h5>'+title+' <span>'+rows.length+'</span></h5><div class="neis-connect-recipient-items">'+(rows.length?rows.map(r=>'<button type="button" class="neis-connect-recipient'+(UI.selectedTargets.has(r.key)?' is-selected':'')+'" data-game="toggle:'+esc(r.key)+'" aria-pressed="'+UI.selectedTargets.has(r.key)+'"><span class="neis-connect-avatar">'+esc(r.icon)+'</span><span class="neis-connect-recipient-name"><strong>'+esc(r.name)+'</strong><small>'+esc(r.sub)+'</small></span><span class="neis-connect-tick">'+(UI.selectedTargets.has(r.key)?'✓':'')+'</span></button>').join(''):'<p class="neis-connect-recipient-empty">'+(UI.recipientLoading?tr('Loading…','جارٍ التحميل…'):kind==='user'?tr('No connections found.','لا يوجد أصدقاء مطابقون.'):tr('No Circles found.','لا توجد مجتمعات مطابقة.'))+'</p>')+'</div></section>';
+ }).join('')+'</div>';
 }
 function page(){
- const svc=byId(stateUI.selected);
- const filtered=SERVICES.filter(s=>stateUI.filter==='all'||s.category===stateUI.filter);
- const cards=filtered.map(s=>'<article class="neis-connect-card"><div class="neis-connect-card-top"><span class="neis-connect-icon '+s.color+'">'+s.icon+'</span><div><h3>'+esc(s.name)+'</h3><small>'+esc(s.access)+'</small></div></div><p>'+esc(s.hint)+'</p><div class="neis-connect-card-actions"><button type="button" data-game="choose:'+s.id+'">'+lang('Play / invite','العب / ادعُ')+'</button></div></article>').join('');
- const contacts=mutual().map(id=>{const person=(state?.members||[]).find(p=>p.id===id);return '<button type="button" data-game="send-user:'+esc(id)+'"><span class="neis-connect-initial">'+esc((person?.full_name||person?.username||'?').slice(0,1))+'</span><span>'+esc(person?.full_name||person?.username||lang('Classmate','زميل'))+'</span><small>'+lang('Send','إرسال')+'</small></button>'}).join('');
- const groups=circles().map(c=>'<button type="button" data-game="send-circle:'+esc(c.id)+'"><span class="neis-connect-initial">◈</span><span>'+esc(c.name)+'</span><small>'+lang('Send','إرسال')+'</small></button>').join('');
- const selected=svc?'<section class="neis-connect-selected"><div class="neis-connect-selected-head"><span class="neis-connect-icon '+svc.color+'">'+svc.icon+'</span><div><span class="neis-connect-eyebrow">'+lang('Selected game','اللعبة المختارة')+'</span><h3>'+esc(svc.name)+'</h3><p>'+esc(svc.access)+'</p></div></div><p>'+esc(svc.hint)+'</p><div class="neis-connect-actions"><button type="button" data-game="start">'+lang('Open game','افتح اللعبة')+'</button>'+(svc.join?'<button type="button" class="outline" data-game="join">'+lang('Join a game','انضم للعبة')+'</button>':'')+(svc.account?'<button type="button" class="outline" data-game="account">'+lang('Create / sign in','إنشاء حساب / دخول')+'</button>':'')+'</div><label for="neisGameLink">'+lang('Invite link from the game provider','رابط الدعوة من منصة اللعبة')+'</label><div class="neis-connect-link-row"><input id="neisGameLink" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://..." value="'+esc(stateUI.link)+'"><button type="button" data-game="copy">'+lang('Copy','نسخ')+'</button></div><p class="neis-connect-footnote">'+lang('Create the game on its original website, then paste its invitation link here. We do not create third-party accounts or host the game ourselves.','أنشئ اللعبة على موقعها الأصلي، ثم الصق رابط الدعوة هنا. لا ننشئ حسابات لدى المنصة ولا نستضيف اللعبة على خوادمنا.')+'</p><div class="neis-connect-actions"><button type="button" data-game="invite">'+lang('Invite connections & Circles','دعوة الأصدقاء والمجتمعات')+'</button></div>'+(stateUI.panel==='invite'?'<div class="neis-connect-invite"><h4>'+lang('Send invitation directly','إرسال الدعوة مباشرة')+'</h4><div class="neis-connect-invite-columns"><section><h5>'+lang('Mutual connections','الأصدقاء المتبادلون')+'</h5><div class="neis-connect-targets">'+(contacts||'<p>'+lang('No mutual connections yet.','لا يوجد أصدقاء متبادلون بعد.')+'</p>')+'</div></section><section><h5>'+lang('My Circles','مجتمعاتي')+'</h5><div class="neis-connect-targets">'+(groups||'<p>'+lang('No joined Circles available.','لا توجد مجتمعات منضم إليها.')+'</p>')+'</div></section></div></div>':'')+'</section>':'<section class="neis-connect-guide"><span class="neis-connect-guide-icon">↗</span><h3>'+lang('Choose a game to get started','اختر لعبة للبدء')+'</h3><p>'+lang('Games open in a small separate window on desktop when allowed by your browser. On mobile they open in a tab.','تفتح الألعاب في نافذة مستقلة صغيرة على الكمبيوتر إذا سمح المتصفح، وفي تبويب على الهاتف.')+'</p></section>';
- return '<div class="neis-connect-backdrop" data-game="close"></div><section class="neis-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="neisConnectTitle"><header><div><small>NEIS CIRCLE / PLAY</small><h2 id="neisConnectTitle">'+lang('Play together, anywhere.','العبوا مع بعض، من أي مكان.')+'</h2><p>'+lang('Choose an online game, open its official site, and invite your Circle.','اختار لعبة أونلاين، افتح موقعها الرسمي، وابعت دعوة لأصحابك.')+'</p></div><button type="button" class="neis-connect-dismiss" data-game="close" aria-label="'+lang('Close','إغلاق')+'">×</button></header>'+(stateUI.notice?'<div class="neis-connect-notice" role="status">'+esc(stateUI.notice)+'</div>':'')+'<div class="neis-connect-layout"><section class="neis-connect-list"><nav class="neis-connect-filters" aria-label="'+lang('Game categories','تصنيفات الألعاب')+'">'+[['all',lang('All','الكل')],['chess',lang('Chess','شطرنج')],['drawing',lang('Drawing','رسم')],['quiz',lang('Quizzes','كويزات')]].map(([k,n])=>'<button type="button" data-game="filter:'+k+'" class="'+(stateUI.filter===k?'active':'')+'">'+n+'</button>').join('')+'</nav><div class="neis-connect-cards">'+cards+'</div></section>'+selected+'</div><footer>'+lang('Games and accounts belong to their respective providers. No paid integration or server-side game engine is required.','الألعاب والحسابات تابعة لمنصاتها الأصلية، ولا تحتاج استضافة ألعاب أو اشتراكات إضافية من NEIS Circle.')+'</footer></section>';
+ const svc=byId(UI.selected)||SERVICES[0];
+ const query=UI.query.trim().toLowerCase();
+ const filtered=SERVICES.filter(s=>(UI.filter==='all'||s.category===UI.filter)&&(!query||[s.name,s.tag,s.category].some(x=>x.toLowerCase().includes(query))));
+ const cards=filtered.map(s=>'<button type="button" class="neis-connect-card'+(svc.id===s.id?' is-active':'')+'" data-game="choose:'+s.id+'" aria-pressed="'+(svc.id===s.id)+'">'+cover(s,false)+'<span class="neis-connect-card-body"><span class="neis-connect-card-name">'+esc(s.name)+'</span><span class="neis-connect-card-caption">'+esc(s.tag)+'</span><span class="neis-connect-card-meta">'+esc(s.access)+'</span></span><span class="neis-connect-card-arrow" aria-hidden="true">↗</span></button>').join('');
+ const filt=[['all',tr('All games','الكل')],['party',tr('Party','جماعية')],['chess',tr('Chess','شطرنج')],['drawing',tr('Drawing','رسم')],['quiz',tr('Quizzes','اختبارات')]].map(([k,n])=>'<button type="button" data-game="filter:'+k+'" class="'+(UI.filter===k?'active':'')+'" aria-pressed="'+(UI.filter===k)+'">'+n+'</button>').join('');
+ const input='<div class="neis-connect-link-box"><label for="neisGameLink">'+tr('Room invitation link','رابط دعوة الغرفة')+'</label><div class="neis-connect-link-row"><input id="neisGameLink" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="'+tr('Paste your room link here…','الصق رابط الغرفة هنا…')+'" value="'+esc(UI.link)+'"><button type="button" class="neis-connect-inline-button" data-game="paste">'+tr('Paste','لصق')+'</button><button type="button" class="neis-connect-inline-button" data-game="copy">'+tr('Copy','نسخ')+'</button></div><p class="neis-connect-help">'+tr('Create a room on the official game site, copy its share link, and paste it above.','افتح موقع اللعبة، أنشئ غرفة، انسخ رابط مشاركتها والصقه هنا.')+'</p></div>';
+ const panel=UI.panel==='share'?'<div class="neis-connect-share"><div class="neis-connect-share-top"><div><h4>'+tr('Who is playing?','مين هيلعب معاك؟')+'</h4><p>'+tr('Choose one or more connections or Circles.','اختار صديق أو أكتر أو مجتمع كامل.')+'</p></div><button type="button" class="neis-connect-text-button" data-game="back">'+tr('Back','رجوع')+'</button></div><input type="search" id="neisRecipientSearch" placeholder="'+tr('Find a connection or Circle…','ابحث عن صديق أو مجتمع…')+'" value="'+esc(UI.query)+'" autocomplete="off">'+recipientRows()+'<button type="button" class="neis-connect-send" data-game="send" '+(UI.busy?'disabled':'')+'>'+ (UI.busy?tr('Sending…','جارٍ الإرسال…'):tr('Send invitation','إرسال الدعوة')+' · '+UI.selectedTargets.size)+'</button></div>':'<div class="neis-connect-steps"><div><b>01</b><span>'+tr('Open a room','افتح غرفة')+'</span></div><div><b>02</b><span>'+tr('Copy the invite link','انسخ رابط الدعوة')+'</span></div><div><b>03</b><span>'+tr('Invite friends here','ادعُ أصحابك هنا')+'</span></div></div>';
+ return '<div class="neis-connect-backdrop" data-game="close"></div><section class="neis-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="neisConnectTitle"><header class="neis-connect-header"><div class="neis-connect-header-copy"><span class="neis-connect-eyebrow">NEIS CIRCLE <span class="neis-connect-slash">/</span> PLAY</span><h2 id="neisConnectTitle">'+tr('Better games. Better together.','اللعب أحلى مع بعض.')+'</h2><p>'+tr('Your favorite online games, all in one place. Pick one, start a room, invite your people.','ألعابك المفضلة في مكان واحد. اختار لعبة، افتح غرفة وادعُ أصحابك.')+'</p></div><div class="neis-connect-header-side"><span class="neis-connect-count">'+SERVICES.length+' '+tr('games','لعبة')+'</span><button type="button" class="neis-connect-dismiss" data-game="close" aria-label="'+tr('Close','إغلاق')+'">×</button></div></header>'+(UI.notice?'<div class="neis-connect-notice '+esc(UI.noticeType)+'" role="status"><span>'+esc(UI.notice)+'</span><button type="button" data-game="dismiss-notice" aria-label="'+tr('Dismiss','إخفاء')+'">×</button></div>':'')+'<div class="neis-connect-layout"><section class="neis-connect-list"><div class="neis-connect-list-heading"><div><h3>'+tr('Discover games','استكشف الألعاب')+'</h3><p>'+tr('No downloads. Just good company.','من غير تحميل، كل اللي تحتاجه أصحابك.')+'</p></div><span class="neis-connect-provider-note">↗ '+tr('Official sites','المواقع الأصلية')+'</span></div><nav class="neis-connect-filters" aria-label="'+tr('Game categories','تصنيفات الألعاب')+'">'+filt+'</nav><div class="neis-connect-cards">'+(cards||'<p class="neis-connect-empty">'+tr('No games found in this category.','لا توجد ألعاب في هذا القسم.')+'</p>')+'</div></section><aside class="neis-connect-selected"><div class="neis-connect-selected-cover">'+cover(svc,true)+'<span class="neis-connect-selected-tag">'+esc(svc.tag)+'</span></div><div class="neis-connect-selected-content"><div class="neis-connect-selected-heading"><div><small>'+tr('READY TO PLAY','جاهز تلعب؟')+'</small><h3>'+esc(svc.name)+'</h3><p>'+esc(svc.access)+'</p></div></div><p class="neis-connect-instructions">'+esc(svc.hint)+'</p><div class="neis-connect-launch-actions"><button type="button" class="neis-connect-launch" data-game="start">'+tr('Create / open room','افتح أو أنشئ غرفة')+' <span>↗</span></button>'+(svc.join?'<button type="button" class="neis-connect-secondary" data-game="join">'+tr('Join','انضم')+'</button>':'')+'</div>'+(svc.account?'<button type="button" class="neis-connect-account" data-game="account">'+tr('Need an account? Sign up on the game site','محتاج حساب؟ سجّل في موقع اللعبة')+' ↗</button>':'')+input+'<button type="button" class="neis-connect-invite-main" data-game="invite">'+tr('Invite connections & Circles','ادعُ الأصدقاء والمجتمعات')+' <span>→</span></button>'+panel+'</div></aside></div><footer class="neis-connect-footer"><span class="neis-connect-footer-dot"></span>'+tr('Games run on their official sites. NEIS Circle only helps you share invites; no extra server load.','الألعاب بتشتغل على مواقعها الأصلية. NEIS Circle بيسهّل إرسال الدعوات فقط، بدون حمل إضافي على السيرفر.')+'</footer></section>';
 }
 function render(){
- if(!stateUI.open)return;
- const root=document.querySelector('#neisGamesOverlay');if(!root)return;
- root.innerHTML=page();
- root.querySelector('#neisGameLink')?.addEventListener('input',event=>{stateUI.link=event.target.value});
+ if(!UI.open||!overlay())return;
+ overlay().innerHTML=page();
+ const link=overlay().querySelector('#neisGameLink');
+ if(link)link.addEventListener('input',evt=>{UI.link=evt.target.value;UI.links[UI.selected]=UI.link});
+ const search=overlay().querySelector('#neisRecipientSearch');
+ if(search)search.addEventListener('input',evt=>{
+  const pos=evt.target.selectionStart;
+  UI.query=evt.target.value;
+  render();
+  const fresh=overlay()?.querySelector('#neisRecipientSearch');
+  if(fresh){fresh.focus();fresh.setSelectionRange(pos,pos)}
+ });
 }
-async function handleAction(action){
- if(action==='close'){reset();return}
- if(action.startsWith('filter:')){stateUI.filter=action.slice(7);render();return}
- if(action.startsWith('choose:')){stateUI.selected=action.slice(7);stateUI.link='';stateUI.panel='catalog';stateUI.notice='';render();return}
- const svc=byId(stateUI.selected);if(!svc)return;
- if(action==='start'||action==='join'||action==='account'){
-  const url=action==='start'?svc.start:action==='join'?svc.join:svc.account;
+function close(){
+ UI.open=false;UI.busy=false;overlay()?.remove();document.body.classList.remove('neis-games-open');
+ if(UI.returnFocus?.isConnected)UI.returnFocus.focus({preventScroll:true});
+}
+function open(selected){
+ if(selected&&byId(selected))UI.selected=selected;
+ UI.link=UI.links[UI.selected]||'';
+ UI.open=true;UI.notice='';UI.panel='setup';UI.query='';UI.selectedTargets.clear();
+ UI.returnFocus=document.activeElement;
+ if(!overlay()){const el=document.createElement('div');el.id='neisGamesOverlay';el.className='neis-games-overlay';document.body.append(el)}
+ document.body.classList.add('neis-games-open');
+ render();overlay()?.querySelector('.neis-connect-dismiss')?.focus({preventScroll:true});
+ void loadRecipients();
+}
+function copyFallback(text){
+ const ta=document.createElement('textarea');ta.value=text;ta.readOnly=true;ta.style.position='fixed';ta.style.opacity='0';
+ document.body.append(ta);ta.select();const result=document.execCommand('copy');ta.remove();
+ if(!result)throw Error(tr('Copy this link manually.','انسخ الرابط يدويًا.'));
+}
+async function action(value){
+ if(value==='close'){close();return}
+ if(value==='dismiss-notice'){UI.notice='';render();return}
+ if(value.startsWith('filter:')){UI.filter=value.slice(7);render();return}
+ if(value.startsWith('choose:')){
+  if(!byId(value.slice(7)))return;
+  UI.links[UI.selected]=UI.link;UI.selected=value.slice(7);UI.link=UI.links[UI.selected]||'';
+  UI.panel='setup';UI.notice='';UI.query='';UI.selectedTargets.clear();render();return;
+ }
+ const svc=byId(UI.selected);
+ if(!svc)return;
+ if(value==='start'||value==='join'||value==='account'){
+  const url=value==='start'?svc.start:value==='join'?svc.join:svc.account;
   if(url)external(url);return;
  }
- if(action==='invite'){verify(stateUI.link);stateUI.panel=stateUI.panel==='invite'?'catalog':'invite';render();return}
- if(action==='copy'){const link=verify(stateUI.link);if(!navigator.clipboard?.writeText)throw Error(lang('Copy this link manually in your browser.','انسخ الرابط يدويًا من المتصفح.'));await navigator.clipboard.writeText(link);notice(lang('Link copied.','تم نسخ الرابط.'));return}
- if(action.startsWith('send-user:')||action.startsWith('send-circle:')){
-  if(stateUI.pending)return;
-  stateUI.pending=true;try{await send(action.startsWith('send-user:')?'user':'circle',action.split(':').slice(1).join(':'))}finally{stateUI.pending=false}
+ if(value==='back'){UI.panel='setup';UI.notice='';render();return}
+ if(value==='invite'){
+  UI.panel='share';UI.notice='';
+  render();
+  try{activeLink()}catch(_){
+   setNotice(tr('First paste your game room invitation link above, then choose who to invite.','الصق رابط دعوة الغرفة فوق أولًا، وبعدها اختار مين تدعوه.'),'info');
+   overlay()?.querySelector('#neisGameLink')?.focus();
+  }
+  return;
+ }
+ if(value==='paste'){
+  if(!navigator.clipboard?.readText){setNotice(tr('Paste with Ctrl+V or long-press the field.','الصق الرابط باستخدام Ctrl+V أو الضغط المطول على الخانة.'),'info');return}
+  try{UI.link=(await navigator.clipboard.readText()).trim();UI.links[UI.selected]=UI.link;render();overlay()?.querySelector('#neisGameLink')?.focus()}
+  catch(_){setNotice(tr('Clipboard access was denied. Paste into the field manually.','المتصفح منع الوصول للحافظة. الصق الرابط يدويًا.'),'info')}
+  return;
+ }
+ if(value==='copy'){
+  const link=activeLink();
+  if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(link);else copyFallback(link);
+  setNotice(tr('Invitation link copied.','تم نسخ رابط الدعوة.'),'success');return;
+ }
+ if(value.startsWith('toggle:')){
+  const key=value.slice(7),isKnown=key.startsWith('user:')?connections().some(x=>key==='user:'+x.id):circles().some(x=>key==='circle:'+x.id);
+  if(!isKnown)return;
+  if(UI.selectedTargets.has(key))UI.selectedTargets.delete(key);else UI.selectedTargets.add(key);
+  render();return;
+ }
+ if(value==='send'){
+  if(UI.busy)return;
+  let url;
+  try{url=activeLink()}catch(err){setNotice(err.message,'error');overlay()?.querySelector('#neisGameLink')?.focus();return}
+  if(!UI.selectedTargets.size){setNotice(tr('Select at least one connection or Circle to send to.','اختار صديق أو مجتمع واحد على الأقل لإرسال الدعوة.'),'info');return}
+  if(!who()){setNotice(tr('Sign in to NEIS Circle first.','سجّل الدخول إلى NEIS Circle أولًا.'),'error');return}
+  UI.busy=true;UI.notice='';render();
+  const targets=[...UI.selectedTargets];
+  let ok=0,failed=0;
+  for(const entry of targets){
+   const [kind,...idParts]=entry.split(':');
+   try{await send(kind,idParts.join(':'),url);ok++}catch(err){failed++;console.warn('[NEIS Games] invite delivery failed',err)}
+  }
+  UI.busy=false;
+  if(ok)UI.selectedTargets.clear();
+  setNotice(failed?tr('Sent to '+ok+' recipient(s). '+failed+' failed — check chat permissions or try again.','تم الإرسال إلى '+ok+'، وتعذّر الإرسال إلى '+failed+'. راجع الصلاحيات وحاول تاني.'):tr('Invitation delivered to '+ok+' recipient(s). Find it in their NEIS Circle chats.','تم إرسال الدعوة إلى '+ok+' من الأصدقاء أو المجتمعات في الشات.'),failed?'error':'success');
  }
 }
 function attach(){
  const rail=document.querySelector('.rail-nav');
  if(rail&&!rail.querySelector('[data-neis-connect-open]')){
   const btn=document.createElement('button');btn.type='button';btn.className='nav-btn';btn.dataset.neisConnectOpen='1';
-  btn.setAttribute('aria-label','NEIS Games');btn.title='NEIS Games';btn.innerHTML='<span aria-hidden="true" style="font-size:19px">♟</span>';
+  btn.setAttribute('aria-label',tr('Games','ألعاب'));btn.title=tr('Games','ألعاب');btn.innerHTML='<span aria-hidden="true" style="font-size:19px">♟</span>';
   const saved=rail.querySelector('[data-nav="library"]');if(saved)saved.insertAdjacentElement('afterend',btn);else rail.append(btn);
  }
  const mobile=document.querySelector('.bottom-nav');
  if(mobile&&!mobile.querySelector('[data-neis-connect-open]')){
-  const b=document.createElement('button');b.type='button';b.dataset.neisConnectOpen='1';b.title='NEIS Games';b.innerHTML='<span aria-hidden="true">♟</span><span>'+lang('Games','ألعاب')+'</span>';
-  const more=mobile.querySelector('[data-mobile-more]');if(more)mobile.insertAdjacentElement('beforebegin',b);else mobile.append(b);
+  const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.title=tr('Games','ألعاب');
+  btn.innerHTML='<span aria-hidden="true">♟</span><span>'+tr('Games','ألعاب')+'</span>';
+  const more=mobile.querySelector('[data-mobile-more]');if(more)mobile.insertAdjacentElement('beforebegin',btn);else mobile.append(btn);
  }
  const view=document.querySelector('#view');
  if(view)for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
   if(form.querySelector('[data-neis-connect-open]'))continue;
-  const b=document.createElement('button');b.type='button';b.dataset.neisConnectOpen='1';b.className='neis-play-chat-trigger';
-  b.setAttribute('aria-label',lang('Invite to an online game','دعوة للعبة أونلاين'));b.textContent='♟';
-  const textarea=form.querySelector('textarea');if(textarea)form.insertBefore(b,textarea);else form.append(b);
+  const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.className='neis-play-chat-trigger';
+  btn.setAttribute('aria-label',tr('Invite to a game','دعوة للعبة'));btn.title=tr('Invite to a game','دعوة للعبة');btn.textContent='♟';
+  const textarea=form.querySelector('textarea');if(textarea)form.insertBefore(btn,textarea);else form.append(btn);
  }
 }
-document.addEventListener('click',event=>{
- const entry=event.target.closest?.('[data-neis-connect-open]');
- if(entry){event.preventDefault();open();return}
- const action=event.target.closest?.('[data-game]')?.dataset.game;
- if(!action)return;
- event.preventDefault();
- Promise.resolve(handleAction(action)).catch(err=>notice(String(err.message||err||lang('Could not complete this action.','تعذر إكمال العملية.'))));
+document.addEventListener('click',evt=>{
+ const trigger=evt.target.closest?.('[data-neis-connect-open]');
+ if(trigger){evt.preventDefault();open();return}
+ const el=evt.target.closest?.('[data-game]');
+ if(!el||!overlay()?.contains(el))return;
+ evt.preventDefault();
+ Promise.resolve(action(el.dataset.game)).catch(err=>setNotice(String(err?.message||err||tr('Action failed.','تعذّر تنفيذ الطلب.')),'error'));
 });
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&stateUI.open)reset()});
-let focusObserver=null;
+document.addEventListener('keydown',evt=>{
+ if(!UI.open)return;
+ if(evt.key==='Escape'){evt.preventDefault();close();return}
+ if(evt.key==='Tab'){
+  const items=[...overlay().querySelectorAll('button:not([disabled]),input:not([disabled])')].filter(x=>x.offsetParent!==null);
+  if(!items.length)return;
+  const first=items[0],last=items[items.length-1];
+  if(evt.shiftKey&&document.activeElement===first){evt.preventDefault();last.focus()}
+  else if(!evt.shiftKey&&document.activeElement===last){evt.preventDefault();first.focus()}
+ }
+});
+let observer=null;
 function initialize(){
  attach();
- if(!focusObserver&&document.querySelector('#view')){
-  focusObserver=new MutationObserver(()=>attach());
-  focusObserver.observe(document.querySelector('#view'),{childList:true,subtree:false});
+ if(!observer&&document.getElementById('view')){
+  observer=new MutationObserver(attach);
+  observer.observe(document.getElementById('view'),{childList:true,subtree:false});
  }
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
-window.NEISPlayConnectors={open,close:reset,validateInvite:verify,providers:SERVICES.map(s=>({id:s.id,name:s.name,start:s.start}))};
+window.NEISPlayConnectors={open,close,validateInvite:verify,providers:SERVICES.map(s=>({id:s.id,name:s.name,start:s.start})),version:'2.0'};
 })();
