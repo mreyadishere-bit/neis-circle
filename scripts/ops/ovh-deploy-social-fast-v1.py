@@ -55,7 +55,9 @@ def main():
    'function circleCard(c){',
    'circleRows:[],circleMembers:[]'
   ]
-  check(all(item in running for item in required),'LIVE_SOCIAL_PREVIEW_ANCHOR_CHANGED')
+  missing=[str(index+1) for index,item in enumerate(required) if item not in running]
+  if missing:print('NEIS_SOCIAL_LIVE_MISSING_ANCHORS='+','.join(missing))
+  check(not missing,'LIVE_SOCIAL_PREVIEW_ANCHOR_CHANGED')
   print('NEIS_SOCIAL_FAST_PREFLIGHT=PASS')
   return
  rev=os.environ.get('GITHUB_SHA','')[:12]
