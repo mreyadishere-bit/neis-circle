@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 import subprocess
 
@@ -88,8 +89,15 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--preflight',action='store_true')
     parser.add_argument('--deploy',action='store_true')
+    parser.add_argument('--key-stdin',action='store_true')
     args=parser.parse_args()
     require(args.preflight != args.deploy,'SELECT_PREFLIGHT_OR_DEPLOY')
+    if args.key_stdin:
+        # GitHub Secrets arrives only via encrypted SSH stdin. The key is
+        # never embedded in an SSH command, a URL, repository file or logs.
+        key=sys.stdin.read(256).strip()
+        require(len(key)>=20 and '\n' not in key,'GEMINI_KEY_STDIN_INVALID')
+        os.environ['GEMINI_API_KEY']=key
     mod=load_original()
     anon,key,preserved=preflight(mod)
     if args.preflight:
