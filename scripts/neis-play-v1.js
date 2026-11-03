@@ -358,7 +358,7 @@ function clearInviteUrl(){
  try{
   const url=new URL(location.href);
   const hadQuery=url.searchParams.has('play');
-  const hadHash=/^#\\/play\\/[A-Fa-f0-9]+$/.test(url.hash);
+  const hadHash=url.hash.startsWith('#/play/') && /^#\x2fplay\x2f[A-Fa-f0-9]+$/.test(url.hash);
   if(!hadQuery&&!hadHash)return;
   url.searchParams.delete('play');
   if(hadHash)url.hash='#/home';
