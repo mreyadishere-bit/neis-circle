@@ -68,3 +68,33 @@ body.mobile-nav-open{overflow:hidden}
   .bottom-nav{left:6px;right:6px;bottom:6px}.bottom-nav button{padding-inline:3px}.bottom-nav button span:last-child{font-size:8px}
   .mobile-nav-layer{padding:8px}.mobile-nav-list{grid-template-columns:1fr}.reply-card.nested{margin-inline-start:10px}
 }
+
+/* Mobile polish: Games menu pictogram, circle create action and Home composer. */
+.mobile-nav-item .neis-mobile-game-icon{width:36px;height:36px;display:grid;place-items:center;flex:0 0 36px}
+.mobile-nav-item .neis-mobile-game-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}
+@media(max-width:760px){
+ #view .page-title .circle-create-button{
+  display:inline-grid!important;place-items:center!important;
+  flex:0 0 44px!important;min-width:44px!important;max-width:44px!important;
+  width:44px!important;height:44px!important;min-height:44px!important;
+  aspect-ratio:1/1!important;padding:0!important;
+  box-sizing:border-box!important;border-radius:12px!important;
+  font-size:22px!important;line-height:1!important;font-weight:700!important;
+ }
+ #view .composer-bar{min-width:0;display:flex;align-items:center;gap:9px}
+ #view .composer-bar > button[data-action="compose"]:not(.compose){
+  display:block!important;flex:1 1 0!important;min-width:0!important;
+  height:44px!important;min-height:44px!important;
+  padding:0 13px!important;line-height:44px!important;
+  text-align:start!important;white-space:nowrap!important;
+  overflow:hidden!important;text-overflow:ellipsis!important;
+  font-size:clamp(12px,3.3vw,14px)!important;
+ }
+ #view .composer-bar > button.compose{
+  flex:0 0 44px!important;min-width:44px!important;
+  height:44px!important;width:44px!important;padding:0!important;
+  display:grid!important;place-items:center!important;
+  line-height:1!important;
+ }
+ #view .composer-bar > .avatar{flex:0 0 40px!important;width:40px!important;height:40px!important}
+}
