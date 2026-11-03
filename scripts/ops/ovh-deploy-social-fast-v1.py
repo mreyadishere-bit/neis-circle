@@ -70,12 +70,18 @@ def main():
  marker='const coreLoad=loadLiveData;'
  loader='loadLiveData=async function(){'
  check(live_social.count(marker)==1 and live_social.count(loader)==1,'SOCIAL_BOOTSTRAP_ANCHOR_MISSING')
- helper= social[social.index(marker)+len(marker):social.index(loader,social.index(marker))]
- check('async function loadCirclesFast(force=false)' in helper,'CIRCLE_HELPER_INVALID')
- live_social=live_social.replace(marker,marker+helper,1)
+ if 'async function loadCirclesFast(force=false)' not in live_social:
+  helper=social[social.index(marker)+len(marker):social.index(loader,social.index(marker))]
+  check('async function loadCirclesFast(force=false)' in helper,'CIRCLE_HELPER_INVALID')
+  live_social=live_social.replace(marker,marker+helper,1)
+ else:
+  print('NEIS_SOCIAL_FAST_LOADER=ALREADY_PRESENT')
  insert_before='  const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{'
  check(live_social.count(insert_before)==1,'NOTIFICATION_BOOTSTRAP_MISSING')
- live_social=live_social.replace(insert_before,'  const circlesEarly=loadCirclesFast();\n'+insert_before,1)
+ if 'const circlesEarly=loadCirclesFast();' not in live_social:
+  live_social=live_social.replace(insert_before,'  const circlesEarly=loadCirclesFast();\\n'.replace('\\n','\n')+insert_before,1)
+ else:
+  print('NEIS_SOCIAL_EARLY_FETCH=ALREADY_PRESENT')
  view_start='circles=function(){'
  view_end='function circleCard(c){'
  check(social.count(view_start)==1 and social.count(view_end)==1 and live_social.count(view_start)==1 and live_social.count(view_end)==1,'CIRCLES_VIEW_ANCHORS_CHANGED')
