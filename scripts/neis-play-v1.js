@@ -46,7 +46,7 @@ function attachActivityEntries(){
 function observeApp(){
  const view=document.getElementById('view');if(!view)return;
  attachActivityEntries();
- const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];clearInviteUrl();}else show();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
+ const observer=new MutationObserver(()=>{if(S.open&&!root()){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';clearInviteUrl();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
  observer.observe(view,{childList:true,subtree:false});
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';const view=document.getElementById('view');if(!view)throw Error('NEIS page container unavailable');view.replaceChildren(r)}
@@ -217,7 +217,11 @@ function flashcardPage(){
  const card=S.cards[position];
  return '<section class="neis-play-game-layout"><div class="neis-play-section"><h3>'+e(deck.title)+'</h3>'+(card?'<div class="neis-play-flashcard"><small>'+t('Card','بطاقة')+' '+(position+1)+'/'+S.cards.length+'</small><h2>'+e(card.question)+'</h2></div><form class="neis-play-form-inline" data-play-form="answer"><input name="answer" maxlength="300" placeholder="'+t('Your answer','إجابتك')+'" required><button type="submit">'+t('Submit','إرسال')+'</button></form>':'<p>'+t('The deck has no cards yet.','المجموعة لا تحتوي على بطاقات بعد.')+'</p>')+'</div><div class="neis-play-section"><h3>'+t('Practice progress','تقدم المراجعة')+'</h3><p>'+answers.length+' '+t('answers submitted','إجابات مُرسلة')+'</p><p>'+t('This is a collaborative practice room; competitive scoring is disabled until server-side answer evaluation is available.','هذه غرفة مراجعة جماعية، والتصنيف التنافسي غير مفعّل حتى تكتمل مراجعة الإجابات على الخادم.')+'</p></div></section>';
 }
-async function fetchLists(){
+let playListLastLoaded=0,playListLoadingPromise=null;
+async function fetchLists(force=false){
+ if(!force&&playListLastLoaded&&Date.now()-playListLastLoaded<12000)return;
+ if(playListLoadingPromise)return playListLoadingPromise;
+ playListLoadingPromise=(async()=>{
  try{
   const db=api();if(!db||!who())return;
   const [decks,daily,champ,rooms,quizzes]=await Promise.all([
@@ -228,8 +232,10 @@ async function fetchLists(){
    request(db.from('neis_quizzes').select('id,owner_id,title,subject,visibility,created_at').order('created_at',{ascending:false}).limit(100))
   ]);
   S.decks=decks||[];S.quizzes=quizzes||[];S.daily=daily?.[0]||null;S.championships=champ||[];S.myRooms=rooms||[];
-  S.status='';render();
- }catch(err){error(err)}
+  playListLastLoaded=Date.now();if(S.open)render();
+ }catch(err){if(S.open)error(err)}
+ })();
+ try{await playListLoadingPromise}finally{playListLoadingPromise=null}
 }
 async function loadQuiz(id){
  const existing=S.quizzes.find(q=>q.id===id);
