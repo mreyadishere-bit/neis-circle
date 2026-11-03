@@ -46,7 +46,7 @@ function attachActivityEntries(){
 function observeApp(){
  const view=document.getElementById('view');if(!view)return;
  attachActivityEntries();
- const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];}else show();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
+ const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];clearInviteUrl();}else show();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
  observer.observe(view,{childList:true,subtree:false});
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';const view=document.getElementById('view');if(!view)throw Error('NEIS page container unavailable');view.replaceChildren(r)}
@@ -354,8 +354,22 @@ async function open(){
  await fetchLists();
  if(pendingInviteCode())await enterPendingInvite();
 }
+function clearInviteUrl(){
+ try{
+  const url=new URL(location.href);
+  const hadQuery=url.searchParams.has('play');
+  const hadHash=/^#\\/play\\/[A-Fa-f0-9]+$/.test(url.hash);
+  if(!hadQuery&&!hadHash)return;
+  url.searchParams.delete('play');
+  if(hadHash)url.hash='#/home';
+  history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+ }catch{}
+}
 function close(){
- S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';const r=root();if(r)r.remove();if(typeof nav==='function')nav('home');const u=new URL(location.href);if(u.searchParams.has('play')){u.searchParams.delete('play');history.replaceState(null,'',u.pathname+u.search+u.hash)}
+ S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';
+ clearInviteUrl();
+ const r=root();if(r)r.remove();
+ if(typeof nav==='function')nav('home');
 }
 async function join(code){const id=await request(api().rpc('neis_play_join_room',{p_code:String(code).trim()}));await openRoom(id)}
 async function create(game){
@@ -551,7 +565,7 @@ async function form(form){
 document.addEventListener('click',event=>{
  const ordinaryNav=event.target.closest('[data-nav]');
  if(S.open&&ordinaryNav&&!ordinaryNav.closest('#neisPlayRoot')){
-   S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;const r=root();if(r)r.remove();
+   S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;clearInviteUrl();const r=root();if(r)r.remove();
  }
  const openBtn=event.target.closest('[data-neis-play-open]');
  if(openBtn){event.preventDefault();event.stopPropagation();open();return}
