@@ -13,7 +13,7 @@ const error=err=>{S.status=String(err?.message||err||t('Something went wrong.','
 function button(text,action,more=''){return '<button type="button" data-play="'+action+'" '+more+'>'+text+'</button>'}
 async function request(q){if(!api()||!who())throw Error(t('Please sign in first.','سجّل الدخول أولاً.'));const res=await q;if(res.error)throw res.error;return res.data}
 function roomLink(){return location.origin+location.pathname+'?play='+encodeURIComponent(S.room.code)}
-function nav(){
+function installNavButtons(){
  if(document.querySelector('[data-neis-play-open]'))return;
  const rail=document.querySelector('.rail-nav');
  if(!rail)return;
@@ -464,6 +464,6 @@ document.addEventListener('submit',event=>{
 },true);
 async function formHandler(f){await form(f)}
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&S.open&&!S.busy)close()});
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{nav();observeApp()},{once:true});else{nav();observeApp()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installNavButtons();observeApp()},{once:true});else{installNavButtons();observeApp()}
 window.NEISPlay={open,close,get active(){return S.open}};
 })();
