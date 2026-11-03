@@ -429,7 +429,7 @@ function start(){
     window.visualViewport.addEventListener("resize",syncMobileViewport,{passive:true});
     window.visualViewport.addEventListener("scroll",syncMobileViewport,{passive:true});
   }
-  window.addEventListener("resize",syncMobileViewport,{passive:true});
+  window.addEventListener?.("resize",syncMobileViewport,{passive:true});
   scheduleMount();
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});
