@@ -10,6 +10,11 @@ assert.ok(js.includes('start_direct_conversation')&&js.includes('circle_messages
 assert.ok(!js.includes('setInterval(')&&!js.includes('chess.js@'),'no game polling or local chess engine');
 assert.ok(css.includes('@media(max-width:560px)')&&css.includes('@media(max-width:800px)'),'responsive modal sizes');
 assert.ok(js.includes('enhanceChatMessageText')&&js.includes('neis-connect-recipient'),'game invite chat cards retained');
+assert.ok(js.includes('if(language===currentGameLanguage)return'),'ignore redundant language mutations');
+assert.ok(js.includes('if(!inChat&&!fullViewChange)'),'ignore unrelated post/feed changes');
+assert.ok(js.includes('void loadRecipients();'),'lazy recipients available when invited');
+assert.ok(html.includes('neis-game-connectors-v1.js?v=gamehub-perf-20261103" async'),'nonessential Games script does not block DOMContentLoaded');
+assert.ok(/neis-game-connectors-v1\.css[^>]+media="print"/.test(html),'nonessential Games stylesheet does not block the initial paint');
 assert.ok(fs.readFileSync('scripts/navigation-v14.js','utf8').includes('neis-mobile-game-entry'),'Games appears in mobile More menu');
 
 const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox']});
