@@ -44,7 +44,7 @@ function render(){
 function homePage(){
  const items=[['chess','♟',t('Chess Arena','ساحة الشطرنج'),t('Challenge a friend to a casual chess match.','تحدّ صديقك في مباراة شطرنج ودية.')],['sketch','✎',t('Sketch & Guess','ارسم وخمّن'),t('Draw with friends. Guess in the room chat.','ارسم مع أصدقائك وخمّن في دردشة الغرفة.')],['flashcards','▣',t('Flashcard Battles','تحدي البطاقات'),t('Review a shared deck in a multiplayer room.','راجع مجموعة بطاقات مع أصدقائك.')]];
  const cards=items.map(([kind,icon,title,desc])=>'<article class="neis-play-card"><div class="neis-play-symbol">'+icon+'</div><h3>'+title+'</h3><p>'+desc+'</p>'+button(t('Create room','إنشاء غرفة'),'create:'+kind)+'</article>').join('');
- return '<section class="neis-play-hero"><div><small>PLAY • LEARN • CONNECT</small><h1>'+t('Better together.','الأفضل معًا.')+'</h1><p>'+t('Real rooms. Real classmates. No paid subscriptions.','غرف حقيقية وطلاب حقيقيون بدون اشتراكات مدفوعة.')+'</p></div><div class="neis-play-hero-symbol">♟ ✎ ▣</div></section><div class="neis-play-card-grid">'+cards+'</div><section class="neis-play-section"><h3>'+t('Join a friend','انضم إلى صديق')+'</h3><form data-play-form="join" class="neis-play-form-inline"><input name="code" required maxlength="12" placeholder="'+t('Invitation code','رمز الدعوة')+'" autocomplete="off"><button type="submit">'+t('Join room','انضمام')+'</button></form></section><section class="neis-play-section"><h3>'+t('Your active rooms','غرفك النشطة')+'</h3><div class="neis-play-list">'+(S.myRooms.length?S.myRooms.map(r=>'<div class="neis-play-list-item"><span>'+e(label(r.game))+' · '+e(r.status)+'</span>'+button(t('Open','فتح'),'room:'+e(r.id))+'</div>').join(''):'<p class="neis-play-muted">'+t('No active rooms.','لا توجد غرف نشطة.')+'</p>')+'</div></section><p class="neis-play-note">'+t('Casual beta: competitive ratings and automatic anti-cheat results are not enabled.','نسخة تجريبية ودية: التصنيفات التنافسية ونتائج مكافحة الغش لم تُفعّل بعد.')+'</p>';
+ return '<section class="neis-play-hero"><div><small>PLAY • LEARN • CONNECT</small><h1>'+t('Better together.','الأفضل معًا.')+'</h1><p>'+t('Real rooms. Real classmates. No paid subscriptions.','غرف حقيقية وطلاب حقيقيون بدون اشتراكات مدفوعة.')+'</p></div><div class="neis-play-hero-symbol">♟ ✎ ▣</div></section><div class="neis-play-card-grid">'+cards+'</div><section class="neis-play-section"><h3>'+t('Join a friend','انضم إلى صديق')+'</h3><form data-play-form="join" class="neis-play-form-inline"><input name="code" required maxlength="16" placeholder="'+t('Invitation code','رمز الدعوة')+'" autocomplete="off"><button type="submit">'+t('Join room','انضمام')+'</button></form></section><section class="neis-play-section"><h3>'+t('Your active rooms','غرفك النشطة')+'</h3><div class="neis-play-list">'+(S.myRooms.length?S.myRooms.map(r=>'<div class="neis-play-list-item"><span>'+e(label(r.game))+' · '+e(r.status)+'</span>'+button(t('Open','فتح'),'room:'+e(r.id))+'</div>').join(''):'<p class="neis-play-muted">'+t('No active rooms.','لا توجد غرف نشطة.')+'</p>')+'</div></section><p class="neis-play-note">'+t('Casual beta: competitive ratings and automatic anti-cheat results are not enabled.','نسخة تجريبية ودية: التصنيفات التنافسية ونتائج مكافحة الغش لم تُفعّل بعد.')+'</p>';
 }
 function dailyPage(){
  const d=S.daily;
@@ -151,7 +151,7 @@ function setupCanvas(){
  const ctx=canvas.getContext('2d');
  ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#256da8';ctx.lineWidth=3;
  for(const stroke of S.events.filter(x=>x.type==='stroke')){
-  const points=stroke.payload.points;if(!Array.isArray(points)||points.length<2)continue;
+  const points=stroke.payload.points;if(!Array.isArray(points)||points.length<2||!points.every(p=>Array.isArray(p)&&p.length===2&&p.every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1)))continue;
   ctx.beginPath();points.forEach(([x,y],i)=>{if(i===0)ctx.moveTo(x*canvas.width,y*canvas.height);else ctx.lineTo(x*canvas.width,y*canvas.height)});ctx.stroke();
  }
  function point(ev){const rect=canvas.getBoundingClientRect();return [Math.max(0,Math.min(1,(ev.clientX-rect.left)/rect.width)),Math.max(0,Math.min(1,(ev.clientY-rect.top)/rect.height))]}
@@ -183,10 +183,10 @@ async function open(){
  if(S.open)return;S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
  show();await fetchLists();
  const match=new URLSearchParams(location.search).get('play');
- if(match&&/^[A-F0-9]{10}$/.test(match)){try{const id=await request(api().rpc('neis_play_join_room',{p_code:match}));await openRoom(id)}catch(err){error(err)}}
+ if(match&&/^[A-F0-9]{16}$/.test(match)){try{const id=await request(api().rpc('neis_play_join_room',{p_code:match}));await openRoom(id)}catch(err){error(err)}}
 }
 function close(){
- S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';const r=root();if(r)r.remove();history.replaceState(null,'',location.pathname+location.hash);
+ S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';const r=root();if(r)r.remove();const u=new URL(location.href);if(u.searchParams.has('play')){u.searchParams.delete('play');history.replaceState(null,'',u.pathname+u.search+u.hash)}
 }
 async function join(code){const id=await request(api().rpc('neis_play_join_room',{p_code:String(code).trim()}));await openRoom(id)}
 async function create(game){
