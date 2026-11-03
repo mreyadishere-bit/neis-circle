@@ -168,7 +168,10 @@
  border:1px solid var(--line,#d8e4ee)!important;
  background:var(--card,#fff)!important;
  color:var(--ink,#22394c)!important;
- font:700 11px/1.2 inherit!important;
+ font-family:inherit!important;
+ font-size:11px!important;
+ font-weight:700!important;
+ line-height:1.2!important;
  white-space:nowrap!important;
 }
 #view #liveChatForm .neis-connect-chat-trigger:hover,
