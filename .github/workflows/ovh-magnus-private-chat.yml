@@ -1,0 +1,131 @@
+name: NEIS Magnus Private Chat
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103150000_magnus_private_chat.sql'
+      - 'supabase/functions/magnus-chat/index.ts'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/05-social.js'
+      - 'styles/magnus-neis-v1.css'
+      - 'scripts/ops/ovh-deploy-magnus-neis-v1.py'
+      - 'qa/magnus-private-chat.test.mjs'
+      - '.github/workflows/ovh-magnus-private-chat.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103150000_magnus_private_chat.sql'
+      - 'supabase/functions/magnus-chat/index.ts'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/05-social.js'
+      - 'styles/magnus-neis-v1.css'
+      - 'scripts/ops/ovh-deploy-magnus-neis-v1.py'
+      - '.github/workflows/ovh-magnus-private-chat.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-magnus-private-chat-release
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - name: Validate Magnus code and isolation from Circles
+        run: |
+          set -euo pipefail
+          node --check scripts/magnus-neis-v1.js
+          node --check scripts/05-social.js
+          node qa/magnus-private-chat.test.mjs
+          node qa/messages-state.test.mjs
+          node qa/messages-dom.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-magnus-neis-v1.py
+          bun build supabase/functions/magnus-chat/index.ts --target=browser --external '*' --outdir=/tmp/magnus-syntax
+  ovh-dry-run:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Authenticate with pinned OVH host key
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: SQL migration must pass without changing real records
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/magnus-neis-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103150000_magnus_private_chat.sql "$target:$stage/schema.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -c '"'"'
+          import pathlib,subprocess
+          sql=pathlib.Path("/home/ubuntu/neis-backups/magnus-neis-20261103/schema.sql").read_text()
+          lines=[x for x in sql.splitlines() if x.strip().lower() not in ("begin;","commit;") and not x.lower().startswith("notify pgrst")]
+          query="begin;\n"+"\n".join(lines)+"\nrollback;\n"
+          cmd=["sudo","-n","/usr/bin/docker","exec","-i","supabase-db",
+            "psql","-X","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres","-q"]
+          p=subprocess.run(cmd,input=query,text=True,capture_output=True,timeout=60)
+          if p.returncode:
+            errors=[x[:180] for x in p.stderr.splitlines() if "ERROR:" in x][:2]
+            print("MAGNUS_SQL_DRY_RUN_FAILED",errors)
+            raise SystemExit(1)
+          print("MAGNUS_SQL_DRY_RUN=PASS")
+          '"'"''
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: ovh-dry-run
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage Magnus files on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/magnus-neis-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103150000_magnus_private_chat.sql "$target:$stage/schema.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/magnus-chat/index.ts "$target:$stage/index.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/magnus-neis-v1.js "$target:$stage/magnus-neis-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/magnus-neis-v1.css "$target:$stage/magnus-neis-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-magnus-neis-v1.py "$target:$stage/deploy.py"
+      - name: Apply protected release and check authenticated Edge route
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST"             "python3 /home/ubuntu/neis-backups/magnus-neis-20261103/deploy.py"

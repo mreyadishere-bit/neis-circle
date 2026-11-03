@@ -2094,6 +2094,14 @@ messages=function(){
   const activePerson=active?conversationName(active.id):null,msgs=active?state.liveMessages.filter(m=>same(m.conversation_id,active.id)&&!m.deleted_at):[];if(active)setTimeout(()=>loadConversationHistory(active.id),0);
   return `<section class="messages ${active?'mobile-thread-open':''}"><aside class="thread-list"><div class="thread-head"><h2>${t('Messages','الرسائل')}</h2><button class="round-btn" data-new-chat aria-label="${t('New conversation','محادثة جديدة')}">+</button></div><input id="conversationSearch" class="thread-search" placeholder="${t('Search conversations…','ابحث في المحادثات…')}" value="${esc(state.conversationQuery)}"><div class="thread-list-scroll">${threads.length?threads.map(c=>{const p=conversationName(c.id),last=conversationLast(c.id),unread=conversationUnread(c.id);return `<button class="thread ${active&&same(c.id,active.id)?'active':''}" data-open-conversation="${c.id}">${profileAvatar(p)}<div><b>${esc(p?.full_name||'Student')}</b><small>${esc(last?.deleted_at?t('Message deleted','تم حذف الرسالة'):last?.body||t('Start the conversation','ابدأ المحادثة'))}</small></div>${unread?`<i class="count-badge unread">${unread}</i>`:`<time>${last?relative(last.created_at):''}</time>`}</button>`}).join(''):emptyState(t('No conversations yet','لا توجد محادثات بعد'),t('Start a conversation with any student.','ابدأ محادثة مع أي طالب.'))}</div></aside><div class="chat">${active?`<div class="chat-head"><button class="round-btn" data-mobile-threads aria-label="${t('Back to conversations','العودة للمحادثات')}">←</button>${profileAvatar(activePerson)}<button class="author-link" data-open-profile="${activePerson?.id}"><span><b>${esc(activePerson?.full_name||'Student')}</b><small>@${esc(activePerson?.username||'student')}</small></span></button><button class="round-btn chat-delete" data-delete-chat="${active.id}" title="${t('Remove chat','إزالة المحادثة')}" aria-label="${t('Remove chat','إزالة المحادثة')}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5"/></svg></button></div><div class="chat-flow" id="chatFlow">${msgs.length?msgs.map((m,i)=>messageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'))}</div>${dmReplyComposer(active.id)}<form class="chat-form" id="liveChatForm"><button type="button" class="chat-emoji-toggle" data-chat-emoji-toggle="dm" aria-label="${t('Add emoji','إضافة إيموجي')}">☺</button><textarea id="liveChatInput" rows="1" maxlength="4000" required placeholder="${t('Write a message…','اكتب رسالة…')}" autocomplete="off" dir="auto">${esc(getDmDraft(active.id))}</textarea><button type="submit" data-chat-send aria-label="${t('Send','إرسال')}">→</button><div class="chat-emoji-popover hidden" data-chat-emoji-popover="dm">${emojiPickerMarkup('data-chat-emoji-choice')}</div></form>`:`<div class="chat-empty">${emptyState(t('Choose a conversation','اختر محادثة'),t('Select a conversation or start a new one.','اختر محادثة أو ابدأ واحدة جديدة.'))}</div>`}</div></section>`
 };
+// Magnus is a pinned, private AI conversation in Messages only.
+const renderStudentMessages=messages;
+messages=function(){
+  const markup=renderStudentMessages();
+  return window.NEISMagnus?.integrate(markup,{
+    active:state.activeConversationId==='magnus',lang:state.lang
+  })||markup;
+};
 function sharedChatContentCard(m){
   if(m?.shared_article_id){
     const article=state.articles.find(a=>same(a.id,m.shared_article_id));
@@ -3525,6 +3533,7 @@ function openPostImageGallery(postId,startIndex=0){
 }
 
 function bindV6(root=document){
+  window.NEISMagnus?.bind(root,{sb,user:authUser,routeTo,lang:state.lang});
   if(canControlAuthorLikeEmails()&&!window.__neisAdminSettingsLoading&&(authorLikeEmailSetting===null||adminDmEmailSetting===null||adminPostEmailSetting===null)){
     window.__neisAdminSettingsLoading=true;
     Promise.allSettled([

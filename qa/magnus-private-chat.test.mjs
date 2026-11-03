@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const client=readFileSync('scripts/magnus-neis-v1.js','utf8');
+const social=readFileSync('scripts/05-social.js','utf8');
+const edge=readFileSync('supabase/functions/magnus-chat/index.ts','utf8');
+const db=readFileSync('supabase/migrations/20261103150000_magnus_private_chat.sql','utf8');
+const index=readFileSync('index.html','utf8');
+assert.match(social,/window\.NEISMagnus\?\.integrate/);
+assert.match(social,/window\.NEISMagnus\?\.bind/);
+assert.match(social,/state\.activeConversationId==='magnus'/);
+assert.doesNotMatch(client,/circle_messages|circle_members|\.from\('messages'\)/);
+assert.doesNotMatch(edge,/circle_messages|conversation_members|from\("messages"\)/);
+assert.match(edge,/auth\.getUser\(jwt\)/);
+assert.match(edge,/SUPABASE_SERVICE_ROLE_KEY/);
+assert.match(edge,/magnus_claim_turn/);
+assert.match(edge,/magnus_commit_turn/);
+assert.match(edge,/responseMimeType:"application\/json"/);
+assert.match(edge,/model_timeout/);
+assert.match(db,/enable row level security/);
+assert.match(db,/user_id=auth\.uid\(\)/);
+assert.match(db,/grant execute on function public\.magnus_commit_turn\(uuid,uuid,text,text,text\) to service_role/);
+assert.match(db,/revoke all on function public\.magnus_commit_turn\(uuid,uuid,text,text,text\) from public,anon,authenticated/);
+assert.match(db,/unique\(user_id, request_id, role\)/);
+assert.match(db,/magnus_clear_my_chat/);
+assert.match(index,/scripts\/magnus-neis-v1\.js/);
+assert.match(index,/styles\/magnus-neis-v1\.css/);
+
+const context=vm.createContext({window:{},console});
+vm.runInContext(client,context);
+const shell='<section class="messages mobile-thread-open"><aside class="thread-list"><div class="thread-list-scroll">'+
+  '<button class="thread active" data-open-conversation="abc">Friend</button></div></aside>'+
+  '<div class="chat"><div class="chat-empty">Pick one</div></div></section>';
+const normal=context.window.NEISMagnus.integrate(shell,{active:false,lang:'en'});
+assert.match(normal,/data-magnus-open/);
+assert.match(normal,/data-open-conversation="abc"/);
+assert.match(normal,/Pick one/);
+const magnus=context.window.NEISMagnus.integrate(shell,{active:true,lang:'en'});
+assert.match(magnus,/id="magnusForm"/);
+assert.match(magnus,/id="magnusFlow"/);
+assert.doesNotMatch(magnus,/Pick one/);
+assert.match(magnus,/data-open-conversation="abc"/);
+assert.match(magnus,/magnus-thread active/);
+console.log('MAGNUS_MESSAGES_INTEGRATION=PASS');

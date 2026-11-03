@@ -1,0 +1,59 @@
+/* Magnus in native Messages. Reuses the existing chat shell and layout. */
+.magnus-thread{display:flex;align-items:center;gap:10px}
+.magnus-thread>div{min-width:0;flex:1}
+.magnus-thread b,.magnus-thread small{display:block}
+.magnus-thread small{color:var(--muted,#66768a);font-size:11px}
+.magnus-avatar{width:39px;height:39px;display:inline-grid;place-items:center;flex-shrink:0;
+  border-radius:14px;background:linear-gradient(140deg,#1f568b,#3a8cce);color:white;font-size:23px;
+  box-shadow:0 5px 14px #1c5c921b}
+.magnus-ai-tag{font-size:10px;letter-spacing:.07em;font-weight:800;
+  color:#2875ac;background:#e7f4ff;border-radius:8px;padding:4px 6px}
+.magnus-thread.active{background:var(--soft,#ebf4fc)}
+.magnus-chat{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.magnus-head{gap:11px;align-items:center;flex-shrink:0}
+.magnus-head .magnus-avatar{width:36px;height:36px;border-radius:12px}
+.magnus-identity{display:grid;gap:3px;min-width:0;flex:1}
+.magnus-identity b{font-size:15px;color:var(--ink,#1b2939)}
+.magnus-identity small{font-size:11px;color:var(--muted,#65758a)}
+.magnus-clear{cursor:pointer;border:1px solid var(--line,#d7e4ef);background:transparent;
+  color:var(--muted,#65758a);border-radius:9px;padding:7px 10px;font-size:11px}
+.magnus-clear:hover{background:var(--soft,#f2f6fa)}
+.magnus-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;
+  padding:20px clamp(14px,4%,32px) 16px;display:flex;flex-direction:column;gap:15px}
+.magnus-intro{display:grid;justify-items:center;text-align:center;max-width:440px;align-self:center;
+  margin:20px auto 26px;gap:7px}
+.magnus-intro-mark{display:grid;place-items:center;border-radius:18px;width:60px;height:60px;
+  font-size:32px;color:#2c76af;background:#eaf3fc}
+.magnus-intro strong{font-size:21px;color:var(--ink,#1b2939)}
+.magnus-intro p{font-size:13px;line-height:1.6;color:var(--muted,#607185);margin:0}
+.magnus-line{display:flex;width:100%;min-width:0}
+.magnus-line.mine{justify-content:flex-end}
+.magnus-line.bot{justify-content:flex-start}
+.magnus-bubble{display:grid;gap:7px;min-width:0;max-width:min(82%,600px);padding:12px 15px;
+  border-radius:17px;background:var(--soft,#f0f5fa);color:var(--ink,#223348);line-height:1.6;
+  position:relative;font-size:13px}
+.magnus-line.mine .magnus-bubble{background:#2c73ab;color:white;border-bottom-right-radius:5px}
+.magnus-line.bot .magnus-bubble{border-bottom-left-radius:5px}
+.magnus-bubble time{font-size:10px;opacity:.6;justify-self:end}
+.magnus-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.magnus-reaction{font-size:17px;position:absolute;bottom:-13px;left:8px;background:var(--card,#fff);
+  border:1px solid var(--line,#d6e2ef);border-radius:15px;line-height:1;padding:4px 6px}
+.magnus-loading,.magnus-typing{align-self:flex-start;font-size:12px;
+  color:var(--muted,#617289);background:var(--soft,#f2f6fb);border-radius:15px;padding:12px 16px}
+.magnus-typing span{letter-spacing:.3em;font-size:8px;animation:magnus-pulse 1.2s infinite alternate}
+.magnus-error{align-self:stretch;color:#a52f2f;background:#fff1ef;border:1px solid #ffd4cf;
+  border-radius:11px;padding:10px 13px;font-size:12px;line-height:1.5}
+.magnus-form{flex-shrink:0;display:flex;align-items:flex-end;gap:9px}
+.magnus-form textarea{min-height:43px;max-height:130px;resize:vertical;flex:1;line-height:1.45}
+.magnus-form button:disabled{opacity:.5;cursor:not-allowed}
+.magnus-note{padding:0 14px 10px;font-size:10px;color:var(--muted,#68778b);
+  text-align:center;flex-shrink:0}
+@keyframes magnus-pulse{to{opacity:.25}}
+@media(max-width:760px){
+ .magnus-scroll{padding:17px 14px}
+ .magnus-bubble{max-width:89%}
+ .magnus-head .round-btn{display:grid}
+ .magnus-clear{font-size:10px}
+ .magnus-intro{margin:16px auto 20px}
+}
+@media(prefers-reduced-motion:reduce){.magnus-typing span{animation:none}}
