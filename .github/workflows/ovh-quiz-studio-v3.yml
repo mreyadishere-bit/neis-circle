@@ -39,6 +39,7 @@ jobs:
           node qa/neis-play-v1.test.mjs
           node qa/neis-play-v2.test.mjs
           node qa/neis-play-room-links.test.mjs
+          node qa/neis-quiz-ai-fallback.test.mjs
   browser:
     needs: static
     runs-on: ubuntu-24.04
