@@ -111,8 +111,7 @@
 @media(max-width:800px){
  .neis-games-overlay .neis-connect-dialog{inset:10px;border-radius:19px}
  .neis-games-overlay .neis-connect-layout{grid-template-columns:1fr;gap:20px;overflow-y:auto;padding:17px}
- .neis-games-overlay .neis-connect-selected{position:static;order:-1}
- .neis-games-overlay .neis-connect-list{order:1}
+ .neis-games-overlay .neis-connect-selected{position:static}
  .neis-games-overlay .neis-connect-header{padding:17px 19px 15px}
  .neis-games-overlay .neis-connect-header h2{font-size:26px}
  .neis-games-overlay .neis-connect-footer{padding:10px 17px}
@@ -138,6 +137,7 @@
  .neis-games-overlay .neis-connect-selected-content{padding:16px;gap:12px}
  .neis-games-overlay .neis-connect-cover.is-large{height:115px}
  .neis-games-overlay .neis-connect-selected-heading h3{font-size:21px}
+ .neis-games-overlay .neis-connect-recipients{grid-template-columns:1fr}
  .neis-games-overlay .neis-connect-recipient-items{max-height:142px}
  .neis-games-overlay .neis-connect-footer{display:none}
  .neis-games-overlay .neis-connect-notice{margin:10px 14px 0}
