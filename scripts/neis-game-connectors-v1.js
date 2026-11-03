@@ -276,7 +276,7 @@ async function action(value){
 function enhanceChatMessageText(el){
  if(!el||el.dataset.neisGameEnhanced||!el.closest('#chatFlow,#circleChatFlow'))return;
  const raw=String(el.textContent||'').trim();
- const m=/^🎮\s*(?:Join me for|Let's play|هيا نلعب|يلا نلعب)\s+([^\r\n]+)\s*\r?\n\s*(https:\/\/[^\s]+)/i.exec(raw);
+ const m=/^🎮\s*(?:Join me for|Let['’]s play|هيا نلعب|يلا نلعب)\s+([^\r\n]+)\s*\r?\n\s*(https:\/\/[^\s]+)/i.exec(raw);
  if(!m)return;
  const svc=SERVICES.find(s=>s.name.toLowerCase()===m[1].trim().toLowerCase());
  if(!svc)return;
@@ -386,5 +386,5 @@ function initialize(){
  }
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
-window.NEISPlayConnectors={open,close,validateInvite:verify,providers:SERVICES.map(s=>({id:s.id,name:s.name,start:s.start})),version:'2.0'};
+window.NEISPlayConnectors={open,close,validateInvite:verify,providers:SERVICES.map(s=>({id:s.id,name:s.name,start:s.start})),version:'2.2'};
 })();
