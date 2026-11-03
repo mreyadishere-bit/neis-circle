@@ -1,0 +1,66 @@
+name: OVH Meeting Screen Share Stability
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/05-social.js'
+      - 'qa/livekit-screen-stability.test.mjs'
+      - 'scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py'
+      - '.github/workflows/ovh-meeting-screen-stability.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/05-social.js'
+      - 'scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py'
+      - '.github/workflows/ovh-meeting-screen-stability.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-meeting-screen-share-stability
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate screen sharing and deployment
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node qa/livekit-screen-stability.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    environment: ovh-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Activate LiveKit display fix and verify Caddy
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/meeting-screen-stability-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
