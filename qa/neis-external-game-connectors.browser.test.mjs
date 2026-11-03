@@ -79,6 +79,10 @@ try {
    const hero=document.createElement('section');hero.className='hero';
    hero.innerHTML='<div class="hero-main"><div style="display:flex;gap:8px"><button class="primary" data-nav="circles">Explore Circles</button><button class="secondary" data-nav="connections">Your connections</button></div></div>';
    view.prepend(hero);
+   const admin=document.createElement('section');
+   admin.className='admin-banner';
+   admin.innerHTML='<h1>Your private control room.</h1>';
+   view.append(admin);
   });
   const appy=page.locator('#view .hero-main .neis-home-appy-link');
   await appy.waitFor();
@@ -93,6 +97,42 @@ try {
      .every(property=>a[property]===b[property]);
   });
   assert.equal(matchingStyles,true,'APPY matches primary button visual properties');
+  assert.equal(await appy.evaluate(el=>getComputedStyle(el).fontSize),width<=520?'12px':'13px',
+    'primary Home action labels are smaller, mobile-safe and equal');
+  const themes=await page.evaluate(()=>{
+   const root=document.documentElement;
+   const home=document.querySelector('#view .hero-main');
+   const admin=document.querySelector('#view .admin-banner');
+   const previous={theme:root.dataset.theme,accent:root.style.getPropertyValue('--accent')};
+   const checks=[];
+   for(const mode of ['light','dark']){
+    root.dataset.theme=mode;
+    for(const [name,hex] of [['blue','#2676b5'],['green','#00846a'],['coral','#e39982']]){
+     root.style.setProperty('--accent',hex);
+     const homeStyle=getComputedStyle(home);
+     const adminStyle=getComputedStyle(admin);
+     checks.push({
+      mode,name,
+      sameGradient:homeStyle.backgroundImage===adminStyle.backgroundImage,
+      sameText:homeStyle.color===adminStyle.color,
+      gradient:homeStyle.backgroundImage,
+      shapesHidden:getComputedStyle(home,'::before').display==='none'&&
+        getComputedStyle(home,'::after').display==='none'
+     });
+    }
+   }
+   if(previous.theme===undefined)delete root.dataset.theme;else root.dataset.theme=previous.theme;
+   if(previous.accent)root.style.setProperty('--accent',previous.accent);
+   else root.style.removeProperty('--accent');
+   return checks;
+  });
+  assert.equal(themes.length,6,'both modes and three accent themes checked');
+  assert.ok(themes.every(x=>x.sameGradient&&x.sameText),'Home and Admin always share identical computed gradient and text color');
+  assert.ok(themes.every(x=>x.shapesHidden),'old Home geometry no longer covers shared gradient');
+  assert.ok(themes.every(x=>x.gradient.includes('gradient')),'Home always uses gradient');
+  assert.equal(new Set(themes.filter(x=>x.mode==='light').map(x=>x.gradient)).size,3,
+    'gradient follows actual chosen accent rather than fixed blue/green');
+
   // Verify dark mode specifically, since its old light-tinted hero could
   // create poor contrast, and its accent-contrast may change with the theme.
   await page.evaluate(()=>document.documentElement.dataset.theme='dark');
