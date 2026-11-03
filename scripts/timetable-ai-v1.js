@@ -98,6 +98,24 @@ function message(body,role){
   const p=el("div","ttai-bubble ttai-"+role,body);
   return p;
 }
+function syncMobileViewport(){
+  const panel=stateAI.panel;
+  if(!panel||!stateAI.open)return;
+  const mobile=window.matchMedia("(max-width:760px)").matches;
+  if(!mobile){
+    panel.style.removeProperty("--ttai-visible-height");
+    panel.style.removeProperty("--ttai-visible-top");
+    return;
+  }
+  const viewport=window.visualViewport;
+  const height=viewport?viewport.height:window.innerHeight;
+  const top=viewport?viewport.offsetTop:0;
+  panel.style.setProperty("--ttai-visible-height",Math.max(250,Math.round(height))+"px");
+  panel.style.setProperty("--ttai-visible-top",Math.max(0,Math.round(top))+"px");
+}
+function setMobileOpenState(open){
+  document.body.classList.toggle("ttai-mobile-open",!!open&&window.matchMedia("(max-width:760px)").matches);
+}
 function dayName(n){
   const ds=lang()==="ar"?["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"]:
     ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -121,8 +139,16 @@ function ensurePanel(){
 }
 function draw(){
   const panel=ensurePanel();
-  if(!stateAI.open){panel.hidden=true;return}
+  if(!stateAI.open){
+    panel.hidden=true;
+    setMobileOpenState(false);
+    panel.style.removeProperty("--ttai-visible-height");
+    panel.style.removeProperty("--ttai-visible-top");
+    return;
+  }
   panel.hidden=false;
+  setMobileOpenState(true);
+  syncMobileViewport();
   panel.dir=lang()==="ar"?"rtl":"ltr";
   panel.setAttribute("aria-label",t("title"));
   panel.replaceChildren();
@@ -229,6 +255,8 @@ function draw(){
   };
   footer.append(compose);
   panel.append(footer);
+  // Keep the message pane independently scrollable. A visualViewport resize
+  // must resize this pane, never drag the entire page or hide the AI messages.
   chat.scrollTop=chat.scrollHeight;
 }
 function setFile(file){
@@ -369,7 +397,7 @@ function openPanel(){
   begin();
   stateAI.open=true;draw();
   const field=stateAI.panel?.querySelector("textarea");
-  if(field)field.focus();
+  if(field && !window.matchMedia("(max-width:760px)").matches)field.focus({preventScroll:true});
 }
 function mount(){
   if(!isTimetable()){
@@ -395,6 +423,13 @@ document.addEventListener("keydown",e=>{
 function start(){
   const root=document.querySelector("#view")||document.body;
   new MutationObserver(scheduleMount).observe(root,{childList:true});
+  // The software keyboard changes visualViewport rather than the layout
+  // viewport on Android. Keep the modal inside the visible region.
+  if(window.visualViewport){
+    window.visualViewport.addEventListener("resize",syncMobileViewport,{passive:true});
+    window.visualViewport.addEventListener("scroll",syncMobileViewport,{passive:true});
+  }
+  window.addEventListener("resize",syncMobileViewport,{passive:true});
   scheduleMount();
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});
