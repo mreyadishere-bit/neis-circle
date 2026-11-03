@@ -58,30 +58,8 @@ begin
   elsif p_type='guess' then
    if r.game<>'sketch' or char_length(coalesce(p_payload->>'text',''))>80 then raise exception 'invalid_guess';end if;
   elsif p_type='answer' and r.game='quiz' then
-   if coalesce(p_payload->>'card_id','') !~ '^[a-f0-9-]{36}   if r.game<>'flashcards' or length(coalesce(p_payload->>'text',''))>300 or
-    not exists(select 1 from public.neis_play_cards where id::text=coalesce(p_payload->>'card_id','') and deck_id::text=coalesce(r.settings->>'deck_id','')) then raise exception 'invalid_answer';end if;
-  elsif p_type<>'chat' or length(coalesce(p_payload->>'text',''))>500 then
-   raise exception 'invalid_chat';end if;
- end if;
- insert into public.neis_play_events(room_id,user_id,type,payload)
- values(p_room,auth.uid(),p_type,p_payload) returning id into ev_id;
- return ev_id;
-end;
-$$;
-
-
-    or coalesce(p_payload->>'choice','') !~ '^[0-3]   if r.game<>'flashcards' or length(coalesce(p_payload->>'text',''))>300 or
-    not exists(select 1 from public.neis_play_cards where id::text=coalesce(p_payload->>'card_id','') and deck_id::text=coalesce(r.settings->>'deck_id','')) then raise exception 'invalid_answer';end if;
-  elsif p_type<>'chat' or length(coalesce(p_payload->>'text',''))>500 then
-   raise exception 'invalid_chat';end if;
- end if;
- insert into public.neis_play_events(room_id,user_id,type,payload)
- values(p_room,auth.uid(),p_type,p_payload) returning id into ev_id;
- return ev_id;
-end;
-$$;
-
-
+   if coalesce(p_payload->>'card_id','') !~ '^[a-f0-9-]{36}$'
+    or coalesce(p_payload->>'choice','') !~ '^[0-3]$'
     or not exists(select 1 from public.neis_quiz_questions q
        where q.id::text=p_payload->>'card_id' and q.quiz_id::text=r.settings->>'quiz_id')
    then raise exception 'invalid_quiz_answer';end if;
@@ -96,7 +74,6 @@ $$;
  return ev_id;
 end;
 $$;
-
 
 create or replace function public.neis_quiz_room_scores(p_room uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
