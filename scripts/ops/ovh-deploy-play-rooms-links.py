@@ -64,7 +64,7 @@ def main():
  shutil.copytree(old,tmp)
  original_social=(old/SOCIAL).read_text()
  editorial='<p class="kicker"><i></i>'+chr(36)+"{t('Editorial','المقالات')}"+'</p>'
- need(editorial in original_social or editorial not in social_source,'EDITORIAL_MARKER_CHANGED')
+ check(editorial in original_social or editorial not in social_source,'EDITORIAL_MARKER_CHANGED')
  original_social=original_social.replace(editorial,'')
  marker='function messageBubble(m,previous){'
  helper=social_source[social_source.index('function safeChatLinks(value){'):social_source.index(marker)]
@@ -125,5 +125,5 @@ def main():
 if __name__=='__main__':
  try:main()
  except Exception as error:
-  print('PLAY_ROOMS_LINKS=FAILED_'+str(error)[:80],file=sys.stderr)
+  print('PLAY_ROOMS_LINKS=FAILED_'+str(error)[:300],file=sys.stderr)
   sys.exit(1)
