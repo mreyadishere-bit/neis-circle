@@ -1231,27 +1231,65 @@ window.NEISRealtimeRuntime={
 };
 
 const coreLoad=loadLiveData;
+let circlesFastPromise=null,circlesFastLoadedAt=0;
+async function loadCirclesFast(force=false){
+ if(!sb||!authUser)return;
+ if(circlesFastPromise)return circlesFastPromise;
+ if(!force&&circlesFastLoadedAt&&Date.now()-circlesFastLoadedAt<12000)return;
+ const userId=authUser.id;
+ state.circlesLoading=true;
+ circlesFastPromise=(async()=>{
+  try{
+   const {data,error}=await sb.from('circles')
+    .select('id,owner_id,name,description,category,privacy,created_at')
+    .order('created_at',{ascending:false});
+   if(!same(authUser?.id,userId))return;
+   if(error){
+    state.dataErrors.circles=error;
+    console.warn('[NEIS circles]',error);
+   }else{
+    state.circleRows=data||[];
+    state.dataErrors.circles=null;
+    circlesFastLoadedAt=Date.now();
+   }
+  }catch(error){
+   if(same(authUser?.id,userId))state.dataErrors.circles=error;
+  }finally{
+   if(same(authUser?.id,userId)){
+    state.circlesLoading=false;
+    if(state.view==='circles'&&!document.getElementById('neisPlayRoot'))render();
+   }
+  }
+ })();
+ try{await circlesFastPromise}finally{circlesFastPromise=null}
+}
+document.addEventListener('click',event=>{
+ const target=event.target.closest?.('[data-circle-retry]');
+ if(!target)return;
+ event.preventDefault();
+ void loadCirclesFast(true);
+},true);
 loadLiveData=async function(){
   if(!sb||!authUser)return;
   const uid=authUser.id;
   // Notifications are latency-sensitive: start cache hydration, realtime, and
   // the fresh sync before the heavier social/bootstrap data finishes loading.
+  const circlesEarly=loadCirclesFast();
   const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{
     console.warn('[NEIS notifications startup]',error);
   });
   await coreLoad();
   if(realtimeChannel){await sb.removeChannel(realtimeChannel);realtimeChannel=null}
   const directChatPromise=chatBootstrapData.loadDirect({sb,userId:uid,state,profileData});
-  const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
+  const [followRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([
     sb.from('follows').select('follower_id,following_id,status,created_at').or(`follower_id.eq.${uid},following_id.eq.${uid}`).order('created_at',{ascending:false}),
-    sb.from('circles').select('id,owner_id,name,description,category,privacy,created_at').order('created_at',{ascending:false}),
     sb.from('circle_members').select('circle_id,user_id,role,status,joined_at').order('joined_at'),
     sb.from('circle_meetings').select('id,circle_id,creator_id,title,description,starts_at,duration_minutes,room_name,cancelled_at,ended_at,created_at').order('starts_at'),
     sb.from('comments').select('id,post_id,parent_id,author_id,body,created_at,updated_at,deleted_at').is('deleted_at',null).order('created_at')
   ]);
   if(!followRes.error)state.follows=followRes.data||[];else state.dataErrors.connections=followRes.error;
+  await circlesEarly;
   await directChatPromise;
-  if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;
   if(!circleMemberRes.error)state.circleMembers=(circleMemberRes.data||[]).map(member=>({...member,profile:profileData(member.user_id)}));
   if(!meetingRes.error){state.circleMeetings=(meetingRes.data||[]).map(meeting=>({...meeting,creator:profileData(meeting.creator_id)}));state.dataErrors.meetings=null}else{state.dataErrors.meetings=meetingRes.error;console.error('[NEIS meetings load]',meetingRes.error)}
   if(!commentRes.error){state.allComments=(commentRes.data||[]).map(comment=>({...comment,profile:profileData(comment.author_id)}));const commentCounts=new Map();for(const comment of state.allComments){const key=String(comment.post_id||'');if(key)commentCounts.set(key,(commentCounts.get(key)||0)+1)}state.posts.forEach(p=>{p.comments=commentCounts.get(String(p.id))||0})}
@@ -2173,7 +2211,7 @@ circles=function(){
   let items=[...state.circleRows],q=normalize(state.query);if(q)items=items.filter(c=>match(q,c.name,c.description,c.category));
   if(state.circleFilter==='joined')items=items.filter(c=>membership(c.id)?.status==='active');
   if(state.circleFilter==='created')items=items.filter(c=>same(c.owner_id,authUser.id));
-  return `${pageTitle(t('Circles','المجتمعات'),t('Real student communities with posts, chat, meetings and shared purpose.','مجتمعات طلابية حقيقية بها منشورات ودردشة واجتماعات وهدف مشترك.'),`<button class="primary circle-create-button" data-new-circle aria-label="${t('New circle','مجتمع جديد')}">${t('+ New circle','+ مجتمع جديد')}</button>`)}<div class="tabs"><button class="${state.circleFilter==='all'?'active':''}" data-circle-filter="all">${t('Explore','استكشف')}</button><button class="${state.circleFilter==='joined'?'active':''}" data-circle-filter="joined">${t('Joined','منضم إليها')}</button><button class="${state.circleFilter==='created'?'active':''}" data-circle-filter="created">${t('Created','أنشأتها')}</button></div><div class="grid-3 circle-discovery-grid" style="margin-top:18px">${items.length?items.map(circleCard).join(''):emptyState(t('No circles here yet','لا توجد مجتمعات هنا بعد'),state.circleFilter==='all'?t('Create the first Circle and it will open immediately.','أنشئ أول مجتمع وسيفتح فورًا.'):t('Change the filter or create a Circle.','غيّر الفلتر أو أنشئ مجتمعًا.'))}</div>`
+  return `${pageTitle(t('Circles','المجتمعات'),t('Real student communities with posts, chat, meetings and shared purpose.','مجتمعات طلابية حقيقية بها منشورات ودردشة واجتماعات وهدف مشترك.'),`<button class="primary circle-create-button" data-new-circle aria-label="${t('New circle','مجتمع جديد')}">${t('+ New circle','+ مجتمع جديد')}</button>`)}<div class="tabs"><button class="${state.circleFilter==='all'?'active':''}" data-circle-filter="all">${t('Explore','استكشف')}</button><button class="${state.circleFilter==='joined'?'active':''}" data-circle-filter="joined">${t('Joined','منضم إليها')}</button><button class="${state.circleFilter==='created'?'active':''}" data-circle-filter="created">${t('Created','أنشأتها')}</button></div><div class="grid-3 circle-discovery-grid" style="margin-top:18px">${items.length?items.map(circleCard).join(''):state.circlesLoading?emptyState(t('Loading Circles…','جارٍ تحميل المجتمعات…'),t('Fetching current communities.','جارٍ تحميل المجتمعات الحالية.')):state.dataErrors?.circles?`<div class="empty neis-circles-retry"><b>${t('Could not load Circles','تعذّر تحميل المجتمعات')}</b><span>${t('Check your connection and try again.','تحقق من الاتصال وحاول مرة أخرى.')}</span><button type="button" class="primary" data-circle-retry>${t('Retry','إعادة المحاولة')}</button></div>`:emptyState(t('No circles here yet','لا توجد مجتمعات هنا بعد'),state.circleFilter==='all'?t('Create the first Circle and it will open immediately.','أنشئ أول مجتمع وسيفتح فورًا.'):t('Change the filter or create a Circle.','غيّر الفلتر أو أنشئ مجتمعًا.'))}</div>`
 };
 function circleCard(c){
   const members=state.circleMembers.filter(m=>same(m.circle_id,c.id)&&m.status==='active').length,mine=membership(c.id);
