@@ -72,7 +72,7 @@ def main():
  run(['node','--check',str(target)],timeout=20)
  html=(tmp/'index.html').read_text()
  ensure('scripts/05-social.js' in html,'INDEX_SOCIAL_SCRIPT_MISSING')
- html,count=re.subn(r'(scripts/05-social[.]js)(?:[?][^"\\s]*)?',
+ html,count=re.subn(r'(scripts/05-social[.]js)(?:[?][^"\s]*)?',
   lambda m:m.group(1)+'?v=circle-actions-'+REV,html,count=1)
  ensure(count==1,'INDEX_SCRIPT_VERSION_FAILURE')
  (tmp/'index.html').write_text(html)
