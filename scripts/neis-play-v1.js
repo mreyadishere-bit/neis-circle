@@ -29,6 +29,35 @@ function nav(){
   const more=mobile.querySelector('[data-mobile-more]');if(more)mobile.insertBefore(small,more);else mobile.appendChild(small);
  }
 }
+function attachActivityEntries(){
+ const view=document.getElementById('view');if(!view)return;
+ if(typeof state!=='undefined'&&state.view==='home'){
+  const column=view.querySelector('.dashboard .main-column');
+  if(column&&!column.querySelector('[data-neis-play-home]')){
+   const card=document.createElement('section');
+   card.className='neis-play-home-shortcut';card.dataset.neisPlayHome='1';
+   card.innerHTML='<div><small>'+t('DAILY CHALLENGE','تحدي اليوم')+'</small><strong>'+t('A new question. A new challenge.','سؤال جديد وتحدٍ جديد.')+'</strong><p>'+t('Answer today’s question, or challenge a friend to a game.','أجب عن سؤال اليوم أو تحدَّ صديقًا في لعبة.')+'</p></div><button type="button" data-neis-play-open>'+t('Open Play','افتح الألعاب')+'</button>';
+   column.prepend(card);
+  }
+ }
+ for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
+  if(form.querySelector('[data-neis-play-open]'))continue;
+  const trigger=document.createElement('button');
+  trigger.type='button';trigger.className='neis-play-chat-trigger';
+  trigger.dataset.neisPlayOpen='1';
+  trigger.setAttribute('aria-label',t('Invite friends to play','ادعُ الأصدقاء للعب'));
+  trigger.title=t('Start a game','ابدأ لعبة');
+  trigger.textContent='♟';
+  const textarea=form.querySelector('textarea');
+  if(textarea)form.insertBefore(trigger,textarea);else form.appendChild(trigger);
+ }
+}
+function observeApp(){
+ const view=document.getElementById('view');if(!view)return;
+ attachActivityEntries();
+ const observer=new MutationObserver(attachActivityEntries);
+ observer.observe(view,{childList:true,subtree:false});
+}
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';document.body.appendChild(r)}
  r.innerHTML='<div class="neis-play-shell"><header class="neis-play-header"><div><small>NEIS CIRCLE</small><h2>NEIS Play</h2></div><div>'+button(t('Close','إغلاق'),'close','class="neis-play-quiet"')+'</div></header><main class="neis-play-content" id="neisPlayContent"></main></div>';
  render();
@@ -302,6 +331,6 @@ document.addEventListener('submit',event=>{
 },true);
 async function formHandler(f){await form(f)}
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&S.open&&!S.busy)close()});
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',nav,{once:true});else nav();
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{nav();observeApp()},{once:true});else{nav();observeApp()}
 window.NEISPlay={open,close,get active(){return S.open}};
 })();
