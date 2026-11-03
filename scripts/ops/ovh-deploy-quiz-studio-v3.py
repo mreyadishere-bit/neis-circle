@@ -49,12 +49,13 @@ def route(name):
   with urllib.request.urlopen(request,timeout=22):raise RuntimeError('UNAUTHENTICATED_REQUEST_ACCEPTED_'+name)
  except urllib.error.HTTPError as error:check(error.code in (401,403),'ROUTE_AUTH_BROKEN_'+name)
 def provider_smoke():
- # Send one minimal validation request from OVH; never print API credentials.
+ # Validate the same strict JSON schema used by the production quiz function.
  key=run(DOCKER+['exec','supabase-edge-functions','sh','-c','printf %s "$GEMINI_API_KEY"'],timeout=20).strip()
  check(bool(key),'GEMINI_KEY_NOT_PRESENT')
+ schema={"type":"OBJECT","properties":{"questions":{"type":"ARRAY","items":{"type":"OBJECT","properties":{"prompt":{"type":"STRING"},"options":{"type":"ARRAY","items":{"type":"STRING"}},"correct_index":{"type":"INTEGER"},"explanation":{"type":"STRING"}},"required":["prompt","options","correct_index","explanation"]}}},"required":["questions"]}
  body=json.dumps({
-  'contents':[{'parts':[{'text':'Return a JSON object with exactly one multiple-choice question about 2 + 2. Fields: questions, prompt, options (four strings), correct_index, explanation.'}]}],
-  'generationConfig':{'responseMimeType':'application/json','temperature':0.1,'maxOutputTokens':650}
+  'contents':[{'parts':[{'text':'Return ONLY this exact object, unchanged: {"questions":[{"prompt":"What is 2 + 2?","options":["3","4","5","6"],"correct_index":1,"explanation":"2 + 2 = 4."}]}' }]}],
+  'generationConfig':{'responseMimeType':'application/json','responseSchema':schema,'temperature':0.1,'maxOutputTokens':2048}
  }).encode()
  request=urllib.request.Request(
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',
@@ -62,14 +63,16 @@ def provider_smoke():
   headers={'x-goog-api-key':key,'content-type':'application/json'}
  )
  try:
-  with urllib.request.urlopen(request,timeout=45) as response:
+  with urllib.request.urlopen(request,timeout=50) as response:
    upstream=json.load(response)
  except urllib.error.HTTPError as error:
   raise RuntimeError('GEMINI_UPSTREAM_HTTP_'+str(error.code)) from None
- raw=''.join(x.get('text','') for x in (upstream.get('candidates') or [{}])[0].get('content',{}).get('parts',[]))
+ candidate=(upstream.get('candidates') or [{}])[0]
+ raw=''.join(x.get('text','') for x in candidate.get('content',{}).get('parts',[]))
  try:decoded=json.loads(raw)
- except Exception:raise RuntimeError('GEMINI_UPSTREAM_INVALID_JSON') from None
- check(isinstance(decoded.get('questions'),list) and len(decoded['questions'])>=1,'GEMINI_PROVIDER_NO_QUESTIONS')
+ except Exception:raise RuntimeError('GEMINI_UPSTREAM_INVALID_JSON_'+str(candidate.get('finishReason','unknown'))) from None
+ check(isinstance(decoded.get('questions'),list) and bool(decoded['questions']),'GEMINI_PROVIDER_NO_QUESTIONS_'+str(candidate.get('finishReason','unknown')))
+ check(all(isinstance(q.get('options'),list) and len(q['options'])==4 and isinstance(q.get('correct_index'),int) for q in decoded['questions']),'GEMINI_PROVIDER_INVALID_QUESTION')
  print('QUIZ_GEMINI_PROVIDER_SMOKE=PASS')
 def main():
  check(bool(re.fullmatch('[a-f0-9]{12}',SHA)),'BAD_REVISION')
