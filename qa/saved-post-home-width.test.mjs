@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const core=readFileSync('scripts/01-core.js','utf8');
+const css=readFileSync('styles/app.css','utf8');
+const saved=core.slice(core.indexOf('function library()'),core.indexOf('function messages()'));
+const home=core.slice(core.indexOf('function home()'),core.indexOf('function pageTitle('));
+assert.ok(saved.includes('feed saved-home-width-feed'));
+assert.ok(saved.includes('p.map(postCard)'), 'saved cards must reuse standard post markup');
+assert.ok(home.includes('class="dashboard"'), 'home uses main/sidebar dashboard');
+assert.match(css,/#view \.saved-home-width-feed/);
+assert.match(css,/width:calc\(100% - 352px\)/);
+assert.match(css,/@media \(max-width:1100px\)/);
+console.log('SAVED_FEED_HOME_SIZE=PASS');

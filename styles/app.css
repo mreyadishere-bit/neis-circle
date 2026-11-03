@@ -4422,3 +4422,20 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
   .circle-discovery-card>p{min-height:0;-webkit-line-clamp:3}
   .circle-discovery-card>.module-meta{padding-top:18px}
 }
+
+
+/* Saved posts follow the same main-column width as the Home dashboard. */
+@media (min-width:1101px){
+  #view .saved-home-width-feed{
+    width:calc(100% - 352px); /* 330px Home sidebar + 22px column gap */
+    max-width:100%;
+    min-width:0;
+  }
+}
+@media (max-width:1100px){
+  #view .saved-home-width-feed{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+  }
+}
