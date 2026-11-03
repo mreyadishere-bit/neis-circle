@@ -35,7 +35,12 @@
     document.body.classList.add('mobile-nav-open');
     var trigger=document.querySelector('[data-mobile-more]');
     if(trigger)trigger.setAttribute('aria-expanded','true');
-    root.querySelector('.mobile-nav-close').focus();
+    // Start at the first navigation item on every opening, even after a previous scroll.
+    // Prevent focus restoration/visualViewport adjustments from scrolling the list.
+    var list=root.querySelector('.mobile-nav-list');
+    if(list)list.scrollTop=0;
+    root.querySelector('.mobile-nav-close')?.focus({preventScroll:true});
+    if(list)requestAnimationFrame(function(){if(list.isConnected)list.scrollTop=0});
   }
   document.addEventListener('click',function(event){
     if(event.target.closest('[data-mobile-more]')){event.preventDefault();open();return}
