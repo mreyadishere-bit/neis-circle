@@ -1,0 +1,113 @@
+name: OVH Circle Message Delete and Reaction Fix
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103180000_circle_message_action_permissions.sql'
+      - 'scripts/05-social.js'
+      - 'qa/circle-message-actions-regression.test.mjs'
+      - 'scripts/ops/ovh-deploy-circle-message-actions-20261103.py'
+      - '.github/workflows/ovh-circle-message-action-fix.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103180000_circle_message_action_permissions.sql'
+      - 'scripts/05-social.js'
+      - 'scripts/ops/ovh-deploy-circle-message-actions-20261103.py'
+      - '.github/workflows/ovh-circle-message-action-fix.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-circle-message-action-fix
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate both deletion paths, editor, and reaction removal
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node qa/circle-message-actions-regression.test.mjs
+          node qa/messages-dom.test.mjs
+          node qa/messages-state.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-circle-message-actions-20261103.py
+  dry-run:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Confirm actual deployed database schema supports the repair
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/circle-message-actions-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103180000_circle_message_action_permissions.sql "$target:$stage/schema.sql"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" 'python3 -c '"'"'
+          import pathlib,subprocess
+          sql=pathlib.Path("/home/ubuntu/neis-backups/circle-message-actions-20261103/schema.sql").read_text()
+          content=[x for x in sql.splitlines() if x.strip().lower() not in ("begin;","commit;") and not x.lower().startswith("notify pgrst")]
+          payload="begin;\n"+"\n".join(content)+"\nrollback;\n"
+          cmd=["sudo","-n","/usr/bin/docker","exec","-i","supabase-db","psql","-X","-v","ON_ERROR_STOP=1","-U","postgres","-d","postgres","-q"]
+          response=subprocess.run(cmd,input=payload,text=True,capture_output=True,timeout=60)
+          if response.returncode:
+            print("CIRCLE_MESSAGE_DRY_RUN=FAILED")
+            print([x[:180] for x in response.stderr.splitlines() if "ERROR:" in x][:3])
+            raise SystemExit(1)
+          print("CIRCLE_MESSAGE_DRY_RUN=PASS")
+          '"'"''
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dry-run
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage and publish Circle message permissions plus frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/circle-message-actions-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103180000_circle_message_action_permissions.sql "$target:$stage/schema.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-circle-message-actions-20261103.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "python3 $stage/deploy.py"
