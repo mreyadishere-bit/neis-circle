@@ -63,6 +63,7 @@
       '<div class="thread-list-scroll">'+botThread(lang).replace('magnus-thread',
         'magnus-thread'+(active?' active':'')));
   }
+  const mobileSend=()=>window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app');
   function scroll(){
     const el=document.getElementById('magnusFlow');
     if(el)el.scrollTop=el.scrollHeight;
@@ -92,6 +93,8 @@
   async function send(sb,user,input){
     const message=input.value.trim();
     if(!message||state.busy||!user)return;
+    // Android IME must stay dismissed until the user taps the composer again.
+    if(mobileSend())input.blur();
     state.busy=true;state.error='';
     const requestId=crypto.randomUUID();
     const pending={id:requestId,role:'user',body:message,reaction:null,created_at:new Date().toISOString()};
@@ -116,7 +119,7 @@
         String(error?.message||'Magnus could not reply. Please retry.').slice(0,220);
     }finally{
       clearTimeout(timer);state.busy=false;refresh();scroll();
-      input.focus({preventScroll:true});
+      if(!mobileSend()&&input.isConnected)input.focus({preventScroll:true});
     }
   }
   function bind(root,{sb,user,routeTo,lang}={}){
