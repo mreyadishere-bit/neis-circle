@@ -63,3 +63,11 @@
 .neis-play-danger{background:#b93e48!important}
 @media(max-width:950px){.neis-play-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.neis-play-game-layout{grid-template-columns:1fr}.neis-play-board{margin-inline:auto}}
 @media(max-width:600px){.neis-play-shell{padding:14px 12px 80px}.neis-play-hero-symbol{display:none}.neis-play-hero{padding:24px}.neis-play-card-grid{grid-template-columns:1fr}.neis-play-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.neis-play-tabs button{padding:10px 6px}.neis-play-card,.neis-play-section{padding:17px}.neis-play-room-top button{margin-block:6px}.neis-play-board .neis-play-square{font-size:clamp(19px,8vw,38px)}}
+
+/* Lightweight entry points injected only in Home and the existing chat composer. */
+.neis-play-home-shortcut{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px 20px;border:1px solid var(--line,#dbe3e9);border-radius:20px;background:var(--card,#fff)}
+.neis-play-home-shortcut div{min-width:0}.neis-play-home-shortcut small{display:block;color:var(--accent,#2874b2);font-size:10px;font-weight:800;letter-spacing:.10em;margin-bottom:5px}
+.neis-play-home-shortcut strong{font-size:15px;display:block}.neis-play-home-shortcut p{margin:4px 0 0;color:var(--muted,#67758a);font-size:12px}
+.neis-play-home-shortcut button{flex:0 0 auto;border:0;border-radius:12px;background:var(--accent,#2874b2);color:#fff;padding:11px 15px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
+.chat-form .neis-play-chat-trigger{display:grid;place-items:center;flex:0 0 36px;width:36px;min-width:36px;height:36px;min-height:36px;padding:0;border:1px solid var(--line,#dae3e9);border-radius:10px;background:var(--soft,#eaf1f8);color:var(--accent,#2874b2);font-size:19px;cursor:pointer}
+@media(max-width:600px){.neis-play-home-shortcut{padding:14px;gap:10px}.neis-play-home-shortcut p{display:none}.neis-play-home-shortcut button{padding:10px 11px}}
