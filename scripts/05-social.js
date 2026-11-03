@@ -3892,11 +3892,13 @@ function bindV6(root=document){
   }
   if(root.querySelector('#liveChatForm'))requestAnimationFrame(()=>scrollActiveDmToBottom({immediate:true}));
   bindChatEmojiPicker(root);bindMessageReactionButtons(root);
-  const chat=root.querySelector('#liveChatForm');if(chat){const sendButton=chat.querySelector('[data-chat-send]');if(sendButton)sendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#liveChatInput')?.focus({preventScroll:true})}},{passive:false});chat.onsubmit=async e=>{
+  const dismissSoftKeyboardOnSend=()=>window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app');
+  const chat=root.querySelector('#liveChatForm');if(chat){chat.onsubmit=async e=>{
     e.preventDefault();
     if(chat.dataset.sending==='1')return;
-    const input=$('#liveChatInput'),button=chat.querySelector('button'),conversationId=state.activeConversationId,body=input.value.trim();
+    const input=$('#liveChatInput'),button=chat.querySelector('[data-chat-send]'),conversationId=state.activeConversationId,body=input.value.trim();
     if(!body)return;
+    if(dismissSoftKeyboardOnSend())input.blur();
     chat.dataset.sending='1';
     button.disabled=true;
     setDmDraft(conversationId,input.value);
@@ -3917,7 +3919,7 @@ function bindV6(root=document){
     await markConversationRead(conversationId);
     chat.dataset.sending='';
     button.disabled=false;
-    input.focus({preventScroll:true});
+    if(!dismissSoftKeyboardOnSend()&&input.isConnected)input.focus({preventScroll:true});
     scrollActiveDmToBottom();
   };}
   const circleInput=root.querySelector('#circleChatInput');if(circleInput){bindDmKeyboardBottom();bindComposerKeyboard(circleInput,root.querySelector('#circleChatForm'));circleInput.oninput=()=>setCircleDraft(state.activeCircleId,circleInput.value);circleInput.addEventListener('focus',()=>scrollActiveCircleChatToBottom(),{passive:true});circleInput.addEventListener('click',()=>scrollActiveCircleChatToBottom(),{passive:true})}
@@ -3952,7 +3954,7 @@ function bindV6(root=document){
     el.onclick=jump;
     el.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){jump(event)}};
   });
-  const circleChat=root.querySelector('#circleChatForm');if(circleChat){const circleSendButton=circleChat.querySelector('[data-chat-send]');if(circleSendButton)circleSendButton.addEventListener('pointerdown',event=>{if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app')){event.preventDefault();$('#circleChatInput')?.focus({preventScroll:true})}},{passive:false});circleChat.onsubmit=async e=>{e.preventDefault();if(circleChat.dataset.sending==='1')return;const input=$('#circleChatInput'),button=circleChat.querySelector('button'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;circleChat.dataset.sending='1';button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select(chatFields.circleMessage).single();if(error){toast(safeError(error,'send this message'));circleChat.dataset.sending='';button.disabled=false;return}setCircleDraft(circleId,'');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}circleChat.dataset.sending='';button.disabled=false;input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
+  const circleChat=root.querySelector('#circleChatForm');if(circleChat){circleChat.onsubmit=async e=>{e.preventDefault();if(circleChat.dataset.sending==='1')return;const input=$('#circleChatInput'),button=circleChat.querySelector('[data-chat-send]'),circleId=state.activeCircleId,body=input.value.trim();if(!body)return;if(dismissSoftKeyboardOnSend())input.blur();circleChat.dataset.sending='1';button.disabled=true;setCircleDraft(circleId,input.value);const replyTo=activeCircleReply();const {data,error}=await sb.from('circle_messages').insert({circle_id:circleId,sender_id:authUser.id,body,reply_to_id:replyTo?.id||null}).select(chatFields.circleMessage).single();if(error){toast(safeError(error,'send this message'));circleChat.dataset.sending='';button.disabled=false;return}setCircleDraft(circleId,'');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));clearCircleReplyTarget();if(data){data.profile=profileData(authUser.id);if(!state.circleMessages.some(m=>same(m.id,data.id)))state.circleMessages.push(data);const flow=$('#circleChatFlow');if(flow){const previous=state.circleMessages.filter(m=>same(m.circle_id,circleId)&&!m.deleted_at&&!same(m.id,data.id)).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).at(-1);flow.insertAdjacentHTML('beforeend',circleMessageBubble(data,previous));flow.scrollTop=flow.scrollHeight;bindV6(flow)}}circleChat.dataset.sending='';button.disabled=false;if(!dismissSoftKeyboardOnSend()&&input.isConnected)input.focus({preventScroll:true});scrollActiveCircleChatToBottom()};}
 }
 
 function fitMobileConversationList(){
