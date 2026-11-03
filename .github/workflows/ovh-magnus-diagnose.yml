@@ -68,4 +68,7 @@ jobs:
           rollback;"""
           committed=run(['sudo','-n','/usr/bin/docker','exec','-i','supabase-db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atq'],stdin=sql_commit)
           print('MAGNUS_COMMIT_ROLLBACK_TEST='+('PASS' if committed.returncode==0 else 'FAIL'))
+          for label,result in [('CLAIM',claimed),('COMMIT',committed)]:
+            errors=[re.sub(r'[0-9a-f]{8}-[0-9a-f-]{27,}', '[uuid]',x.strip())[:180] for x in result.stderr.splitlines() if 'ERROR:' in x]
+            print('MAGNUS_'+label+'_ERROR='+str(errors[:2]))
           PY
