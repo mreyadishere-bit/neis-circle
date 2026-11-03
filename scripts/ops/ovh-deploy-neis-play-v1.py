@@ -75,6 +75,11 @@ def main():
   check(db("select to_regclass('public.neis_play_championships') is not null;").strip()=='t','PARTIAL_DATABASE_INSTALL')
   print('NEIS_PLAY_DB=ALREADY_PRESENT')
  if '--dry-run' in sys.argv:
+  if exists=='t':
+   auth=STAGE/'auth-smoke.py'
+   check(auth.is_file(),'AUTH_SMOKE_SCRIPT_MISSING')
+   run(['python3',str(auth)],timeout=90)
+   print('NEIS_PLAY_AUTH_SMOKE_PREFLIGHT=PASS')
   print('NEIS_PLAY_PREFLIGHT=PASS')
   return
  if exists=='f':
@@ -82,6 +87,10 @@ def main():
   db('begin;\n'+sql+'\ncommit;\n',timeout=180)
   check(db("select to_regclass('public.neis_play_rooms') is not null;").strip()=='t','MIGRATION_NOT_APPLIED')
   print('NEIS_PLAY_DB=INSTALLED')
+ auth=STAGE/'auth-smoke.py'
+ check(auth.is_file(),'AUTH_SMOKE_SCRIPT_MISSING')
+ run(['python3',str(auth)],timeout=90)
+ print('NEIS_PLAY_AUTH_SMOKE=PASS')
  old=active_frontend()
  check(old.parent==RELEASES,'UNEXPECTED_LIVE_RELEASE')
  overlay=OVERLAY.read_text()
