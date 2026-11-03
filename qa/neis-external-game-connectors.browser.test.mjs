@@ -55,6 +55,7 @@ try {
     rpc(name,args){window.__sent.push({name,args});return Promise.resolve({data:name==='start_direct_conversation'?'conversation-1':true,error:null})}
    };
   });
+  await page.addStyleTag({path:'styles/app.css'});
   await page.addStyleTag({path:'styles/neis-game-connectors-v1.css'});
   await page.evaluate(()=>{for(let i=0;i<10;i++){const b=document.createElement('button');b.type='button';b.dataset.neisConnectOpen='1';b.textContent='Games';document.querySelector('.bottom-nav').before(b)}});
   await page.addScriptTag({path:'scripts/navigation-v14.js'});
@@ -80,6 +81,16 @@ try {
   const appy=page.locator('#view .hero-main .neis-home-appy-link');
   await appy.waitFor();
   assert.equal(await appy.count(),1,'one APPY action in home banner');
+  assert.equal((await appy.innerText()).trim(),'APPY','APPY has no arrow icon');
+  assert.equal(await appy.evaluate(el=>el.classList.contains('primary')),true,'APPY uses same primary class as Explore Circles');
+  assert.equal(await appy.evaluate(el=>el.classList.contains('secondary')),false,'APPY no longer uses secondary white styling');
+  const matchingStyles=await appy.evaluate(el=>{
+   const reference=el.closest('.hero-main').querySelector('[data-nav="circles"]');
+   const a=getComputedStyle(el),b=getComputedStyle(reference);
+   return ['backgroundColor','color','borderRadius','height','paddingLeft','paddingRight','fontWeight']
+     .every(property=>a[property]===b[property]);
+  });
+  assert.equal(matchingStyles,true,'APPY matches primary button visual properties');
   assert.equal(await appy.getAttribute('href'),'https://appy.neiscircle.site/','APPY opens the requested website');
   assert.equal(await appy.getAttribute('target'),'_blank','APPY opens in a separate browser tab');
   assert.equal(await appy.getAttribute('rel'),'noopener noreferrer','APPY uses safe new-tab navigation');
