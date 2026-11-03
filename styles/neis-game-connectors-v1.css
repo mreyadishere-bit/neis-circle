@@ -286,52 +286,88 @@
  }
 }
 
-/* Home action typography: APPY must match Explore Circles exactly. */
+/* Shared, accent-aware Home/Admin hero. Both surfaces use precisely the same
+   gradient and respond to the user's existing selected color theme. */
+#view{
+ --neis-shared-hero-gradient:
+  radial-gradient(ellipse at 94% 8%,
+   color-mix(in srgb,var(--accent,#2678b3) 19%,transparent) 0%,transparent 67%),
+  linear-gradient(128deg,
+   color-mix(in srgb,var(--accent,#2678b3) 10%,#101d1d) 0%,
+   color-mix(in srgb,var(--accent,#2678b3) 22%,#17282b) 54%,
+   color-mix(in srgb,var(--accent,#2678b3) 33%,#1b3332) 100%);
+}
+#view :is(.hero-main,.admin-banner),
+html[data-theme="dark"] #view :is(.hero-main,.admin-banner){
+ background:var(--neis-shared-hero-gradient)!important;
+ color:#f5f8fa!important;
+ border:1px solid color-mix(in srgb,var(--accent,#2678b3) 16%,#293b40)!important;
+ box-shadow:0 16px 40px rgba(0,13,21,.14);
+}
+#view :is(.hero-main,.admin-banner) h1{
+ color:#f7fafc!important;
+}
+#view :is(.hero-main,.admin-banner) p{
+ color:#c5d1d5!important;
+}
+#view .hero-main:before,
+#view .hero-main:after{
+ /* The old oversized geometric ornaments were unrelated to the Admin card
+    and clashed with custom themes; show the shared gradient instead. */
+ display:none!important;
+ content:none!important;
+}
+#view .hero-main .kicker{color:#d4e2e8!important;opacity:.9}
+
+/* APPY mirrors Explore Circles, including typography and touch targets.
+   Keep both at 13px without affecting other buttons or destinations. */
 #view .hero-main .neis-home-actions{
- display:flex;flex-wrap:wrap;align-items:center;gap:8px;position:relative;z-index:2;
+ display:flex;
+ flex-wrap:wrap;
+ align-items:center;
+ gap:8px;
+ position:relative;
+ z-index:2;
 }
 #view .hero-main .neis-home-actions > :is(button.primary,a.neis-home-appy-link){
- box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;
- flex:0 0 auto;height:43px;min-height:43px;padding:0 16px;
- border:0;border-radius:13px;
- background:var(--accent)!important;color:var(--accent-contrast,#fff)!important;
- font-family:inherit;font-size:15px;font-weight:700;line-height:1.55;
- letter-spacing:normal;text-decoration:none;white-space:nowrap;
+ box-sizing:border-box;
+ display:inline-flex;
+ align-items:center;
+ justify-content:center;
+ flex:0 0 auto;
+ min-height:43px;
+ height:43px;
+ padding:0 16px;
+ border:0;
+ border-radius:13px;
+ background:var(--accent,#2678b3)!important;
+ color:var(--accent-contrast,#fff)!important;
+ font-family:inherit;
+ font-size:13px!important;
+ font-weight:700;
+ line-height:1.35!important;
+ letter-spacing:normal;
+ text-decoration:none;
+ white-space:nowrap;
  cursor:pointer;
 }
 #view .hero-main .neis-home-actions > :is(button.primary,a.neis-home-appy-link):hover{
  filter:brightness(1.06);
 }
 #view .hero-main .neis-home-actions > :is(button.primary,a.neis-home-appy-link):focus-visible{
- outline:3px solid var(--accent,#2977bb);outline-offset:3px;
+ outline:3px solid color-mix(in srgb,var(--accent,#2678b3) 50%,#fff);
+ outline-offset:3px;
+}
+/* The light secondary connection button stays legible on the dark gradient. */
+#view .hero-main .neis-home-actions > button.secondary,
+html[data-theme="dark"] #view .hero-main .neis-home-actions > button.secondary{
+ background:#f1f6fa!important;
+ color:#172b38!important;
+ border-color:#d9e5ed!important;
 }
 @media(max-width:520px){
  #view .hero-main .neis-home-actions{gap:7px}
-}
-
-/* Dark mode: a dark hero, readable text and balanced controls rather than
-   the old pale mint inverted banner. Preserve each user's chosen accent. */
-html[data-theme="dark"] #view .hero-main{
- background:linear-gradient(135deg,#111e2e 0%,#192b3e 58%,#101b29 100%)!important;
- color:#f5f8fc!important;
- border:1px solid #2a3d50;
- box-shadow:0 18px 40px rgba(2,8,16,.16);
-}
-html[data-theme="dark"] #view .hero-main :is(h1,.kicker){
- color:#f5f8fc;
-}
-html[data-theme="dark"] #view .hero-main p{
- color:#b9cbdc!important;opacity:1;
-}
-html[data-theme="dark"] #view .hero-main:before{
- background:color-mix(in srgb,var(--accent) 52%,#6589b2);
- opacity:.45;
-}
-html[data-theme="dark"] #view .hero-main:after{
- border-color:color-mix(in srgb,var(--accent) 52%,#3d78af);
- opacity:.42;
-}
-html[data-theme="dark"] #view .hero-main .neis-home-actions > .secondary{
- background:#edf3fa!important;color:#16283a!important;
- border-color:#cddbe9!important;
+ #view .hero-main .neis-home-actions > :is(button.primary,a.neis-home-appy-link){
+  min-height:40px;height:40px;padding-inline:12px;font-size:12px!important;
+ }
 }
