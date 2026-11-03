@@ -50,6 +50,8 @@ try{
  await page.setContent('<div id="magnusRoot"><div class="magnus-scroll" id="magnusFlow"></div><form id="magnusForm"><textarea id="magnusInput"></textarea><button type="submit" id="magnusSend">Send</button></form></div>');
  await page.evaluate(()=>{
   window.__magnusCalls=0;
+  // setContent() uses about:blank; crypto.randomUUID is secure-context only.
+  if(typeof crypto.randomUUID!=='function')Object.defineProperty(crypto,'randomUUID',{configurable:true,value:()=> 'local-test-request-id'});
   window.__sbMock={
    from(){return {select(){return this},order(){return this},limit(){return Promise.resolve({data:[],error:null})}}},
    functions:{invoke:async()=>{window.__magnusCalls++;return {data:{reply:'Hello!'},error:null}}},
