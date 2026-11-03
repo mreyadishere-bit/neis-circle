@@ -327,12 +327,15 @@ function enhanceChatInvites(node){
 let legacyGamesCleaned=false;
 function attach(){
  const rail=document.querySelector('.rail-nav');
+ // The desktop sidebar script may run before or after this async Games bundle.
+ // If it has not initialized, let it create the label exactly once.
+ const railEnhanced=!!rail?.closest('.rail')?.classList.contains('neis-hover-rail');
  if(rail&&!rail.querySelector('[data-neis-connect-open]')){
   const btn=document.createElement('button');btn.type='button';btn.className='nav-btn';btn.dataset.neisConnectOpen='1';
   btn.setAttribute('aria-label',tr('Games','الألعاب'));btn.title=tr('Games','الألعاب');
   // Sidebar labels are normally injected by a script that ran before this async Games entry.
   // Include the label here so the expanded/pinned sidebar never shows an icon alone.
-  btn.innerHTML='<span class="neis-connect-rail-icon" aria-hidden="true">♟</span><span class="neis-rail-label" aria-hidden="true">'+tr('Games','الألعاب')+'</span>';
+  btn.innerHTML='<span class="neis-connect-rail-icon" aria-hidden="true">♟</span>'+(railEnhanced?'<span class="neis-rail-label" aria-hidden="true">'+tr('Games','الألعاب')+'</span>':'');
   const saved=rail.querySelector('[data-nav="library"]');if(saved)saved.insertAdjacentElement('afterend',btn);else rail.append(btn);
  }
  // Remove older misplaced Games buttons once; never rescan the entire document
@@ -346,9 +349,11 @@ function attach(){
  const railEntry=rail?.querySelector('[data-neis-connect-open]');
  if(railEntry){
   railEntry.title=tr('Games','الألعاب');railEntry.setAttribute('aria-label',tr('Games','الألعاب'));
-  let label=railEntry.querySelector('.neis-rail-label');
-  if(!label){label=document.createElement('span');label.className='neis-rail-label';label.setAttribute('aria-hidden','true');railEntry.append(label)}
-  label.textContent=tr('Games','الألعاب');
+  if(railEnhanced){
+   let label=railEntry.querySelector('.neis-rail-label');
+   if(!label){label=document.createElement('span');label.className='neis-rail-label';label.setAttribute('aria-hidden','true');railEntry.append(label)}
+   label.textContent=tr('Games','الألعاب');
+  }
  }
  // Games stay available in the sidebar and mobile More menu, not chat composers.
  // Remove legacy composer buttons without touching drafts or other chat controls.
