@@ -23,6 +23,7 @@ try {
    window.authUser={id:'me'};
    window.state={view:'messages',lang:'en',follows:[{follower_id:'me',following_id:'friend',status:'accepted'},{follower_id:'friend',following_id:'me',status:'accepted'}],members:[{id:'friend',full_name:'Test Friend',username:'testfriend'}],circleRows:[{id:'c1',name:'Math Club'}],circleMembers:[{circle_id:'c1',user_id:'me',status:'active'}]};
    window.__sent=[];
+   window.__reads=[];
    const fixtures={
     follows:window.state.follows,
     circle_members:window.state.circleMembers,
@@ -31,6 +32,7 @@ try {
    };
    window.sb={
     from(table){
+     window.__reads.push(table);
      return {
       select(){return this},
       or(){return this},
@@ -54,6 +56,7 @@ try {
   await page.locator('#neisGamesOverlay').waitFor();
   assert.equal(await page.locator('.neis-connect-card').count(),13,'thirteen carefully chosen games in catalog');
   assert.equal(await page.locator('.neis-connect-cover svg').count(),14,'distinct vector covers on every card and active game');
+  assert.equal(await page.evaluate(()=>window.__reads.length),0,'opening games must not query contacts or Circles');
   assert.equal(await page.locator('#messages-view').count(),1,'original NEIS chat remains in DOM');
 
   await page.locator('[data-game="choose:chesscom"]').click();
@@ -61,9 +64,11 @@ try {
   await page.locator('#neisGameLink').fill('https://evil.example/?to=chess.com');
   await page.locator('[data-game="invite"]').click();
   assert.ok((await page.locator('.neis-connect-notice').innerText()).includes('does not belong'),'reject misleading off-domain links without closing invite panel');
+  assert.equal(await page.evaluate(()=>window.__reads.length),0,'invalid invites must not query contacts');
 
   await page.locator('#neisGameLink').fill('https://link.chess.com/play/ixm2tD');
   await page.locator('[data-game="invite"]').click();
+  await page.waitForFunction(()=>window.__reads.includes('follows'));
   await page.locator('[data-game="toggle:user:friend"]').click();
   await page.locator('[data-game="toggle:circle:c1"]').click();
   const oldScroll=await page.locator('.neis-connect-layout').evaluate(el=>{el.scrollTop=Math.max(0,el.scrollHeight-el.clientHeight-80);return el.scrollTop});
