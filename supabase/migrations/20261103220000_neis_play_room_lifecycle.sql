@@ -55,7 +55,7 @@ alter table public.neis_play_championships drop constraint if exists neis_play_c
 alter table public.neis_play_championships add constraint neis_play_championships_game_check check(game in ('chess','sketch','flashcards','quiz'));
 create or replace function public.neis_play_create_championship(p_circle uuid,p_title text,p_game text,p_start timestamptz)
 returns uuid language plpgsql security definer set search_path=public
-as $
+as $neis_champ$
 declare new_id uuid;
 begin
  if auth.uid() is null then raise exception 'login_required';end if;
@@ -65,7 +65,7 @@ begin
  values(p_circle,auth.uid(),btrim(p_title),p_game,p_start) returning id into new_id;
  return new_id;
 end;
-$;
+$neis_champ$;
 
 
 notify pgrst,'reload schema';
