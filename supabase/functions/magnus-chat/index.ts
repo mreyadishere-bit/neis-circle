@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
-const MODEL="gemini-3-flash-preview";
+const MODEL="gemini-3.5-flash-lite";
 const FAST_MODEL="gemini-3.1-flash-lite";
 const RESPONSE_HEADERS={
  "content-type":"application/json; charset=utf-8",
@@ -50,7 +50,8 @@ async function askGemini(key:string,model:string,history:Row[],message:string,ms
    method:"POST",signal:controller.signal,headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
    body:JSON.stringify({
      systemInstruction:{parts:[{text:MAGNUS_PERSONALITY}]},contents,
-     generationConfig:{responseMimeType:"application/json",temperature:0.65,maxOutputTokens:2048}
+     generationConfig:{responseMimeType:"application/json",temperature:0.65,maxOutputTokens:1200,
+       thinkingConfig:{thinkingLevel:model===MODEL?"minimal":"low"}}
    }),
   });
   if(!request.ok){
@@ -101,15 +102,15 @@ Deno.serve(async (request:Request)=>{
    code:claim.data?.reason||"rate_limit"
   },429);
   const recent=await admin.from("magnus_messages").select("role,body")
-   .eq("user_id",user.id).order("created_at",{ascending:false}).limit(16);
+   .eq("user_id",user.id).order("created_at",{ascending:false}).limit(12);
   if(recent.error)throw new Error("HISTORY_UNAVAILABLE");
   const history=[...(recent.data||[])].reverse() as Row[];
   let generated:{reply:string;reaction:string|null};
-  try{generated=await askGemini(key,MODEL,history,message,14500)}
+  try{generated=await askGemini(key,MODEL,history,message,8500)}
   catch(error){
    if(error instanceof Error&&error.message==="GEMINI_RATE_LIMIT")
     return json({error:"Gemini's free quota is temporarily exhausted. Your message was not saved.",code:"ai_quota"},429);
-   try{generated=await askGemini(key,FAST_MODEL,history,message,11000)}
+   try{generated=await askGemini(key,FAST_MODEL,history,message,8500)}
    catch{return json({error:"Magnus is taking too long to respond. Please retry.",code:"model_timeout"},503)}
   }
   const result=await admin.rpc("magnus_commit_turn",{

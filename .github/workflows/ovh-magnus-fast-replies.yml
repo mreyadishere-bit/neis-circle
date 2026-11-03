@@ -1,0 +1,48 @@
+name: OVH Magnus Faster Replies
+on:
+  pull_request:
+    branches: [main]
+    paths: ['supabase/functions/magnus-chat/index.ts', 'scripts/ops/ovh-deploy-magnus-speed-20261103.py', 'qa/magnus-low-latency.test.mjs', '.github/workflows/ovh-magnus-fast-replies.yml']
+  push:
+    branches: [main]
+    paths: ['supabase/functions/magnus-chat/index.ts', 'scripts/ops/ovh-deploy-magnus-speed-20261103.py', '.github/workflows/ovh-magnus-fast-replies.yml']
+permissions: {contents: read}
+concurrency:
+  group: ovh-magnus-faster-replies
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - run: |
+          node qa/magnus-low-latency.test.mjs
+          node qa/magnus-private-chat.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-magnus-speed-20261103.py
+          bun build supabase/functions/magnus-chat/index.ts --target=browser --external '*' --outdir=/tmp/magnus-fast
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+      - name: Activate Edge release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          scp -o StrictHostKeyChecking=yes supabase/functions/magnus-chat/index.ts "ubuntu@$HOST:/home/ubuntu/neis-backups/magnus-speed-20261103/index.ts"
+          scp -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-magnus-speed-20261103.py "ubuntu@$HOST:/home/ubuntu/neis-backups/magnus-speed-20261103/deploy.py"
+          ssh -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 /home/ubuntu/neis-backups/magnus-speed-20261103/deploy.py'
