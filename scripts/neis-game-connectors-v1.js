@@ -270,6 +270,59 @@ async function action(value){
   setNotice(failed?tr('Invitation sent to '+ok+' recipient(s); '+failed+' failed. Check chat permissions and try again.','أُرسلت الدعوة إلى '+ok+' من المستلمين، وتعذّر الإرسال إلى '+failed+'. تحقق من صلاحيات المحادثة وحاول مرة أخرى.'):tr('Invitation sent to '+ok+' recipient(s) in NEIS Circle chats.','أُرسلت الدعوة إلى '+ok+' من المستلمين عبر محادثات NEIS Circle.'),failed?'error':'success');
  }
 }
+/* Convert trusted NEIS game-invitation messages into clear chat action cards.
+   The message itself stays a regular text message and uses existing chat storage.
+   Never transform arbitrary user links or unknown hosts. */
+function enhanceChatMessageText(el){
+ if(!el||el.dataset.neisGameEnhanced||!el.closest('#chatFlow,#circleChatFlow'))return;
+ const raw=String(el.textContent||'').trim();
+ const m=/^🎮\s*(?:Join me for|Let's play|هيا نلعب|يلا نلعب)\s+([^\r\n]+)\s*\r?\n\s*(https:\/\/[^\s]+)/i.exec(raw);
+ if(!m)return;
+ const svc=SERVICES.find(s=>s.name.toLowerCase()===m[1].trim().toLowerCase());
+ if(!svc)return;
+ let url;
+ try{url=verify(m[2],svc)}catch(_){return}
+ const link=document.createElement('a');
+ link.className='neis-chat-game-card';
+ link.href=url;
+ link.target='_blank';
+ link.rel='noopener noreferrer';
+ link.referrerPolicy='no-referrer';
+ link.setAttribute('aria-label',tr('Open '+svc.name+' game','افتح لعبة '+svc.name));
+ const icon=document.createElement('span');
+ icon.className='neis-chat-game-art';
+ icon.style.setProperty('--game-accent',svc.colors[0]);
+ icon.textContent=svc.mark;
+ const info=document.createElement('span');
+ info.className='neis-chat-game-detail';
+ const eyebrow=document.createElement('span');
+ eyebrow.className='neis-chat-game-eyebrow';eyebrow.textContent=tr('GAME INVITATION','دعوة إلى لعبة');
+ const title=document.createElement('strong');title.textContent=svc.name;
+ const host=document.createElement('small');host.textContent=new URL(url).hostname;
+ info.append(eyebrow,title,host);
+ const cta=document.createElement('span');
+ cta.className='neis-chat-game-cta';cta.textContent=tr('Join game ↗','انضم للعبة ↗');
+ link.append(icon,info,cta);
+ const copy=document.createElement('button');
+ copy.type='button';copy.className='neis-chat-game-copy';
+ copy.setAttribute('aria-label',tr('Copy game link','نسخ رابط اللعبة'));
+ copy.textContent=tr('Copy game link','نسخ رابط اللعبة');
+ copy.addEventListener('click',async evt=>{
+  evt.preventDefault();evt.stopPropagation();
+  try{
+   if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(url);
+   else copyFallback(url);
+   copy.textContent=tr('Copied!','تم النسخ!');
+  }catch(_){copy.textContent=tr('Copy failed','تعذّر النسخ')}
+ });
+ el.dataset.neisGameEnhanced='1';
+ el.replaceChildren(link,copy);
+}
+function enhanceChatInvites(node){
+ if(!node||node.nodeType!==1)return;
+ if(node.matches?.('.message-text'))enhanceChatMessageText(node);
+ node.querySelectorAll?.('.message-text').forEach(enhanceChatMessageText);
+}
 function attach(){
  const rail=document.querySelector('.rail-nav');
  if(rail&&!rail.querySelector('[data-neis-connect-open]')){
@@ -317,9 +370,19 @@ document.addEventListener('keydown',evt=>{
 let observer=null;
 function initialize(){
  attach();
- if(!observer&&document.getElementById('view')){
-  observer=new MutationObserver(attach);
-  observer.observe(document.getElementById('view'),{childList:true,subtree:false});
+ const view=document.getElementById('view');
+ if(view)enhanceChatInvites(view);
+ if(!observer&&view){
+  observer=new MutationObserver(records=>{
+   let needsAttach=false;
+   for(const record of records)for(const node of record.addedNodes){
+    if(node.nodeType!==1)continue;
+    if(node.matches?.('#liveChatForm,#circleChatForm')||node.querySelector?.('#liveChatForm,#circleChatForm'))needsAttach=true;
+    if(node.matches?.('.message-text')||node.querySelector?.('.message-text'))enhanceChatInvites(node);
+   }
+   if(needsAttach)attach();
+  });
+  observer.observe(view,{childList:true,subtree:true});
  }
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
