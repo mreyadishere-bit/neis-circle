@@ -106,24 +106,16 @@
   };
 
   home=function(){
+    // The Home "Latest articles" block is optional. Hide that block by
+    // providing an empty list ONLY while its existing renderer runs.
+    // Do not delete content, alter the Articles page or persist changes.
     const originalArticles=state.articles;
-    let html='';
-
     try{
-      state.articles=featuredArticles();
-      html=baseHome();
+      state.articles=[];
+      return baseHome();
     }finally{
       state.articles=originalArticles;
     }
-
-    if(typeof html!=='string')return html;
-
-    html=html
-      .replace(/Latest articles/g,'Best Articles')
-      .replace(/أحدث المقالات/g,'أفضل المقالات')
-      .replace(/(<h2>(?:Best Articles|أفضل المقالات)<\/h2><\/div><button class="secondary" data-nav="articles")/,'$1 data-open-best-articles');
-
-    return html;
   };
 
   bindDynamic=function(){
