@@ -70,6 +70,7 @@ function render(){
  }else if(S.room){body=roomPage()}
  else if(S.tab==='daily')body=dailyPage();
  else if(S.tab==='decks')body=quizStudioPage();
+ else if(S.tab==='solo')body=soloQuizPage();
  else if(S.tab==='championships')body=championshipPage();
  else body=homePage();
  const tabs=['home','daily','decks','championships'].map((a,i)=>button([t('Games','الألعاب'),t('Daily Challenge','سؤال اليوم'),t('Quiz Studio','استوديو الاختبارات'),t('Championships','البطولات')][i],a,'class="'+(S.tab===a&&!S.room?'active':'')+'"')).join('');
@@ -104,6 +105,12 @@ function quizStudioPage(){
  }
  return '<div class="neis-play-quiz-wizard"><section class="neis-play-section"><small class="neis-quiz-step">CREATE</small><h2>'+t('Quiz Studio','استوديو الاختبارات')+'</h2><p>'+t('Build a quiz from scratch, or turn your own notes into review questions. Every generated question is editable before you share it.','أنشئ اختبارًا يدويًا أو حوّل ملاحظاتك إلى أسئلة، مع مراجعتها قبل المشاركة.')+'</p><form data-play-form="quiz-new" class="neis-play-form"><label>'+t('Quiz title','عنوان الاختبار')+'<input name="title" minlength="3" maxlength="100" required placeholder="Physics • Chapter 3"></label><label>'+t('Subject','المادة')+'<input name="subject" maxlength="90"></label><button type="submit">'+t('Create quiz','إنشاء اختبار')+'</button></form></section><section class="neis-play-section"><small class="neis-quiz-step">YOUR LIBRARY</small><h3>'+t('My quizzes','اختباراتي')+'</h3><div class="neis-play-list">'+(own.length?own.map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+'</span>'+button(t('Edit','تعديل'),'quiz-open:'+e(q.id))+'</div>').join(''):'<p>'+t('No quizzes yet. Make your first one.','لا توجد اختبارات بعد.')+'</p>')+'</div></section></div>'+
  (detailHtml||'<section class="neis-play-section"><h3>'+t('Explore community quizzes','اختبارات المجتمع')+'</h3><div class="neis-play-list">'+quizzes.slice(0,25).map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+' · '+e(q.subject||'')+'</span>'+button(t('Practice','تدرب'),'quiz-open:'+e(q.id))+'</div>').join('')+'</div></section>');
+}
+function soloQuizPage(){
+ const q=S.quizQuestions[S.quizPosition];
+ const grade=S.quizFeedback;
+ return '<section class="neis-play-section"><small class="neis-quiz-step">'+t('SOLO PRACTICE','تدريب فردي')+'</small><h2>'+e(S.quiz?.title||'Quiz')+'</h2><div class="neis-quiz-progress"><span style="width:'+Math.round(100*S.quizPosition/Math.max(1,S.quizQuestions.length))+'%"></span></div>'+
+ (q?'<p class="neis-quiz-question">'+e(q.prompt)+'</p><div class="neis-quiz-option-grid">'+q.options.map((o,i)=>button(String.fromCharCode(65+i)+'. '+e(o),'solo-answer:'+i,'class="'+(grade?(grade.correct_index===i?'correct':grade.chosen===i?'wrong':''):'')+'" '+(grade?'disabled':''))).join('')+'</div>'+(grade?'<p>'+e(grade.is_correct?t('Correct!','إجابة صحيحة!'):t('Not quite.','ليست صحيحة.'))+' '+e(grade.explanation||'')+'</p>'+button(t('Next question','السؤال التالي'),'solo-next'):''):'<h3>'+t('Completed!','أكملت الاختبار!')+' '+S.quizScore+'/'+S.quizQuestions.length+'</h3>')+'</section>';
 }
 function quizBattlePage(){
  if(!S.quiz||!S.quizQuestions.length)return '<section class="neis-play-section"><h3>'+t('Quiz is unavailable','الاختبار غير متاح')+'</h3></section>';
@@ -183,15 +190,28 @@ function flashcardPage(){
 async function fetchLists(){
  try{
   const db=api();if(!db||!who())return;
-  const [decks,daily,champ,rooms]=await Promise.all([
+  const [decks,daily,champ,rooms,quizzes]=await Promise.all([
    request(db.from('neis_play_decks').select('id,owner_id,title,subject,created_at').order('created_at',{ascending:false}).limit(100)),
    request(db.from('neis_play_daily').select('day,question,options').lte('day',new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())).order('day',{ascending:false}).limit(1)),
    request(db.from('neis_play_championships').select('id,circle_id,title,game,starts_at,status').gte('starts_at',new Date().toISOString()).order('starts_at',{ascending:true}).limit(40)),
-   request(db.rpc('neis_play_my_rooms'))
+   request(db.rpc('neis_play_my_rooms')),
+   request(db.from('neis_quizzes').select('id,owner_id,title,subject,visibility,created_at').order('created_at',{ascending:false}).limit(100))
   ]);
-  S.decks=decks||[];S.daily=daily?.[0]||null;S.championships=champ||[];S.myRooms=rooms||[];
+  S.decks=decks||[];S.quizzes=quizzes||[];S.daily=daily?.[0]||null;S.championships=champ||[];S.myRooms=rooms||[];
   S.status='';render();
  }catch(err){error(err)}
+}
+async function loadQuiz(id){
+ const existing=S.quizzes.find(q=>q.id===id);
+ let quiz=existing;
+ if(!quiz){const rows=await request(api().from('neis_quizzes').select('id,owner_id,title,subject').eq('id',id).limit(1));quiz=rows?.[0]}
+ if(!quiz)throw Error(t('Quiz is not available.','الاختبار غير متاح.'));
+ S.quiz=quiz;S.quizQuestions=await request(api().from('neis_quiz_questions').select('id,quiz_id,prompt,options,sort_order').eq('quiz_id',quiz.id).order('sort_order').limit(60));
+ S.quizPosition=0;S.quizScore=0;S.quizFeedback=null;
+}
+async function quizGrading(question,choice){
+ const result=await request(api().rpc('neis_quiz_grade',{p_question:question,p_choice:choice}));
+ S.quizScore+=result.is_correct?1:0;S.quizFeedback=result;render();
 }
 async function openRoom(id){
  try{
@@ -214,6 +234,10 @@ async function prepareGame(){
   if(id)S.cards=await request(api().from('neis_play_cards').select('id,deck_id,question,answer').eq('deck_id',id).order('created_at').limit(80));
  }
 }
+async function fetchQuizScores(){
+ if(S.room?.game!=='quiz')return;
+ try{S.quizScores=await request(api().rpc('neis_quiz_room_scores',{p_room:S.room.id}))}catch{S.quizScores=[]}
+}
 function schedule(){
  clearInterval(S.timer);if(!S.room)return;
  S.timer=setInterval(async()=>{
@@ -225,7 +249,7 @@ function schedule(){
    const delta=r.events||[];
    S.room={...r,events:[]};
    if(delta.length){S.events.push(...delta);S.seq=delta.at(-1).id;}
-   if(delta.length||r.status!==S.lastStatus||r.members.length!==S.lastMembers){S.lastStatus=r.status;S.lastMembers=r.members.length;render()}
+   if(delta.length||r.status!==S.lastStatus||r.members.length!==S.lastMembers){S.lastStatus=r.status;S.lastMembers=r.members.length;if(S.room?.game==='quiz'&&delta.length)await fetchQuizScores();render()}
   }catch(err){S.status=t('Room connection needs attention. Retry by reopening the room.','اتصال الغرفة يحتاج إعادة فتح.');render()}
  },4000);
 }
@@ -260,7 +284,7 @@ async function syncNow(){
  const r=await request(api().rpc('neis_play_room_snapshot',{p_id:S.room.id,p_after:S.seq}));
  const delta=r.events||[];
  S.room={...r,events:[]};if(delta.length){S.events.push(...delta);S.seq=delta.at(-1).id}
- render();
+ if(S.room.game==='quiz')await fetchQuizScores();render();
 }
 async function open(){
  if(S.open)return;S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
@@ -274,14 +298,16 @@ function close(){
 async function join(code){const id=await request(api().rpc('neis_play_join_room',{p_code:String(code).trim()}));await openRoom(id)}
 async function create(game){
  let title=label(game),settings={};
- if(game==='flashcards'){
-  const choices=S.decks.filter(d=>d.owner_id===who());
-  if(!choices.length)throw Error(t('Create your own flashcard deck first.','أنشئ مجموعة بطاقات خاصة بك أولاً.'));
-  const choice=prompt(t('Enter the deck number:\n','اكتب رقم مجموعة البطاقات:\n')+choices.map((d,i)=>(i+1)+'. '+d.title).join('\n'),'1');
-  if(!choice)return;const deck=choices[Number(choice)-1];if(!deck)throw Error(t('Invalid deck number.','رقم المجموعة غير صحيح.'));
-  const cards=await request(api().from('neis_play_cards').select('id').eq('deck_id',deck.id).limit(1));
-  if(!cards.length)throw Error(t('Add at least one card first.','أضف بطاقة واحدة على الأقل أولاً.'));
-  settings={deck_id:deck.id};title=deck.title;
+ if(game==='quiz'){
+  const candidates=S.quizzes.filter(q=>q.owner_id===who()||q.visibility==='public');
+  if(!candidates.length){S.tab='decks';render();throw Error(t('Create a quiz first.','أنشئ اختبارًا أولاً.'))}
+  const answer=prompt(t('Choose a quiz number:\n','اختر رقم الاختبار:\n')+candidates.map((x,i)=>(i+1)+'. '+x.title).join('\n'),'1');
+  if(!answer)return;
+  const quiz=candidates[Number(answer)-1];
+  if(!quiz)throw Error(t('Invalid selection.','اختيار غير صحيح.'));
+  await loadQuiz(quiz.id);
+  if(!S.quizQuestions.length)throw Error(t('Add at least one question first.','أضف سؤالًا واحدًا على الأقل.'));
+  title=quiz.title;settings={quiz_id:quiz.id};
  }
  const data=await request(api().rpc('neis_play_create_room',{p_game:game,p_title:title,p_settings:settings}));
  await openRoom(data[0].room_id);
@@ -321,6 +347,15 @@ async function action(a){
   if(a.startsWith('daily:')){
    if(S.dailyResult)return;
    const choice=Number(a.slice(6));S.dailyResult=await request(api().rpc('neis_play_answer_daily',{p_day:S.daily.day,p_choice:choice}));render();return;
+  }
+  if(a.startsWith('quiz-open:')){await loadQuiz(a.slice(10));S.tab='decks';render();return}
+  if(a==='solo-next'){S.quizPosition++;S.quizFeedback=null;render();return}
+  if(a.startsWith('solo-answer:')){const choice=Number(a.slice(12));const q=S.quizQuestions[S.quizPosition];if(!q||S.quizFeedback)return;const data=await request(api().rpc('neis_quiz_grade',{p_question:q.id,p_choice:choice}));S.quizFeedback={...data,chosen:choice};S.quizScore+=data.is_correct?1:0;render();return}
+  if(a==='quiz-practice'){S.quizPosition=0;S.quizScore=0;S.quizFeedback=null;S.tab='solo';render();return}
+  if(a.startsWith('quiz-answer:')){
+   const parts=a.slice(12).split(':');const question=parts[0],choice=Number(parts[1]);
+   if(S.room?.game==='quiz'){await send('answer',{card_id:question,choice});return}
+   await quizGrading(question,choice);return;
   }
   if(a.startsWith('register:')){await request(api().rpc('neis_play_register_championship',{p_id:a.slice(9)}));S.status=t('Registration confirmed.','تم التسجيل.');render();return}
   if(a==='start'||a==='end')return await send(a,{});
