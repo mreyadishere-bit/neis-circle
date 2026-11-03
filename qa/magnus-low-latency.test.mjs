@@ -3,7 +3,7 @@ import {readFileSync} from "node:fs";
 const edge=readFileSync("supabase/functions/magnus-chat/index.ts","utf8");
 const deploy=readFileSync("scripts/ops/ovh-deploy-magnus-speed-20261103.py","utf8");
 assert.match(edge,/const MODEL="gemini-3\.5-flash-lite"/);
-assert.match(edge,/const FAST_MODEL="gemini-3\\.1-flash-lite"/);
+assert.ok(edge.includes('const FAST_MODEL="gemini-3.1-flash-lite"'));
 assert.match(edge,/thinkingLevel:model===MODEL\?"minimal":"low"/);
 assert.match(edge,/maxOutputTokens:1200/);
 assert.match(edge,/limit\(12\)/);
