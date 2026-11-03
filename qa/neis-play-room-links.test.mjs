@@ -11,7 +11,7 @@ assert.ok(play.includes("rpc('neis_play_manage_room'"),'actual management RPC');
 assert.ok(play.includes("new Map((S.myRooms||[])"),'deduplicate rooms by id');
 assert.ok(play.includes("neis-play-compact-empty"),'daily compact empty state');
 assert.ok(play.includes("neis-play-champ-layout"),'balanced championships layout');
-assert.ok(play.includes("neis-quiz-studio-layout"),'quiz studio layout');
+assert.ok(play.includes("neis-studio-v3")&&play.includes("neis-studio-methods"),'focused quiz studio layout');
 assert.ok(css.includes('.neis-play-champ-layout')&&css.includes('.neis-hub-room-actions'));
 for(const condition of ["r.creator_id<>auth.uid()","r.status<>'waiting'","r.creator_id=auth.uid()","status='finished'","delete from public.neis_play_members","delete from public.neis_play_rooms"])assert.ok(sql.includes(condition),'room restriction '+condition);
 assert.ok(sql.includes("'creator_id',r.creator_id")&&sql.includes("'member_count'"),'room metadata');
