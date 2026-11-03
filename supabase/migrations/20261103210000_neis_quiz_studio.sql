@@ -23,10 +23,15 @@ create index if not exists neis_quiz_questions_quiz_idx on public.neis_quiz_ques
 alter table public.neis_quizzes enable row level security;
 alter table public.neis_quiz_questions enable row level security;
 alter table public.neis_quiz_answers enable row level security;
+drop policy if exists neis_quizzes_select on public.neis_quizzes;
 create policy neis_quizzes_select on public.neis_quizzes for select to authenticated using (visibility='public' or owner_id=auth.uid());
+drop policy if exists neis_quizzes_insert on public.neis_quizzes;
 create policy neis_quizzes_insert on public.neis_quizzes for insert to authenticated with check(owner_id=auth.uid());
+drop policy if exists neis_quizzes_update on public.neis_quizzes;
 create policy neis_quizzes_update on public.neis_quizzes for update to authenticated using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+drop policy if exists neis_quizzes_delete on public.neis_quizzes;
 create policy neis_quizzes_delete on public.neis_quizzes for delete to authenticated using(owner_id=auth.uid());
+drop policy if exists neis_quiz_questions_select on public.neis_quiz_questions;
 create policy neis_quiz_questions_select on public.neis_quiz_questions for select to authenticated using(exists(select 1 from public.neis_quizzes q where q.id=quiz_id and (q.visibility='public' or q.owner_id=auth.uid())));
 revoke all on public.neis_quiz_answers from anon,authenticated;
 grant select,insert,update,delete on public.neis_quizzes to authenticated;
