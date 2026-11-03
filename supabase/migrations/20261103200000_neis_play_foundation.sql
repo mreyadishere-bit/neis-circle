@@ -49,13 +49,13 @@ create table if not exists public.neis_play_daily (
  day date primary key,
  question text not null check (char_length(btrim(question)) between 10 and 300),
  options jsonb not null check (jsonb_typeof(options)='array' and jsonb_array_length(options)=4),
- explanation text not null default '',
  created_by uuid not null references auth.users(id),
  created_at timestamptz not null default now()
 );
 create table if not exists public.neis_play_daily_keys (
  day date primary key references public.neis_play_daily(day) on delete cascade,
- correct_index int not null check (correct_index between 0 and 3)
+ correct_index int not null check (correct_index between 0 and 3),
+ explanation text not null default ''
 );
 create table if not exists public.neis_play_daily_answers (
  day date not null references public.neis_play_daily(day) on delete cascade,
@@ -202,7 +202,7 @@ begin
  else
   if r.status<>'playing' then raise exception 'game_not_started';end if;
   if p_type='move' then
-   if r.game<>'chess' or p_payload->>'uci' !~ '^[a-h][1-8][a-h][1-8][qrbn]?$' then raise exception 'invalid_chess_move';end if;
+   if r.game<>'chess' or coalesce(p_payload->>'uci','') !~ '^[a-h][1-8][a-h][1-8][qrbn]?$' then raise exception 'invalid_chess_move';end if;
    select array_agg(user_id order by joined_at,user_id) into player_order from public.neis_play_members where room_id=p_room;
    select count(*) into move_count from public.neis_play_events where room_id=p_room and type='move';
    current_turn:=player_order[1+(move_count%2)];
@@ -230,7 +230,7 @@ begin
  if auth.uid() is null then raise exception 'login_required';end if;
  if p_choice not between 0 and 3 then raise exception 'invalid_choice';end if;
  if p_day>(now() at time zone 'Africa/Cairo')::date then raise exception 'not_published';end if;
- select k.correct_index,d.explanation into answer,explanation from public.neis_play_daily d join public.neis_play_daily_keys k on k.day=d.day where d.day=p_day;
+ select k.correct_index,k.explanation into answer,explanation from public.neis_play_daily d join public.neis_play_daily_keys k on k.day=d.day where d.day=p_day;
  if not found then raise exception 'daily_question_unavailable';end if;
  insert into public.neis_play_daily_answers(day,user_id,chosen_index) values(p_day,auth.uid(),p_choice)
  on conflict(day,user_id) do nothing;
@@ -247,8 +247,8 @@ begin
  if p_day<(now() at time zone 'Africa/Cairo')::date or p_day>(now() at time zone 'Africa/Cairo')::date+90 then raise exception 'invalid_day';end if;
  if length(btrim(coalesce(p_question,''))) not between 10 and 300 or jsonb_typeof(p_options)<>'array' or jsonb_array_length(p_options)<>4 or p_correct not between 0 and 3 then raise exception 'invalid_question';end if;
  if exists(select 1 from public.neis_play_daily where day=p_day) then raise exception 'date_already_has_question';end if;
- insert into public.neis_play_daily(day,question,options,explanation,created_by) values(p_day,btrim(p_question),p_options,left(coalesce(p_explanation,''),1000),auth.uid());
- insert into public.neis_play_daily_keys(day,correct_index) values(p_day,p_correct);
+ insert into public.neis_play_daily(day,question,options,created_by) values(p_day,btrim(p_question),p_options,auth.uid());
+ insert into public.neis_play_daily_keys(day,correct_index,explanation) values(p_day,p_correct,left(coalesce(p_explanation,''),1000));
  return true;
 end;
 $$;
@@ -281,7 +281,23 @@ begin
 end;
 $$;
 
+create or replace function public.neis_play_my_rooms()
+returns jsonb language plpgsql security definer set search_path=public
+as $
+declare result jsonb;
+begin
+ if auth.uid() is null then raise exception 'login_required';end if;
+ select coalesce(jsonb_agg(jsonb_build_object('id',r.id,'code',r.code,'game',r.game,'title',r.title,'status',r.status,'created_at',r.created_at) order by r.created_at desc),'[]'::jsonb) into result
+ from (select r.* from public.neis_play_rooms r join public.neis_play_members m on m.room_id=r.id
+ where m.user_id=auth.uid() and r.expires_at>now() order by r.created_at desc limit 25) r;
+ return result;
+end;
+$;
+create unique index if not exists neis_play_one_answer_per_card on public.neis_play_events (room_id,user_id,(payload->>'card_id'))
+ where type='answer';
+
 revoke all on function public.neis_play_create_room(text,text,uuid,jsonb) from public;
+revoke all on function public.neis_play_my_rooms() from public;
 revoke all on function public.neis_play_join_room(text) from public;
 revoke all on function public.neis_play_room_snapshot(uuid,bigint) from public;
 revoke all on function public.neis_play_send_event(uuid,text,jsonb) from public;
@@ -289,7 +305,7 @@ revoke all on function public.neis_play_answer_daily(date,int) from public;
 revoke all on function public.neis_play_publish_daily(date,text,jsonb,int,text) from public;
 revoke all on function public.neis_play_create_championship(uuid,text,text,timestamptz) from public;
 revoke all on function public.neis_play_register_championship(uuid) from public;
-grant execute on function public.neis_play_create_room(text,text,uuid,jsonb),public.neis_play_join_room(text),
+grant execute on function public.neis_play_my_rooms(),public.neis_play_create_room(text,text,uuid,jsonb),public.neis_play_join_room(text),
  public.neis_play_room_snapshot(uuid,bigint),public.neis_play_send_event(uuid,text,jsonb),
  public.neis_play_answer_daily(date,int),public.neis_play_publish_daily(date,text,jsonb,int,text),
  public.neis_play_create_championship(uuid,text,text,timestamptz),public.neis_play_register_championship(uuid)
