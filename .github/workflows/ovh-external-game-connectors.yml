@@ -1,0 +1,112 @@
+name: NEIS External Game Connectors Verified OVH Release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/neis-game-connectors-v1.js'
+      - 'styles/neis-game-connectors-v1.css'
+      - 'qa/neis-external-game-connectors.browser.test.mjs'
+      - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
+      - 'index.html'
+      - '.github/workflows/ovh-external-game-connectors.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/neis-game-connectors-v1.js'
+      - 'styles/neis-game-connectors-v1.css'
+      - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
+      - 'index.html'
+      - '.github/workflows/ovh-external-game-connectors.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-external-game-connectors
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: |
+          set -euo pipefail
+          node --check scripts/neis-game-connectors-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-game-connectors-v1.py
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm install --no-save playwright
+      - run: node qa/neis-external-game-connectors.browser.test.mjs
+  preflight:
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage assets and verify OVH read-only
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          remote="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-connectors-v1-stage"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Publish external game launcher without changing database
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          remote="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-connectors-v1-stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
