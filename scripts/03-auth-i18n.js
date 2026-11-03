@@ -139,6 +139,7 @@ compose=function(kind='Discussion'){
     <div class="row"><label class="field">${bi('Tags','الوسوم')}<input id="postTags" placeholder="Physics, Grade11, Practical"></label><label class="field">${bi('Images (up to 8)','الصور (حتى 8)')}<input id="postImage" type="file" accept="image/*" multiple></label></div>
     <label class="field" id="postYoutubeField">${bi('YouTube video link (optional)','رابط فيديو YouTube (اختياري)')}<input id="postYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/…"></label>
     <div class="post-image-display-setting"><span>${bi('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="postImageDisplayMode" value="fit" checked><b>${bi('Fit','Fit')}</b><small>${bi('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="postImageDisplayMode" value="fill"><b>${bi('Fill','Fill')}</b><small>${bi('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
+    <div class="post-link-fields" id="postLinkFields"><p><b>${bi('Optional link button','زر رابط اختياري')}</b><small>${bi('Add a short button that opens a secure HTTPS link.','أضف زرًا قصيرًا يفتح رابط HTTPS آمنًا.')}</small></p><div class="row"><label class="field">${bi('Button name','اسم الزر')}<input id="postLinkLabel" maxlength="36" placeholder="My Chess"></label><label class="field">${bi('HTTPS link','رابط HTTPS')}<input id="postLinkUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://…"></label></div></div>
     <p class="post-image-edit-hint hidden" id="postImageEditHint">${bi('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
     <div id="postImagePreview" class="post-upload-preview-grid hidden"></div>
     <div class="modal-actions"><button type="button" class="secondary" data-close>${bi('Cancel','إلغاء')}</button><button id="postSubmit" class="primary">${bi('Publish post','نشر المنشور')}</button></div>
@@ -166,6 +167,7 @@ compose=function(kind='Discussion'){
     const bodyLabel=$('#postBodyLabel');if(bodyLabel)bodyLabel.textContent=isPoll?bi('Description / context (optional)','الوصف / السياق (اختياري)'):bi('Details','التفاصيل');
     if(postSubmit)postSubmit.textContent=isPoll?bi('Publish poll','نشر التصويت'):bi('Publish post','نشر المنشور');
     $('#postYoutubeField')?.classList.toggle('hidden',isPoll);
+    $('#postLinkFields')?.classList.toggle('hidden',isPoll);
   };
   postKind.onchange=updatePostComposerMode;
   updatePostComposerMode();
@@ -195,6 +197,9 @@ compose=function(kind='Discussion'){
       if(new Set(clean.map(x=>x.toLowerCase())).size!==clean.length){toast(bi('Poll options must be unique.','يجب أن تكون خيارات التصويت مختلفة.'));return}
       if($('#postPollClosing').value==='custom'&&!$('#postPollCloseAt').value){toast(bi('Choose a closing date and time.','اختر تاريخ ووقت الإغلاق.'));return}
     }
+    const link_button_label=$('#postLinkLabel').value.trim(),link_button_url=$('#postLinkUrl').value.trim();
+    if(!isPoll&&((link_button_label&&!link_button_url)||(!link_button_label&&link_button_url))){toast(bi('Add both a button name and HTTPS link, or leave both empty.','أضف اسم الزر ورابط HTTPS معًا، أو اتركهما فارغين.'));return}
+    if(!isPoll&&link_button_url&&!validPostHttpsUrl(link_button_url)){toast(bi('The button link must be a valid HTTPS URL.','يجب أن يكون رابط الزر رابط HTTPS صحيحًا.'));return}
     btn.classList.add('button-loading');btn.disabled=true;
     const uploaded=[];
     for(const file of selectedFiles){
@@ -225,7 +230,7 @@ compose=function(kind='Discussion'){
         p_closes_at:closeValue?new Date(closeValue).toISOString():null
       }));
     }else{
-      ({error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode,youtube_url}));
+      ({error}=await sb.from('posts').insert({author_id:authUser.id,kind:$('#postKind').value,title:$('#postTitle').value.trim(),body:$('#postBody').value.trim(),tags:$('#postTags').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6),image_url,image_urls,image_display_mode,link_button_label,link_button_url,youtube_url}));
     }
     if(error){
       if(uploaded.length)await sb.storage.from('community-media').remove(uploaded.map(item=>item.path));
