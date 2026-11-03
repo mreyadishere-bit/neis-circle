@@ -371,3 +371,28 @@ html[data-theme="dark"] #view .hero-main .neis-home-actions > button.secondary{
   min-height:40px;height:40px;padding-inline:12px;font-size:12px!important;
  }
 }
+
+/* Narrow mobile hero: three destinations on ONE row without clipping. */
+@media(max-width:620px){
+ #view .hero-main .neis-home-actions{
+  display:flex!important;flex-flow:row nowrap!important;
+  align-items:stretch!important;gap:6px!important;
+  min-width:0;width:100%;max-width:100%;margin-top:15px!important;
+ }
+ #view .hero-main .neis-home-actions > :is(button.primary,button.secondary,a.neis-home-appy-link){
+  flex:0 1 auto!important;width:auto!important;min-width:0!important;
+  height:38px!important;min-height:38px!important;
+  padding:0 clamp(6px,1.8vw,11px)!important;
+  font-size:clamp(10px,2.6vw,12px)!important;line-height:1.2!important;
+  white-space:nowrap!important;letter-spacing:-.015em!important;
+  border-radius:10px!important;
+ }
+ #view .hero-main .neis-home-actions > button.secondary{flex-shrink:1!important}
+ #view .hero-main .neis-home-actions > a.neis-home-appy-link{flex-shrink:0!important}
+}
+@media(max-width:370px){
+ #view .hero-main .neis-home-actions{gap:4px!important}
+ #view .hero-main .neis-home-actions > :is(button.primary,button.secondary,a.neis-home-appy-link){
+  padding-inline:5px!important;font-size:10px!important;
+ }
+}
