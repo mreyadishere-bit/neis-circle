@@ -79,6 +79,7 @@ jobs:
       - name: Stage candidate and verify Edge service without modifying production
         env:
           HOST: ${{ secrets.OVH_HOST }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
           remote="ubuntu@$HOST"
@@ -89,12 +90,13 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py "$remote:$stage/ovh-timetable-gemini-503-edge-hotfix.py"
           sha256sum supabase/functions/timetable-ai/index.ts | cut -d' ' -f1 > /tmp/timetable-503-source.sha256
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/timetable-503-source.sha256 "$remote:$stage/index.ts.sha256"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --preflight"
+          printf '%s' "$GEMINI_API_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --preflight --key-stdin"
       - name: Deploy ONLY Timetable AI Edge function with automatic rollback
         env:
           HOST: ${{ secrets.OVH_HOST }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
           remote="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --deploy"
+          printf '%s' "$GEMINI_API_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --deploy --key-stdin"
