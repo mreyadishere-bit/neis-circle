@@ -28,6 +28,24 @@
 .neis-games-overlay .neis-connect-filters button{flex:0 0 auto;border:1px solid var(--line,#dce6ef);background:var(--card,#fff);color:var(--muted,#536d81);font-size:11px;font-weight:750;line-height:1;border-radius:999px;padding:10px 14px;min-height:33px;transition:background .2s,border-color .2s,color .2s}
 .neis-games-overlay .neis-connect-filters button:hover{border-color:var(--accent,#3179bb);color:var(--ink,#233447)}
 .neis-games-overlay .neis-connect-filters button.active{background:var(--ink,#1b3143);color:var(--card,#fff);border-color:var(--ink,#1b3143)}
+/* APPY shortcut shares the compact category-pill row without changing filters. */
+.neis-games-overlay .neis-connect-filters .neis-connect-appy-link{
+ display:inline-flex;align-items:center;justify-content:center;gap:7px;
+ flex:0 0 auto;white-space:nowrap;min-height:33px;
+ margin-inline-start:auto;padding:8px 12px;
+ border:1px solid var(--accent,#2977bb);border-radius:999px;
+ background:color-mix(in srgb,var(--accent,#2977bb) 7%,var(--card,#fff));
+ color:var(--accent,#2977bb);
+ text-decoration:none;font-size:11px;font-weight:800;line-height:1;
+ transition:background-color .16s,border-color .16s;
+}
+.neis-games-overlay .neis-connect-filters .neis-connect-appy-link:hover{
+ background:color-mix(in srgb,var(--accent,#2977bb) 15%,var(--card,#fff));
+ border-color:var(--accent,#2977bb);
+}
+.neis-games-overlay .neis-connect-appy-symbol{font-size:14px;line-height:1}
+@media(max-width:650px){.neis-games-overlay .neis-connect-filters .neis-connect-appy-link{margin-inline-start:2px}}
+
 .neis-games-overlay .neis-connect-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}
 .neis-games-overlay .neis-connect-card{position:relative;display:flex;flex-direction:column;min-width:0;min-height:186px;padding:0;text-align:start;background:var(--card,#fff);border:1px solid var(--line,#e0e8f0);border-radius:16px;overflow:hidden;color:var(--ink,#182c3c);transition:transform .2s,border-color .2s,box-shadow .2s;box-shadow:0 2px 10px rgba(10,36,55,.018)}
 .neis-games-overlay .neis-connect-card:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent,#3175b4) 55%,var(--line,#d7e2ec));box-shadow:0 12px 24px rgba(7,30,51,.09)}
