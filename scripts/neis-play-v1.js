@@ -96,18 +96,44 @@ function championshipPage(){
  const options=circles.map(c=>'<option value="'+e(c.id)+'">'+e(c.name)+'</option>').join('');
  return '<section class="neis-play-section"><h2>'+t('Circle Championships','بطولات المجتمعات')+'</h2><p>'+t('Create a real event, register Circle members, and organize matches. Automatic brackets are coming after game integrity checks.','أنشئ حدثًا وسجّل أعضاء المجتمع ونظّم المباريات. الجداول التلقائية بعد اختبارات النزاهة.')+'</p><form data-play-form="championship" class="neis-play-form"><label>'+t('Circle','المجتمع')+'<select name="circle" required>'+options+'</select></label><label>'+t('Event name','اسم البطولة')+'<input name="title" maxlength="100" minlength="3" required></label><label>'+t('Game','اللعبة')+'<select name="game"><option value="chess">Chess</option><option value="sketch">Sketch & Guess</option><option value="flashcards">Flashcards</option></select></label><label>'+t('Start time','وقت البداية')+'<input name="starts" type="datetime-local" required></label><button type="submit">'+t('Create championship (Circle moderators)','إنشاء بطولة (مشرفي المجتمع)')+'</button></form></section><div class="neis-play-list">'+(S.championships.length?S.championships.map(c=>'<article class="neis-play-list-item"><div><strong>'+e(c.title)+'</strong><p>'+e(label(c.game))+' · '+e(new Date(c.starts_at).toLocaleString())+'</p></div>'+button(t('Register','تسجيل'),'register:'+e(c.id))+'</article>').join(''):'<p class="neis-play-muted">'+t('No upcoming Circle championships.','لا توجد بطولات قادمة.')+'</p>')+'</div>';
 }
+function invitationPanel(){
+ const people=Array.isArray(state.follows)?state.follows:[];
+ const mine=who();
+ const outgoing=new Set(people.filter(x=>x.follower_id===mine&&x.status==='accepted').map(x=>x.following_id));
+ const mutual=[...new Set(people.filter(x=>x.following_id===mine&&x.status==='accepted'&&outgoing.has(x.follower_id)).map(x=>x.follower_id))];
+ const circles=(state.circleMembers||[]).filter(x=>x.user_id===mine&&x.status==='active').map(x=>state.circleRows?.find(c=>c.id===x.circle_id)).filter(Boolean);
+ const contacts=mutual.map(id=>{const p=(state.members||[]).find(x=>x.id===id);return '<button type="button" data-play="invite-user:'+e(id)+'" class="neis-invite-choice"><span class="neis-invite-avatar">'+e((p?.full_name||'?').slice(0,1))+'</span><span>'+e(p?.full_name||p?.username||'Student')+'</span><small>Send invite</small></button>'}).join('');
+ const groups=circles.map(c=>'<button type="button" class="neis-invite-choice" data-play="invite-circle:'+e(c.id)+'"><span class="neis-invite-avatar">◈</span><span>'+e(c.name)+'</span><small>Circle chat</small></button>').join('');
+ return '<section class="neis-play-section neis-invite-panel"><div class="neis-play-invite-heading"><h3>'+t('Invite classmates','ادعُ زملاءك')+'</h3>'+button(t('Hide','إخفاء'),'hide-invite','class="neis-play-quiet"')+'</div><p>'+t('Choose a mutual connection or one of your Circles. Invitations are sent directly, not left as drafts.','اختر صديقًا متابعًا لك أو أحد مجتمعاتك. تُرسل الدعوات مباشرة وليس كمسودة.')+'</p><div class="neis-invite-groups"><div><h4>'+t('Mutual connections','الأصدقاء المتبادلون')+'</h4><div class="neis-invite-list">'+(contacts||'<small>'+t('No mutual connections yet.','لا توجد علاقات متبادلة بعد.')+'</small>')+'</div></div><div><h4>'+t('My Circles','مجتمعاتي')+'</h4><div class="neis-invite-list">'+(groups||'<small>'+t('Join a Circle first.','انضم لمجتمع أولاً.')+'</small>')+'</div></div></div></section>';
+}
+async function sendInvitation(kind,id){
+ if(!S.room)throw Error('Room is not selected');
+ const text=t('♟ NEIS Play invitation · ','♟ دعوة NEIS Play · ')+label(S.room.game)+'\n'+roomLink()+'\n'+t('Join using your NEIS Circle account.','انضم بحسابك على NEIS Circle.');
+ if(kind==='circle'){
+  const membership=(state.circleMembers||[]).find(m=>m.circle_id===id&&m.user_id===who()&&m.status==='active');
+  if(!membership)throw Error(t('You must be a member of this Circle.','يجب أن تكون عضوًا في هذا المجتمع.'));
+  await request(api().from('circle_messages').insert({circle_id:id,sender_id:who(),body:text}));
+ }else{
+  const follows=state.follows||[];
+  if(!follows.some(f=>f.follower_id===who()&&f.following_id===id&&f.status==='accepted')||
+     !follows.some(f=>f.follower_id===id&&f.following_id===who()&&f.status==='accepted'))throw Error(t('Only mutual connections can receive direct invitations.','الدعوات المباشرة للأصدقاء المتبادلين فقط.'));
+  const conversation=await request(api().rpc('start_direct_conversation',{target_user:id}));
+  await request(api().from('messages').insert({conversation_id:conversation,sender_id:who(),body:text}));
+ }
+ S.status=t('Invitation delivered.','تم إرسال الدعوة بنجاح.');S.invitesOpen=false;render();
+}
 function roomPage(){
  const r=S.room;
  const members=r.members||[];
  const host=r.creator_id===who();
- const header='<section class="neis-play-section"><div class="neis-play-room-top"><div><small>'+e(label(r.game))+'</small><h2>'+e(r.title||t('Friendly room','غرفة ودية'))+'</h2><p>'+t('Room code','رمز الغرفة')+': <strong>'+e(r.code)+'</strong> · '+members.length+'/'+(r.game==='chess'?'2':r.game==='sketch'?'12':'8')+' · '+e(r.status)+'</p></div><div>'+button(t('Copy invitation','نسخ الدعوة'),'invite')+button(t('Send in current chat','إرسال للدردشة الحالية'),'chatinvite')+button(t('Back to Play','العودة'),'leave')+'</div></div></section>';
+ const header='<section class="neis-play-section"><div class="neis-play-room-top"><div><small>'+e(label(r.game))+'</small><h2>'+e(r.title||t('Friendly room','غرفة ودية'))+'</h2><p>'+t('Room code','رمز الغرفة')+': <strong>'+e(r.code)+'</strong> · '+members.length+'/'+(r.game==='chess'?'2':r.game==='sketch'?'12':'8')+' · '+e(r.status)+'</p></div><div>'+button(t('Copy invitation','نسخ الدعوة'),'invite')+button(t('Invite friends','دعوة الأصدقاء'),'show-invite')+button(t('Back to Play','العودة'),'leave')+'</div></div></section>';
  let game='';
  if(r.status==='waiting')game='<div class="neis-play-section"><h3>'+t('Waiting for players','في انتظار اللاعبين')+'</h3><p>'+members.map((m,i)=>e(m.id===who()?t('You','أنت'):t('Player','لاعب')+' '+(i+1))).join(' • ')+'</p>'+(host?button(t('Start game','ابدأ اللعبة'),'start','class="neis-play-primary"'):'<p>'+t('The host will start the game.','المضيف سيبدأ اللعبة.')+'</p>')+'</div>';
  else if(r.status==='finished')game='<section class="neis-play-section"><h3>'+t('Room finished','انتهت الغرفة')+'</h3></section>';
  else if(r.game==='chess')game=chessPage();
  else if(r.game==='sketch')game=sketchPage();
  else game=flashcardPage();
- return header+game+(r.status==='playing'&&host?'<div class="neis-play-section">'+button(t('End room','إنهاء الغرفة'),'end','class="neis-play-danger"')+'</div>':'');
+ return header+(S.invitesOpen?invitationPanel():'')+game+(r.status==='playing'&&host?'<div class="neis-play-section">'+button(t('End room','إنهاء الغرفة'),'end','class="neis-play-danger"')+'</div>':'');
 }
 function chessPage(){
  if(!S.chessFactory)return '<div class="neis-play-section"><p>'+t('Loading free chess rules engine…','تحميل محرك قواعد الشطرنج المجاني…')+'</p></div>';
@@ -276,6 +302,10 @@ async function action(a){
   }
   if(a.startsWith('register:')){await request(api().rpc('neis_play_register_championship',{p_id:a.slice(9)}));S.status=t('Registration confirmed.','تم التسجيل.');render();return}
   if(a==='start'||a==='end')return await send(a,{});
+  if(a==='show-invite'){S.invitesOpen=true;render();return}
+  if(a==='hide-invite'){S.invitesOpen=false;render();return}
+  if(a.startsWith('invite-user:')){await sendInvitation('dm',a.slice(12));return}
+  if(a.startsWith('invite-circle:')){await sendInvitation('circle',a.slice(14));return}
   if(a==='invite'){copyInvite();return}
   if(a==='chatinvite'){currentChatInvite();return}
   if(a==='suggest'){
