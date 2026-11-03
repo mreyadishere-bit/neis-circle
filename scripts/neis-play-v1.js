@@ -31,15 +31,6 @@ function installNavButtons(){
 }
 function attachActivityEntries(){
  const view=document.getElementById('view');if(!view)return;
- if(typeof state!=='undefined'&&state.view==='home'){
-  const column=view.querySelector('.dashboard .main-column');
-  if(column&&!column.querySelector('[data-neis-play-home]')){
-   const card=document.createElement('section');
-   card.className='neis-play-home-shortcut';card.dataset.neisPlayHome='1';
-   card.innerHTML='<div><small>'+t('DAILY CHALLENGE','تحدي اليوم')+'</small><strong>'+t('A new question. A new challenge.','سؤال جديد وتحدٍ جديد.')+'</strong><p>'+t('Answer today’s question, or challenge a friend to a game.','أجب عن سؤال اليوم أو تحدَّ صديقًا في لعبة.')+'</p></div><button type="button" data-neis-play-open>'+t('Open Play','افتح الألعاب')+'</button>';
-   column.prepend(card);
-  }
- }
  for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
   if(form.querySelector('[data-neis-play-open]'))continue;
   const trigger=document.createElement('button');
