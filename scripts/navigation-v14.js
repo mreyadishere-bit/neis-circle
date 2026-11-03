@@ -29,7 +29,7 @@
       '<section class="mobile-nav-sheet"><div class="mobile-nav-head"><h2 id="mobileNavTitle">'+label('All tools','كل الأدوات')+'</h2><button class="mobile-nav-close" type="button" data-mobile-close aria-label="'+label('Close','إغلاق')+'">×</button></div>'+
       '<nav class="mobile-nav-list" aria-label="'+label('All navigation destinations','كل وجهات التنقل')+'">'+
       destinations.map(function(item){var cls='mobile-nav-item'+(item[4]==='admin'?' admin-mobile'+(admin?' visible':''):'')+((appState&&appState.view===item[0])?' active':'');return '<button type="button" class="'+cls+'" data-nav="'+item[0]+'">'+svg(item[1])+'<span>'+label(item[2],item[3])+'</span></button>'}).join('')+
-      '<button type="button" class="mobile-nav-item neis-mobile-game-entry" data-neis-connect-open><span class="neis-mobile-game-icon" aria-hidden="true">🎮</span><span>'+label('Games','الألعاب')+'</span></button>'+
+      '<button type="button" class="mobile-nav-item neis-mobile-game-entry" data-neis-connect-open><span class="neis-mobile-game-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7.5 8.5h9a4.5 4.5 0 0 1 4.4 3.5l1.1 5.1a2.3 2.3 0 0 1-3.8 2.2l-2.8-2.6h-6.8l-2.8 2.6A2.3 2.3 0 0 1 2 17.1l1.1-5.1a4.5 4.5 0 0 1 4.4-3.5Z"/><path d="M8.4 11v4.7M6.1 13.4h4.6"/><circle cx="15.8" cy="12.1" r=".7"/><circle cx="18" cy="14.1" r=".7"/></svg></span><span>'+label('Games','الألعاب')+'</span></button>'+
       '<button type="button" class="mobile-nav-item" data-action="settings">'+svg('settings')+'<span>'+label('Settings','الإعدادات')+'</span></button>'+
       '</nav></section></div>';
     document.body.classList.add('mobile-nav-open');
