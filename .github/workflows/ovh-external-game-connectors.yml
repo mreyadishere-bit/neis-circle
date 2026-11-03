@@ -14,6 +14,7 @@ on:
     paths:
       - 'scripts/neis-game-connectors-v1.js'
       - 'styles/neis-game-connectors-v1.css'
+      - 'qa/neis-external-game-connectors.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
