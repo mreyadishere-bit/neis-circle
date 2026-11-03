@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const app=fs.readFileSync('scripts/neis-play-v1.js','utf8');
+const css=fs.readFileSync('styles/neis-play-v1.css','utf8');
+const admin=fs.readFileSync('scripts/main-admin-auth-studio-v5.js','utf8');
+const sql=fs.readFileSync('supabase/migrations/20261103210000_neis_quiz_studio.sql','utf8')+
+ fs.readFileSync('supabase/migrations/20261103211000_neis_quiz_rooms.sql','utf8')+
+ fs.readFileSync('supabase/migrations/20261103212000_neis_quiz_ai_limits.sql','utf8');
+const edge=fs.readFileSync('supabase/functions/neis-quiz-ai/index.ts','utf8');
+assert.ok(app.includes("view.replaceChildren(r)"),'native layout in existing stage');
+assert.ok(!app.includes("document.body.appendChild(r)"),'no fullscreen overlay');
+assert.ok(css.includes('#view .neis-play-root{position:relative'),'native scoped layout');
+assert.ok(!admin.includes("['branch','Branch']"),'remove Branch');
+assert.ok(!admin.includes("['grade','Grade']"),'remove Grade');
+assert.ok(!admin.includes("['role','Role']"),'remove Role');
+assert.ok(admin.includes("k==='actions'?'st-actions'"),'wider actions column');
+assert.ok(admin.includes('flex-wrap:nowrap'),'actions cannot stack');
+assert.ok(app.includes('invite-user:')&&app.includes('invite-circle:'),'invite controls');
+assert.ok(app.includes("from('circle_messages').insert"),'real Circle chat invitation');
+assert.ok(app.includes("from('messages').insert"),'real DM invitation');
+assert.ok(app.includes("rpc('start_direct_conversation'"),'create direct conversation if absent');
+assert.ok(app.includes('Quiz Studio')&&app.includes('Quiz Clash'),'quiz replacing flashcards in feed');
+assert.ok(app.includes("new DOMParser().parseFromString(raw,'text/html').body.textContent"),'HTML parsed as text not executable');
+assert.ok(app.includes("functions.invoke('neis-quiz-ai'"),'server-side AI generation');
+assert.ok(app.includes("neis_quiz_grade"),'server-side answer grading');
+assert.ok(app.includes("neis_quiz_room_scores"),'server-side multiplayer scores');
+assert.ok(sql.includes('neis_quiz_answers')&&sql.includes('revoke all on public.neis_quiz_answers'),'answer keys private');
+assert.ok(sql.includes('quiz_owner_only')&&sql.includes('room_members_only'),'permissions');
+assert.ok(sql.includes('neis_quiz_ai_claim'),'rate-limit AI');
+assert.ok(edge.includes('GEMINI_API_KEY')&&!edge.includes('console.log(notes)'),'server-only API key');
+assert.ok(edge.includes('client.auth.getUser(jwt)'),'authenticate before AI');
+assert.ok(edge.includes('client.rpc("neis_quiz_ai_claim")'),'limit usage');
+console.log('NEIS_PLAY_V2_STATIC=PASS');
