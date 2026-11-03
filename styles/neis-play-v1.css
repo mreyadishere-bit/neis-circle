@@ -111,3 +111,64 @@
 .neis-quiz-import input{display:block;width:100%}
 @media(max-width:900px){.neis-play-quiz-wizard{grid-template-columns:1fr}.neis-invite-groups{grid-template-columns:1fr}}
 @media(max-width:600px){#view .neis-play-shell{padding:0 0 32px}#view .neis-play-header h2{font-size:25px}#view .neis-play-tabs{width:100%}.neis-play-room-top button{font-size:12px}}
+
+/* NEIS Play — editorial game hub: real data, no placeholder players. */
+.neis-play-hub{display:grid;gap:23px}
+.neis-hub-intro{display:flex;align-items:end;justify-content:space-between;gap:20px;padding:14px 0 8px}
+.neis-hub-intro small,.neis-hub-section-title small{font-size:11px;font-weight:850;letter-spacing:.14em;color:var(--accent,#2874b2)}
+.neis-hub-intro h1{margin:9px 0;font-size:clamp(32px,4vw,48px);font-weight:800;letter-spacing:-.055em;color:var(--ink)}
+.neis-hub-intro p{margin:0;max-width:570px;color:var(--muted);font-size:14px;line-height:1.6}
+.neis-hub-metrics{display:flex;gap:8px;align-self:stretch}
+.neis-hub-metrics>div{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:120px;padding:13px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.neis-hub-metrics strong{font-weight:780;font-size:25px;letter-spacing:-.04em}
+.neis-hub-metrics span{font-size:10px;color:var(--muted);text-align:center;max-width:110px}
+.neis-hub-join{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;border-radius:18px;border:1px solid var(--line);background:var(--card)}
+.neis-hub-join>div{display:flex;align-items:center;gap:12px}
+.neis-hub-join-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:var(--soft);color:var(--accent);font-size:23px}
+.neis-hub-join strong{font-size:13px;display:block}
+.neis-hub-join p{font-size:11px;color:var(--muted);margin:4px 0 0}
+.neis-hub-join .neis-play-form-inline{margin:0;min-width:min(360px,100%)}
+.neis-hub-join input{max-width:230px;font-size:12px!important}
+.neis-hub-section-title{display:flex;justify-content:space-between;align-items:end}
+.neis-hub-section-title h2{font-size:23px;letter-spacing:-.045em;margin:5px 0 0}
+.neis-game-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.neis-game-card{overflow:hidden;border-radius:20px;border:1px solid var(--line);background:var(--card);transition:transform .18s ease,box-shadow .18s ease}
+.neis-game-card:hover{transform:translateY(-3px);box-shadow:0 18px 50px #0d334b12}
+.neis-game-card-art{height:134px;display:grid;place-items:center;position:relative;overflow:hidden}
+.neis-game-card-art span{position:relative;z-index:1;font-size:80px;line-height:1;transform:rotate(-9deg);text-shadow:0 15px 25px #0003}
+.neis-game-chess .neis-game-card-art{background:radial-gradient(circle at 32% 24%,#c8e2df,transparent 56%),linear-gradient(125deg,#a3beb3,#51847c)}
+.neis-game-chess .neis-game-card-art:after{content:"";position:absolute;inset:0;background:conic-gradient(#d7e9df 25%,#6c968d 0 50%,#d7e9df 0 75%,#6c968d 0) 50% 0/45px 45px;opacity:.15;transform:rotate(-12deg) scale(1.3)}
+.neis-game-sketch .neis-game-card-art{background:linear-gradient(140deg,#f2e9dd,#d8bed2)}
+.neis-game-sketch .neis-game-card-art:after{content:"〰";font-size:180px;color:#bd6b83;opacity:.19;position:absolute;top:-80px;right:-10px;transform:rotate(-30deg)}
+.neis-game-quiz .neis-game-card-art{background:radial-gradient(circle at 70% 15%,#7cbce1,transparent 65%),linear-gradient(135deg,#2474ab,#174b7f)}
+.neis-game-quiz .neis-game-card-art span{color:#f6ffff;text-shadow:0 12px 32px #002d5260}
+.neis-game-card-copy{padding:17px 18px 20px}
+.neis-game-card-kicker{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.neis-game-card h3{font-size:20px;margin:7px 0 5px;letter-spacing:-.035em}
+.neis-game-card p{color:var(--muted);font-size:12px;line-height:1.5;min-height:37px;margin:0 0 16px}
+.neis-game-card-actions{display:flex;flex-wrap:wrap;gap:7px}
+.neis-game-card-actions button,.neis-hub-discover-grid button,.neis-hub-room button{padding:10px 13px;font-size:12px;min-height:39px}
+.neis-game-card-actions button:not(.neis-play-quiet),.neis-hub-discover-grid button,.neis-hub-room button{border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+.neis-game-card-actions .neis-play-quiet{padding:9px 11px;border-radius:10px}
+.neis-hub-discover-grid{display:grid;grid-template-columns:1.16fr 1fr;gap:14px}
+.neis-hub-daily,.neis-hub-events{border-radius:19px;min-height:210px;padding:21px 24px;border:1px solid var(--line);display:flex;flex-direction:column;align-items:start}
+.neis-hub-daily{background:linear-gradient(125deg,color-mix(in srgb,var(--card) 87%,#b8d5ed),var(--card))}
+.neis-hub-events{background:var(--card)}
+.neis-hub-meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;width:100%;font-size:10px;font-weight:800;letter-spacing:.10em;color:var(--accent)}
+.neis-hub-meta span:last-child:not(:first-child){font-size:11px;letter-spacing:0;color:var(--muted)}
+.neis-hub-discover-grid h3{font-size:20px;line-height:1.35;letter-spacing:-.03em;margin:20px 0 8px;max-width:490px}
+.neis-hub-discover-grid p{font-size:12px;color:var(--muted);line-height:1.6;margin:0 0 15px}
+.neis-hub-discover-grid button{margin-top:auto}
+.neis-hub-events small{display:block;font-size:11px;color:var(--muted);margin-bottom:10px}
+.neis-hub-active{padding-top:8px}
+.neis-hub-active>.neis-hub-section-title{margin-bottom:12px}
+.neis-hub-room{display:flex;align-items:center;gap:13px;padding:12px 14px;border:1px solid var(--line);background:var(--card);border-radius:15px}
+.neis-hub-room-icon{width:42px;height:42px;border-radius:12px;background:var(--soft);color:var(--accent);display:grid;place-items:center;font-size:23px}
+.neis-hub-room>div:nth-child(2){flex:1;min-width:0}
+.neis-hub-room strong{font-size:13px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.neis-hub-room p{font-size:11px;color:var(--muted);margin:4px 0 0}
+.neis-hub-empty{text-align:center;background:var(--card);border:1px dashed var(--line);border-radius:17px;padding:28px;color:var(--muted)}
+.neis-hub-empty strong{font-size:14px;color:var(--ink)}
+.neis-hub-empty p{font-size:12px;margin:8px 0 0}
+@media(max-width:1000px){.neis-hub-intro{flex-wrap:wrap}.neis-hub-join{flex-wrap:wrap}.neis-hub-join .neis-play-form-inline{flex:1}.neis-hub-join input{max-width:none}.neis-game-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.neis-game-grid,.neis-hub-discover-grid{grid-template-columns:1fr}.neis-hub-intro h1{font-size:32px}.neis-hub-metrics{width:100%}.neis-hub-metrics>div{flex:1}.neis-hub-join .neis-play-form-inline{width:100%}.neis-hub-join input{width:100%}.neis-game-card{display:grid;grid-template-columns:112px minmax(0,1fr)}.neis-game-card-art{height:100%;min-height:170px}.neis-game-card-art span{font-size:65px}.neis-game-card-copy{padding:15px}.neis-game-card h3{font-size:18px}.neis-game-card p{min-height:0}.neis-game-card-actions button{font-size:11px}}
