@@ -23,32 +23,9 @@ jobs:
           node qa/magnus-private-chat.test.mjs
           python3 -m py_compile scripts/ops/ovh-deploy-magnus-speed-20261103.py
           bun build supabase/functions/magnus-chat/index.ts --target=browser --external '*' --outdir=/tmp/magnus-fast
-  probe:
-    needs: validate
-    runs-on: ubuntu-24.04
-    environment: ovh-staging
-    steps:
-      - uses: actions/checkout@v4
-      - name: Configure SSH
-        env:
-          HOST: ${{ secrets.OVH_HOST }}
-          KEY: ${{ secrets.OVH_SSH_KEY }}
-          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
-      - name: Probe model
-        env:
-          HOST: ${{ secrets.OVH_HOST }}
-        run: |
-          ssh -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'mkdir -p /home/ubuntu/neis-backups/magnus-speed-20261103'
-          scp -o StrictHostKeyChecking=yes qa/magnus-fast-model-probe.mjs "ubuntu@$HOST:/home/ubuntu/neis-backups/magnus-speed-20261103/probe.mjs"
-          ssh -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'sudo -n docker exec -i supabase-edge-functions deno eval --quiet - < /home/ubuntu/neis-backups/magnus-speed-20261103/probe.mjs'
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: probe
+    needs: validate
     runs-on: ubuntu-24.04
     environment: ovh-staging
     steps:
