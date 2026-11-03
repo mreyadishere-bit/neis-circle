@@ -2257,7 +2257,95 @@ function renderMeetingChat(runtime){const flow=$('#livekitChatFlow');if(!flow)re
 function openMeetingPanel(runtime,panel){const side=$('#livekitSidePanel');if(!side)return;const samePanel=!side.classList.contains('hidden')&&side.dataset.panel===panel;side.classList.toggle('hidden',samePanel);if(samePanel){side.dataset.panel='';return}side.dataset.panel=panel;side.classList.remove('hidden');side.querySelectorAll('[data-meeting-panel-section]').forEach(section=>section.classList.toggle('hidden',section.dataset.meetingPanelSection!==panel));if(panel==='participants')renderMeetingParticipantList(runtime);if(panel==='chat')renderMeetingChat(runtime)}
 async function sendMeetingChat(runtime){const input=$('#livekitChatInput'),button=$('#livekitChatForm button');if(!input||!runtime?.room)return;const textValue=input.value.trim();if(!textValue)return;button.disabled=true;try{const sender=runtime.room.localParticipant.name||state.profile?.name||authUser?.user_metadata?.full_name||t('You','أنت'),message={type:'meeting-chat',text:textValue,sender,at:Date.now()};await runtime.room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(message)),{reliable:true,topic:'neis-meeting-chat'});runtime.chatMessages.push({...message,mine:true});input.value='';renderMeetingChat(runtime)}catch(error){console.error('[NEIS meeting chat]',error);toast(t('Message could not be sent.','تعذر إرسال الرسالة.'))}finally{if(button?.isConnected)button.disabled=false}}
 function handleMeetingData(runtime,payload,participant,topic){if(topic&&topic!=='neis-meeting-chat')return;try{const message=JSON.parse(new TextDecoder().decode(payload));if(message?.type!=='meeting-chat'||!String(message.text||'').trim())return;runtime.chatMessages.push({type:'meeting-chat',text:String(message.text).slice(0,2000),sender:participant?.name||message.sender||t('Participant','مشارك'),at:Number(message.at)||Date.now(),mine:false});renderMeetingChat(runtime)}catch{}}
-function renderMeetingParticipants(runtime){const grid=$('#livekitGrid');if(!grid||!runtime.room)return;grid.innerHTML='';const participants=meetingParticipants(runtime);let focusedStillAvailable=false;participants.forEach(participant=>{const publications=[...participant.videoTrackPublications.values()].filter(pub=>pub.track&&!pub.isMuted),screenPublication=publications.find(pub=>pub.source===runtime.lk.Track.Source.ScreenShare),selected=screenPublication||publications.find(pub=>pub.source===runtime.lk.Track.Source.Camera),isScreen=!!screenPublication,isFocused=isScreen&&runtime.focusedScreenIdentity===participant.identity;if(isFocused)focusedStillAvailable=true;const tile=document.createElement('article');tile.className=`livekit-tile ${participant===runtime.room.localParticipant?'local':''} ${isScreen?'screen':''} ${isFocused?'screen-focused':''} ${runtime.activeSpeakers?.has(participant.identity)?'active-speaker':''}`;tile.innerHTML=`<div class="livekit-tile-placeholder">${esc(initials(participant.name||participant.identity||'NC'))}</div><span class="livekit-participant-label">${esc(participant.name||participant.identity||t('Participant','مشارك'))}${participant===runtime.room.localParticipant?` · ${t('You','أنت')}`:''}</span>${isScreen?`<button class="livekit-screen-expand" type="button" aria-label="${isFocused?t('Exit full view','إنهاء العرض الكامل'):t('View shared screen full size','عرض الشاشة المشاركة بالكامل')}">${isFocused?'×':'⛶'}</button>`:''}`;if(selected?.track){const element=selected.track.attach();element.autoplay=true;element.playsInline=true;tile.prepend(element)}if(isScreen){tile.onclick=event=>{if(event.target.closest('.livekit-participant-label'))return;runtime.focusedScreenIdentity=isFocused?'':participant.identity;renderMeetingParticipants(runtime)}}grid.appendChild(tile)});if(runtime.focusedScreenIdentity&&!focusedStillAvailable)runtime.focusedScreenIdentity='';grid.classList.toggle('has-focused-screen',!!runtime.focusedScreenIdentity);const count=$('#livekitParticipantCount');if(count)count.textContent=`${participants.length} ${t(participants.length===1?'participant':'participants','مشارك')}`;renderMeetingParticipantList(runtime)}
+function renderMeetingParticipants(runtime){
+  const grid=$('#livekitGrid');if(!grid||!runtime.room)return;
+  const participants=meetingParticipants(runtime);
+  const active=new Set();
+  let focusedStillAvailable=false;
+  // Keep the same <video> and LiveKit track attachment across active-speaker events.
+  // Recreating all tiles on every audio-level update makes screen sharing flash black.
+  participants.forEach(participant=>{
+    const identity=String(participant.identity);
+    active.add(identity);
+    const publications=[...participant.videoTrackPublications.values()].filter(pub=>pub.track&&!pub.isMuted);
+    const screenPublication=publications.find(pub=>pub.source===runtime.lk.Track.Source.ScreenShare);
+    const selected=screenPublication||publications.find(pub=>pub.source===runtime.lk.Track.Source.Camera);
+    const isScreen=!!screenPublication;
+    const isFocused=isScreen&&runtime.focusedScreenIdentity===identity;
+    if(isFocused)focusedStillAvailable=true;
+    let tile=[...grid.children].find(element=>element.dataset?.meetingIdentity===identity);
+    if(!tile){
+      tile=document.createElement('article');
+      tile.dataset.meetingIdentity=identity;
+      grid.appendChild(tile);
+    }
+    tile.className=`livekit-tile ${participant===runtime.room.localParticipant?'local':''} ${isScreen?'screen':''} ${isFocused?'screen-focused':''} ${runtime.activeSpeakers?.has(identity)?'active-speaker':''}`;
+    const name=participant.name||identity||t('Participant','مشارك');
+    let placeholder=tile.querySelector('.livekit-tile-placeholder');
+    if(!placeholder){
+      placeholder=document.createElement('div');
+      placeholder.className='livekit-tile-placeholder';
+      tile.appendChild(placeholder);
+    }
+    const letters=initials(name||'NC');
+    if(placeholder.textContent!==letters)placeholder.textContent=letters;
+    let label=tile.querySelector('.livekit-participant-label');
+    if(!label){
+      label=document.createElement('span');
+      label.className='livekit-participant-label';
+      tile.appendChild(label);
+    }
+    const labelText=name+(participant===runtime.room.localParticipant?' · '+t('You','أنت'):'');
+    if(label.textContent!==labelText)label.textContent=labelText;
+    const nextTrack=selected?.track||null;
+    if(tile._neisMeetingTrack!==nextTrack){
+      if(tile._neisMeetingVideo){
+        try{tile._neisMeetingTrack?.detach(tile._neisMeetingVideo)}catch{}
+        tile._neisMeetingVideo.remove();
+      }
+      tile._neisMeetingTrack=nextTrack;
+      tile._neisMeetingVideo=null;
+      if(nextTrack){
+        const element=nextTrack.attach();
+        element.autoplay=true;
+        element.playsInline=true;
+        tile.prepend(element);
+        tile._neisMeetingVideo=element;
+      }
+    }
+    let expand=tile.querySelector('.livekit-screen-expand');
+    if(isScreen){
+      if(!expand){
+        expand=document.createElement('button');
+        expand.className='livekit-screen-expand';
+        expand.type='button';
+        tile.appendChild(expand);
+      }
+      expand.setAttribute('aria-label',isFocused?t('Exit full view','إنهاء العرض الكامل'):t('View shared screen full size','عرض الشاشة المشاركة بالكامل'));
+      expand.textContent=isFocused?'×':'⛶';
+      tile.onclick=event=>{
+        if(event.target.closest('.livekit-participant-label'))return;
+        runtime.focusedScreenIdentity=runtime.focusedScreenIdentity===identity?'':identity;
+        renderMeetingParticipants(runtime);
+      };
+    }else{
+      expand?.remove();
+      tile.onclick=null;
+    }
+  });
+  [...grid.children].forEach(tile=>{
+    if(active.has(tile.dataset?.meetingIdentity))return;
+    if(tile._neisMeetingVideo){
+      try{tile._neisMeetingTrack?.detach(tile._neisMeetingVideo)}catch{}
+    }
+    tile.remove();
+  });
+  if(runtime.focusedScreenIdentity&&!focusedStillAvailable)runtime.focusedScreenIdentity='';
+  grid.classList.toggle('has-focused-screen',!!runtime.focusedScreenIdentity);
+  const count=$('#livekitParticipantCount');
+  if(count)count.textContent=`${participants.length} ${t(participants.length===1?'participant':'participants','مشارك')}`;
+  renderMeetingParticipantList(runtime);
+}
 function meetingAudioHolder(runtime){if(!runtime)return null;if(runtime.audioElementHost?.isConnected)return runtime.audioElementHost;const holder=document.createElement('div');holder.className='livekit-audio livekit-persistent-audio';holder.setAttribute('aria-hidden','true');document.body.appendChild(holder);runtime.audioElementHost=holder;return holder}
 function renderMeetingAudio(runtime){const holder=meetingAudioHolder(runtime);if(!holder||!runtime.room)return;runtime.room.remoteParticipants.forEach(participant=>participant.audioTrackPublications.forEach(publication=>publication.track?.detach().forEach(element=>element.remove())));holder.innerHTML='';runtime.room.remoteParticipants.forEach(participant=>participant.audioTrackPublications.forEach(publication=>{if(publication.track&&!publication.isMuted){const audio=publication.track.attach();audio.autoplay=true;audio.playsInline=true;holder.appendChild(audio);audio.play?.().catch(()=>{})}}))}
 function syncRoomMediaButtons(runtime){const mic=$('[data-room-mic]'),camera=$('[data-room-camera]');runtime.micEnabled=runtime.room.localParticipant.isMicrophoneEnabled;runtime.cameraEnabled=runtime.room.localParticipant.isCameraEnabled;if(mic){mic.setAttribute('aria-pressed',String(runtime.micEnabled));mic.querySelector('span').textContent=runtime.micEnabled?t('Mute','كتم'):t('Unmute','تشغيل الصوت')}if(camera){camera.setAttribute('aria-pressed',String(runtime.cameraEnabled));camera.querySelector('span').textContent=runtime.cameraEnabled?t('Camera off','إيقاف الكاميرا'):t('Camera on','تشغيل الكاميرا')}renderMeetingParticipantList(runtime)}
