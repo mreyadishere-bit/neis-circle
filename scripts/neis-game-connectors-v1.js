@@ -222,11 +222,13 @@ async function action(value){
  if(value==='invite'){
   UI.panel='share';UI.notice='';
   render();
-  void loadRecipients();
   try{activeLink()}catch(err){
    setNotice(err.message,'error');
    overlay()?.querySelector('#neisGameLink')?.focus({preventScroll:true});
+   return;
   }
+  // A valid invite is required before requesting contact/profile data.
+  void loadRecipients();
   return;
  }
  if(value==='paste'){
