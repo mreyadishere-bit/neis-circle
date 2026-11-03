@@ -127,3 +127,12 @@ body.mobile-nav-open{overflow:hidden}
  .ttai-panel .ttai-compose{min-width:0!important}
  .ttai-panel .ttai-input{min-width:0!important;max-height:80px!important;resize:none!important}
 }
+
+@media(max-width:760px){
+ #view .page-title .circle-create-button{
+  font-size:0!important;overflow:hidden!important;white-space:nowrap!important;
+ }
+ #view .page-title .circle-create-button::before{
+  content:"+";font-size:24px;line-height:1;font-weight:650;display:block;
+ }
+}
