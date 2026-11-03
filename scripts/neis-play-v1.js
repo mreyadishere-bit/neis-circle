@@ -392,6 +392,7 @@ async function create(game){
   title=quiz.title;settings={quiz_id:quiz.id};
  }
  const data=await request(api().rpc('neis_play_create_room',{p_game:game,p_title:title,p_settings:settings}));
+ playListLastLoaded=0;
  await openRoom(data[0].room_id);
 }
 async function chessSquare(sq){
@@ -422,7 +423,7 @@ async function manageRoom(type,id){
  if(S.room?.id===id){S.room=null;S.events=[];S.seq=0;clearInterval(S.timer)}
  S.myRooms=(S.myRooms||[]).filter(r=>r.id!==id);
  S.status=type==='delete'?t('Room deleted.','تم حذف الغرفة.'):type==='end'?t('Room ended.','انتهت الغرفة.'):t('You left the room.','غادرت الغرفة.');
- render();await fetchLists();
+ render();await fetchLists(true);
 }
 async function action(a){
  S.status='';
