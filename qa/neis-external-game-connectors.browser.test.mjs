@@ -23,7 +23,7 @@ try {
   const page=await browser.newPage({viewport:{width,height:850}});
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
-  await page.setContent('<header>NEIS Circle</header><nav class="rail-nav"><button data-nav="library">Saved</button></nav><nav class="bottom-nav"><button data-mobile-more>More</button></nav><div id="mobileNavRoot"></div><main id="view"><section id="messages-view"><form id="liveChatForm"><textarea></textarea></form><div id="chatFlow" class="chat-flow"></div></section></main>');
+  await page.setContent('<header>NEIS Circle</header><nav class="rail-nav"><button data-nav="library">Saved</button></nav><nav class="bottom-nav"><button data-mobile-more>More</button></nav><div id="mobileNavRoot"></div><main id="view"><section id="messages-view"><form id="liveChatForm"><button type="button" data-neis-connect-open class="neis-connect-chat-trigger">Games</button><textarea></textarea></form><form id="circleChatForm"><button type="button" data-neis-connect-open class="neis-connect-chat-trigger">Games</button><textarea></textarea></form><div id="chatFlow" class="chat-flow"></div></section></main>');
   await page.evaluate(()=>{
    window.authUser={id:'me'};
    window.state={view:'messages',lang:'en',follows:[{follower_id:'me',following_id:'friend',status:'accepted'},{follower_id:'friend',following_id:'me',status:'accepted'}],members:[{id:'friend',full_name:'Test Friend',username:'testfriend'}],circleRows:[{id:'c1',name:'Math Club'}],circleMembers:[{circle_id:'c1',user_id:'me',status:'active'}]};
@@ -56,7 +56,7 @@ try {
   await page.addScriptTag({path:'scripts/neis-game-connectors-v1.js'});
   assert.equal(await page.locator('.bottom-nav').evaluate(el=>el.parentElement.querySelectorAll(':scope > button[data-neis-connect-open]').length),0,'remove duplicate buttons outside the nav');
   assert.equal(await page.locator('.bottom-nav > [data-neis-connect-open]').count(),0,'keep original five-button mobile navigation');
-  assert.equal(await page.locator('#liveChatForm > [data-neis-connect-open]').count(),1,'one game button in chat');
+  assert.equal(await page.locator('#liveChatForm [data-neis-connect-open],#circleChatForm [data-neis-connect-open]').count(),0,'Games button removed from both chat composers');
   await page.locator('[data-neis-connect-open]').first().click();
   await page.locator('#neisGamesOverlay').waitFor();
   assert.equal(await page.locator('.neis-connect-card').count(),13,'thirteen carefully chosen games in catalog');
