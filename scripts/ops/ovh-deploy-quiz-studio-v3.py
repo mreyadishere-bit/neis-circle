@@ -49,28 +49,27 @@ def route(name):
   with urllib.request.urlopen(request,timeout=22):raise RuntimeError('UNAUTHENTICATED_REQUEST_ACCEPTED_'+name)
  except urllib.error.HTTPError as error:check(error.code in (401,403),'ROUTE_AUTH_BROKEN_'+name)
 def provider_smoke():
- # Requests a minimal quiz question using the key inside Edge, without printing the key or any personal data.
- source=r"""
-const key=Deno.env.get('GEMINI_API_KEY');
-if(!key)throw new Error('GEMINI_KEY_NOT_PRESENT');
-const controller=new AbortController();
-const timer=setTimeout(()=>controller.abort(),30000);
-try{
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',{
-  method:'POST',signal:controller.signal,
-  headers:{'x-goog-api-key':key,'content-type':'application/json'},
-  body:JSON.stringify({contents:[{parts:[{text:'Return JSON only: {"questions":[{"prompt":"What is 2 + 2?","options":["3","4","5","6"],"correct_index":1,"explanation":"2 + 2 = 4"}]}' }]}],generationConfig:{responseMimeType:'application/json',temperature:0.1,maxOutputTokens:512}})
- });
- if(!r.ok)throw new Error('GEMINI_UPSTREAM_HTTP_'+r.status);
- const json=await r.json();
- const output=(json?.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
- const decoded=JSON.parse(output);
- if(!Array.isArray(decoded.questions)||!decoded.questions.length)throw new Error('GEMINI_UPSTREAM_INVALID_JSON');
- console.log('QUIZ_GEMINI_PROVIDER_SMOKE=PASS');
-}finally{clearTimeout(timer)}
-"""
- output=run(DOCKER+['exec','-i','supabase-edge-functions','deno','run','--allow-env','--allow-net','-'],stdin=source,timeout=55)
- check('QUIZ_GEMINI_PROVIDER_SMOKE=PASS' in output,'GEMINI_PROVIDER_TEST_FAILED')
+ # Send one minimal validation request from OVH; never print API credentials.
+ key=run(DOCKER+['exec','supabase-edge-functions','sh','-c','printf %s "$GEMINI_API_KEY"'],timeout=20).strip()
+ check(bool(key),'GEMINI_KEY_NOT_PRESENT')
+ body=json.dumps({
+  'contents':[{'parts':[{'text':'Return a JSON object with exactly one multiple-choice question about 2 + 2. Fields: questions, prompt, options (four strings), correct_index, explanation.'}]}],
+  'generationConfig':{'responseMimeType':'application/json','temperature':0.1,'maxOutputTokens':650}
+ }).encode()
+ request=urllib.request.Request(
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',
+  data=body,method='POST',
+  headers={'x-goog-api-key':key,'content-type':'application/json'}
+ )
+ try:
+  with urllib.request.urlopen(request,timeout=45) as response:
+   upstream=json.load(response)
+ except urllib.error.HTTPError as error:
+  raise RuntimeError('GEMINI_UPSTREAM_HTTP_'+str(error.code)) from None
+ raw=''.join(x.get('text','') for x in (upstream.get('candidates') or [{}])[0].get('content',{}).get('parts',[]))
+ try:decoded=json.loads(raw)
+ except Exception:raise RuntimeError('GEMINI_UPSTREAM_INVALID_JSON') from None
+ check(isinstance(decoded.get('questions'),list) and len(decoded['questions'])>=1,'GEMINI_PROVIDER_NO_QUESTIONS')
  print('QUIZ_GEMINI_PROVIDER_SMOKE=PASS')
 def main():
  check(bool(re.fullmatch('[a-f0-9]{12}',SHA)),'BAD_REVISION')
