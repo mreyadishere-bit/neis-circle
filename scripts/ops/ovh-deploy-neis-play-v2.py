@@ -136,6 +136,14 @@ def main():
   for path in [*FILES.values(),ADMIN]:
    html,n=re.subn('('+re.escape(path)+r')(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+VERSION,html,count=1)
    require(n==1,'FRONTEND_CACHE_KEY_FAILED_'+path)
+  # Keep the existing runtime coordinator last. Inserting new scripts after it fails static quality checks.
+  play_script=re.search(r'<script[^>]+src="scripts/neis-play-v1\.js\?[^"]+"[^>]*></script>',html)
+  coordinator=re.search(r'<script[^>]+src="scripts/data-coordinator-v171\.js\?[^"]+"[^>]*></script>',html)
+  require(play_script is not None and coordinator is not None,'SCRIPT_ORDER_ANCHORS_MISSING')
+  play_tag=play_script.group(0)
+  html=html.replace(play_tag,'',1)
+  anchor=coordinator.group(0)
+  html=html.replace(anchor,play_tag+'\n  '+anchor,1)
   (tmp/'index.html').write_text(html)
   require(sum(p.is_file() for p in tmp.rglob('*'))==count,'FRONT_FILES_CHANGED')
   for path in [*FILES.values(),ADMIN]:run(['node','--check',str(tmp/path)],timeout=25) if path.endswith('.js') else None
