@@ -197,8 +197,8 @@ async function action(value){
  if(value==='invite'){
   UI.panel='share';UI.notice='';
   render();
-  try{activeLink()}catch(_){
-   setNotice(tr('First paste your game room invitation link above, then choose who to invite.','الصق رابط دعوة الغرفة فوق أولًا، وبعدها اختار مين تدعوه.'),'info');
+  try{activeLink()}catch(err){
+   setNotice(err.message,'error');
    overlay()?.querySelector('#neisGameLink')?.focus();
   }
   return;
