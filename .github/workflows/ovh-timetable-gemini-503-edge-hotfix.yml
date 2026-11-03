@@ -1,0 +1,99 @@
+name: OVH Timetable Gemini 503 Safe Edge-only Recovery
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/timetable-ai/index.ts'
+      - 'qa/timetable-ai-gemini-503.test.mjs'
+      - 'scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py'
+      - '.github/workflows/ovh-timetable-gemini-503-edge-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ovh-timetable-ai-gemini-deploy
+  cancel-in-progress: false
+
+jobs:
+  regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Test Gemini overload failover and existing timetable contracts
+        run: |
+          set -euo pipefail
+          node qa/timetable-ai-gemini-503.test.mjs
+          node qa/timetable-ai-timeout.test.mjs
+          node qa/timetable-ai-gemini.test.mjs
+          node qa/static-check.mjs
+          npm run qa:unit
+          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py
+          python3 -m py_compile scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py
+  edge-deploy:
+    needs: regressions
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify 3.6 Flash fallback is available to existing project
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,urllib.request
+          key=os.environ.get('GEMINI_API_KEY','').strip()
+          if len(key)<20:
+              raise SystemExit('GEMINI_MODEL_CHECK_KEY_UNAVAILABLE')
+          req=urllib.request.Request(
+              'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash',
+              headers={'x-goog-api-key':key},method='GET')
+          with urllib.request.urlopen(req,timeout=18) as response:
+              model=json.loads(response.read())
+          if 'generateContent' not in model.get('supportedGenerationMethods',[]):
+              raise SystemExit('GEMINI_FALLBACK_GENERATE_CONTENT_NOT_AVAILABLE')
+          print('GEMINI_FALLBACK_METADATA=VERIFIED_3_6_FLASH')
+          PY
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage candidate and verify Edge service without modifying production
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          remote="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/timetable-ai/index.ts "$remote:$stage/index.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py "$remote:$stage/ovh-deploy-timetable-ai-gemini-v1.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py "$remote:$stage/ovh-timetable-gemini-503-edge-hotfix.py"
+          sha256sum supabase/functions/timetable-ai/index.ts | cut -d' ' -f1 > /tmp/timetable-503-source.sha256
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/timetable-503-source.sha256 "$remote:$stage/index.ts.sha256"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --preflight"
+      - name: Deploy ONLY Timetable AI Edge function with automatic rollback
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          remote="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --deploy"
