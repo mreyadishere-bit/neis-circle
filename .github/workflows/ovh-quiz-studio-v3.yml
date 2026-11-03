@@ -1,0 +1,126 @@
+name: NEIS Quiz Studio V3 Verified Release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'styles/neis-play-v1.css'
+      - 'supabase/functions/neis-quiz-ai/index.ts'
+      - 'qa/neis-quiz-studio-invites-browser.test.mjs'
+      - 'qa/neis-play-v2.test.mjs'
+      - 'scripts/ops/ovh-deploy-quiz-studio-v3.py'
+      - '.github/workflows/ovh-quiz-studio-v3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'styles/neis-play-v1.css'
+      - 'supabase/functions/neis-quiz-ai/index.ts'
+      - 'scripts/ops/ovh-deploy-quiz-studio-v3.py'
+      - '.github/workflows/ovh-quiz-studio-v3.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-quiz-studio-v3
+  cancel-in-progress: false
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify UI, API contract, syntax and deployment safety
+        run: |
+          set -euo pipefail
+          node --check scripts/neis-play-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-quiz-studio-v3.py
+          node qa/neis-play-v1.test.mjs
+          node qa/neis-play-v2.test.mjs
+          node qa/neis-play-room-links.test.mjs
+  browser:
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Install Playwright for preinstalled Chrome
+        run: npm install --no-save playwright
+      - name: Test complete native UI, invite deep links, AI quiz review and existing navigation
+        run: |
+          set -euo pipefail
+          node qa/neis-play-browser.test.mjs
+          node qa/neis-play-hub-browser.test.mjs
+          node qa/neis-play-notifications-browser.test.mjs
+          node qa/neis-quiz-studio-invites-browser.test.mjs
+  preflight:
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage isolated assets and run zero-mutation OVH preflight
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-quiz-studio-v3-stage"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-play-v1.js "$target:$stage/neis-play-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/neis-quiz-ai/index.ts "$target:$stage/neis-quiz-ai.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-quiz-studio-v3.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Release and verify Edge Gemini, Caddy assets and route authentication
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-quiz-studio-v3-stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-play-v1.js "$target:$stage/neis-play-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/neis-quiz-ai/index.ts "$target:$stage/neis-quiz-ai.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-quiz-studio-v3.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"

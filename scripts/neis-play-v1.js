@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 if(window.NEISPlay)return;
-const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],quizzes:[],quiz:null,quizQuestions:[],quizPosition:0,quizFeedback:null,quizScore:0,quizImport:null,daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
+const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],quizzes:[],quiz:null,quizQuestions:[],quizPosition:0,quizFeedback:null,quizScore:0,quizImport:null,quizMode:'ai',quizGenerating:false,pendingQuizQuestions:[],pendingInvite:null,daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
 const t=(en,ar)=>typeof state!=='undefined'&&state.lang==='ar'?ar:en;
 const e=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const api=()=>typeof sb!=='undefined'?sb:null;
@@ -12,7 +12,7 @@ const label=(game)=>({chess:t('Chess Arena','ساحة الشطرنج'),sketch:t(
 const error=err=>{S.status=String(err?.message||err||t('Something went wrong.','حدث خطأ.')).replace(/[_]/g,' ');render()};
 function button(text,action,more=''){return '<button type="button" data-play="'+action+'" '+more+'>'+text+'</button>'}
 async function request(q){if(!api()||!who())throw Error(t('Please sign in first.','سجّل الدخول أولاً.'));const res=await q;if(res.error)throw res.error;return res.data}
-function roomLink(){return location.origin+location.pathname+'?play='+encodeURIComponent(S.room.code)}
+function roomLink(){const url=new URL(location.origin+location.pathname);url.searchParams.set('play',S.room.code);url.hash='/play/'+S.room.code;return url.toString()}
 function installNavButtons(){
  if(document.querySelector('[data-neis-play-open]'))return;
  const rail=document.querySelector('.rail-nav');
@@ -46,7 +46,7 @@ function attachActivityEntries(){
 function observeApp(){
  const view=document.getElementById('view');if(!view)return;
  attachActivityEntries();
- const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];}else show();}else if(!S.open)attachActivityEntries()});
+ const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];clearInviteUrl();}else show();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
  observer.observe(view,{childList:true,subtree:false});
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';const view=document.getElementById('view');if(!view)throw Error('NEIS page container unavailable');view.replaceChildren(r)}
@@ -100,22 +100,37 @@ function dailyPage(){
  return '<section class="neis-play-section"><small>'+e(d.day)+'</small><h2>'+t('Question of the Day','سؤال اليوم')+'</h2><h3>'+e(d.question)+'</h3><div class="neis-play-options">'+options.map((o,i)=>button(e(o)+(answered?' '+(answered.correct===i?'✓':''):'') ,'daily:'+i,'class="'+(answered?.chosen===i?'active':'')+'" '+(answered?'disabled':''))).join('')+'</div>'+(answered?'<p class="neis-play-result">'+(answered.is_correct?t('Correct answer!','إجابة صحيحة!'):t('Keep learning!','استمر في التعلم!'))+' '+e(answered.explanation||'')+'</p>':'')+button(t('Suggest a future question','اقترح سؤالاً جديدًا'),'suggest')+'</section>';
 }
 function quizStudioPage(){
- const quizzes=S.quizzes||[];
- const own=quizzes.filter(q=>q.owner_id===who());
- const detail=S.quiz;
+ const quizzes=S.quizzes||[],own=quizzes.filter(q=>q.owner_id===who()),detail=S.quiz;
+ const intro='<section class="neis-studio-intro"><div><span class="neis-studio-eyebrow">'+t('YOUR CREATIVE DESK','مساحة إبداعك')+'</span><h2>'+t('Quiz Studio','استوديو الاختبارات')+'</h2><p>'+t('Turn what you study into something worth playing. Make it yourself or let AI help you start.','حوّل اللي بتذاكره لاختبار ممتع. ابدأ بنفسك أو استخدم الذكاء الاصطناعي.')+'</p></div><div class="neis-studio-intro-art" aria-hidden="true"><span>?</span><i>✓</i></div></section>';
  let detailHtml='';
  if(detail){
-  detailHtml='<section class="neis-play-section"><div class="neis-play-room-top"><div><small class="neis-quiz-step">'+t('QUIZ EDITOR','محرر الاختبار')+'</small><h2>'+e(detail.title)+'</h2><p>'+e(S.quizQuestions.length)+' '+t('questions','أسئلة')+'</p></div>'+button(t('Practice solo','تدرب منفردًا'),'quiz-practice')+'</div>'+
-   '<div class="neis-play-quiz-wizard"><div><h3>'+t('Add a question','أضف سؤالًا')+'</h3><form data-play-form="quiz-question" class="neis-play-form"><label>'+t('Question','السؤال')+'<textarea name="prompt" minlength="5" maxlength="600" required rows="2"></textarea></label>'+
-   [0,1,2,3].map(i=>'<label>'+String.fromCharCode(65+i)+'<input name="option'+i+'" maxlength="200" required></label>').join('')+
-   '<label>'+t('Correct answer','الإجابة الصحيحة')+'<select name="correct"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><label>'+t('Explanation (optional)','الشرح اختياري')+'<textarea name="explanation" rows="2" maxlength="1000"></textarea></label><button type="submit">'+t('Add question','إضافة السؤال')+'</button></form></div>'+
-   '<div><h3>'+t('Import or generate','استيراد أو إنشاء')+'</h3><div class="neis-quiz-import"><p>'+t('Upload an HTML/TXT AI summary, or paste notes. The text is read safely without executing HTML.','ارفع ملخص HTML أو TXT، أو الصق ملاحظاتك. لا يتم تشغيل أي كود HTML.')+'</p>'+
-   '<form data-play-form="quiz-generate" class="neis-play-form"><label>'+t('Topic or study notes','الموضوع أو الملاحظات')+'<textarea name="notes" id="neisQuizNotes" rows="6" maxlength="18000" placeholder="Electricity: Ohm’s law, resistance, power..."></textarea></label><label>'+t('Optional HTML or TXT file','ملف HTML أو TXT اختياري')+'<input id="neisQuizFile" name="file" type="file" accept=".html,.htm,.txt,text/plain,text/html"></label><label>'+t('Number of questions','عدد الأسئلة')+'<select name="count"><option value="5">5</option><option value="10">10</option><option value="15">15</option></select></label><button type="submit">'+t('Generate questions with AI','إنشاء الأسئلة بالذكاء الاصطناعي')+'</button></form></div></div></div>'+
-   (S.pendingQuizQuestions?.length?'<div class="neis-play-section neis-quiz-review"><h3>'+t('Review AI suggestions','راجع مقترحات الذكاء الاصطناعي')+'</h3><p>'+t('These questions are not saved yet. Review their accuracy before publishing.','هذه الأسئلة لم تُحفظ بعد. راجع دقتها قبل النشر.')+'</p>'+S.pendingQuizQuestions.map((q,i)=>'<div class="neis-play-list-item"><div><strong>'+(i+1)+'. '+e(q.prompt)+'</strong><p>'+q.options.map((o,j)=>String.fromCharCode(65+j)+'. '+e(o)+(j===q.correct_index?' ✓':'')).join(' · ')+'</p></div>'+button(t('Remove','حذف'),'quiz-remove:'+i)+'</div>').join('')+button(t('Save reviewed questions','حفظ الأسئلة بعد المراجعة'),'quiz-save-ai')+'</div>':'')+
-   '<div class="neis-play-list">'+S.quizQuestions.map((q,i)=>'<div class="neis-play-list-item"><strong>'+(i+1)+'. '+e(q.prompt)+'</strong><span>'+e(q.options?.length||0)+' options</span></div>').join('')+'</div></section>';
+  const mode=S.quizMode||'ai',editable=detail.owner_id===who();
+  const switcher='<div class="neis-studio-methods" role="group" aria-label="'+t('Choose creation method','اختر طريقة الإنشاء')+'">'+
+   button('<span aria-hidden="true">✦</span> '+t('Generate with AI','إنشاء بالذكاء الاصطناعي'),'quiz-mode:ai','class="'+(mode==='ai'?'active':'')+'"')+
+   button('<span aria-hidden="true">＋</span> '+t('Write manually','إضافة يدويًا'),'quiz-mode:manual','class="'+(mode==='manual'?'active':'')+'"')+'</div>';
+  const head='<div class="neis-studio-editor-head"><div><span class="neis-studio-eyebrow">'+t('CURRENT QUIZ','الاختبار الحالي')+'</span><h3>'+e(detail.title)+'</h3><p>'+e(detail.subject||t('General knowledge','معلومات عامة'))+' · '+e(S.quizQuestions.length)+' '+t('questions saved','أسئلة محفوظة')+'</p></div><div class="neis-studio-editor-actions">'+(S.quizQuestions.length?button(t('Try quiz','جرّب الاختبار'),'quiz-practice','class="neis-studio-quiet"'):'')+button(t('Back to library','رجوع للمكتبة'),'quiz-close','class="neis-studio-quiet"')+'</div></div>';
+  const manual='<section class="neis-studio-workbench"><div class="neis-studio-step"><span>01</span><div><h4>'+t('Write your question','اكتب سؤالك')+'</h4><p>'+t('Choose four answers and mark the correct one.','اكتب أربع إجابات وحدد الإجابة الصحيحة.')+'</p></div></div>'+
+   '<form data-play-form="quiz-question" class="neis-studio-form"><label>'+t('Question','السؤال')+'<textarea name="prompt" minlength="5" maxlength="600" required rows="3" placeholder="'+t('What would you ask your classmates?','عايز تسأل زمايلك عن إيه؟')+'"></textarea></label>'+
+   '<div class="neis-studio-answers">'+[0,1,2,3].map(i=>'<label><span>'+String.fromCharCode(65+i)+'</span><input name="option'+i+'" maxlength="200" required placeholder="'+t('Answer option','اختيار الإجابة')+' '+String.fromCharCode(65+i)+'"></label>').join('')+'</div>'+
+   '<div class="neis-studio-inline"><label>'+t('Correct answer','الإجابة الصحيحة')+'<select name="correct"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><label>'+t('Explanation (optional)','الشرح (اختياري)')+'<input name="explanation" maxlength="1000" placeholder="'+t('Why is it correct?','ليه دي الإجابة الصحيحة؟')+'"></label></div>'+
+   '<div class="neis-studio-submit"><button type="submit">'+t('Save question','احفظ السؤال')+'</button></div></form></section>';
+  const ai='<section class="neis-studio-workbench"><div class="neis-studio-step"><span>✦</span><div><h4>'+t('Create from a topic or your notes','أنشئ من موضوع أو ملخص')+'</h4><p>'+t('Enter a topic, paste study notes, or upload an HTML/TXT summary. You can combine them.','اكتب الموضوع، أو الصق ملخصك، أو ارفع ملف HTML/TXT. تقدر تجمع بينهم.')+'</p></div></div>'+
+   '<form data-play-form="quiz-generate" class="neis-studio-form"><label>'+t('Topic','الموضوع')+'<input name="topic" maxlength="100" placeholder="'+t('e.g. Electricity, Ohm’s law','مثلاً: الكهرباء وقانون أوم')+'" value="'+e(detail.subject||'')+'"></label>'+
+   '<label>'+t('Study notes (optional)','ملاحظاتك (اختياري)')+'<textarea name="notes" id="neisQuizNotes" rows="5" maxlength="18000" placeholder="'+t('Paste your summary here or just enter a topic above…','الصق ملخصك هنا أو اكتب الموضوع بالأعلى…')+'"></textarea></label>'+
+   '<label class="neis-studio-upload"><input id="neisQuizFile" name="file" type="file" accept=".html,.htm,.txt,text/plain,text/html"><span class="neis-studio-upload-icon" aria-hidden="true">↑</span><strong>'+t('Choose an HTML or TXT summary','اختر ملخص HTML أو TXT')+'</strong><small>'+t('Up to 300 KB · Your text is processed securely','حتى 300 كيلوبايت · النص يُعالج بشكل آمن')+'</small><span class="neis-studio-upload-name" id="neisQuizFileName"></span></label>'+
+   '<div class="neis-studio-generate-footer"><label>'+t('Questions','عدد الأسئلة')+'<select name="count"><option value="5">5</option><option value="10" selected>10</option><option value="15">15</option></select></label><button type="submit" '+(S.quizGenerating?'disabled':'')+'>'+(S.quizGenerating?t('Generating…','جارٍ الإنشاء…'):t('✦ Generate questions','✦ إنشاء الأسئلة'))+'</button></div>'+
+   '<p class="neis-studio-disclaimer">'+t('AI suggestions need review. No questions are saved until you approve them.','أسئلة الذكاء الاصطناعي محتاجة مراجعة ومش بتتحفظ إلا بعد موافقتك.')+'</p></form></section>';
+  const pending=S.pendingQuizQuestions||[];
+  const review=pending.length?'<section class="neis-studio-review"><div class="neis-studio-review-head"><div><span class="neis-studio-eyebrow">'+t('REVIEW BEFORE SAVING','راجع قبل الحفظ')+'</span><h4>'+pending.length+' '+t('questions ready','أسئلة جاهزة')+'</h4></div>'+button(t('Discard suggestions','تجاهل المقترحات'),'quiz-discard-ai','class="neis-studio-quiet"')+'</div>'+
+   '<form data-play-form="quiz-review" class="neis-studio-review-form">'+pending.map((q,i)=>'<fieldset><legend>'+(i+1)+'. '+t('Question','سؤال')+'</legend><label>'+t('Question','السؤال')+'<textarea name="p'+i+'" minlength="5" maxlength="600" required rows="2">'+e(q.prompt)+'</textarea></label><div class="neis-studio-answers">'+q.options.map((v,j)=>'<label><span>'+String.fromCharCode(65+j)+'</span><input name="o'+i+'_'+j+'" maxlength="200" required value="'+e(v)+'"></label>').join('')+'</div><label>'+t('Correct choice','الإجابة الصحيحة')+'<select name="c'+i+'">'+[0,1,2,3].map(j=>'<option value="'+j+'" '+(j===q.correct_index?'selected':'')+'>'+String.fromCharCode(65+j)+'</option>').join('')+'</select></label><label>'+t('Explanation','الشرح')+'<input name="x'+i+'" maxlength="1000" value="'+e(q.explanation||'')+'"></label>'+button(t('Remove question','حذف السؤال'),'quiz-remove:'+i,'class="neis-studio-quiet"')+'</fieldset>').join('')+
+   '<div class="neis-studio-submit"><button type="submit">'+t('Save reviewed questions','حفظ الأسئلة بعد المراجعة')+'</button></div></form></section>':'';
+  const saved='<section class="neis-studio-saved"><div class="neis-studio-saved-title"><h4>'+t('Saved questions','الأسئلة المحفوظة')+'</h4><span>'+S.quizQuestions.length+'</span></div>'+(S.quizQuestions.length?S.quizQuestions.map((q,i)=>'<div class="neis-studio-saved-row"><span>'+(i+1)+'</span><strong>'+e(q.prompt)+'</strong></div>').join(''):'<p class="neis-studio-muted">'+t('Nothing saved yet. Create your first question above.','لسه مفيش أسئلة. ابدأ بأول سؤال فوق.')+'</p>')+'</section>';
+  detailHtml='<section class="neis-studio-editor">'+head+(editable?switcher+(mode==='manual'?manual:ai)+review:saved)+ (editable?saved:'')+'</section>';
  }
- return '<div class="neis-play-quiz-wizard neis-quiz-studio-layout"><section class="neis-play-section"><small class="neis-quiz-step">CREATE</small><h2>'+t('Quiz Studio','استوديو الاختبارات')+'</h2><p>'+t('Build a quiz from scratch, or turn your own notes into review questions. Every generated question is editable before you share it.','أنشئ اختبارًا يدويًا أو حوّل ملاحظاتك إلى أسئلة، مع مراجعتها قبل المشاركة.')+'</p><form data-play-form="quiz-new" class="neis-play-form"><label>'+t('Quiz title','عنوان الاختبار')+'<input name="title" minlength="3" maxlength="100" required placeholder="Physics • Chapter 3"></label><label>'+t('Subject','المادة')+'<input name="subject" maxlength="90"></label><button type="submit">'+t('Create quiz','إنشاء اختبار')+'</button></form></section><section class="neis-play-section"><small class="neis-quiz-step">YOUR LIBRARY</small><h3>'+t('My quizzes','اختباراتي')+'</h3><div class="neis-play-list">'+(own.length?own.map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+'</span>'+button(t('Edit','تعديل'),'quiz-open:'+e(q.id))+'</div>').join('') :'<div class="neis-play-empty-state"><span aria-hidden="true">◎</span><strong>'+t('Your first quiz starts here','ابدأ بأول اختبار')+'</strong><p>'+t('Create a quiz to challenge friends or revise a lesson.','أنشئ اختبارًا لتحدي الأصدقاء أو مراجعة الدروس.')+'</p></div>')+'</div></section></div>'+
- (detailHtml||'<section class="neis-play-section"><h3>'+t('Explore community quizzes','اختبارات المجتمع')+'</h3><div class="neis-play-list">'+(quizzes.slice(0,25).map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+' · '+e(q.subject||'')+'</span>'+button(t('Practice','تدرب'),'quiz-open:'+e(q.id))+'</div>').join('')||'<div class="neis-play-empty-state"><span aria-hidden="true">◇</span><strong>'+t('No community quizzes yet','لا توجد اختبارات عامة بعد')+'</strong><p>'+t('Share your first quiz and help classmates learn.','شارك أول اختبار لمساعدة زملائك في المذاكرة.')+'</p></div>')+'</div></section>');
+ const create='<section class="neis-studio-create"><div class="neis-studio-section-title"><span class="neis-studio-eyebrow">'+t('NEW QUIZ','اختبار جديد')+'</span><h3>'+t('Start a quiz','ابدأ اختبار جديد')+'</h3></div><form data-play-form="quiz-new" class="neis-studio-form"><label>'+t('Title','العنوان')+'<input name="title" minlength="3" maxlength="100" required placeholder="'+t('Physics · Chapter 3','الفيزياء · الفصل الثالث')+'"></label><label>'+t('Subject (optional)','المادة (اختياري)')+'<input name="subject" maxlength="90" placeholder="'+t('Physics','فيزياء')+'"></label><button type="submit">'+t('Create quiz','إنشاء الاختبار')+'</button></form></section>';
+ const library='<section class="neis-studio-library"><div class="neis-studio-section-title"><span class="neis-studio-eyebrow">'+t('YOUR LIBRARY','مكتبتك')+'</span><h3>'+t('My quizzes','اختباراتي')+'</h3></div><div class="neis-studio-library-list">'+(own.length?own.map(q=>'<button type="button" class="neis-studio-library-item" data-play="quiz-open:'+e(q.id)+'"><span class="neis-studio-book-icon">◎</span><span><strong>'+e(q.title)+'</strong><small>'+e(q.subject||t('Quiz','اختبار'))+'</small></span><span aria-hidden="true">›</span></button>').join(''):'<div class="neis-play-empty-state"><span aria-hidden="true">◎</span><strong>'+t('Your first quiz starts here','اختبارك الأول يبدأ هنا')+'</strong><p>'+t('Make one from a topic or from your notes.','اعمل اختبار من موضوع أو من ملخصاتك.')+'</p></div>')+'</div></section>';
+ const discover='<section class="neis-studio-community"><div class="neis-studio-section-title"><span class="neis-studio-eyebrow">'+t('EXPLORE','استكشف')+'</span><h3>'+t('Community quizzes','اختبارات المجتمع')+'</h3></div>'+(quizzes.length?'<div class="neis-studio-community-grid">'+quizzes.slice(0,16).map(q=>'<div class="neis-studio-community-item"><span>◎</span><strong>'+e(q.title)+'</strong><small>'+e(q.subject||'')+'</small>'+button(t('Explore','استكشف'),'quiz-open:'+e(q.id))+'</div>').join('')+'</div>':'<div class="neis-play-empty-state"><span aria-hidden="true">◇</span><strong>'+t('No shared quizzes yet','مفيش اختبارات عامة بعد')+'</strong><p>'+t('The first shared quiz can be yours.','ممكن أول اختبار يكون بتاعك.')+'</p></div>')+'</section>';
+ return '<div class="neis-studio-v3">'+intro+(detail?detailHtml:'<div class="neis-studio-start-grid">'+create+library+'</div>'+discover)+'</div>';
 }
 function soloQuizPage(){
  const q=S.quizQuestions[S.quizPosition];
@@ -301,14 +316,60 @@ async function syncNow(){
  S.room={...r,events:[]};if(delta.length){S.events.push(...delta);S.seq=delta.at(-1).id}
  if(S.room.game==='quiz')await fetchQuizScores();render();
 }
+function pendingInviteCode(){
+ try{
+  const url=new URL(location.href);
+  const hashMatch=/^#\/play\/([a-fA-F0-9]{10,16})$/.exec(url.hash);
+  const raw=url.searchParams.get('play')||hashMatch?.[1]||'';
+  const code=raw.trim().toUpperCase();
+  return /^[A-F0-9]{10}(?:[A-F0-9]{6})?$/.test(code)?code:null;
+ }catch{return null}
+}
+let joiningInvite=false;
+async function enterPendingInvite(){
+ const code=pendingInviteCode();
+ if(!code||!who()||!api()||!document.getElementById('view')||joiningInvite)return;
+ if(S.room?.code===code)return;
+ joiningInvite=true;
+ try{
+  if(!S.open){
+   S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
+   show();
+  }
+  const id=await request(api().rpc('neis_play_join_room',{p_code:code}));
+  await openRoom(id);
+  S.status='';
+ }catch(err){
+  if(S.open)error(err);
+ }finally{joiningInvite=false}
+}
 async function open(){
- if(S.open)return;S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
- show();await fetchLists();
- const match=new URLSearchParams(location.search).get('play');
- if(match&&/^[A-F0-9]{16}$/.test(match)){try{const id=await request(api().rpc('neis_play_join_room',{p_code:match}));await openRoom(id)}catch(err){error(err)}}
+ if(S.open){
+  if(pendingInviteCode())await enterPendingInvite();
+  return;
+ }
+ S.open=true;
+ S.originalView=typeof state!=='undefined'?state.view:null;
+ show();
+ await fetchLists();
+ if(pendingInviteCode())await enterPendingInvite();
+}
+function clearInviteUrl(){
+ try{
+  const url=new URL(location.href);
+  const hadQuery=url.searchParams.has('play');
+  const hadHash=url.hash.startsWith('#/play/') && /^#\x2fplay\x2f[A-Fa-f0-9]+$/.test(url.hash);
+  if(!hadQuery&&!hadHash)return;
+  url.searchParams.delete('play');
+  if(hadHash)url.hash='#/home';
+  history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+ }catch{}
 }
 function close(){
- S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';const r=root();if(r)r.remove();if(typeof nav==='function')nav('home');const u=new URL(location.href);if(u.searchParams.has('play')){u.searchParams.delete('play');history.replaceState(null,'',u.pathname+u.search+u.hash)}
+ S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';
+ clearInviteUrl();
+ const r=root();if(r)r.remove();
+ if(typeof nav==='function')nav('home');
 }
 async function join(code){const id=await request(api().rpc('neis_play_join_room',{p_code:String(code).trim()}));await openRoom(id)}
 async function create(game){
@@ -375,6 +436,9 @@ async function action(a){
    if(S.dailyResult)return;
    const choice=Number(a.slice(6));S.dailyResult=await request(api().rpc('neis_play_answer_daily',{p_day:S.daily.day,p_choice:choice}));render();return;
   }
+  if(a==='quiz-close'){S.quiz=null;S.pendingQuizQuestions=[];S.quizMode='ai';render();return}
+  if(a==='quiz-discard-ai'){S.pendingQuizQuestions=[];render();return}
+  if(a.startsWith('quiz-mode:')){S.quizMode=a.slice(10)==='manual'?'manual':'ai';render();return}
   if(a.startsWith('quiz-remove:')){S.pendingQuizQuestions.splice(Number(a.slice(12)),1);render();return}
   if(a==='quiz-save-ai'){
    if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Quiz creator only.','صاحب الاختبار فقط.'));
@@ -443,24 +507,49 @@ async function form(form){
    await request(api().rpc('neis_quiz_add_question',{p_quiz:S.quiz.id,p_prompt:String(data.get('prompt')||'').trim(),p_options:opts,p_correct:Number(data.get('correct')),p_explanation:String(data.get('explanation')||'')}));
    await loadQuiz(S.quiz.id);S.status=t('Question added.','تمت إضافة السؤال.');render();return;
   }
+  if(kind==='quiz-review'){
+   if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Only the quiz owner can save questions.','صاحب الاختبار فقط يقدر يحفظ الأسئلة.'));
+   const pending=[...(S.pendingQuizQuestions||[])];if(!pending.length)throw Error(t('No questions to save.','لا توجد أسئلة للحفظ.'));
+   for(let i=0;i<pending.length;i++){
+    const p=String(data.get('p'+i)||'').trim();
+    const opts=[0,1,2,3].map(j=>String(data.get('o'+i+'_'+j)||'').trim());
+    const answer=Number(data.get('c'+i));
+    await request(api().rpc('neis_quiz_add_question',{p_quiz:S.quiz.id,p_prompt:p,p_options:opts,p_correct:answer,p_explanation:String(data.get('x'+i)||'')}));
+    S.pendingQuizQuestions.shift();
+   }
+   await loadQuiz(S.quiz.id);S.status=t('Questions saved to your quiz.','تم حفظ الأسئلة في اختبارك.');render();return;
+  }
   if(kind==='quiz-generate'){
    if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Only the quiz creator can generate questions.','صاحب الاختبار فقط يمكنه إنشاء الأسئلة.'));
    const upload=data.get('file');let notes=String(data.get('notes')||'').trim();
+   let topic=String(data.get('topic')||'').trim()||String(S.quiz.subject||'').trim();
    if(upload&&upload.size){
     if(upload.size>300000)throw Error(t('Choose a file under 300 KB.','اختر ملفًا أصغر من 300 كيلوبايت.'));
     if(!/\.(txt|html|htm)$/i.test(upload.name))throw Error(t('Only TXT or HTML summaries are supported.','يُسمح بملفات TXT أو HTML فقط.'));
     const raw=await upload.text();
-    const extracted=/\.html?$/i.test(upload.name)?new DOMParser().parseFromString(raw,'text/html').body.textContent:raw;
-    notes=(notes+'\n'+(extracted||'')).trim().slice(0,18000);
+    if(/\.html?$/i.test(upload.name)){
+     const doc=new DOMParser().parseFromString(raw,'text/html');
+     doc.querySelectorAll('script,style,template,svg,noscript,iframe').forEach(n=>n.remove());
+     notes=(notes+'\n'+(doc.body?.textContent||'')).trim().slice(0,18000);
+    }else notes=(notes+'\n'+raw).trim().slice(0,18000);
    }
-   if(notes.length<30)throw Error(t('Add at least 30 characters of topic or study notes.','أضف 30 حرفًا على الأقل من الملاحظات.'));
+   if(!topic&&!notes)throw Error(t('Add a topic, study notes, or upload a summary.','اكتب موضوعًا أو ملاحظات أو ارفع ملخص.'));
    const count=Math.min(15,Math.max(5,Number(data.get('count'))||5));
-   S.status=t('Generating your questions…','جارٍ إنشاء أسئلتك…');render();
-   const {data:result,error:failed}=await api().functions.invoke('neis-quiz-ai',{body:{notes,topic:S.quiz.subject||S.quiz.title,count}});
-   if(failed||!Array.isArray(result?.questions))throw Error(t('AI generation is temporarily unavailable. You can add questions manually.','خدمة الذكاء الاصطناعي غير متاحة حاليًا. يمكنك إضافة الأسئلة يدويًا.'));
-   S.pendingQuizQuestions=result.questions.slice(0,15).filter(q=>typeof q.prompt==='string'&&Array.isArray(q.options)&&q.options.length===4&&Number.isInteger(q.correct_index)&&q.correct_index>=0&&q.correct_index<4);
-   if(!S.pendingQuizQuestions.length)throw Error(t('No valid questions were generated.','لم يتم إنشاء أسئلة صالحة.'));
-   S.status=t('Review the generated questions before saving them.','راجع الأسئلة قبل حفظها.');render();return;
+   S.quizGenerating=true;S.status=t('Creating questions from your material…','بننشئ أسئلة من محتواك…');render();
+   try{
+    const {data:result,error:failed}=await api().functions.invoke('neis-quiz-ai',{body:{notes,topic:topic||S.quiz.title,count}});
+    if(failed){
+     let detail='';
+     try{const response=failed.context;if(response?.json){const body=await response.json();detail=body.error||body.message||''}}catch{}
+     throw Error(detail||failed.message||t('AI service unavailable.','الخدمة غير متاحة.'));
+    }
+    if(result?.error)throw Error(String(result.error));
+    if(!Array.isArray(result?.questions))throw Error(t('No valid questions returned.','لم يتم استلام أسئلة صالحة.'));
+    S.pendingQuizQuestions=result.questions.slice(0,15).filter(q=>typeof q.prompt==='string'&&q.prompt.trim().length>=5&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.correct_index)&&q.correct_index>=0&&q.correct_index<4);
+    if(!S.pendingQuizQuestions.length)throw Error(t('No valid questions could be generated from this input.','لم نتمكن من إنشاء أسئلة صالحة من المحتوى.'));
+    S.status=t('Questions ready! Review or edit them before saving.','الأسئلة جاهزة! راجعها وعدّلها قبل الحفظ.');
+   }finally{S.quizGenerating=false;render()}
+   return;
   }
   if(kind==='championship'){
    const id=await request(api().rpc('neis_play_create_championship',{p_circle:data.get('circle'),p_title:String(data.get('title')).trim(),p_game:data.get('game'),p_start:new Date(data.get('starts')).toISOString()}));
@@ -476,7 +565,7 @@ async function form(form){
 document.addEventListener('click',event=>{
  const ordinaryNav=event.target.closest('[data-nav]');
  if(S.open&&ordinaryNav&&!ordinaryNav.closest('#neisPlayRoot')){
-   S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;const r=root();if(r)r.remove();
+   S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;clearInviteUrl();const r=root();if(r)r.remove();
  }
  const openBtn=event.target.closest('[data-neis-play-open]');
  if(openBtn){event.preventDefault();event.stopPropagation();open();return}
@@ -484,12 +573,14 @@ document.addEventListener('click',event=>{
  if(!control)return;event.preventDefault();if(S.busy)return;
  S.busy=true;Promise.resolve(action(control.dataset.play)).finally(()=>{S.busy=false});
 },true);
+document.addEventListener('change',event=>{if(event.target?.id==='neisQuizFile'){const name=document.getElementById('neisQuizFileName');if(name)name.textContent=event.target.files?.[0]?.name||''}},true);
 document.addEventListener('submit',event=>{
  const form=event.target.closest('#neisPlayRoot [data-play-form]');
  if(!form)return;event.preventDefault();if(S.busy)return;S.busy=true;Promise.resolve(formHandler(form)).finally(()=>{S.busy=false});
 },true);
 async function formHandler(f){await form(f)}
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&S.open&&!S.busy)close()});
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installNavButtons();observeApp()},{once:true});else{installNavButtons();observeApp()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installNavButtons();observeApp();void enterPendingInvite()},{once:true});else{installNavButtons();observeApp();void enterPendingInvite()}
+window.addEventListener('popstate',()=>void enterPendingInvite());window.addEventListener('hashchange',()=>void enterPendingInvite());
 window.NEISPlay={open,close,get active(){return S.open}};
 })();

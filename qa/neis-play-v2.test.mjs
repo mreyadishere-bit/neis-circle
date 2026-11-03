@@ -20,7 +20,7 @@ assert.ok(app.includes("from('circle_messages').insert"),'real Circle chat invit
 assert.ok(app.includes("from('messages').insert"),'real DM invitation');
 assert.ok(app.includes("rpc('start_direct_conversation'"),'create direct conversation if absent');
 assert.ok(app.includes('Quiz Studio')&&app.includes('Quiz Clash'),'quiz replacing flashcards in feed');
-assert.ok(app.includes("new DOMParser().parseFromString(raw,'text/html').body.textContent"),'HTML parsed as text not executable');
+assert.ok(app.includes("new DOMParser().parseFromString(raw,'text/html')")&&app.includes("doc.querySelectorAll('script,style,template,svg,noscript,iframe')"),'HTML parsed safely without running embedded scripts');
 assert.ok(app.includes("functions.invoke('neis-quiz-ai'"),'server-side AI generation');
 assert.ok(app.includes("neis_quiz_grade"),'server-side answer grading');
 assert.ok(app.includes("neis_quiz_room_scores"),'server-side multiplayer scores');

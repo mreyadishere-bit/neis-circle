@@ -26,23 +26,28 @@ Deno.serve(async(req:Request)=>{
   const notes=String(payload?.notes||"").trim();
   const topic=String(payload?.topic||"").trim().slice(0,100);
   const count=Math.max(3,Math.min(15,Math.floor(Number(payload?.count)||5)));
-  if(notes.length<30||notes.length>18000)return reply({error:"Provide 30–18,000 characters of notes."},400);
+  if(notes.length>18000||(!notes&&topic.length<3))return reply({error:"Add a topic of at least 3 characters or provide study notes (up to 18,000 characters)."},400);
   const limit=await client.rpc("neis_quiz_ai_claim");
   if(limit.error)return reply({error:"Daily AI limit reached (6 requests). Please use manual Quiz Studio or retry tomorrow."},429);
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),18000);
+  const timeout=setTimeout(()=>controller.abort(),35000);
   let result:Response;
   try{
    result=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+MODEL+":generateContent",{
     method:"POST",signal:controller.signal,
     headers:{"x-goog-api-key":key,"content-type":"application/json"},
-    body:JSON.stringify({contents:[{role:"user",parts:[{text:"Topic: "+topic+"\nRequested questions: "+count+"\nSource notes:\n"+notes}]}],
+    body:JSON.stringify({contents:[{role:"user",parts:[{text:"Topic: "+topic+"\nRequested questions: "+count+"\n"+(notes?"Source notes:\n"+notes:"No source notes supplied. Create foundational, age-appropriate practice questions about the topic; avoid uncertain claims.")}]}],
      systemInstruction:{parts:[{text:prompt}]},
-     generationConfig:{responseMimeType:"application/json",temperature:0.4,maxOutputTokens:4500}})
+     generationConfig:{responseMimeType:"application/json",temperature:0.35,maxOutputTokens:7000}})
    });
   }finally{clearTimeout(timeout)}
   if(result.status===429)return reply({error:"Free AI quota reached. Please retry later."},429);
-  if(!result.ok)return reply({error:"Quiz AI service temporarily unavailable."},503);
+  if(!result.ok){
+   if(result.status===401||result.status===403)return reply({error:"Gemini credentials or project access need attention."},503);
+   if(result.status===404)return reply({error:"The configured Gemini model is unavailable for this API key."},503);
+   if(result.status===400)return reply({error:"Gemini rejected this input. Try shorter notes."},400);
+   return reply({error:"Quiz AI service temporarily unavailable."},503);
+  }
   const data=await result.json();
   const output=(data?.candidates?.[0]?.content?.parts||[]).map((x:{text?:string})=>x.text||"").join("");
   let parsed:unknown;

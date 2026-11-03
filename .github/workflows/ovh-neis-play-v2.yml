@@ -1,22 +1,6 @@
 name: NEIS Play V2 Safe Release
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
-      - 'scripts/main-admin-auth-studio-v5.js'
-      - 'supabase/functions/neis-quiz-ai/index.ts'
-      - 'supabase/migrations/2026110321*.sql'
-      - 'qa/neis-play*.test.mjs'
-      - 'scripts/ops/ovh-deploy-neis-play-v2.py'
-      - '.github/workflows/ovh-neis-play-v2.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/ops/ovh-deploy-neis-play-v2.py'
-      - 'supabase/functions/neis-quiz-ai/index.ts'
-      - 'supabase/migrations/2026110321*.sql'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

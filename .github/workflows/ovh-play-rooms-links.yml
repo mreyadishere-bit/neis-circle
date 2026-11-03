@@ -1,28 +1,6 @@
 name: NEIS Play Room Lifecycle and Chat Links
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'scripts/05-social.js'
-      - 'supabase/migrations/20261103220000_neis_play_room_lifecycle.sql'
-      - 'qa/neis-play-room-links.test.mjs'
-      - 'qa/neis-play-notifications-browser.test.mjs'
-      - 'styles/neis-play-v1.css'
-      - 'qa/neis-play-hub-browser.test.mjs'
-      - 'scripts/ops/ovh-deploy-play-rooms-links.py'
-      - '.github/workflows/ovh-play-rooms-links.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'scripts/05-social.js'
-      - 'supabase/migrations/20261103220000_neis_play_room_lifecycle.sql'
-      - 'qa/neis-play-room-links.test.mjs'
-      - 'qa/neis-play-notifications-browser.test.mjs'
-      - 'styles/neis-play-v1.css'
-      - 'scripts/ops/ovh-deploy-play-rooms-links.py'
-      - '.github/workflows/ovh-play-rooms-links.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
