@@ -7,6 +7,9 @@ const css=fs.readFileSync('styles/neis-game-connectors-v1.css','utf8');
 const html=fs.readFileSync('index.html','utf8');
 assert.ok(html.includes('scripts/neis-game-connectors-v1.js')&&!html.includes('<script src="scripts/neis-play-v1.js'),'legacy in-app game engine is no longer loaded');
 assert.ok(js.includes('start_direct_conversation')&&js.includes('circle_messages'),'DM and Circle invites retained');
+assert.ok(!js.includes('neis-game-provider'),'no popup window reused');
+assert.ok(js.includes("window.open(url,'_blank','noopener,noreferrer')"),'all external games open in safe new tabs');
+
 assert.ok(!js.includes('setInterval(')&&!js.includes('chess.js@'),'no game polling or local chess engine');
 assert.ok(css.includes('@media(max-width:560px)')&&css.includes('@media(max-width:800px)'),'responsive modal sizes');
 assert.ok(js.includes('enhanceChatMessageText')&&js.includes('neis-connect-recipient'),'game invite chat cards retained');
