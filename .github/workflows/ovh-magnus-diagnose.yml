@@ -36,9 +36,12 @@ jobs:
           import subprocess,re
           def run(args,stdin=None):
             return subprocess.run(args,input=stdin,text=True,capture_output=True,timeout=30)
-          logs=run(['sudo','-n','/usr/bin/docker','logs','--since','18h','--tail','1200','supabase-edge-functions']).stderr
+          logs_result=run(['sudo','-n','/usr/bin/docker','logs','--since','18h','--tail','5000','supabase-edge-functions'])
+          logs=logs_result.stdout+'\n'+logs_result.stderr
           categories=re.findall(r'Magnus request failed:\s*([A-Z][A-Z_]{3,60})',logs)
           print('MAGNUS_ERROR_CATEGORIES='+','.join(categories[-12:]) if categories else 'MAGNUS_ERROR_CATEGORIES=NOT_FOUND')
+          print('MAGNUS_LOG_LINES='+str(len(logs.splitlines())))
+          print('MAGNUS_LOG_MARKERS='+str(len(re.findall(r'magnus',logs,re.I))))
           sql="""select 'magnus_messages_table='||(to_regclass('public.magnus_messages') is not null)::text;
           select 'magnus_claim_turn='||(to_regprocedure('public.magnus_claim_turn()') is not null)::text;
           select 'magnus_commit_turn='||(to_regprocedure('public.magnus_commit_turn(uuid,uuid,text,text,text)') is not null)::text;
