@@ -1,0 +1,101 @@
+name: OVH Magnus Timestamp Recovery
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103190000_magnus_claim_timestamp_fix.sql'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/ops/ovh-deploy-magnus-timefix-20261103.py'
+      - 'qa/magnus-timestamp-regression.test.mjs'
+      - '.github/workflows/ovh-magnus-timestamp-recovery.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/20261103190000_magnus_claim_timestamp_fix.sql'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/ops/ovh-deploy-magnus-timefix-20261103.py'
+      - '.github/workflows/ovh-magnus-timestamp-recovery.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-magnus-timestamp-recovery
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate syntax and Magnus behavior
+        run: |
+          set -euo pipefail
+          node --check scripts/magnus-neis-v1.js
+          node qa/magnus-timestamp-regression.test.mjs
+          node qa/magnus-private-chat.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-magnus-timefix-20261103.py
+  dry-run:
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH access
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage Magnus-only fix and run rolled-back authenticated SQL test
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/magnus-timefix-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103190000_magnus_claim_timestamp_fix.sql "$target:$stage/migration.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/magnus-neis-v1.js "$target:$stage/magnus-neis-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-magnus-timefix-20261103.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "python3 $stage/deploy.py --dry-run"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: dry-run
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH access
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Apply verified Magnus database fix and frontend release
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/magnus-timefix-20261103"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103190000_magnus_claim_timestamp_fix.sql "$target:$stage/migration.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/magnus-neis-v1.js "$target:$stage/magnus-neis-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-magnus-timefix-20261103.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "python3 $stage/deploy.py"
