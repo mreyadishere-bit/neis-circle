@@ -76,6 +76,9 @@ def main():
     run(COMPOSE+['config','--quiet'],timeout=45)
     test_in_rollback(sql)
     print('MAGNUS_DB_FUNCTION_DRY_RUN=PASS')
+    if '--dry-run' in sys.argv:
+        print('MAGNUS_DEPLOY_DRY_RUN_ONLY=SUCCESS')
+        return
     # Apply the database correction independently. It is safe if the UI
     # deployment fails, because this restores the existing AI path.
     db(sql)
