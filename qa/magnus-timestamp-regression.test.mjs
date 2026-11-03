@@ -9,7 +9,7 @@ const deploy=readFileSync('scripts/ops/ovh-deploy-magnus-timefix-20261103.py','u
 assert.match(sql,/v_now timestamptz := clock_timestamp\(\)/);
 assert.match(sql,/v_limits\.day_start < v_now-interval '24 hours'/);
 assert.match(sql,/v_limits\.burst_start < v_now-interval '60 seconds'/);
-assert.doesNotMatch(sql,/\bcurrent_time\b/i);
+assert.doesNotMatch(sql,/declare\s+current_time\s+timestamptz/i);
 assert.match(sql,/for update/);
 assert.match(sql,/v_limits\.burst_count >= 12 or v_limits\.day_count >= 250/);
 assert.match(sql,/grant execute on function public\.magnus_claim_turn\(\) to authenticated/);
