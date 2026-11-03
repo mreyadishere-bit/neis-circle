@@ -6,7 +6,7 @@
 .neis-games-overlay .neis-connect-dialog{position:absolute;inset:clamp(12px,3vh,26px) max(12px,calc((100vw - 1280px)/2));min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--card,#fff);border:1px solid var(--line,#d8e3ec);border-radius:24px;box-shadow:0 26px 80px rgba(3,18,35,.26);color:var(--ink,#182938)}
 .neis-games-overlay button{font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .neis-games-overlay button:disabled{cursor:wait;opacity:.6}
-.neis-games-overlay :is(button,input):focus-visible{outline:3px solid var(--accent,#2977bb);outline-offset:3px}
+.neis-games-overlay :is(button,input,a):focus-visible{outline:3px solid var(--accent,#2977bb);outline-offset:3px}
 .neis-games-overlay .neis-connect-header{flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding:clamp(20px,2.5vw,29px) clamp(19px,3vw,34px) 21px;border-bottom:1px solid var(--line,#dce7ef);background:var(--card,#fff)}
 .neis-games-overlay .neis-connect-header-copy{max-width:775px;min-width:0}
 .neis-games-overlay .neis-connect-eyebrow{display:inline-block;letter-spacing:.17em;font-weight:850;font-size:10px;color:var(--accent,#3179b6)}
@@ -58,8 +58,8 @@
 .neis-games-overlay .neis-connect-launch{flex:1;justify-content:space-between}
 .neis-games-overlay .neis-connect-launch span{font-size:18px}
 .neis-games-overlay .neis-connect-launch:hover,.neis-games-overlay .neis-connect-invite-main:hover,.neis-games-overlay .neis-connect-send:hover{filter:brightness(.94)}
-.neis-games-overlay .neis-connect-secondary{flex:0 0 auto;min-height:43px;padding:0 16px;border:1px solid var(--line,#d9e5ed);border-radius:11px;background:var(--soft,#f3f7fa);color:var(--ink,#263c4a);font-size:12px;font-weight:750}
-.neis-games-overlay .neis-connect-account{width:max-content;max-width:100%;background:transparent;border:0;padding:0;color:var(--accent,#2674b4);text-align:start;font-size:11px;font-weight:680}
+.neis-games-overlay .neis-connect-secondary{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;min-height:43px;padding:0 16px;border:1px solid var(--line,#d9e5ed);border-radius:11px;background:var(--soft,#f3f7fa);color:var(--ink,#263c4a);font-size:12px;font-weight:750;text-decoration:none}
+.neis-games-overlay .neis-connect-account{width:max-content;max-width:100%;background:transparent;border:0;padding:0;color:var(--accent,#2674b4);text-align:start;font-size:11px;font-weight:680;text-decoration:none}
 .neis-games-overlay .neis-connect-account:hover,.neis-games-overlay .neis-connect-text-button:hover{text-decoration:underline}
 .neis-games-overlay .neis-connect-link-box{display:grid;gap:8px;border-top:1px solid var(--line,#e3e9f0);padding-top:15px}
 .neis-games-overlay .neis-connect-link-box label{font-size:12px;font-weight:760}
@@ -273,4 +273,15 @@
  #view .chat-message .neis-chat-game-card{gap:7px;padding:9px}
  #view .chat-message .neis-chat-game-art{width:33px;height:38px;flex-basis:33px;font-size:22px;border-radius:9px}
  #view .chat-message .neis-chat-game-cta{font-size:9px;padding:6px;max-width:63px}
+}
+
+/* Native new-tab game links, and sidebar entry mounted after the sidebar labels. */
+.neis-games-overlay a.neis-connect-launch{text-decoration:none;cursor:pointer}
+.neis-games-overlay a.neis-connect-secondary:hover{border-color:var(--accent,#2977b5)}
+@media (min-width:1024px){
+ .rail.neis-hover-rail .nav-btn[data-neis-connect-open] .neis-connect-rail-icon{
+  grid-column:1;grid-row:1;align-self:center;justify-self:center;
+  width:28px;height:28px;display:grid;place-items:center;
+  font-size:19px;line-height:1;
+ }
 }
