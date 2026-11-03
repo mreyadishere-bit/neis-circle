@@ -54,7 +54,7 @@ try{
   assert.ok(!(await page.url()).includes('?play='),'closing clears invite query');
   assert.ok(!(await page.url()).includes('#/play/'),'closing clears invite hash');
   await page.locator('.rail-nav [data-neis-play-open]').click();
-  await page.locator('#neisPlayRoot [data-play="decks"]').click();
+  await page.locator('#neisPlayRoot .neis-play-tabs [data-play="decks"]').click();
   await page.locator('[data-play-form="quiz-new"] [name="title"]').fill('Physics fundamentals');
   await page.locator('[data-play-form="quiz-new"] [name="subject"]').fill('Electricity');
   await page.locator('[data-play-form="quiz-new"] button[type=submit]').click();
