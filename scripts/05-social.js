@@ -93,9 +93,16 @@ async function toggleMessageReaction(scope,messageId,emoji){
 function openMessageReactionDetails(scope,messageId,emoji){
   const rows=messageReactionRows(scope,messageId).filter(r=>r.emoji===emoji);
   if(!rows.length)return;
-  const people=rows.map(r=>profileData(r.user_id));
-  openModal(`<div class="modal-head"><div><h2>${esc(emoji)} ${t('Reactions','التفاعلات')}</h2><p>${rows.length} ${t(rows.length===1?'person reacted':'people reacted',rows.length===1?'شخص تفاعل':'أشخاص تفاعلوا')}</p></div><button class="close" data-close>×</button></div><div class="message-reaction-people">${rows.map((r,index)=>{const p=people[index],mine=same(r.user_id,authUser?.id);return `<button type="button" class="message-reaction-person" data-open-profile="${esc(r.user_id)}">${profileAvatar(p)}<span><b>${esc(p.full_name||t('NEIS Student','طالب NEIS'))}</b><small>${mine?t('You','أنت'):(p.username?'@'+esc(p.username):'')}</small></span><em>${esc(emoji)}</em></button>`}).join('')}</div>`);
+  const mine=rows.some(r=>same(r.user_id,authUser?.id));
+  const people=rows.map(r=>profileData(r.user_id)||{});
+  openModal(`<div class="modal-head"><div><h2>${esc(emoji)} ${t('Reactions','التفاعلات')}</h2><p>${rows.length} ${t(rows.length===1?'person reacted':'people reacted',rows.length===1?'شخص تفاعل':'أشخاص تفاعلوا')}</p></div><button class="close" data-close>×</button></div><div class="message-reaction-people">${rows.map((r,index)=>{const p=people[index],isMine=same(r.user_id,authUser?.id);return `<button type="button" class="message-reaction-person" data-open-profile="${esc(r.user_id)}">${profileAvatar(p)}<span><b>${esc(p.full_name||t('NEIS Student','طالب NEIS'))}</b><small>${isMine?t('You','أنت'):(p.username?'@'+esc(p.username):'')}</small></span><em>${esc(emoji)}</em></button>`}).join('')}</div>${mine?`<div class="modal-actions"><button type="button" class="secondary danger" data-remove-my-message-reaction>${t('Remove my reaction','إزالة تفاعلي')} ${esc(emoji)}</button></div>`:''}`);
   $$('[data-open-profile]').forEach(button=>button.onclick=()=>{closeModal();routeTo(`profile/${button.dataset.openProfile}`)});
+  const remove=$('[data-remove-my-message-reaction]');
+  if(remove)remove.onclick=async()=>{
+    remove.disabled=true;
+    closeModal();
+    await toggleMessageReaction(scope,messageId,emoji);
+  };
 }
 function bindMessageReactionButtons(root=document){
   root.querySelectorAll?.('[data-message-reaction-details]').forEach(button=>{
@@ -2180,7 +2187,7 @@ async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/obje
 async function deletePost(id){const p=byId(state.posts,id);if(!p||!await confirmAction(t('Delete post?','حذف المنشور؟'),p.title))return;const {error}=await sb.from('posts').delete().eq('id',id);if(error){toast(safeError(error,'delete this post'));return}handlePostRealtime({eventType:'DELETE',old:{id:p.id}});for(const url of postImages(p))await removeMediaUrl(url);toast(t('Post deleted.','تم حذف المنشور.'))}
 async function deleteGalleryItem(id){const g=byId(state.gallery,id);if(!g||!await confirmAction(t('Delete gallery item?','حذف عنصر المعرض؟'),(g.caption_en||g.caption_ar||t('This image','هذه الصورة'))))return;const {error}=await sb.from('gallery_items').delete().eq('id',id);if(error){toast(safeError(error,'delete this gallery item'));return}state.gallery=state.gallery.filter(item=>!same(item.id,id));window.NEISSecondaryData?.invalidate?.('gallery');window.NEISSecondaryData?.seed?.('gallery',state.gallery);await removeMediaUrl(g.image_url);render();toast(t('Gallery item deleted.','تم حذف عنصر المعرض.'))}
 async function deleteArticle(id){const a=byId(state.articles,id);if(!a||!await confirmAction(t('Delete article?','حذف المقال؟'),a.title_en||a.title_ar))return;const {error}=await sb.from('articles').delete().eq('id',id);if(error){toast(safeError(error,'delete this article'));return}state.articles=state.articles.filter(item=>!same(item.id,id));window.NEISSecondaryData?.invalidate?.('articles');window.NEISSecondaryData?.seed?.('articles',state.articles);await removeMediaUrl(a.cover_url);render();toast(t('Article deleted.','تم حذف المقال.'))}
-async function deleteCircleMessage(id){const m=byId(state.circleMessages,id);if(!m||!await confirmAction(t('Delete message?','حذف الرسالة؟'),t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.')))return;const {data,error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',id).select(chatFields.circleMessage).maybeSingle();if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}await handleCircleMessageRealtime({eventType:'UPDATE',new:data,old:m})}
+async function deleteCircleMessage(id){const m=byId(state.circleMessages,id);if(!m||!await confirmAction(t('Delete message?','حذف الرسالة؟'),t('It will remain as a deleted-message marker.','ستبقى علامة توضح أن الرسالة حُذفت.')))return;const {data,error}=await sb.rpc('neis_circle_delete_message',{p_message_id:Number(id)});if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}await handleCircleMessageRealtime({eventType:'UPDATE',new:data,old:m})}
 async function deleteDirectMessage(id){const m=byId(state.liveMessages,id);if(!m||(!same(m.sender_id,authUser.id)&&!state.isAdmin)||!await confirmAction(t('Permanently delete message?','حذف الرسالة نهائيًا؟'),t('The message will disappear for everyone and cannot be restored.','ستختفي الرسالة لدى الجميع ولا يمكن استعادتها.')))return;const messageId=String(id||'').trim();if(!messageId){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));return}const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));return}state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));render();toast(t('Message permanently deleted.','تم حذف الرسالة نهائيًا.'))}
 async function deleteConversation(id){if(!id||!await confirmAction(t('Permanently delete this chat?','حذف هذه المحادثة نهائيًا؟'),t('The complete conversation and all of its messages will be removed for both people. This cannot be undone.','ستُحذف المحادثة كاملةً بكل رسائلها لدى الطرفين، ولا يمكن التراجع عن ذلك.')))return;const {data,error}=await sb.rpc('delete_direct_conversation',{conversation_id_input:id});if(error||!data){toast(error?safeError(error,'delete this chat'):t('This chat could not be deleted.','تعذر حذف هذه المحادثة.'));return}state.activeConversationId='';state.conversations=state.conversations.filter(item=>!same(item.id,id));state.conversationMembers=state.conversationMembers.filter(item=>!same(item.conversation_id,id));state.liveMessages=state.liveMessages.filter(item=>!same(item.conversation_id,id));routeTo('messages',true);toast(t('Chat permanently deleted.','تم حذف المحادثة نهائيًا.'))}
 async function deleteMeeting(id){const m=byId(state.circleMeetings,id);if(!m||!await confirmAction(t('Delete meeting?','حذف الاجتماع؟'),t('The scheduled meeting will be removed permanently.','سيتم حذف الاجتماع المجدول نهائيًا.')))return;const {error}=await sb.from('circle_meetings').delete().eq('id',id);if(error){toast(safeError(error,'delete this meeting'));return}await handleCircleMeetingRealtime({eventType:'DELETE',old:m});toast(t('Meeting deleted.','تم حذف الاجتماع.'))}
@@ -3902,16 +3909,18 @@ window.NEISChatActionBridge={
       if(!body)return;
       if(body===String(message.body||'').trim()){closeModal();return}
       button.disabled=true;
-      const table=isCircle?'circle_messages':'messages';
       const editedAt=new Date().toISOString();
-      const {data,error}=await sb.from(table).update({body,edited_at:editedAt}).eq('id',key).eq('sender_id',authUser.id).select('id,body,edited_at');
-      if(error||!data?.length){
+      const result=isCircle
+        ?await sb.rpc('neis_circle_edit_message',{p_message_id:Number(key),p_body:body})
+        :await sb.from('messages').update({body,edited_at:editedAt}).eq('id',key).eq('sender_id',authUser.id).select('id,body,edited_at');
+      const {data,error}=result;
+      if(error||!(isCircle?data:data?.length)){
         toast(error?safeError(error,'edit this message'):t('This message could not be updated.','تعذر تعديل الرسالة.'));
         button.disabled=false;
         return;
       }
       message.body=body;
-      message.edited_at=editedAt;
+      message.edited_at=(isCircle?data.edited_at:data?.[0]?.edited_at)||editedAt;
       closeModal();
       render();
       toast(t('Message updated.','تم تعديل الرسالة.'));
@@ -4180,22 +4189,22 @@ window.neisDeleteMessageNow=async(scope,id,button)=>{
   try{
     if(scope==='circle'){
       const target=state.circleMessages.find(m=>same(m.id,messageId));
-      if(!target){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
-      const {error}=await sb.from('circle_messages').update({body:'',deleted_at:new Date().toISOString()}).eq('id',messageId);
-      if(error){toast(safeError(error,'delete this message'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
+      if(!target){toast(t('This message could not be identified.','تعذر تحديد هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original;btn.dataset.deleteBusy='0'}return}
+      const {data,error}=await sb.rpc('neis_circle_delete_message',{p_message_id:Number(messageId)});
+      if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original;btn.dataset.deleteBusy='0'}return}
       const local=state.circleMessages.find(m=>same(m.id,messageId));
-      if(local){local.body='';local.deleted_at=new Date().toISOString()}
+      if(local){Object.assign(local,data)}
       closeModal();
       if(state.view==='circle-detail'&&state.circleTab==='chat'){
         const flow=document.querySelector('#circleChatFlow');
-        const msgs=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId)&&!m.deleted_at);
+        const msgs=state.circleMessages.filter(m=>same(m.circle_id,state.activeCircleId));
         if(flow){flow.innerHTML=msgs.length?msgs.map((m,i)=>circleMessageBubble(m,msgs[i-1])).join(''):emptyState(t('No messages yet','لا توجد رسائل بعد'),t('Send the first message.','أرسل أول رسالة.'));bindV6(flow)}
       }
       toast(t('Message deleted.','تم حذف الرسالة.'));
       return;
     }
     const {data,error}=await sb.rpc('delete_direct_message',{message_id_input:messageId});
-    if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original}return}
+    if(error||!data){toast(error?safeError(error,'delete this message'):t('This message could not be deleted.','تعذر حذف هذه الرسالة.'));if(btn){btn.disabled=false;btn.innerHTML=original;btn.dataset.deleteBusy='0'}return}
     state.liveMessages=state.liveMessages.filter(item=>!same(item.id,messageId));
     closeModal();
     if(state.view==='messages'&&state.activeConversationId){
@@ -4207,7 +4216,7 @@ window.neisDeleteMessageNow=async(scope,id,button)=>{
   }catch(error){
     console.error('[NEIS direct delete v101]',error);
     toast(t('Could not delete this message.','تعذر حذف هذه الرسالة.'));
-    if(btn){btn.disabled=false;btn.innerHTML=original}
+    if(btn){btn.disabled=false;btn.innerHTML=original;btn.dataset.deleteBusy='0'}
   }
 };
 
