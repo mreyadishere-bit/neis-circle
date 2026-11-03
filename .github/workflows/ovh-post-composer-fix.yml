@@ -1,15 +1,6 @@
 name: OVH Post Composer Reliability Fix
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/02-content-admin.js'
-      - 'scripts/05-social.js'
-      - 'scripts/06-image-editor.js'
-      - 'qa/media-fast-publish-v3.test.mjs'
-      - 'scripts/ops/ovh-deploy-post-composer-fix.py'
-      - '.github/workflows/ovh-post-composer-fix.yml'
 permissions:
   contents: read
 concurrency:
