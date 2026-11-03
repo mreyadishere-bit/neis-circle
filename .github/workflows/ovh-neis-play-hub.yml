@@ -8,13 +8,6 @@ on:
       - 'qa/neis-play-hub-browser.test.mjs'
       - 'scripts/ops/ovh-deploy-neis-play-hub.py'
       - '.github/workflows/ovh-neis-play-hub.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
-      - 'scripts/ops/ovh-deploy-neis-play-hub.py'
-      - '.github/workflows/ovh-neis-play-hub.yml'
 permissions:
   contents: read
 concurrency:
