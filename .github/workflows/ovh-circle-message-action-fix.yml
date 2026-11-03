@@ -8,13 +8,6 @@ on:
       - 'qa/circle-message-actions-regression.test.mjs'
       - 'scripts/ops/ovh-deploy-circle-message-actions-20261103.py'
       - '.github/workflows/ovh-circle-message-action-fix.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'supabase/migrations/20261103180000_circle_message_action_permissions.sql'
-      - 'scripts/05-social.js'
-      - 'scripts/ops/ovh-deploy-circle-message-actions-20261103.py'
-      - '.github/workflows/ovh-circle-message-action-fix.yml'
 permissions:
   contents: read
 concurrency:
