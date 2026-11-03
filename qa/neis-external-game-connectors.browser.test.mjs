@@ -100,7 +100,7 @@ try {
    const style=getComputedStyle(el);
    const h=getComputedStyle(el.querySelector('button.primary'));
    const appy=getComputedStyle(el.querySelector('a.neis-home-appy-link'));
-   const rgb=style.color.match(/\\d+(?:\\.\\d+)?/g)?.slice(0,3).map(Number)||[];
+   const rgb=style.color.match(/[0-9]+(?:[.][0-9]+)?/g)?.slice(0,3).map(Number)||[];
    return {
     background:style.backgroundImage,
     textLight:rgb.length===3&&rgb.every(v=>v>220),
