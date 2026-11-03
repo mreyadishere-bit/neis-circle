@@ -287,3 +287,73 @@
 #view .neis-studio-saved-row strong{font-size:12px;font-weight:650}
 @media(max-width:850px){#view .neis-studio-start-grid{grid-template-columns:1fr}#view .neis-studio-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){#view .neis-studio-intro{min-height:0;padding:23px}#view .neis-studio-intro-art{display:none}#view :is(.neis-studio-create,.neis-studio-library,.neis-studio-community,.neis-studio-editor){padding:17px}#view .neis-studio-community-grid,#view .neis-studio-answers,#view .neis-studio-inline{grid-template-columns:1fr}#view .neis-studio-generate-footer button{width:100%}#view .neis-studio-methods{width:100%}#view .neis-studio-methods button{flex:1}}
+
+/* Navigation-safe compact Play presentation, sized for phones, tablets and laptops. */
+#view .neis-play-shell{width:100%;max-width:1120px;padding:12px clamp(12px,2.3vw,24px) 42px;min-height:0}
+#view .neis-play-header{padding:8px 0 16px}
+#view .neis-play-header h2{font-size:clamp(21px,2.4vw,27px)}
+#view .neis-play-content{padding-top:15px}
+#view .neis-play-tabs{gap:5px;margin-bottom:17px;display:flex;flex-wrap:nowrap;max-width:100%;overflow-x:auto;scrollbar-width:thin;padding-bottom:3px}
+#view .neis-play-tabs button{flex:0 0 auto;padding:9px 12px;font-size:12px;min-height:38px;white-space:nowrap}
+#view .neis-play-section,#view .neis-play-card{padding:clamp(14px,1.7vw,20px);border-radius:17px}
+#view .neis-play-room-top{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#view .neis-play-room-top h3{font-size:clamp(18px,2.1vw,22px)}
+#view .neis-play-room-top>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:6px}
+#view .neis-play-room-top button{min-height:36px;padding:8px 12px;font-size:12px;border-radius:10px}
+#view .neis-invite-panel{margin-top:12px}
+#view .neis-invite-panel>p{font-size:12px;line-height:1.5;margin:8px 0}
+#view .neis-invite-groups{gap:12px;margin-top:12px}
+#view .neis-invite-list{max-height:min(27vh,195px);scrollbar-width:thin;overscroll-behavior:contain;padding-right:2px}
+#view .neis-invite-choice{padding:7px 9px!important;min-height:40px!important;gap:8px!important}
+#view .neis-invite-choice span:nth-child(2){font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view .neis-invite-choice small{font-size:10px;white-space:nowrap}
+#view .neis-invite-avatar{width:27px;height:27px;flex:0 0 27px;font-size:11px}
+#view .neis-hub-intro{padding:3px 0 0}
+#view .neis-hub-intro h1{font-size:clamp(25px,3vw,35px)}
+#view .neis-game-grid{gap:10px}
+#view .neis-game-card{border-radius:16px}
+#view .neis-game-card-art{height:106px}
+#view .neis-game-card-art span{font-size:64px}
+#view .neis-game-card-copy{padding:13px 14px 16px}
+#view .neis-game-card h3{font-size:18px}
+#view .neis-hub-join{padding:10px 13px}
+#view .neis-hub-discover-grid{gap:10px}
+#view .neis-hub-daily,#view .neis-hub-events{min-height:160px;padding:17px 18px}
+#view .neis-hub-discover-grid h3{font-size:18px;margin:12px 0 6px}
+#view .neis-hub-room{padding:10px 12px;gap:10px}
+#view .neis-studio-v3{gap:12px;max-width:1040px}
+#view .neis-studio-v3 .neis-studio-intro{min-height:112px;padding:18px 22px}
+#view .neis-studio-v3 .neis-studio-intro-art{height:75px;flex-basis:95px}
+#view .neis-studio-v3 .neis-studio-intro-art span{height:64px;width:65px;font-size:43px}
+#view .neis-studio-v3 .neis-studio-intro-art i{height:29px;width:29px;font-size:18px}
+#view .neis-studio-v3 :is(.neis-studio-create,.neis-studio-library,.neis-studio-community,.neis-studio-editor){padding:18px}
+#view .neis-studio-v3 .neis-studio-workbench{max-width:740px}
+#view .neis-studio-v3 .neis-studio-section-title h3{font-size:20px;margin-bottom:12px}
+#view .neis-studio-v3 .neis-studio-form{gap:11px}
+#view .neis-studio-v3 .neis-studio-methods{margin-bottom:15px}
+#view .neis-studio-v3 .neis-studio-step{margin-bottom:13px}
+#view .neis-studio-v3 .neis-studio-form textarea{min-height:76px}
+#view .neis-play-champ-layout{max-width:1060px;margin:0 auto;grid-template-columns:minmax(0,1.04fr) minmax(300px,.96fr);gap:12px}
+#view .neis-play-champ-layout>.neis-play-section{padding:18px}
+#view .neis-play-champ-layout h2{font-size:clamp(21px,2.1vw,26px)}
+#view .neis-play-champ-create .neis-play-form{gap:11px}
+#view .neis-play-compact-empty{max-width:660px;padding:20px}
+@media(max-width:1020px){
+ #view .neis-play-shell{max-width:100%}
+ #view .neis-play-champ-layout{grid-template-columns:minmax(0,1fr)}
+ #view .neis-game-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:650px){
+ #view .neis-play-shell{padding:10px 12px 28px}
+ #view .neis-play-header{padding-bottom:10px}
+ #view .neis-play-tabs{margin-bottom:12px}
+ #view .neis-invite-groups,#view .neis-game-grid,#view .neis-hub-discover-grid{grid-template-columns:minmax(0,1fr)}
+ #view .neis-invite-list{max-height:150px}
+ #view .neis-play-room-top>div:last-child{width:100%}
+ #view .neis-play-room-top>div:last-child button{flex:1 1 auto}
+ #view .neis-hub-intro h1{font-size:26px}
+ #view .neis-studio-v3 .neis-studio-intro{padding:16px}
+ #view .neis-studio-v3 :is(.neis-studio-create,.neis-studio-library,.neis-studio-community,.neis-studio-editor){padding:14px}
+ #view .neis-game-card-art{height:auto;min-height:135px}
+ #view .neis-play-champ-layout>.neis-play-section{padding:14px}
+}
