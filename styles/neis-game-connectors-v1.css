@@ -286,26 +286,21 @@
  }
 }
 
-/* APPY belongs beside Explore Circles / Your connections in the home hero. */
+/* APPY is visually identical to the primary Explore Circles hero action. */
 #view .hero-main .neis-home-actions{
  display:flex;flex-wrap:wrap;align-items:center;gap:8px;position:relative;z-index:2;
 }
-#view .hero-main .neis-home-appy-link{
+#view .hero-main a.neis-home-appy-link{
  display:inline-flex;align-items:center;justify-content:center;
- box-sizing:border-box;min-height:43px;padding:0 16px;
- border:1px solid var(--line,#d9e3ec);border-radius:12px;
- background:var(--card,#fff);color:var(--ink,#142536);
- font-family:inherit;font-size:13px;font-weight:700;
+ box-sizing:border-box;height:43px;padding:0 16px;
+ border:0;border-radius:13px;
+ background:var(--accent);color:#fff;
+ font-family:inherit;font-size:inherit;font-weight:700;line-height:inherit;
  text-decoration:none;white-space:nowrap;cursor:pointer;
- transition:border-color .15s,transform .15s;
 }
-#view .hero-main .neis-home-appy-link:hover{
- border-color:var(--accent,#2d79b6);transform:translateY(-1px);
-}
-#view .hero-main .neis-home-appy-link:focus-visible{
+#view .hero-main a.neis-home-appy-link:focus-visible{
  outline:3px solid var(--accent,#2977bb);outline-offset:2px;
 }
 @media(max-width:520px){
  #view .hero-main .neis-home-actions{gap:7px}
- #view .hero-main .neis-home-appy-link{min-height:40px;padding-inline:12px;font-size:12px}
 }
