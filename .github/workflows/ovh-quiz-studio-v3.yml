@@ -13,8 +13,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
       - 'supabase/functions/neis-quiz-ai/index.ts'
       - 'scripts/ops/ovh-deploy-quiz-studio-v3.py'
       - '.github/workflows/ovh-quiz-studio-v3.yml'
