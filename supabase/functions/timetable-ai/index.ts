@@ -3,6 +3,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { GoogleGenAI, Type } from "npm:@google/genai@2.32.0";
 
 const PRIMARY_MODEL = "gemini-3.8-flash";
+// Used only if the primary model responds with repeated, quick HTTP 503 overloads.
+// Both models support native PDF/image inputs and the same structured schema.
+const OVERLOAD_FALLBACK_MODEL = "gemini-3.6-flash";
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "image/png",
@@ -275,16 +278,18 @@ CRITICAL RULES:
 async function callGeminiWithRetry(
   ai: GoogleGenAI,
   contents: Array<Record<string, unknown>>,
-  // Retry only a *quick* 503 response, once. The 80s SDK deadline
-  // plus the 95s browser deadline must not turn into several minutes.
+  // Preserve one quick primary retry; permit one fallback *only* after a second
+  // fast 503. Never retry 429, malformed files or authentication errors.
   maxRetries = 1,
 ) {
   let lastError: unknown = null;
-  const requestStartedAt = Date.now();
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  const startedAt = Date.now();
+  for (let attempt = 0; attempt <= maxRetries + 1; attempt++) {
+    const fallback = attempt > maxRetries;
+    const model = fallback ? OVERLOAD_FALLBACK_MODEL : PRIMARY_MODEL;
     try {
-      const response = await ai.models.generateContent({
-        model: PRIMARY_MODEL,
+      return await ai.models.generateContent({
+        model,
         contents,
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
@@ -292,23 +297,23 @@ async function callGeminiWithRetry(
           responseSchema: TIMETABLE_RESPONSE_SCHEMA,
         },
       });
-      return response;
     } catch (err: unknown) {
       lastError = err;
       const status = Number((err as { status?: number })?.status || 0);
-      const msg = err instanceof Error ? err.message : String(err);
-      // Google's 503 UNAVAILABLE signals temporary provider overload, not
-      // a bad PDF or exceeded user quota. One jittered backoff is appropriate
-      // only if the first 503 arrives quickly enough to fit the UI deadline.
-      const isProvider503 = status === 503 ||
-        (status === 0 && /503|high demand|service unavailable|overloaded/i.test(msg));
-      const canRetryWithinDeadline =
-        attempt < maxRetries && Date.now() - requestStartedAt < 10000;
-      if (!isProvider503 || !canRetryWithinDeadline) {
+      const message = err instanceof Error ? err.message : String(err);
+      const isOverload503 = status === 503 ||
+        (status === 0 && /503|high demand|service unavailable|overloaded/i.test(message));
+      // Full backend response must still fit the frontend's existing 95s
+      // deadline. If a request is already slow, fail cleanly so the user's
+      // original PDF and prompt remain available for the existing Retry button.
+      if (!isOverload503 || fallback || Date.now() - startedAt >= 9000) {
         throw err;
       }
-      const backoffMs = 1200 + Math.floor(Math.random() * 600);
-      await new Promise((r) => setTimeout(r, backoffMs));
+      // Back off briefly before the primary retry and fallback. 429 stays
+      // untouched because a quota error should never trigger extra traffic.
+      const baseDelay = attempt < maxRetries ? 900 : 300;
+      const delay = baseDelay + Math.floor(Math.random() * 300);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw lastError;
@@ -561,7 +566,7 @@ Deno.serve(async (request: Request) => {
           ? validateAndNormalizeEntries(extractedObj.detected_lessons)
           : validatedEntries,
       },
-      model: PRIMARY_MODEL,
+      model: String(response?.modelVersion ?? PRIMARY_MODEL).replace(/^models\\//, ""),
       provider: "gemini",
     });
   } catch (error: unknown) {
