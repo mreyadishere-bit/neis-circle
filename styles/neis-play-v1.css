@@ -206,3 +206,84 @@
 .bubble.mine .neis-chat-link{color:inherit;text-decoration:underline}
 @media(max-width:920px){#view .neis-play-champ-layout{grid-template-columns:1fr}}
 @media(max-width:640px){#view .neis-hub-room{flex-wrap:wrap}#view .neis-hub-room-copy{flex-basis:calc(100% - 65px)}#view .neis-hub-room-actions{width:100%;justify-content:flex-start;padding-inline-start:55px}#view .neis-play-compact-empty{padding:20px}#view .neis-play-inline-actions button{flex:1}}
+
+/* Quiz Studio: focused editorial interface, scoped to the existing NEIS page. */
+#view .neis-studio-v3{--studio-ink:var(--ink,#142a3b);--studio-muted:var(--muted,#65798a);--studio-border:var(--line,#dce6ed);--studio-paper:var(--card,#fff);color:var(--studio-ink);display:grid;gap:18px;margin:0 auto;max-width:1150px}
+#view .neis-studio-v3 *{box-sizing:border-box}
+#view .neis-studio-v3 .neis-studio-intro{display:flex;align-items:center;justify-content:space-between;gap:20px;background:linear-gradient(115deg,#16364c 0%,#215e7f 62%,#397c9c 100%);color:#fff;border-radius:20px;padding:25px clamp(20px,3vw,34px);min-height:154px;overflow:hidden;position:relative}
+#view .neis-studio-eyebrow{font-size:10px;font-weight:850;letter-spacing:.12em;color:var(--accent,#2776ae);text-transform:uppercase}
+#view .neis-studio-intro .neis-studio-eyebrow{color:#abd9f2}
+#view .neis-studio-intro h2{font-size:clamp(26px,3.5vw,37px);letter-spacing:-.055em;margin:8px 0}
+#view .neis-studio-intro p{color:#e5f1f9;font-size:13px;max-width:520px;line-height:1.6;margin:0}
+#view .neis-studio-intro-art{flex:0 0 130px;height:120px;position:relative;display:grid;place-items:center}
+#view .neis-studio-intro-art span{display:grid;place-items:center;border-radius:24px;width:90px;height:100px;background:#fff;color:#236080;font-weight:800;font-size:56px;transform:rotate(13deg);box-shadow:0 14px 25px #071b2936}
+#view .neis-studio-intro-art i{font-style:normal;position:absolute;top:6px;right:5px;background:#f1c96c;color:#153c54;font-size:22px;font-weight:900;width:40px;height:40px;display:grid;place-items:center;border-radius:50%}
+#view .neis-studio-start-grid{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(280px,.85fr);gap:16px;align-items:start}
+#view .neis-studio-create,#view .neis-studio-library,#view .neis-studio-community,#view .neis-studio-editor{background:var(--studio-paper);border:1px solid var(--studio-border);border-radius:19px;padding:24px;min-width:0;box-shadow:0 8px 25px #1e3e5210}
+#view .neis-studio-section-title h3{font-size:23px;letter-spacing:-.035em;margin:7px 0 20px}
+#view .neis-studio-form{display:grid;gap:16px}
+#view .neis-studio-form label,#view .neis-studio-review-form label{display:grid;gap:8px;min-width:0;font-size:12px;font-weight:730;color:var(--studio-ink)}
+#view .neis-studio-form :is(input:not([type=file]),textarea,select),#view .neis-studio-review-form :is(input,textarea,select){width:100%;max-width:100%;min-width:0;font-family:inherit;font-size:13px;line-height:1.5;color:var(--studio-ink);padding:12px 14px;border:1px solid var(--studio-border);border-radius:11px;background:var(--studio-paper);box-shadow:none;outline:none}
+#view .neis-studio-form textarea,#view .neis-studio-review-form textarea{resize:vertical}
+#view .neis-studio-form :is(input,textarea,select):focus,#view .neis-studio-review-form :is(input,textarea,select):focus{border-color:var(--accent,#2874b2);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,#2874b2) 13%,transparent)}
+#view .neis-studio-form button[type=submit],#view .neis-studio-review-form button[type=submit]{background:var(--accent,#2874b2);color:#fff;border:0;padding:12px 19px;min-height:42px;width:max-content;max-width:100%;border-radius:11px;font-weight:750;font-family:inherit;font-size:13px;cursor:pointer}
+#view .neis-studio-form button:disabled{opacity:.6;cursor:progress}
+#view .neis-studio-library-list{display:grid;gap:8px}
+#view .neis-studio-library-item{width:100%;display:flex;align-items:center;text-align:start;gap:12px;border:1px solid var(--studio-border);background:var(--studio-paper);padding:10px;border-radius:13px;color:var(--studio-ink);font:inherit;cursor:pointer}
+#view .neis-studio-library-item>span:nth-child(2){flex:1;display:grid;gap:3px;min-width:0}
+#view .neis-studio-library-item strong{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view .neis-studio-library-item small{font-size:11px;color:var(--studio-muted)}
+#view .neis-studio-library-item>span:last-child{color:var(--studio-muted);font-size:26px}
+#view .neis-studio-book-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:var(--soft,#eaf2f7);color:var(--accent,#2874b2);font-size:22px}
+#view .neis-studio-library-item:hover{border-color:var(--accent,#2874b2)}
+#view .neis-studio-community{padding:23px}
+#view .neis-studio-community-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#view .neis-studio-community-item{display:grid;justify-items:start;gap:5px;padding:15px;border:1px solid var(--studio-border);border-radius:14px}
+#view .neis-studio-community-item>span{font-size:26px;color:var(--accent,#2874b2)}
+#view .neis-studio-community-item strong{font-size:13px;min-height:35px}
+#view .neis-studio-community-item small{font-size:11px;color:var(--studio-muted)}
+#view .neis-studio-community-item button{background:var(--soft,#eaf2f7);border:1px solid var(--studio-border);color:var(--studio-ink);border-radius:10px;padding:8px 11px;margin-top:8px;font-weight:700}
+#view .neis-studio-editor-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+#view .neis-studio-editor-head h3{font-size:clamp(22px,3vw,28px);letter-spacing:-.035em;margin:5px 0}
+#view .neis-studio-editor-head p{margin:0;color:var(--studio-muted);font-size:12px}
+#view .neis-studio-editor-actions{display:flex;gap:8px;flex-wrap:wrap}
+#view .neis-studio-quiet{padding:10px 12px!important;border:1px solid var(--studio-border)!important;border-radius:10px!important;background:var(--studio-paper)!important;color:var(--studio-ink)!important;font-weight:700}
+#view .neis-studio-methods{display:flex;flex-wrap:wrap;gap:7px;width:max-content;max-width:100%;background:var(--soft,#eaf1f8);border:1px solid var(--studio-border);border-radius:13px;padding:5px;margin-bottom:21px}
+#view .neis-studio-methods button{padding:11px 15px;border-radius:9px;border:0;background:transparent;color:var(--studio-muted);font-family:inherit;font-weight:750;font-size:12px;cursor:pointer}
+#view .neis-studio-methods button.active{background:var(--studio-paper);color:var(--studio-ink);box-shadow:0 2px 8px #0c2c4214}
+#view .neis-studio-workbench{max-width:790px;margin:0 auto 16px}
+#view .neis-studio-step{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+#view .neis-studio-step>span{flex:0 0 44px;width:44px;height:44px;display:grid;place-items:center;background:var(--soft,#eaf2f8);border-radius:14px;color:var(--accent,#2776a8);font-size:18px;font-weight:850}
+#view .neis-studio-step h4{font-size:19px;letter-spacing:-.025em;margin:0}
+#view .neis-studio-step p{color:var(--studio-muted);margin:5px 0 0;font-size:12px}
+#view .neis-studio-upload{display:flex!important;align-items:center;flex-direction:column;justify-content:center;text-align:center;min-height:122px;background:color-mix(in srgb,var(--soft,#edf3f7) 50%,var(--studio-paper));border:1px dashed var(--studio-border);padding:18px;border-radius:14px;cursor:pointer}
+#view .neis-studio-upload input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+#view .neis-studio-upload-icon{font-size:22px;width:33px;height:33px;display:grid;place-items:center;border-radius:9px;background:var(--studio-paper);border:1px solid var(--studio-border);color:var(--accent)}
+#view .neis-studio-upload strong{font-size:12px}
+#view .neis-studio-upload small{color:var(--studio-muted);font-size:11px;font-weight:400}
+#view .neis-studio-upload-name{font-size:11px;color:var(--accent,#2570a8);overflow-wrap:anywhere}
+#view .neis-studio-generate-footer{display:flex;align-items:end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+#view .neis-studio-generate-footer label{width:135px}
+#view .neis-studio-generate-footer button{min-width:230px}
+#view .neis-studio-disclaimer,#view .neis-studio-muted{font-size:11px;color:var(--studio-muted);line-height:1.6;margin:0}
+#view .neis-studio-answers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#view .neis-studio-answers label{position:relative}
+#view .neis-studio-answers label>span{position:absolute;top:33px;left:12px;font-size:12px;font-weight:850;color:var(--accent,#2874b2)}
+#view .neis-studio-answers label input{padding-left:31px!important}
+#view .neis-studio-inline{display:grid;grid-template-columns:minmax(120px,.35fr) 1fr;gap:12px}
+#view .neis-studio-submit{margin-top:3px}
+#view .neis-studio-review{background:var(--soft,#f2f7fa);padding:20px;border-radius:16px;margin:16px 0}
+#view .neis-studio-review-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+#view .neis-studio-review-head h4{margin:6px 0;font-size:18px}
+#view .neis-studio-review-form{display:grid;gap:15px;margin-top:16px}
+#view .neis-studio-review-form fieldset{border:1px solid var(--studio-border);background:var(--studio-paper);border-radius:14px;padding:18px;display:grid;gap:13px;min-width:0}
+#view .neis-studio-review-form legend{font-size:13px;font-weight:750;padding:0 8px}
+#view .neis-studio-saved{border-top:1px solid var(--studio-border);padding-top:16px;margin-top:26px}
+#view .neis-studio-saved-title{display:flex;justify-content:space-between;align-items:center}
+#view .neis-studio-saved-title h4{font-size:17px;margin:0 0 12px}
+#view .neis-studio-saved-title span{color:var(--studio-muted);font-size:12px}
+#view .neis-studio-saved-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--studio-border)}
+#view .neis-studio-saved-row>span{display:grid;place-items:center;background:var(--soft,#edf3f8);border-radius:8px;width:28px;height:28px;color:var(--accent);font-size:12px;font-weight:800}
+#view .neis-studio-saved-row strong{font-size:12px;font-weight:650}
+@media(max-width:850px){#view .neis-studio-start-grid{grid-template-columns:1fr}#view .neis-studio-community-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){#view .neis-studio-intro{min-height:0;padding:23px}#view .neis-studio-intro-art{display:none}#view :is(.neis-studio-create,.neis-studio-library,.neis-studio-community,.neis-studio-editor){padding:17px}#view .neis-studio-community-grid,#view .neis-studio-answers,#view .neis-studio-inline{grid-template-columns:1fr}#view .neis-studio-generate-footer button{width:100%}#view .neis-studio-methods{width:100%}#view .neis-studio-methods button{flex:1}}
