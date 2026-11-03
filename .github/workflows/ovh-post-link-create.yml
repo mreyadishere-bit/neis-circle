@@ -1,0 +1,63 @@
+name: OVH Post Link Creation Fix
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-deploy-post-link-create-20261103.py'
+      - '.github/workflows/ovh-post-link-create.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-deploy-post-link-create-20261103.py'
+      - '.github/workflows/ovh-post-link-create.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-post-link-create-release
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify localized post composer and rollback script
+        run: |
+          set -euo pipefail
+          node --check scripts/03-auth-i18n.js
+          node qa/post-link-create.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-post-link-create-20261103.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy isolated composer update and verify live Caddy files
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/post-link-create-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/03-auth-i18n.js "$target:$stage/03-auth-i18n.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-post-link-create-20261103.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
