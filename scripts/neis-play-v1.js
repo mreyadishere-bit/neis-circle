@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 if(window.NEISPlay)return;
-const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],quizzes:[],quiz:null,quizQuestions:[],quizPosition:0,quizFeedback:null,quizScore:0,quizImport:null,daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
+const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],quizzes:[],quiz:null,quizQuestions:[],quizPosition:0,quizFeedback:null,quizScore:0,quizImport:null,quizMode:'ai',quizGenerating:false,pendingQuizQuestions:[],pendingInvite:null,daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
 const t=(en,ar)=>typeof state!=='undefined'&&state.lang==='ar'?ar:en;
 const e=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const api=()=>typeof sb!=='undefined'?sb:null;
@@ -390,6 +390,9 @@ async function action(a){
    if(S.dailyResult)return;
    const choice=Number(a.slice(6));S.dailyResult=await request(api().rpc('neis_play_answer_daily',{p_day:S.daily.day,p_choice:choice}));render();return;
   }
+  if(a==='quiz-close'){S.quiz=null;S.pendingQuizQuestions=[];S.quizMode='ai';render();return}
+  if(a==='quiz-discard-ai'){S.pendingQuizQuestions=[];render();return}
+  if(a.startsWith('quiz-mode:')){S.quizMode=a.slice(10)==='manual'?'manual':'ai';render();return}
   if(a.startsWith('quiz-remove:')){S.pendingQuizQuestions.splice(Number(a.slice(12)),1);render();return}
   if(a==='quiz-save-ai'){
    if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Quiz creator only.','صاحب الاختبار فقط.'));
@@ -458,24 +461,49 @@ async function form(form){
    await request(api().rpc('neis_quiz_add_question',{p_quiz:S.quiz.id,p_prompt:String(data.get('prompt')||'').trim(),p_options:opts,p_correct:Number(data.get('correct')),p_explanation:String(data.get('explanation')||'')}));
    await loadQuiz(S.quiz.id);S.status=t('Question added.','تمت إضافة السؤال.');render();return;
   }
+  if(kind==='quiz-review'){
+   if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Only the quiz owner can save questions.','صاحب الاختبار فقط يقدر يحفظ الأسئلة.'));
+   const pending=[...(S.pendingQuizQuestions||[])];if(!pending.length)throw Error(t('No questions to save.','لا توجد أسئلة للحفظ.'));
+   for(let i=0;i<pending.length;i++){
+    const p=String(data.get('p'+i)||'').trim();
+    const opts=[0,1,2,3].map(j=>String(data.get('o'+i+'_'+j)||'').trim());
+    const answer=Number(data.get('c'+i));
+    await request(api().rpc('neis_quiz_add_question',{p_quiz:S.quiz.id,p_prompt:p,p_options:opts,p_correct:answer,p_explanation:String(data.get('x'+i)||'')}));
+    S.pendingQuizQuestions.shift();
+   }
+   await loadQuiz(S.quiz.id);S.status=t('Questions saved to your quiz.','تم حفظ الأسئلة في اختبارك.');render();return;
+  }
   if(kind==='quiz-generate'){
    if(!S.quiz||S.quiz.owner_id!==who())throw Error(t('Only the quiz creator can generate questions.','صاحب الاختبار فقط يمكنه إنشاء الأسئلة.'));
    const upload=data.get('file');let notes=String(data.get('notes')||'').trim();
+   let topic=String(data.get('topic')||'').trim()||String(S.quiz.subject||'').trim();
    if(upload&&upload.size){
     if(upload.size>300000)throw Error(t('Choose a file under 300 KB.','اختر ملفًا أصغر من 300 كيلوبايت.'));
     if(!/\.(txt|html|htm)$/i.test(upload.name))throw Error(t('Only TXT or HTML summaries are supported.','يُسمح بملفات TXT أو HTML فقط.'));
     const raw=await upload.text();
-    const extracted=/\.html?$/i.test(upload.name)?new DOMParser().parseFromString(raw,'text/html').body.textContent:raw;
-    notes=(notes+'\n'+(extracted||'')).trim().slice(0,18000);
+    if(/\.html?$/i.test(upload.name)){
+     const doc=new DOMParser().parseFromString(raw,'text/html');
+     doc.querySelectorAll('script,style,template,svg,noscript,iframe').forEach(n=>n.remove());
+     notes=(notes+'\n'+(doc.body?.textContent||'')).trim().slice(0,18000);
+    }else notes=(notes+'\n'+raw).trim().slice(0,18000);
    }
-   if(notes.length<30)throw Error(t('Add at least 30 characters of topic or study notes.','أضف 30 حرفًا على الأقل من الملاحظات.'));
+   if(!topic&&!notes)throw Error(t('Add a topic, study notes, or upload a summary.','اكتب موضوعًا أو ملاحظات أو ارفع ملخص.'));
    const count=Math.min(15,Math.max(5,Number(data.get('count'))||5));
-   S.status=t('Generating your questions…','جارٍ إنشاء أسئلتك…');render();
-   const {data:result,error:failed}=await api().functions.invoke('neis-quiz-ai',{body:{notes,topic:S.quiz.subject||S.quiz.title,count}});
-   if(failed||!Array.isArray(result?.questions))throw Error(t('AI generation is temporarily unavailable. You can add questions manually.','خدمة الذكاء الاصطناعي غير متاحة حاليًا. يمكنك إضافة الأسئلة يدويًا.'));
-   S.pendingQuizQuestions=result.questions.slice(0,15).filter(q=>typeof q.prompt==='string'&&Array.isArray(q.options)&&q.options.length===4&&Number.isInteger(q.correct_index)&&q.correct_index>=0&&q.correct_index<4);
-   if(!S.pendingQuizQuestions.length)throw Error(t('No valid questions were generated.','لم يتم إنشاء أسئلة صالحة.'));
-   S.status=t('Review the generated questions before saving them.','راجع الأسئلة قبل حفظها.');render();return;
+   S.quizGenerating=true;S.status=t('Creating questions from your material…','بننشئ أسئلة من محتواك…');render();
+   try{
+    const {data:result,error:failed}=await api().functions.invoke('neis-quiz-ai',{body:{notes,topic:topic||S.quiz.title,count}});
+    if(failed){
+     let detail='';
+     try{const response=failed.context;if(response?.json){const body=await response.json();detail=body.error||body.message||''}}catch{}
+     throw Error(detail||failed.message||t('AI service unavailable.','الخدمة غير متاحة.'));
+    }
+    if(result?.error)throw Error(String(result.error));
+    if(!Array.isArray(result?.questions))throw Error(t('No valid questions returned.','لم يتم استلام أسئلة صالحة.'));
+    S.pendingQuizQuestions=result.questions.slice(0,15).filter(q=>typeof q.prompt==='string'&&q.prompt.trim().length>=5&&Array.isArray(q.options)&&q.options.length===4&&q.options.every(o=>typeof o==='string'&&o.trim())&&Number.isInteger(q.correct_index)&&q.correct_index>=0&&q.correct_index<4);
+    if(!S.pendingQuizQuestions.length)throw Error(t('No valid questions could be generated from this input.','لم نتمكن من إنشاء أسئلة صالحة من المحتوى.'));
+    S.status=t('Questions ready! Review or edit them before saving.','الأسئلة جاهزة! راجعها وعدّلها قبل الحفظ.');
+   }finally{S.quizGenerating=false;render()}
+   return;
   }
   if(kind==='championship'){
    const id=await request(api().rpc('neis_play_create_championship',{p_circle:data.get('circle'),p_title:String(data.get('title')).trim(),p_game:data.get('game'),p_start:new Date(data.get('starts')).toISOString()}));
@@ -499,6 +527,7 @@ document.addEventListener('click',event=>{
  if(!control)return;event.preventDefault();if(S.busy)return;
  S.busy=true;Promise.resolve(action(control.dataset.play)).finally(()=>{S.busy=false});
 },true);
+document.addEventListener('change',event=>{if(event.target?.id==='neisQuizFile'){const name=document.getElementById('neisQuizFileName');if(name)name.textContent=event.target.files?.[0]?.name||''}},true);
 document.addEventListener('submit',event=>{
  const form=event.target.closest('#neisPlayRoot [data-play-form]');
  if(!form)return;event.preventDefault();if(S.busy)return;S.busy=true;Promise.resolve(formHandler(form)).finally(()=>{S.busy=false});
