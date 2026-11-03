@@ -66,6 +66,14 @@ try {
   await page.locator('[data-neis-connect-open]').first().click();
   await page.locator('#neisGamesOverlay').waitFor();
   assert.equal(await page.locator('.neis-connect-card').count(),13,'thirteen carefully chosen games in catalog');
+  assert.equal(await page.locator('.neis-connect-list-heading,.neis-connect-provider-note').count(),0,'redundant Discover Games and Official Sites headers removed');
+  const appy=page.locator('.neis-connect-filters .neis-connect-appy-link');
+  assert.equal(await appy.count(),1,'APPY shortcut appears once beside category filters');
+  assert.equal(await appy.getAttribute('href'),'https://appy.neiscircle.site/','APPY shortcut targets the requested site');
+  assert.equal(await appy.getAttribute('target'),'_blank','APPY opens in its own browser tab');
+  assert.equal(await appy.getAttribute('rel'),'noopener noreferrer','APPY has safe external-link isolation');
+  assert.equal(await page.locator('.neis-connect-filters [data-game^="filter:"]').count(),5,'all category filters remain');
+
   assert.equal(await page.locator('.neis-connect-cover svg').count(),14,'distinct vector covers on every card and active game');
   assert.equal(await page.evaluate(()=>window.__reads.length),0,'opening games must not query contacts or Circles');
   assert.equal(await page.locator('#messages-view').count(),1,'original NEIS chat remains in DOM');
