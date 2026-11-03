@@ -48,7 +48,7 @@ def main():
   target.parent.mkdir(parents=True,exist_ok=True)
   shutil.copy2(STAGE/staged,target)
  for name in ('main-admin-roles-v1.js','super-admin-management-v1.js','main-admin-auth-studio-v5.js'):
-  expr=r'(scripts/'+re.escape(name)+r')(?:\\?[^"\\s]*)?'
+  expr=r'(scripts/'+re.escape(name)+r')(?:\?[^"\s]*)?'
   html,count=re.subn(expr,lambda m:m.group(1)+'?v='+VERSION,html,count=1)
   require(count==1,'MISSING_SCRIPT_REFERENCE_'+name)
  (temp/'index.html').write_text(html)
