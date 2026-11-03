@@ -66,6 +66,14 @@ def main():
  html=swap(html,old_styles,'styles/neis-game-connectors-v1.css')
  html=swap(html,old_scripts,'scripts/neis-game-connectors-v1.js')
  html=swap(html,['scripts/navigation-v14.js'],'scripts/navigation-v14.js')
+ # The release is cloned from the active OVH site, not the repository index.html.
+ # Make Game Hub resources non-blocking on the *deployed* HTML as well.
+ stylesheet=r'<link rel="stylesheet" href="styles/neis-game-connectors-v1.css?v='+revision+r'" media="print" onload="this.media=\'all\'">'
+ html,n=re.subn(r'<link\\b[^>]*href="styles/neis-game-connectors-v1\\.css\\?v='+revision+r'"[^>]*>',lambda _m:stylesheet,html,count=1)
+ check(n==1,'GAME_CSS_NONBLOCKING_SWAP_FAILED')
+ script=r'<script src="scripts/neis-game-connectors-v1.js?v='+revision+r'" async></script>'
+ html,n=re.subn(r'<script\\b[^>]*src="scripts/neis-game-connectors-v1\\.js\\?v='+revision+r'"[^>]*></script>',lambda _m:script,html,count=1)
+ check(n==1,'GAME_JS_ASYNC_SWAP_FAILED')
  check(html.count('scripts/neis-game-connectors-v1.js')==1,'GAME_SCRIPT_DUPLICATE')
  check(html.count('scripts/navigation-v14.js')==1,'MOBILE_NAV_SCRIPT_DUPLICATE')
  check(html.count('styles/neis-game-connectors-v1.css')==1,'GAME_STYLE_DUPLICATE')
