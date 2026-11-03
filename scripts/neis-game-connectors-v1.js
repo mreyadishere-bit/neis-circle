@@ -348,24 +348,16 @@ function attach(){
  if(!legacyGamesCleaned){
   legacyGamesCleaned=true;
   for(const btn of document.querySelectorAll('button[data-neis-connect-open]')){
-   if(!btn.closest('.rail-nav,#liveChatForm,#circleChatForm,#mobileNavRoot'))btn.remove();
+   if(!btn.closest('.rail-nav,#mobileNavRoot'))btn.remove();
   }
  }
  const railEntry=rail?.querySelector('[data-neis-connect-open]');
  if(railEntry){railEntry.title=tr('Games','الألعاب');railEntry.setAttribute('aria-label',tr('Games','الألعاب'))}
- const view=document.querySelector('#view');
+ // Games stay available in the sidebar and mobile More menu, not chat composers.
+ // Remove legacy composer buttons without touching drafts or other chat controls.
+ const view=document.getElementById('view');
  if(view)for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
-  const existing=form.querySelector('[data-neis-connect-open]');
-  if(existing){
-   existing.title=tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة');
-   existing.setAttribute('aria-label',existing.title);
-   const label=existing.querySelector('.neis-connect-chat-label');if(label)label.textContent=tr('Games','الألعاب');
-   continue;
-  }
-  const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.className='neis-play-chat-trigger';
-  btn.setAttribute('aria-label',tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة'));btn.title=tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة');
-  btn.className='neis-connect-chat-trigger';btn.innerHTML='<span aria-hidden="true">🎮</span><span class="neis-connect-chat-label">'+tr('Games','الألعاب')+'</span>';
-  const textarea=form.querySelector('textarea');if(textarea)form.insertBefore(btn,textarea);else form.append(btn);
+  for(const button of form.querySelectorAll('[data-neis-connect-open],.neis-connect-chat-trigger,.neis-play-chat-trigger'))button.remove();
  }
 }
 document.addEventListener('click',evt=>{
