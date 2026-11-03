@@ -52,7 +52,9 @@ jobs:
       - name: Install browser test runner
         run: npm install --no-save playwright
       - name: Verify native Play page and existing chat on desktop and mobile
-        run: node qa/neis-play-browser.test.mjs
+        run: |
+          node qa/neis-play-browser.test.mjs
+          node qa/neis-play-hub-browser.test.mjs
   preflight:
     needs: browser
     runs-on: ubuntu-24.04
