@@ -29,6 +29,7 @@
       '<section class="mobile-nav-sheet"><div class="mobile-nav-head"><h2 id="mobileNavTitle">'+label('All tools','كل الأدوات')+'</h2><button class="mobile-nav-close" type="button" data-mobile-close aria-label="'+label('Close','إغلاق')+'">×</button></div>'+
       '<nav class="mobile-nav-list" aria-label="'+label('All navigation destinations','كل وجهات التنقل')+'">'+
       destinations.map(function(item){var cls='mobile-nav-item'+(item[4]==='admin'?' admin-mobile'+(admin?' visible':''):'')+((appState&&appState.view===item[0])?' active':'');return '<button type="button" class="'+cls+'" data-nav="'+item[0]+'">'+svg(item[1])+'<span>'+label(item[2],item[3])+'</span></button>'}).join('')+
+      '<button type="button" class="mobile-nav-item neis-mobile-game-entry" data-neis-connect-open><span class="neis-mobile-game-icon" aria-hidden="true">🎮</span><span>'+label('Games','الألعاب')+'</span></button>'+
       '<button type="button" class="mobile-nav-item" data-action="settings">'+svg('settings')+'<span>'+label('Settings','الإعدادات')+'</span></button>'+
       '</nav></section></div>';
     document.body.classList.add('mobile-nav-open');
