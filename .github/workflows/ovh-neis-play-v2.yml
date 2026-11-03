@@ -1,0 +1,136 @@
+name: NEIS Play V2 Safe Release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'styles/neis-play-v1.css'
+      - 'scripts/main-admin-auth-studio-v5.js'
+      - 'supabase/functions/neis-quiz-ai/index.ts'
+      - 'supabase/migrations/2026110321*.sql'
+      - 'qa/neis-play*.test.mjs'
+      - 'scripts/ops/ovh-deploy-neis-play-v2.py'
+      - '.github/workflows/ovh-neis-play-v2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'styles/neis-play-v1.css'
+      - 'scripts/main-admin-auth-studio-v5.js'
+      - 'supabase/functions/neis-quiz-ai/index.ts'
+      - 'scripts/ops/ovh-deploy-neis-play-v2.py'
+      - '.github/workflows/ovh-neis-play-v2.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-neis-play-v2-safe
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Run syntax and security regression tests
+        run: |
+          set -euo pipefail
+          node --check scripts/neis-play-v1.js
+          node --check scripts/main-admin-auth-studio-v5.js
+          python3 -m py_compile scripts/ops/ovh-deploy-neis-play-v2.py
+          node qa/neis-play-v1.test.mjs
+          node qa/neis-play-v2.test.mjs
+  browser:
+    runs-on: ubuntu-24.04
+    needs: validate
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Install browser test runner
+        run: npm install --no-save playwright
+      - name: Verify native Play page and existing chat on desktop and mobile
+        run: node qa/neis-play-browser.test.mjs
+  preflight:
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin OVH SSH host
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Stage and run SQL rollback test without modifying production
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-play-v2-stage"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-play-v1.js "$target:$stage/neis-play-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v5.js "$target:$stage/main-admin-auth-studio-v5.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/neis-quiz-ai/index.ts "$target:$stage/neis-quiz-ai.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103210000_neis_quiz_studio.sql "$target:$stage/quiz-studio.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103211000_neis_quiz_rooms.sql "$target:$stage/quiz-rooms.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103212000_neis_quiz_ai_limits.sql "$target:$stage/quiz-limits.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-neis-play-v2.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin OVH SSH host
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Publish isolated Quiz AI and native NEIS Play assets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-play-v2-stage"
+          for file in scripts/neis-play-v1.js styles/neis-play-v1.css scripts/main-admin-auth-studio-v5.js supabase/functions/neis-quiz-ai/index.ts supabase/migrations/20261103210000_neis_quiz_studio.sql supabase/migrations/20261103211000_neis_quiz_rooms.sql supabase/migrations/20261103212000_neis_quiz_ai_limits.sql scripts/ops/ovh-deploy-neis-play-v2.py; do
+            case "$file" in
+              scripts/neis-play-v1.js) dest=neis-play-v1.js;;
+              styles/neis-play-v1.css) dest=neis-play-v1.css;;
+              scripts/main-admin-auth-studio-v5.js) dest=main-admin-auth-studio-v5.js;;
+              supabase/functions/neis-quiz-ai/index.ts) dest=neis-quiz-ai.ts;;
+              *210000*) dest=quiz-studio.sql;;
+              *211000*) dest=quiz-rooms.sql;;
+              *212000*) dest=quiz-limits.sql;;
+              *) dest=deploy.py;;
+            esac
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$file" "$target:$stage/$dest"
+          done
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
