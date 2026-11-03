@@ -14,6 +14,7 @@ on:
       - 'scripts/timetable-ai-v1.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
       - 'qa/mobile-nav-keyboard.browser.test.mjs'
+      - 'qa/neis-mobile-ui-polish.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -31,6 +32,7 @@ on:
       - 'scripts/timetable-ai-v1.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
       - 'qa/mobile-nav-keyboard.browser.test.mjs'
+      - 'qa/neis-mobile-ui-polish.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -70,6 +72,7 @@ jobs:
       # event loop and ignores per-locator timeouts.
       - run: timeout --signal=TERM --kill-after=15s 210s node qa/neis-external-game-connectors.browser.test.mjs
       - run: timeout --signal=TERM --kill-after=15s 150s node qa/mobile-nav-keyboard.browser.test.mjs
+      - run: timeout --signal=TERM --kill-after=15s 150s node qa/neis-mobile-ui-polish.browser.test.mjs
   preflight:
     needs: browser
     runs-on: ubuntu-24.04
