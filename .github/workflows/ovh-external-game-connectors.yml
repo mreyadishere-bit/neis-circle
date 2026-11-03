@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/neis-game-connectors-v1.js'
+      - 'scripts/featured-articles-v160.js'
+      - 'qa/home-best-articles-hidden.test.mjs'
       - 'styles/neis-game-connectors-v1.css'
       - 'scripts/navigation-v14.js'
       - 'styles/ui-v14.css'
@@ -19,6 +21,8 @@ on:
     branches: [main]
     paths:
       - 'scripts/neis-game-connectors-v1.js'
+      - 'scripts/featured-articles-v160.js'
+      - 'qa/home-best-articles-hidden.test.mjs'
       - 'styles/neis-game-connectors-v1.css'
       - 'scripts/navigation-v14.js'
       - 'styles/ui-v14.css'
@@ -46,6 +50,8 @@ jobs:
       - run: |
           set -euo pipefail
           node --check scripts/neis-game-connectors-v1.js
+          node --check scripts/featured-articles-v160.js
+          node qa/home-best-articles-hidden.test.mjs
           node --check scripts/navigation-v14.js
           node --check scripts/05-social.js
           node --check scripts/magnus-neis-v1.js
@@ -94,6 +100,7 @@ jobs:
           stage="/home/ubuntu/neis-backups/neis-connectors-v1-stage"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "install -d -m 700 $stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/featured-articles-v160.js "$remote:$stage/featured-articles-v160.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/ui-v14.css "$remote:$stage/ui-v14.css"
@@ -132,6 +139,7 @@ jobs:
           remote="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/neis-connectors-v1-stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/featured-articles-v160.js "$remote:$stage/featured-articles-v160.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/ui-v14.css "$remote:$stage/ui-v14.css"
