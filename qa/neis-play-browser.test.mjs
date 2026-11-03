@@ -8,7 +8,7 @@ try{
     await page.evaluate(()=>{window.state={view:'home',lang:'en'}});
     await page.addStyleTag({path:'styles/neis-play-v1.css'});
     await page.addScriptTag({path:'scripts/neis-play-v1.js'});
-    assert.equal(await page.locator('[data-neis-play-open]').count(),2);
+    assert.ok((await page.locator('[data-neis-play-open]').count())>=3,'sidebar, mobile and Home entry points');
     await page.locator('[data-neis-play-open]').nth(mobile?1:0).click({force:true});
     await page.locator('#neisPlayRoot').waitFor();
     assert.equal(await page.locator('#original-home').count(),1,'original page must remain untouched');
