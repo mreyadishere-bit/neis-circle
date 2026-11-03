@@ -162,6 +162,8 @@ function page(){
 function render(){
  if(!UI.open||!overlay())return;
  const root=overlay();
+ root.setAttribute('lang',tr('en','ar'));
+ root.setAttribute('dir',tr('ltr','rtl'));
  const pane=root.querySelector('.neis-connect-layout');
  const previousTop=pane?.scrollTop||0;
  const previousTargets=[...root.querySelectorAll('.neis-connect-recipient-items')].map(el=>el.scrollTop);
@@ -288,6 +290,7 @@ function enhanceChatMessageText(el){
  link.target='_blank';
  link.rel='noopener noreferrer';
  link.referrerPolicy='no-referrer';
+ link.setAttribute('dir',tr('ltr','rtl'));
  link.setAttribute('aria-label',tr('Open '+svc.name+' game','افتح لعبة '+svc.name));
  const icon=document.createElement('span');
  icon.className='neis-chat-game-art';
@@ -298,7 +301,7 @@ function enhanceChatMessageText(el){
  const eyebrow=document.createElement('span');
  eyebrow.className='neis-chat-game-eyebrow';eyebrow.textContent=tr('GAME INVITATION','دعوة إلى لعبة');
  const title=document.createElement('strong');title.textContent=svc.name;
- const host=document.createElement('small');host.textContent=new URL(url).hostname;
+ const host=document.createElement('small');host.setAttribute('dir','ltr');host.textContent=new URL(url).hostname;
  info.append(eyebrow,title,host);
  const cta=document.createElement('span');
  cta.className='neis-chat-game-cta';cta.textContent=tr('Join game ↗','انضم للعبة ↗');
@@ -316,6 +319,7 @@ function enhanceChatMessageText(el){
   }catch(_){copy.textContent=tr('Copy failed','تعذّر النسخ')}
  });
  el.dataset.neisGameEnhanced='1';
+ el.dataset.neisGameRaw=raw;
  el.replaceChildren(link,copy);
 }
 function enhanceChatInvites(node){
@@ -335,9 +339,17 @@ function attach(){
  for(const btn of document.querySelectorAll('button[data-neis-connect-open]')){
   if(!btn.closest('.rail-nav,#liveChatForm,#circleChatForm,#mobileNavRoot'))btn.remove();
  }
+ const railEntry=rail?.querySelector('[data-neis-connect-open]');
+ if(railEntry){railEntry.title=tr('Games','الألعاب');railEntry.setAttribute('aria-label',tr('Games','الألعاب'))}
  const view=document.querySelector('#view');
  if(view)for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
-  if(form.querySelector('[data-neis-connect-open]'))continue;
+  const existing=form.querySelector('[data-neis-connect-open]');
+  if(existing){
+   existing.title=tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة');
+   existing.setAttribute('aria-label',existing.title);
+   const label=existing.querySelector('.neis-connect-chat-label');if(label)label.textContent=tr('Games','الألعاب');
+   continue;
+  }
   const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.className='neis-play-chat-trigger';
   btn.setAttribute('aria-label',tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة'));btn.title=tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة');
   btn.className='neis-connect-chat-trigger';btn.innerHTML='<span aria-hidden="true">🎮</span><span class="neis-connect-chat-label">'+tr('Games','الألعاب')+'</span>';
@@ -368,8 +380,21 @@ document.addEventListener('keydown',evt=>{
  }
 });
 let observer=null;
+function updateLanguage(){
+ attach();
+ document.querySelectorAll('.message-text[data-neis-game-enhanced="1"]').forEach(el=>{
+  const original=el.dataset.neisGameRaw;
+  if(!original)return;
+  el.removeAttribute('data-neis-game-enhanced');
+  el.textContent=original;
+  enhanceChatMessageText(el);
+ });
+ if(UI.open)render();
+}
 function initialize(){
  attach();
+ const langWatcher=new MutationObserver(updateLanguage);
+ langWatcher.observe(document.documentElement,{attributes:true,attributeFilter:['lang','dir']});
  const view=document.getElementById('view');
  if(view)enhanceChatInvites(view);
  if(!observer&&view){
