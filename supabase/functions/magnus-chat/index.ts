@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const MODEL="gemini-3.5-flash-lite";
-const FAST_MODEL="gemini-3-flash-preview";
+const FAST_MODEL="gemini-3.1-flash-lite";
 const RESPONSE_HEADERS={
  "content-type":"application/json; charset=utf-8",
  "access-control-allow-origin":"*",
