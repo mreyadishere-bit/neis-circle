@@ -54,14 +54,16 @@ jobs:
   browser:
     needs: static
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: {node-version: '22'}
       - run: npm install --no-save playwright
-      - run: node qa/neis-external-game-connectors.browser.test.mjs
-      - run: node qa/mobile-nav-keyboard.browser.test.mjs
+      # Bound browser tests even when a DOM mutation loop starves Playwright's
+      # event loop and ignores per-locator timeouts.
+      - run: timeout --signal=TERM --kill-after=15s 210s node qa/neis-external-game-connectors.browser.test.mjs
+      - run: timeout --signal=TERM --kill-after=15s 150s node qa/mobile-nav-keyboard.browser.test.mjs
   preflight:
     needs: browser
     runs-on: ubuntu-24.04
