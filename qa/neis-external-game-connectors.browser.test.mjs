@@ -55,7 +55,9 @@ try {
     rpc(name,args){window.__sent.push({name,args});return Promise.resolve({data:name==='start_direct_conversation'?'conversation-1':true,error:null})}
    };
   });
-  await page.addStyleTag({path:'styles/app.css'});
+  // Supply only the primary-button theme used by the comparison, not the
+  // whole production layout CSS (which hides the desktop rail at 360px).
+  await page.addStyleTag({content:':root{--accent:#2676b5} button{font:inherit;color:inherit} .primary{height:43px;padding:0 16px;border:0;border-radius:13px;background:var(--accent);color:#fff;font-weight:700}'});
   await page.addStyleTag({path:'styles/neis-game-connectors-v1.css'});
   await page.evaluate(()=>{for(let i=0;i<10;i++){const b=document.createElement('button');b.type='button';b.dataset.neisConnectOpen='1';b.textContent='Games';document.querySelector('.bottom-nav').before(b)}});
   await page.addScriptTag({path:'scripts/navigation-v14.js'});
