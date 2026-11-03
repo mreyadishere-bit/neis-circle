@@ -1,26 +1,6 @@
-name: NEIS Magnus Private Chat
+name: NEIS Magnus Private Chat (Legacy Bootstrap)
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'supabase/migrations/20261103150000_magnus_private_chat.sql'
-      - 'supabase/functions/magnus-chat/index.ts'
-      - 'scripts/magnus-neis-v1.js'
-      - 'scripts/05-social.js'
-      - 'styles/magnus-neis-v1.css'
-      - 'scripts/ops/ovh-deploy-magnus-neis-v1.py'
-      - 'qa/magnus-private-chat.test.mjs'
-      - '.github/workflows/ovh-magnus-private-chat.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'supabase/migrations/20261103150000_magnus_private_chat.sql'
-      - 'supabase/functions/magnus-chat/index.ts'
-      - 'scripts/magnus-neis-v1.js'
-      - 'scripts/05-social.js'
-      - 'styles/magnus-neis-v1.css'
-      - 'scripts/ops/ovh-deploy-magnus-neis-v1.py'
-      - '.github/workflows/ovh-magnus-private-chat.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
