@@ -18,6 +18,8 @@ create policy magnus_private_read on public.magnus_messages
  for select to authenticated using(user_id=auth.uid());
 revoke all on public.magnus_messages from public,anon,authenticated;
 grant select on public.magnus_messages to authenticated;
+grant select,insert,delete on public.magnus_messages to service_role;
+grant usage,select on sequence public.magnus_messages_id_seq to service_role;
 
 create table if not exists public.magnus_rate_limits(
   user_id uuid primary key references auth.users(id) on delete cascade,
