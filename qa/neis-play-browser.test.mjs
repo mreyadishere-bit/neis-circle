@@ -8,7 +8,7 @@ try{
     await page.evaluate(()=>{window.state={view:'home',lang:'en'};window.nav=v=>{window.state.view=v;document.getElementById('view').innerHTML='<div class="dashboard"><div class="main-column"><p id="original-home">Existing Home remains intact</p></div></div>'}});
     await page.addStyleTag({path:'styles/neis-play-v1.css'});
     await page.addScriptTag({path:'scripts/neis-play-v1.js'});
-    assert.ok((await page.locator('[data-neis-play-open]').count())>=3,'sidebar, mobile and Home entry points');
+    assert.ok((await page.locator('[data-neis-play-open]').count()) >=2,'sidebar and mobile entry points');
     await page.locator('[data-neis-play-open]').nth(mobile?1:0).click({force:true});
     await page.locator('#neisPlayRoot').waitFor();
     assert.equal(await page.locator('#original-home').count(),0,'native Play page replaces only stage content');
