@@ -14,7 +14,10 @@ assert.match(frontend,/const \{data,error\}=await invokeWithDeadline\(body\)/);
 assert.match(frontend,/stateAI\.lastFailed=\{text,file\}/,'retry must preserve PDF');
 assert.match(frontend,/stateAI\.busy=false;draw\(\)/,'loading state must always clear');
 assert.match(edge,/httpOptions:\s*\{\s*timeout:\s*80000,/,'backend must have network timeout');
-assert.match(edge,/maxRetries = 0,/,'backend must not spend several minutes retrying');
+assert.match(edge,/maxRetries = 1,/,'backend permits one fast primary 503 retry');
+assert.match(edge,/OVERLOAD_FALLBACK_MODEL = "gemini-3\.6-flash"/,'backend uses only verified secondary model');
+assert.match(edge,/Date\.now\(\) - startedAt >= 9000/,'late errors must not launch additional 80s requests');
+assert.match(edge,/fallback \|\| Date\.now\(\)/,'fallback must never retry recursively');
 
 async function runScenario({language='en',network='hang'}){
   let pendingTimeout=null, cleared=false, capturedSignal=null;
