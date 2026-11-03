@@ -428,17 +428,27 @@ function initialize(){
  observer=new MutationObserver(records=>{
   let needsAttach=false;
   for(const record of records){
+   const inChat=record.target?.closest?.('#chatFlow,#circleChatFlow');
+   const fullViewChange=record.target===view;
+   // Most realtime/feed mutations affect posts, counters and other widgets.
+   // Do not query their subtrees at all.
+   if(!inChat&&!fullViewChange){
+    for(const node of record.addedNodes){
+     if(node.nodeType!==1)continue;
+     if(node.matches?.('.message-text,.chat-message,#chatFlow,#circleChatFlow')){
+      enhanceChatInvites(node);
+     }else if(node.matches?.('#liveChatForm,#circleChatForm')){
+      needsAttach=true;
+     }
+    }
+    continue;
+   }
    for(const node of record.addedNodes){
     if(node.nodeType!==1)continue;
-    // Check nearest chat flow first. Ignore ordinary DOM updates completely.
-    if(node.matches?.('.message-text,.chat-message,#chatFlow,#circleChatFlow')||
-       node.closest?.('#chatFlow,#circleChatFlow')){
-     enhanceChatInvites(node);
-     continue;
-    }
-    // A view replacement can contain a newly mounted chat with messages.
+    if(inChat){enhanceChatInvites(node);continue}
+    // A full view navigation can mount a chat and its composer in one pass.
     const chat=node.matches?.('#chatFlow,#circleChatFlow')?node:
-      node.querySelector?.('#chatFlow,#circleChatFlow');
+       node.querySelector?.('#chatFlow,#circleChatFlow');
     if(chat)enhanceChatInvites(chat);
     if(!needsAttach&&(node.matches?.('#liveChatForm,#circleChatForm')||
        node.querySelector?.('#liveChatForm,#circleChatForm')))needsAttach=true;
