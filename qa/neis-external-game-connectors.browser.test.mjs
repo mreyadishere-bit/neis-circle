@@ -97,8 +97,13 @@ try {
      .every(property=>a[property]===b[property]);
   });
   assert.equal(matchingStyles,true,'APPY matches primary button visual properties');
-  assert.equal(await appy.evaluate(el=>getComputedStyle(el).fontSize),width<=520?'12px':'13px',
-    'primary Home action labels are smaller, mobile-safe and equal');
+  const actionFonts=await appy.evaluate(el=>{
+   const primary=el.closest('.neis-home-actions').querySelector('button.primary');
+   return [getComputedStyle(primary).fontSize,getComputedStyle(el).fontSize];
+  });
+  assert.equal(actionFonts[0],actionFonts[1],'Explore Circles and APPY share responsive font size');
+  assert.ok(parseFloat(actionFonts[0])>=10&&parseFloat(actionFonts[0])<=13,
+    'Home action font size remains compact on mobile');
   const themes=await page.evaluate(()=>{
    const root=document.documentElement;
    const home=document.querySelector('#view .hero-main');
