@@ -94,6 +94,7 @@ def main():
  check(count>100,'LIVE_RELEASE_INCOMPLETE')
  revision=os.environ.get('GITHUB_SHA','')[:12]
  check(bool(re.fullmatch('[0-9a-f]{12}',revision)),'INVALID_REVISION')
+ version=MARKER+'-'+revision
  release=RELEASES/('neis-play-v1-'+revision)
  building=Path(str(release)+'.building')
  check(not release.exists() and not building.exists(),'RELEASE_ALREADY_EXISTS')
@@ -104,11 +105,11 @@ def main():
   target.write_text(contents)
  index=current
  if 'styles/neis-play-v1.css' not in index:
-  index=index.replace('</head>',f'  <link rel="stylesheet" href="styles/neis-play-v1.css?v={MARKER}">\n</head>')
- else:index=re.sub(r'(styles/neis-play-v1\.css)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+MARKER,index,count=1)
+  index=index.replace('</head>',f'  <link rel="stylesheet" href="styles/neis-play-v1.css?v={version}">\n</head>')
+ else:index=re.sub(r'(styles/neis-play-v1\.css)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+version,index,count=1)
  if 'scripts/neis-play-v1.js' not in index:
-  index=index.replace('</body>',f'  <script src="scripts/neis-play-v1.js?v={MARKER}" defer></script>\n</body>')
- else:index=re.sub(r'(scripts/neis-play-v1\.js)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+MARKER,index,count=1)
+  index=index.replace('</body>',f'  <script src="scripts/neis-play-v1.js?v={version}" defer></script>\n</body>')
+ else:index=re.sub(r'(scripts/neis-play-v1\.js)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+version,index,count=1)
  (building/'index.html').write_text(index)
  check(index.count('scripts/neis-play-v1.js')==1 and
        index.count('styles/neis-play-v1.css')==1,'DUPLICATE_ASSETS')
