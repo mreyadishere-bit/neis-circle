@@ -89,10 +89,29 @@ try {
   const matchingStyles=await appy.evaluate(el=>{
    const reference=el.closest('.hero-main').querySelector('[data-nav="circles"]');
    const a=getComputedStyle(el),b=getComputedStyle(reference);
-   return ['backgroundColor','color','borderRadius','height','paddingLeft','paddingRight','fontWeight']
+   return ['backgroundColor','color','borderRadius','height','paddingLeft','paddingRight','fontWeight','fontSize','lineHeight','fontFamily']
      .every(property=>a[property]===b[property]);
   });
   assert.equal(matchingStyles,true,'APPY matches primary button visual properties');
+  // Verify dark mode specifically, since its old light-tinted hero could
+  // create poor contrast, and its accent-contrast may change with the theme.
+  await page.evaluate(()=>document.documentElement.dataset.theme='dark');
+  const darkHero=await page.locator('.hero-main').evaluate(el=>{
+   const style=getComputedStyle(el);
+   const h=getComputedStyle(el.querySelector('button.primary'));
+   const appy=getComputedStyle(el.querySelector('a.neis-home-appy-link'));
+   const rgb=style.color.match(/\\d+(?:\\.\\d+)?/g)?.slice(0,3).map(Number)||[];
+   return {
+    background:style.backgroundImage,
+    textLight:rgb.length===3&&rgb.every(v=>v>220),
+    actionSame:['backgroundColor','color','fontSize','lineHeight','fontWeight','height','borderRadius'].every(k=>h[k]===appy[k])
+   };
+  });
+  assert.ok(darkHero.background.includes('gradient'),'dark hero must use dark gradient instead of old pale mint');
+  assert.equal(darkHero.textLight,true,'dark hero text has high contrast');
+  assert.equal(darkHero.actionSame,true,'APPY and Explore Circles remain identical in dark mode');
+  await page.evaluate(()=>document.documentElement.dataset.theme='light');
+
   assert.equal(await appy.getAttribute('href'),'https://appy.neiscircle.site/','APPY opens the requested website');
   assert.equal(await appy.getAttribute('target'),'_blank','APPY opens in a separate browser tab');
   assert.equal(await appy.getAttribute('rel'),'noopener noreferrer','APPY uses safe new-tab navigation');
