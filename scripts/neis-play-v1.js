@@ -12,7 +12,7 @@ const label=(game)=>({chess:t('Chess Arena','ساحة الشطرنج'),sketch:t(
 const error=err=>{S.status=String(err?.message||err||t('Something went wrong.','حدث خطأ.')).replace(/[_]/g,' ');render()};
 function button(text,action,more=''){return '<button type="button" data-play="'+action+'" '+more+'>'+text+'</button>'}
 async function request(q){if(!api()||!who())throw Error(t('Please sign in first.','سجّل الدخول أولاً.'));const res=await q;if(res.error)throw res.error;return res.data}
-function roomLink(){return location.origin+location.pathname+'?play='+encodeURIComponent(S.room.code)}
+function roomLink(){const url=new URL(location.origin+location.pathname);url.searchParams.set('play',S.room.code);url.hash='/play/'+S.room.code;return url.toString()}
 function installNavButtons(){
  if(document.querySelector('[data-neis-play-open]'))return;
  const rail=document.querySelector('.rail-nav');
@@ -46,7 +46,7 @@ function attachActivityEntries(){
 function observeApp(){
  const view=document.getElementById('view');if(!view)return;
  attachActivityEntries();
- const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];}else show();}else if(!S.open)attachActivityEntries()});
+ const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];}else show();}else if(!S.open)attachActivityEntries();if(pendingInviteCode()&&who()&&!S.room&&!joiningInvite)void enterPendingInvite()});
  observer.observe(view,{childList:true,subtree:false});
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';const view=document.getElementById('view');if(!view)throw Error('NEIS page container unavailable');view.replaceChildren(r)}
@@ -316,11 +316,43 @@ async function syncNow(){
  S.room={...r,events:[]};if(delta.length){S.events.push(...delta);S.seq=delta.at(-1).id}
  if(S.room.game==='quiz')await fetchQuizScores();render();
 }
+function pendingInviteCode(){
+ try{
+  const url=new URL(location.href);
+  const hashMatch=/^#\/play\/([a-fA-F0-9]{10,16})$/.exec(url.hash);
+  const raw=url.searchParams.get('play')||hashMatch?.[1]||'';
+  const code=raw.trim().toUpperCase();
+  return /^[A-F0-9]{10}(?:[A-F0-9]{6})?$/.test(code)?code:null;
+ }catch{return null}
+}
+let joiningInvite=false;
+async function enterPendingInvite(){
+ const code=pendingInviteCode();
+ if(!code||!who()||!api()||!document.getElementById('view')||joiningInvite)return;
+ if(S.room?.code===code)return;
+ joiningInvite=true;
+ try{
+  if(!S.open){
+   S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
+   show();
+  }
+  const id=await request(api().rpc('neis_play_join_room',{p_code:code}));
+  await openRoom(id);
+  S.status='';
+ }catch(err){
+  if(S.open)error(err);
+ }finally{joiningInvite=false}
+}
 async function open(){
- if(S.open)return;S.open=true;S.originalView=typeof state!=='undefined'?state.view:null;
- show();await fetchLists();
- const match=new URLSearchParams(location.search).get('play');
- if(match&&/^[A-F0-9]{16}$/.test(match)){try{const id=await request(api().rpc('neis_play_join_room',{p_code:match}));await openRoom(id)}catch(err){error(err)}}
+ if(S.open){
+  if(pendingInviteCode())await enterPendingInvite();
+  return;
+ }
+ S.open=true;
+ S.originalView=typeof state!=='undefined'?state.view:null;
+ show();
+ await fetchLists();
+ if(pendingInviteCode())await enterPendingInvite();
 }
 function close(){
  S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];S.seq=0;S.selected='';const r=root();if(r)r.remove();if(typeof nav==='function')nav('home');const u=new URL(location.href);if(u.searchParams.has('play')){u.searchParams.delete('play');history.replaceState(null,'',u.pathname+u.search+u.hash)}
@@ -534,6 +566,7 @@ document.addEventListener('submit',event=>{
 },true);
 async function formHandler(f){await form(f)}
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'&&S.open&&!S.busy)close()});
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installNavButtons();observeApp()},{once:true});else{installNavButtons();observeApp()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{installNavButtons();observeApp();void enterPendingInvite()},{once:true});else{installNavButtons();observeApp();void enterPendingInvite()}
+window.addEventListener('popstate',()=>void enterPendingInvite());window.addEventListener('hashchange',()=>void enterPendingInvite());
 window.NEISPlay={open,close,get active(){return S.open}};
 })();
