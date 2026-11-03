@@ -23,11 +23,13 @@ function verify(raw){
  if(u.protocol!=='https:'||u.username||u.password||!allowed.has(u.hostname.toLowerCase())||u.href.length>1800)throw Error(lang('Enter a valid HTTPS game invitation link from one of the listed platforms.','أدخل رابط دعوة HTTPS صحيح من إحدى منصات الألعاب المذكورة.'));
  return u.toString();
 }
-function external(url,mode='popup'){
+function external(url){
  const safe=verify(url);
- if(mode==='popup'&&window.innerWidth>700){
-  const popup=window.open(safe,'neis-game-'+(stateUI.selected||'external'),'popup=yes,width=1050,height=780,noopener,noreferrer');
-  if(popup)return;
+ // Open a blank, same-origin popup on a direct user click; sever opener before
+ // navigating to the provider. On devices that block popups, open a normal tab.
+ if(window.innerWidth>700){
+  const popup=window.open('', 'neis-game-window','width=1050,height=780,resizable=yes,scrollbars=yes');
+  if(popup){popup.opener=null;popup.location.replace(safe);return}
  }
  window.open(safe,'_blank','noopener,noreferrer');
 }
@@ -98,7 +100,7 @@ async function handleAction(action){
   if(url)external(url);return;
  }
  if(action==='invite'){verify(stateUI.link);stateUI.panel=stateUI.panel==='invite'?'catalog':'invite';render();return}
- if(action==='copy'){const link=verify(stateUI.link);await navigator.clipboard.writeText(link);notice(lang('Link copied.','تم نسخ الرابط.'));return}
+ if(action==='copy'){const link=verify(stateUI.link);if(!navigator.clipboard?.writeText)throw Error(lang('Copy this link manually in your browser.','انسخ الرابط يدويًا من المتصفح.'));await navigator.clipboard.writeText(link);notice(lang('Link copied.','تم نسخ الرابط.'));return}
  if(action.startsWith('send-user:')||action.startsWith('send-circle:')){
   if(stateUI.pending)return;
   stateUI.pending=true;try{await send(action.startsWith('send-user:')?'user':'circle',action.split(':').slice(1).join(':'))}finally{stateUI.pending=false}
