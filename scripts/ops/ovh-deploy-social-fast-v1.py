@@ -13,7 +13,7 @@ def check(ok,msg):
  if not ok:raise RuntimeError(msg)
 def call(args,timeout=100,require=True):
  p=subprocess.run(args,cwd=ROOT,capture_output=True,text=True,timeout=timeout)
- if p.returncode and require:raise RuntimeError('COMMAND_FAILED_'+str(p.returncode))
+ if p.returncode and require:raise RuntimeError('COMMAND_FAILED_'+str(p.returncode)+':'+p.stderr[-160:])
  return p.stdout
 def sha(s):return hashlib.sha256(s.encode()).hexdigest()
 def active():
@@ -43,6 +43,21 @@ def main():
  check('data-coordinator-v171.js' in html,'DATA_COORDINATOR_MISSING')
  count=sum(p.is_file() for p in old.rglob('*'))
  check(count>100,'FRONTEND_INCOMPLETE')
+ if '--dry-run' in sys.argv:
+  running=(old/SOCIAL).read_text()
+  required=[
+   'const coreLoad=loadLiveData;',
+   'loadLiveData=async function(){',
+   '  const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{',
+   'const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([',
+   '  await directChatPromise;\\n  if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;'.replace('\\n','\n'),
+   'circles=function(){',
+   'function circleCard(c){',
+   'circleRows:[],circleMembers:[]'
+  ]
+  check(all(item in running for item in required),'LIVE_SOCIAL_PREVIEW_ANCHOR_CHANGED')
+  print('NEIS_SOCIAL_FAST_PREFLIGHT=PASS')
+  return
  rev=os.environ.get('GITHUB_SHA','')[:12]
  check(bool(re.fullmatch('[a-f0-9]{12}',rev)),'REVISION_INVALID')
  dest=REL/('neis-social-fast-'+rev)
