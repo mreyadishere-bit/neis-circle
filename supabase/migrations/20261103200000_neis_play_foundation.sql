@@ -286,7 +286,7 @@ $$;
 
 create or replace function public.neis_play_my_rooms()
 returns jsonb language plpgsql security definer set search_path=public
-as $
+as $$
 declare result jsonb;
 begin
  if auth.uid() is null then raise exception 'login_required';end if;
@@ -295,7 +295,7 @@ begin
  where m.user_id=auth.uid() and r.expires_at>now() order by r.created_at desc limit 25) r;
  return result;
 end;
-$;
+$$;
 create unique index if not exists neis_play_one_answer_per_card on public.neis_play_events (room_id,user_id,(payload->>'card_id'))
  where type='answer';
 
