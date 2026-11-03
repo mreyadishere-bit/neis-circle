@@ -6,6 +6,7 @@ on:
       - 'supabase/functions/timetable-ai/index.ts'
       - 'qa/timetable-ai-gemini-503.test.mjs'
       - 'qa/timetable-ai-advice-isolation.test.mjs'
+      - 'scripts/timetable-ai-v1.js'
       - 'qa/timetable-ai-timeout.test.mjs'
       - 'scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py'
       - '.github/workflows/ovh-timetable-gemini-503-edge-hotfix.yml'
@@ -33,6 +34,7 @@ jobs:
           set -euo pipefail
           node qa/timetable-ai-gemini-503.test.mjs
           node qa/timetable-ai-advice-isolation.test.mjs
+          node --check scripts/timetable-ai-v1.js
           node qa/timetable-ai-timeout.test.mjs
           node qa/timetable-ai-gemini.test.mjs
           node qa/static-check.mjs
