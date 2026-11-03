@@ -122,7 +122,11 @@ async function send(kind,id,url){
   if(r.error)throw r.error;
  }else throw Error('Unknown recipient');
 }
+const coverCache=new Map();
 function cover(s,large){
+ const key=s.id+':'+(large?'large':'card');
+ const cached=coverCache.get(key);
+ if(cached)return cached;
  const col=s.colors;
  const art={
   chess:'<g opacity=".24" transform="translate(232 32) rotate(-19 100 85)"><path fill="#fff" d="M0 0h236v160H0z"/>'+Array.from({length:20},(_,i)=>'<rect x="'+(i%5*47.2)+'" y="'+(Math.floor(i/5)*40)+'" width="47.2" height="40" fill="'+((i+Math.floor(i/5))%2?'#20364b':'#fff')+'"/>').join('')+'</g><text x="127" y="181" font-size="148" font-family="Georgia,serif" fill="#fff" opacity=".92">'+esc(s.mark)+'</text>',
@@ -134,7 +138,9 @@ function cover(s,large){
   party:'<g transform="translate(238 26)"><rect x="12" y="20" width="121" height="133" rx="20" fill="#fff" opacity=".21" transform="rotate(-18 73 86)"/><rect x="102" y="0" width="124" height="146" rx="19" fill="#fff" opacity=".45" transform="rotate(14 162 74)"/><path d="M112 99l40-37 42 40" fill="none" stroke="'+col[2]+'" stroke-width="14" stroke-linecap="round"/><circle cx="78" cy="58" r="20" fill="'+col[2]+'"/><path d="M183 146l18-22 18 22" fill="none" stroke="#fff" stroke-width="10"/></g>',
   arcade:'<circle cx="339" cy="105" r="93" fill="none" stroke="#fff" opacity=".26" stroke-width="24"/><circle cx="339" cy="105" r="54" fill="none" stroke="'+col[2]+'" opacity=".85" stroke-width="21"/><circle cx="339" cy="105" r="19" fill="#fff"/><path d="M205 173l58-35M392 29l43-24" stroke="#fff" stroke-width="8" opacity=".65" stroke-linecap="round"/>'
  }[s.art]||'';
- return '<div class="neis-connect-cover'+(large?' is-large':'')+'" style="--coverA:'+col[0]+';--coverB:'+col[1]+';--coverC:'+col[2]+'"><svg viewBox="0 0 480 210" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><path d="M0 0h480v210H0z" fill="transparent"/><path d="M0 159Q130 84 256 178T480 111" fill="none" stroke="#fff" stroke-width="60" opacity=".045"/><circle cx="44" cy="45" r="93" fill="#fff" opacity=".045"/>'+art+'</svg><span class="neis-connect-cover-mark">'+esc(s.mark)+'</span><span class="neis-connect-cover-glint"></span></div>';
+ const html='<div class="neis-connect-cover'+(large?' is-large':'')+'" style="--coverA:'+col[0]+';--coverB:'+col[1]+';--coverC:'+col[2]+'"><svg viewBox="0 0 480 210" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false"><path d="M0 0h480v210H0z" fill="transparent"/><path d="M0 159Q130 84 256 178T480 111" fill="none" stroke="#fff" stroke-width="60" opacity=".045"/><circle cx="44" cy="45" r="93" fill="#fff" opacity=".045"/>'+art+'</svg><span class="neis-connect-cover-mark">'+esc(s.mark)+'</span><span class="neis-connect-cover-glint"></span></div>';
+ coverCache.set(key,html);
+ return html;
 }
 function recipientRows(){
  const people=connections(),groups=circles(),query=UI.query.trim().toLowerCase();
