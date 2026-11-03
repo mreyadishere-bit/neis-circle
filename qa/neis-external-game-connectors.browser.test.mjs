@@ -25,6 +25,7 @@ const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-
 try {
  for(const width of [360,768,1366]){
   const page=await browser.newPage({viewport:{width,height:850}});
+  page.setDefaultTimeout(9000); // Fail on a broken UI instead of hanging the release queue.
   const errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.setContent('<header>NEIS Circle</header><aside class="rail neis-hover-rail"><nav class="rail-nav"><button data-nav="library">Saved</button></nav></aside><nav class="bottom-nav"><button data-mobile-more>More</button></nav><div id="mobileNavRoot"></div><main id="view"><section id="messages-view"><form id="liveChatForm"><button type="button" data-neis-connect-open class="neis-connect-chat-trigger">Games</button><textarea></textarea></form><form id="circleChatForm"><button type="button" data-neis-connect-open class="neis-connect-chat-trigger">Games</button><textarea></textarea></form><div id="chatFlow" class="chat-flow"></div></section></main>');
@@ -87,6 +88,19 @@ try {
   await page.locator('#view .hero').evaluate(el=>el.replaceWith(el.cloneNode(true)));
   await page.waitForTimeout(30);
   assert.equal(await appy.count(),1,'home re-render never duplicates the APPY button');
+  const spuriousAppyMutations=await page.evaluate(async()=>{
+   const hero=document.querySelector('#view .hero-main');
+   let count=0;
+   const observer=new MutationObserver(records=>{count+=records.length});
+   observer.observe(hero,{childList:true,subtree:true});
+   // Force a harmless view-level update. It must not rewrite APPY children
+   // or recursively trigger more mutations in the home hero.
+   document.querySelector('#view').append(document.createElement('span'));
+   await new Promise(resolve=>setTimeout(resolve,40));
+   observer.disconnect();
+   return count;
+  });
+  assert.equal(spuriousAppyMutations,0,'APPY home sync stays idempotent and cannot cause an observer loop');
 
   assert.equal(await page.locator('.neis-connect-cover svg').count(),14,'distinct vector covers on every card and active game');
   assert.equal(await page.evaluate(()=>window.__reads.length),0,'opening games must not query contacts or Circles');
