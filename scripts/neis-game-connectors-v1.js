@@ -196,7 +196,6 @@ function open(selected){
  if(!overlay()){const el=document.createElement('div');el.id='neisGamesOverlay';el.className='neis-games-overlay';document.body.append(el)}
  document.body.classList.add('neis-games-open');
  render();overlay()?.querySelector('.neis-connect-dismiss')?.focus({preventScroll:true});
- void loadRecipients();
 }
 function copyFallback(text){
  const ta=document.createElement('textarea');ta.value=text;ta.readOnly=true;ta.style.position='fixed';ta.style.opacity='0';
@@ -223,6 +222,7 @@ async function action(value){
  if(value==='invite'){
   UI.panel='share';UI.notice='';
   render();
+  void loadRecipients();
   try{activeLink()}catch(err){
    setNotice(err.message,'error');
    overlay()?.querySelector('#neisGameLink')?.focus({preventScroll:true});
@@ -327,6 +327,7 @@ function enhanceChatInvites(node){
  if(node.matches?.('.message-text'))enhanceChatMessageText(node);
  node.querySelectorAll?.('.message-text').forEach(enhanceChatMessageText);
 }
+let legacyGamesCleaned=false;
 function attach(){
  const rail=document.querySelector('.rail-nav');
  if(rail&&!rail.querySelector('[data-neis-connect-open]')){
@@ -334,10 +335,13 @@ function attach(){
   btn.setAttribute('aria-label',tr('Games','ألعاب'));btn.title=tr('Games','ألعاب');btn.innerHTML='<span aria-hidden="true" style="font-size:19px">♟</span>';
   const saved=rail.querySelector('[data-nav="library"]');if(saved)saved.insertAdjacentElement('afterend',btn);else rail.append(btn);
  }
- // Clean up legacy Games buttons inserted outside the mobile navigation.
- // Mobile users can open Games from the existing More menu.
- for(const btn of document.querySelectorAll('button[data-neis-connect-open]')){
-  if(!btn.closest('.rail-nav,#liveChatForm,#circleChatForm,#mobileNavRoot'))btn.remove();
+ // Remove older misplaced Games buttons once; never rescan the entire document
+ // during message changes or chat interactions.
+ if(!legacyGamesCleaned){
+  legacyGamesCleaned=true;
+  for(const btn of document.querySelectorAll('button[data-neis-connect-open]')){
+   if(!btn.closest('.rail-nav,#liveChatForm,#circleChatForm,#mobileNavRoot'))btn.remove();
+  }
  }
  const railEntry=rail?.querySelector('[data-neis-connect-open]');
  if(railEntry){railEntry.title=tr('Games','الألعاب');railEntry.setAttribute('aria-label',tr('Games','الألعاب'))}
@@ -380,35 +384,61 @@ document.addEventListener('keydown',evt=>{
  }
 });
 let observer=null;
+let currentGameLanguage=null;
 function updateLanguage(){
+ const language=tr('en','ar');
+ // Core applyPrefs() sets <html lang> and <html dir> on many renders.
+ // Mutations with the same effective language must be constant-time.
+ if(language===currentGameLanguage)return;
+ currentGameLanguage=language;
  attach();
- document.querySelectorAll('.message-text[data-neis-game-enhanced="1"]').forEach(el=>{
-  const original=el.dataset.neisGameRaw;
-  if(!original)return;
-  el.removeAttribute('data-neis-game-enhanced');
-  el.textContent=original;
-  enhanceChatMessageText(el);
- });
+ for(const flow of [document.getElementById('chatFlow'),document.getElementById('circleChatFlow')]){
+  if(!flow)continue;
+  flow.querySelectorAll('.message-text[data-neis-game-enhanced="1"]').forEach(el=>{
+   const original=el.dataset.neisGameRaw;
+   if(!original)return;
+   el.removeAttribute('data-neis-game-enhanced');
+   el.textContent=original;
+   enhanceChatMessageText(el);
+  });
+ }
  if(UI.open)render();
 }
 function initialize(){
  attach();
+ currentGameLanguage=tr('en','ar');
  const langWatcher=new MutationObserver(updateLanguage);
  langWatcher.observe(document.documentElement,{attributes:true,attributeFilter:['lang','dir']});
  const view=document.getElementById('view');
- if(view)enhanceChatInvites(view);
- if(!observer&&view){
-  observer=new MutationObserver(records=>{
-   let needsAttach=false;
-   for(const record of records)for(const node of record.addedNodes){
-    if(node.nodeType!==1)continue;
-    if(node.matches?.('#liveChatForm,#circleChatForm')||node.querySelector?.('#liveChatForm,#circleChatForm'))needsAttach=true;
-    if(node.matches?.('.message-text')||node.querySelector?.('.message-text'))enhanceChatInvites(node);
-   }
-   if(needsAttach)attach();
-  });
-  observer.observe(view,{childList:true,subtree:true});
+ if(!view)return;
+ // Visit only active chat containers; Home/feed/editor mutations need no work.
+ for(const id of ['chatFlow','circleChatFlow']){
+  const flow=document.getElementById(id);
+  if(flow)enhanceChatInvites(flow);
  }
+ if(observer)return;
+ observer=new MutationObserver(records=>{
+  let needsAttach=false;
+  for(const record of records){
+   for(const node of record.addedNodes){
+    if(node.nodeType!==1)continue;
+    // Check nearest chat flow first. Ignore ordinary DOM updates completely.
+    if(node.matches?.('.message-text,.chat-message,#chatFlow,#circleChatFlow')||
+       node.closest?.('#chatFlow,#circleChatFlow')){
+     enhanceChatInvites(node);
+     continue;
+    }
+    // A view replacement can contain a newly mounted chat with messages.
+    const chat=node.matches?.('#chatFlow,#circleChatFlow')?node:
+      node.querySelector?.('#chatFlow,#circleChatFlow');
+    if(chat)enhanceChatInvites(chat);
+    if(!needsAttach&&(node.matches?.('#liveChatForm,#circleChatForm')||
+       node.querySelector?.('#liveChatForm,#circleChatForm')))needsAttach=true;
+   }
+  }
+  if(needsAttach)attach();
+ });
+ observer.observe(view,{childList:true,subtree:true});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});else initialize();
 window.NEISPlayConnectors={open,close,validateInvite:verify,providers:SERVICES.map(s=>({id:s.id,name:s.name,start:s.start})),version:'2.2'};
