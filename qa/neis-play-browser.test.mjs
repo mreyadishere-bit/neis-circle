@@ -17,7 +17,7 @@ try{
     await page.locator('#neisPlayRoot [data-play="close"]').click();
     assert.equal(await page.locator('#neisPlayRoot').count(),0);
     assert.equal(await page.locator('#original-home').count(),1);
-    assert.equal(await page.locator('[data-neis-play-home]').count(),1,'Home should have a nonintrusive challenge card');
+    assert.equal(await page.locator('[data-neis-play-home]').count(),0,'No Play daily shortcut should clutter Home');
     await page.locator('#view').evaluate(el=>{el.innerHTML='<form id="circleChatForm"><textarea id="circleChatInput"></textarea><button type="submit">Send</button></form>';window.state.view='circle-detail'});
     await page.locator('#circleChatForm [data-neis-play-open]').waitFor();
     assert.equal(await page.locator('#circleChatInput').count(),1,'chat input preserved');
