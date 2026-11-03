@@ -145,16 +145,25 @@ function page(){
 }
 function render(){
  if(!UI.open||!overlay())return;
- overlay().innerHTML=page();
- const link=overlay().querySelector('#neisGameLink');
+ const root=overlay();
+ const pane=root.querySelector('.neis-connect-layout');
+ const previousTop=pane?.scrollTop||0;
+ const previousTargets=[...root.querySelectorAll('.neis-connect-recipient-items')].map(el=>el.scrollTop);
+ root.innerHTML=page();
+ const next=root.querySelector('.neis-connect-layout');
+ if(next)next.scrollTop=previousTop;
+ root.querySelectorAll('.neis-connect-recipient-items').forEach((el,i)=>{el.scrollTop=previousTargets[i]||0});
+ const link=root.querySelector('#neisGameLink');
  if(link)link.addEventListener('input',evt=>{UI.link=evt.target.value;UI.links[UI.selected]=UI.link});
  const search=overlay().querySelector('#neisRecipientSearch');
  if(search)search.addEventListener('input',evt=>{
-  const pos=evt.target.selectionStart;
   UI.query=evt.target.value;
-  render();
-  const fresh=overlay()?.querySelector('#neisRecipientSearch');
-  if(fresh){fresh.focus();fresh.setSelectionRange(pos,pos)}
+  const recipients=overlay()?.querySelector('.neis-connect-recipients');
+  if(recipients){
+   const positions=[...recipients.querySelectorAll('.neis-connect-recipient-items')].map(el=>el.scrollTop);
+   recipients.outerHTML=recipientRows();
+   overlay().querySelectorAll('.neis-connect-recipient-items').forEach((el,i)=>{el.scrollTop=positions[i]||0});
+  }
  });
 }
 function close(){
@@ -184,7 +193,6 @@ async function action(value){
   if(!byId(value.slice(7)))return;
   UI.links[UI.selected]=UI.link;UI.selected=value.slice(7);UI.link=UI.links[UI.selected]||'';
   UI.panel='setup';UI.notice='';UI.query='';UI.selectedTargets.clear();render();
-  if(window.innerWidth<=800)overlay()?.querySelector('.neis-connect-selected')?.scrollIntoView({block:'start',behavior:'smooth'});
   return;
  }
  const svc=byId(UI.selected);
@@ -199,7 +207,7 @@ async function action(value){
   render();
   try{activeLink()}catch(err){
    setNotice(err.message,'error');
-   overlay()?.querySelector('#neisGameLink')?.focus();
+   overlay()?.querySelector('#neisGameLink')?.focus({preventScroll:true});
   }
   return;
  }
@@ -218,12 +226,20 @@ async function action(value){
   const key=value.slice(7),isKnown=key.startsWith('user:')?connections().some(x=>key==='user:'+x.id):circles().some(x=>key==='circle:'+x.id);
   if(!isKnown)return;
   if(UI.selectedTargets.has(key))UI.selectedTargets.delete(key);else UI.selectedTargets.add(key);
-  render();return;
+  const chosen=UI.selectedTargets.has(key);
+  const button=[...(overlay()?.querySelectorAll('.neis-connect-recipient')||[])].find(el=>el.dataset.game===value);
+  if(button){
+   button.classList.toggle('is-selected',chosen);button.setAttribute('aria-pressed',String(chosen));
+   const mark=button.querySelector('.neis-connect-tick');if(mark)mark.textContent=chosen?'✓':'';
+  }
+  const sendButton=overlay()?.querySelector('[data-game="send"]');
+  if(sendButton)sendButton.textContent=tr('Send invitation','إرسال الدعوة')+' · '+UI.selectedTargets.size;
+  return;
  }
  if(value==='send'){
   if(UI.busy)return;
   let url;
-  try{url=activeLink()}catch(err){setNotice(err.message,'error');overlay()?.querySelector('#neisGameLink')?.focus();return}
+  try{url=activeLink()}catch(err){setNotice(err.message,'error');overlay()?.querySelector('#neisGameLink')?.focus({preventScroll:true});return}
   if(!UI.selectedTargets.size){setNotice(tr('Select at least one connection or Circle to send to.','اختار صديق أو مجتمع واحد على الأقل لإرسال الدعوة.'),'info');return}
   if(!who()){setNotice(tr('Sign in to NEIS Circle first.','سجّل الدخول إلى NEIS Circle أولًا.'),'error');return}
   UI.busy=true;UI.notice='';render();
@@ -245,23 +261,27 @@ function attach(){
   btn.setAttribute('aria-label',tr('Games','ألعاب'));btn.title=tr('Games','ألعاب');btn.innerHTML='<span aria-hidden="true" style="font-size:19px">♟</span>';
   const saved=rail.querySelector('[data-nav="library"]');if(saved)saved.insertAdjacentElement('afterend',btn);else rail.append(btn);
  }
- const mobile=document.querySelector('.bottom-nav');
- if(mobile&&!mobile.querySelector('[data-neis-connect-open]')){
-  const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.title=tr('Games','ألعاب');
-  btn.innerHTML='<span aria-hidden="true">♟</span><span>'+tr('Games','ألعاب')+'</span>';
-  const more=mobile.querySelector('[data-mobile-more]');if(more)mobile.insertAdjacentElement('beforebegin',btn);else mobile.append(btn);
+ // Clean up legacy Games buttons inserted outside the mobile navigation.
+ // Mobile users can open Games from the existing More menu.
+ for(const btn of document.querySelectorAll('button[data-neis-connect-open]')){
+  if(!btn.closest('.rail-nav,#liveChatForm,#circleChatForm,#mobileNavRoot'))btn.remove();
  }
  const view=document.querySelector('#view');
  if(view)for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
   if(form.querySelector('[data-neis-connect-open]'))continue;
   const btn=document.createElement('button');btn.type='button';btn.dataset.neisConnectOpen='1';btn.className='neis-play-chat-trigger';
-  btn.setAttribute('aria-label',tr('Invite to a game','دعوة للعبة'));btn.title=tr('Invite to a game','دعوة للعبة');btn.textContent='♟';
+  btn.setAttribute('aria-label',tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة'));btn.title=tr('Invite friends to a game','دعوة الأصدقاء إلى لعبة');
+  btn.className='neis-connect-chat-trigger';btn.innerHTML='<span aria-hidden="true">🎮</span><span class="neis-connect-chat-label">'+tr('Games','الألعاب')+'</span>';
   const textarea=form.querySelector('textarea');if(textarea)form.insertBefore(btn,textarea);else form.append(btn);
  }
 }
 document.addEventListener('click',evt=>{
  const trigger=evt.target.closest?.('[data-neis-connect-open]');
- if(trigger){evt.preventDefault();open();return}
+ if(trigger){
+  evt.preventDefault();
+  document.querySelector('#mobileNavRoot [data-mobile-close]')?.click();
+  open();return;
+ }
  const el=evt.target.closest?.('[data-game]');
  if(!el||!overlay()?.contains(el))return;
  evt.preventDefault();
