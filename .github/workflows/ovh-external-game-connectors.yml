@@ -6,7 +6,12 @@ on:
       - 'scripts/neis-game-connectors-v1.js'
       - 'styles/neis-game-connectors-v1.css'
       - 'scripts/navigation-v14.js'
+      - 'styles/ui-v14.css'
+      - 'scripts/05-social.js'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/timetable-ai-v1.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
+      - 'qa/mobile-nav-keyboard.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -16,7 +21,12 @@ on:
       - 'scripts/neis-game-connectors-v1.js'
       - 'styles/neis-game-connectors-v1.css'
       - 'scripts/navigation-v14.js'
+      - 'styles/ui-v14.css'
+      - 'scripts/05-social.js'
+      - 'scripts/magnus-neis-v1.js'
+      - 'scripts/timetable-ai-v1.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
+      - 'qa/mobile-nav-keyboard.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -36,6 +46,10 @@ jobs:
       - run: |
           set -euo pipefail
           node --check scripts/neis-game-connectors-v1.js
+          node --check scripts/navigation-v14.js
+          node --check scripts/05-social.js
+          node --check scripts/magnus-neis-v1.js
+          node --check scripts/timetable-ai-v1.js
           python3 -m py_compile scripts/ops/ovh-deploy-game-connectors-v1.py
   browser:
     needs: static
@@ -47,6 +61,7 @@ jobs:
         with: {node-version: '22'}
       - run: npm install --no-save playwright
       - run: node qa/neis-external-game-connectors.browser.test.mjs
+      - run: node qa/mobile-nav-keyboard.browser.test.mjs
   preflight:
     needs: browser
     runs-on: ubuntu-24.04
@@ -79,6 +94,10 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/ui-v14.css "$remote:$stage/ui-v14.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$remote:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/magnus-neis-v1.js "$remote:$stage/magnus-neis-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/timetable-ai-v1.js "$remote:$stage/timetable-ai-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
   deploy:
@@ -113,5 +132,9 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/ui-v14.css "$remote:$stage/ui-v14.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$remote:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/magnus-neis-v1.js "$remote:$stage/magnus-neis-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/timetable-ai-v1.js "$remote:$stage/timetable-ai-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
