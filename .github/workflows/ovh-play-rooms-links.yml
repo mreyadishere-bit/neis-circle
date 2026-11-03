@@ -1,0 +1,131 @@
+name: NEIS Play Room Lifecycle and Chat Links
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'scripts/05-social.js'
+      - 'supabase/migrations/20261103220000_neis_play_room_lifecycle.sql'
+      - 'qa/neis-play-room-links.test.mjs'
+      - 'qa/neis-play-notifications-browser.test.mjs'
+      - 'styles/neis-play-v1.css'
+      - 'qa/neis-play-hub-browser.test.mjs'
+      - 'scripts/ops/ovh-deploy-play-rooms-links.py'
+      - '.github/workflows/ovh-play-rooms-links.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/neis-play-v1.js'
+      - 'scripts/05-social.js'
+      - 'supabase/migrations/20261103220000_neis_play_room_lifecycle.sql'
+      - 'qa/neis-play-room-links.test.mjs'
+      - 'qa/neis-play-notifications-browser.test.mjs'
+      - 'styles/neis-play-v1.css'
+      - 'scripts/ops/ovh-deploy-play-rooms-links.py'
+      - '.github/workflows/ovh-play-rooms-links.yml'
+permissions:
+  contents: read
+concurrency:
+  group: ovh-neis-play-room-links
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate Play module and frontend-only deployer
+        run: |
+          set -euo pipefail
+          node --check scripts/neis-play-v1.js
+          python3 -m py_compile scripts/ops/ovh-deploy-play-rooms-links.py
+          node qa/neis-play-v1.test.mjs
+          node qa/neis-play-v2.test.mjs
+          node qa/neis-play-room-links.test.mjs
+  browser:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: npm install --no-save playwright
+      - name: Play hub visual behavior and native navigation on desktop/mobile
+        run: |
+          node qa/neis-play-browser.test.mjs
+          node qa/neis-play-hub-browser.test.mjs
+          node qa/neis-play-notifications-browser.test.mjs
+  preflight:
+    needs: browser
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Rolled-back room lifecycle schema preflight
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-play-rooms-links-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-play-v1.js "$target:$stage/neis-play-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103220000_neis_play_room_lifecycle.sql "$target:$stage/rooms.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-play-rooms-links.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
+  deploy:
+    needs: preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Release only hub frontend with Caddy verification
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/neis-play-rooms-links-20261103"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103220000_neis_play_room_lifecycle.sql "$target:$stage/rooms.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-play-v1.js "$target:$stage/neis-play-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-play-rooms-links.py "$target:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
