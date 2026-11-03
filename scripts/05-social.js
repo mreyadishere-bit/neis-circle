@@ -2131,12 +2131,35 @@ function sharedChatContentCard(m){
   }
   return '';
 }
+function safeChatLinks(value){
+  // Escape first, then turn only absolute HTTPS/HTTP URLs into anchors.
+  // Unsafe protocols, HTML markup and quotes remain escaped plain text.
+  const raw=String(value??'');
+  const urlPattern=/https?:\/\/[^\s<>"'`]+/gi;
+  let output='',previous=0,match;
+  while((match=urlPattern.exec(raw))!==null){
+    const whole=match[0];
+    const trimmed=whole.replace(/[.,!?;:)\]}]+$/g,'');
+    if(!trimmed)continue;
+    output+=esc(raw.slice(previous,match.index));
+    let href=null;
+    try{
+      const candidate=new URL(trimmed);
+      if(['https:','http:'].includes(candidate.protocol)&&candidate.hostname&&
+         !candidate.username&&!candidate.password)href=candidate.href;
+    }catch{}
+    output+=href?'<a class="neis-chat-link" href="'+esc(href)+'" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">'+esc(trimmed)+'</a>':esc(trimmed);
+    output+=esc(whole.slice(trimmed.length));
+    previous=match.index+whole.length;
+  }
+  return output+esc(raw.slice(previous));
+}
 function messageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000);
   const quoted=m.reply_to_id?state.liveMessages.find(x=>same(x.id,m.reply_to_id)):null;
   const quote=quoted?(()=>{const sender=profileData(quoted.sender_id);return `<div class="message-reply-quote" role="button" tabindex="0" data-dm-reply-jump="${esc(quoted.id)}" aria-label="${t('Go to original message','الانتقال إلى الرسالة الأصلية')}"><b>${esc(sender?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.body||t('Message','رسالة'))}</span></div>`})():'';
   const sharedCard=sharedChatContentCard(m);
-  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${esc(m.body)}</span>${sharedCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${messageReactionChips('dm',m.id)}</div><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
+  return `<div class="chat-message ${mine?'mine':''} ${grouped?'grouped':''}" data-message-id="${esc(m.id)}" data-message-deletable="${mine||state.isAdmin?'1':'0'}">${profileAvatar(profileData(m.sender_id))}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${safeChatLinks(m.body)}</span>${sharedCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}</time><div class="message-reactions">${messageReactionChips('dm',m.id)}</div><button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button></span></div>`
 }
 
 window.openNewConversation=function(){
@@ -2180,7 +2203,7 @@ function circleMessageBubble(m,previous){
   const mine=same(m.sender_id,authUser.id),manageable=mine||canModerateCircle(m.circle_id),grouped=previous&&same(previous.sender_id,m.sender_id)&&(new Date(m.created_at)-new Date(previous.created_at)<300000),quoted=m.reply_to_id?state.circleMessages.find(x=>same(x.id,m.reply_to_id)):null,sender={...profileData(m.sender_id),...(m.profile||{})},pinned=circleMessagePinActive(m);
   const quote=quoted?(()=>{const qp={...profileData(quoted.sender_id),...(quoted.profile||{})};return `<div class="message-reply-quote" role="button" tabindex="0" data-circle-reply-jump="${esc(quoted.id)}" aria-label="${t('Go to original message','الانتقال إلى الرسالة الأصلية')}"><b>${esc(qp?.full_name||t('Student','طالب'))}</b><span dir="auto">${esc(quoted.deleted_at?t('Message deleted','تم حذف الرسالة'):quoted.body||t('Message','رسالة'))}</span></div>`})():'';
   const sharedCard=m.deleted_at?'':sharedChatContentCard(m);
-  return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''} ${pinned?'is-pinned':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}" data-message-pinnable="${canPinCircleMessage(m.circle_id)&&!m.deleted_at?'1':'0'}">${circleChatAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):esc(m.body)}</span>${sharedCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}${pinned?` · 📌 ${t('pinned','مثبتة')}`:''}</time><div class="message-reactions">${m.deleted_at?'':messageReactionChips('circle',m.id)}</div>${!m.deleted_at?`<button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>`:''}</span></div></div>`
+  return `<div class="chat-message circle-message ${mine?'mine':''} ${grouped?'grouped':''} ${m.deleted_at?'deleted':''} ${pinned?'is-pinned':''}" data-message-id="${esc(m.id)}" data-circle-message-id="${esc(m.id)}" data-message-deletable="${manageable?'1':'0'}" data-message-pinnable="${canPinCircleMessage(m.circle_id)&&!m.deleted_at?'1':'0'}">${circleChatAvatar(sender)}<div class="circle-message-stack">${!mine&&!grouped?`<button class="circle-message-author author-link" data-open-profile="${m.sender_id}">${esc(sender?.full_name||t('Student','طالب'))}</button>`:''}<span class="bubble ${mine?'mine':''}">${quote}<span class="message-text" dir="auto">${m.deleted_at?t('Message deleted','تم حذف الرسالة'):safeChatLinks(m.body)}</span>${sharedCard}<time>${when(m.created_at)}${m.edited_at?` · ${t('edited','معدلة')}`:''}${pinned?` · 📌 ${t('pinned','مثبتة')}`:''}</time><div class="message-reactions">${m.deleted_at?'':messageReactionChips('circle',m.id)}</div>${!m.deleted_at?`<button type="button" class="message-actions-trigger" data-message-actions-trigger aria-label="${t('Message actions','خيارات الرسالة')}">•••</button>`:''}</span></div></div>`
 }
 function confirmAction(title,copy){return new Promise(resolve=>{openModal(`<div class="modal-head"><div><h2>${esc(title)}</h2><p>${esc(copy)}</p></div><button class="close" data-confirm-no>×</button></div><p class="confirm-copy">${t('This action is saved to the database and cannot be undone.','سيُحفظ هذا الإجراء في قاعدة البيانات ولا يمكن التراجع عنه.')}</p><div class="modal-actions"><button class="secondary" data-confirm-no>${t('Cancel','إلغاء')}</button><button class="primary danger" data-confirm-yes>${t('Delete','حذف')}</button></div>`);$$('[data-confirm-no]').forEach(b=>b.onclick=()=>{closeModal();resolve(false)});$('[data-confirm-yes]').onclick=()=>{closeModal();resolve(true)}})}
 async function removeMediaUrl(url){if(!url)return;const marker='/storage/v1/object/public/community-media/',i=url.indexOf(marker);if(i<0)return;const path=decodeURIComponent(url.slice(i+marker.length));if(path)await sb.storage.from('community-media').remove([path])}
