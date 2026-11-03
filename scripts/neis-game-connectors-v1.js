@@ -156,7 +156,7 @@ function page(){
  const filt=[['all',tr('All games','الكل')],['party',tr('Party','جماعية')],['chess',tr('Chess','شطرنج')],['drawing',tr('Drawing','رسم')],['quiz',tr('Quizzes','اختبارات')]].map(([k,n])=>'<button type="button" data-game="filter:'+k+'" class="'+(UI.filter===k?'active':'')+'" aria-pressed="'+(UI.filter===k)+'">'+n+'</button>').join('');
  const input='<div class="neis-connect-link-box"><label for="neisGameLink">'+tr('Room invitation link','رابط دعوة الغرفة')+'</label><div class="neis-connect-link-row"><input id="neisGameLink" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="'+tr('Paste your room link here…','الصق رابط الغرفة هنا…')+'" value="'+esc(UI.link)+'"><button type="button" class="neis-connect-inline-button" data-game="paste">'+tr('Paste','لصق')+'</button><button type="button" class="neis-connect-inline-button" data-game="copy">'+tr('Copy','نسخ')+'</button></div><p class="neis-connect-help">'+tr('Create a room on the official game site, copy its share link, and paste it above.','افتح موقع اللعبة، أنشئ غرفة، انسخ رابط مشاركتها والصقه هنا.')+'</p></div>';
  const panel=UI.panel==='share'?'<div class="neis-connect-share"><div class="neis-connect-share-top"><div><h4>'+tr('Who would you like to invite?','من تريد دعوته؟')+'</h4><p>'+tr('Select friends or Circles to share your game link.','اختر أصدقاءك أو مجتمعاتك لمشاركة رابط اللعبة.')+'</p></div><button type="button" class="neis-connect-text-button" data-game="back">'+tr('Back','رجوع')+'</button></div><input type="search" id="neisRecipientSearch" placeholder="'+tr('Search connections and Circles…','ابحث عن الأصدقاء والمجتمعات…')+'" value="'+esc(UI.query)+'" autocomplete="off">'+recipientRows()+'<button type="button" class="neis-connect-send" data-game="send" '+(UI.busy?'disabled':'')+'>'+ (UI.busy?tr('Sending…','جارٍ الإرسال…'):tr('Send invitation','إرسال الدعوة')+' · '+UI.selectedTargets.size)+'</button></div>':'<div class="neis-connect-steps"><div><b>01</b><span>'+tr('Open a room','افتح غرفة')+'</span></div><div><b>02</b><span>'+tr('Copy the invite link','انسخ رابط الدعوة')+'</span></div><div><b>03</b><span>'+tr('Invite friends here','ادعُ أصحابك هنا')+'</span></div></div>';
- return '<div class="neis-connect-backdrop" data-game="close"></div><section class="neis-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="neisConnectTitle"><header class="neis-connect-header"><div class="neis-connect-header-copy"><span class="neis-connect-eyebrow">NEIS CIRCLE <span class="neis-connect-slash">/</span> PLAY</span><h2 id="neisConnectTitle">'+tr('Better games. Better together.','اللعب أحلى مع بعض.')+'</h2><p>'+tr('Choose a game, open a room on its official site, and invite your friends.','اختر لعبة، وأنشئ غرفة في موقعها الرسمي، ثم ادعُ أصدقاءك.')+'</p></div><div class="neis-connect-header-side"><span class="neis-connect-count">'+SERVICES.length+' '+tr('games','لعبة')+'</span><button type="button" class="neis-connect-dismiss" data-game="close" aria-label="'+tr('Close','إغلاق')+'">×</button></div></header>'+(UI.notice?'<div class="neis-connect-notice '+esc(UI.noticeType)+'" role="status"><span>'+esc(UI.notice)+'</span><button type="button" data-game="dismiss-notice" aria-label="'+tr('Dismiss','إخفاء')+'">×</button></div>':'')+'<div class="neis-connect-layout"><section class="neis-connect-list"><nav class="neis-connect-filters" aria-label="'+tr('Game categories and APPY','تصنيفات الألعاب وAPPY')+'">'+filt+'<a class="neis-connect-appy-link" href="https://appy.neiscircle.site/" target="_blank" rel="noopener noreferrer" aria-label="'+tr('Open APPY in a new tab','افتح APPY في تبويب جديد')+'"><span class="neis-connect-appy-symbol" aria-hidden="true">▣</span> APPY <span aria-hidden="true">↗</span></a></nav><div class="neis-connect-cards">'+(cards||'<p class="neis-connect-empty">'+tr('No games found in this category.','لا توجد ألعاب في هذا القسم.')+'</p>')+'</div></section><aside class="neis-connect-selected"><div class="neis-connect-selected-cover">'+cover(svc,true)+'<span class="neis-connect-selected-tag">'+esc(gameText(svc,'tag'))+'</span></div><div class="neis-connect-selected-content"><div class="neis-connect-selected-heading"><div><small>'+tr('READY TO PLAY','جاهز للعب؟')+'</small><h3>'+esc(svc.name)+'</h3><p>'+esc(gameText(svc,'access'))+'</p></div></div><p class="neis-connect-instructions">'+esc(gameText(svc,'hint'))+'</p><div class="neis-connect-launch-actions"><a class="neis-connect-launch" href="'+esc(verify(svc.start,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Create / open room','افتح أو أنشئ غرفة')+' <span>↗</span></a>'+(svc.join?'<a class="neis-connect-secondary" href="'+esc(verify(svc.join,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Join','انضم')+'</a>':'')+'</div>'+(svc.account?'<a class="neis-connect-account" href="'+esc(verify(svc.account,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Create or sign in to an account on the game site','أنشئ حسابًا أو سجّل الدخول عبر موقع اللعبة')+' ↗</a>':'')+input+'<button type="button" class="neis-connect-invite-main" data-game="invite">'+tr('Invite connections & Circles','ادعُ الأصدقاء والمجتمعات')+' <span>→</span></button>'+panel+'</div></aside></div><footer class="neis-connect-footer"><span class="neis-connect-footer-dot"></span>'+tr('Games run on their official sites. NEIS Circle only helps you share invites; no extra server load.','الألعاب بتشتغل على مواقعها الأصلية. NEIS Circle بيسهّل إرسال الدعوات فقط، بدون حمل إضافي على السيرفر.')+'</footer></section>';
+ return '<div class="neis-connect-backdrop" data-game="close"></div><section class="neis-connect-dialog" role="dialog" aria-modal="true" aria-labelledby="neisConnectTitle"><header class="neis-connect-header"><div class="neis-connect-header-copy"><span class="neis-connect-eyebrow">NEIS CIRCLE <span class="neis-connect-slash">/</span> PLAY</span><h2 id="neisConnectTitle">'+tr('Better games. Better together.','اللعب أحلى مع بعض.')+'</h2><p>'+tr('Choose a game, open a room on its official site, and invite your friends.','اختر لعبة، وأنشئ غرفة في موقعها الرسمي، ثم ادعُ أصدقاءك.')+'</p></div><div class="neis-connect-header-side"><span class="neis-connect-count">'+SERVICES.length+' '+tr('games','لعبة')+'</span><button type="button" class="neis-connect-dismiss" data-game="close" aria-label="'+tr('Close','إغلاق')+'">×</button></div></header>'+(UI.notice?'<div class="neis-connect-notice '+esc(UI.noticeType)+'" role="status"><span>'+esc(UI.notice)+'</span><button type="button" data-game="dismiss-notice" aria-label="'+tr('Dismiss','إخفاء')+'">×</button></div>':'')+'<div class="neis-connect-layout"><section class="neis-connect-list"><nav class="neis-connect-filters" aria-label="'+tr('Game categories','تصنيفات الألعاب')+'">'+filt+'</nav><div class="neis-connect-cards">'+(cards||'<p class="neis-connect-empty">'+tr('No games found in this category.','لا توجد ألعاب في هذا القسم.')+'</p>')+'</div></section><aside class="neis-connect-selected"><div class="neis-connect-selected-cover">'+cover(svc,true)+'<span class="neis-connect-selected-tag">'+esc(gameText(svc,'tag'))+'</span></div><div class="neis-connect-selected-content"><div class="neis-connect-selected-heading"><div><small>'+tr('READY TO PLAY','جاهز للعب؟')+'</small><h3>'+esc(svc.name)+'</h3><p>'+esc(gameText(svc,'access'))+'</p></div></div><p class="neis-connect-instructions">'+esc(gameText(svc,'hint'))+'</p><div class="neis-connect-launch-actions"><a class="neis-connect-launch" href="'+esc(verify(svc.start,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Create / open room','افتح أو أنشئ غرفة')+' <span>↗</span></a>'+(svc.join?'<a class="neis-connect-secondary" href="'+esc(verify(svc.join,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Join','انضم')+'</a>':'')+'</div>'+(svc.account?'<a class="neis-connect-account" href="'+esc(verify(svc.account,svc))+'" target="_blank" rel="noopener noreferrer">'+tr('Create or sign in to an account on the game site','أنشئ حسابًا أو سجّل الدخول عبر موقع اللعبة')+' ↗</a>':'')+input+'<button type="button" class="neis-connect-invite-main" data-game="invite">'+tr('Invite connections & Circles','ادعُ الأصدقاء والمجتمعات')+' <span>→</span></button>'+panel+'</div></aside></div><footer class="neis-connect-footer"><span class="neis-connect-footer-dot"></span>'+tr('Games run on their official sites. NEIS Circle only helps you share invites; no extra server load.','الألعاب بتشتغل على مواقعها الأصلية. NEIS Circle بيسهّل إرسال الدعوات فقط، بدون حمل إضافي على السيرفر.')+'</footer></section>';
 }
 function render(){
  if(!UI.open||!overlay())return;
@@ -324,6 +324,27 @@ function enhanceChatInvites(node){
  if(node.matches?.('.message-text'))enhanceChatMessageText(node);
  node.querySelectorAll?.('.message-text').forEach(enhanceChatMessageText);
 }
+function syncHomeAppyLink(){
+ // Put APPY alongside the existing Explore Circles / Your connections actions,
+ // rather than next to the Games category filters.
+ const hero=document.querySelector('#view .hero .hero-main');
+ const connections=hero?.querySelector('[data-nav="connections"]');
+ if(!connections)return;
+ const actions=connections.parentElement;
+ if(!actions)return;
+ actions.classList.add('neis-home-actions');
+ let link=actions.querySelector('.neis-home-appy-link');
+ if(!link){
+  link=document.createElement('a');
+  link.className='secondary neis-home-appy-link';
+  connections.insertAdjacentElement('afterend',link);
+ }
+ link.href='https://appy.neiscircle.site/';
+ link.target='_blank';
+ link.rel='noopener noreferrer';
+ link.setAttribute('aria-label',tr('Open APPY in a new tab','افتح APPY في تبويب جديد'));
+ link.textContent='APPY ↗';
+}
 let legacyGamesCleaned=false;
 function attach(){
  const rail=document.querySelector('.rail-nav');
@@ -361,6 +382,7 @@ function attach(){
  if(view)for(const form of view.querySelectorAll('#liveChatForm,#circleChatForm')){
   for(const button of form.querySelectorAll('[data-neis-connect-open],.neis-connect-chat-trigger,.neis-play-chat-trigger'))button.remove();
  }
+ syncHomeAppyLink();
 }
 document.addEventListener('click',evt=>{
  const trigger=evt.target.closest?.('[data-neis-connect-open]');
@@ -420,10 +442,12 @@ function initialize(){
  }
  if(observer)return;
  observer=new MutationObserver(records=>{
-  let needsAttach=false;
+  let needsAttach=false,needsHomeAppy=false;
   for(const record of records){
    const inChat=record.target?.closest?.('#chatFlow,#circleChatFlow');
    const fullViewChange=record.target===view;
+   if(fullViewChange||record.target?.matches?.('.hero-main')||
+      record.target?.closest?.('.hero-main'))needsHomeAppy=true;
    // Most realtime/feed mutations affect posts, counters and other widgets.
    // Do not query their subtrees at all.
    if(!inChat&&!fullViewChange){
@@ -449,6 +473,7 @@ function initialize(){
    }
   }
   if(needsAttach)attach();
+  if(needsHomeAppy)syncHomeAppyLink();
  });
  observer.observe(view,{childList:true,subtree:true});
 }
