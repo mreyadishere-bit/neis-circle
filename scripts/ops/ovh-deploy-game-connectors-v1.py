@@ -68,7 +68,7 @@ def main():
  html=swap(html,['scripts/navigation-v14.js'],'scripts/navigation-v14.js')
  # The release is cloned from the active OVH site, not the repository index.html.
  # Make Game Hub resources non-blocking on the *deployed* HTML as well.
- stylesheet=r'<link rel="stylesheet" href="styles/neis-game-connectors-v1.css?v='+revision+r'" media="print" onload="this.media=\'all\'">'
+ stylesheet='<link rel="stylesheet" href="styles/neis-game-connectors-v1.css?v='+revision+r'" media="print" onload="this.media=\'all\'">'
  html,n=re.subn(r'<link\b[^>]*href="styles/neis-game-connectors-v1\.css\?v='+revision+r'"[^>]*>',lambda _m:stylesheet,html,count=1)
  check(n==1,'GAME_CSS_NONBLOCKING_SWAP_FAILED')
  script=r'<script src="scripts/neis-game-connectors-v1.js?v='+revision+r'" async></script>'
