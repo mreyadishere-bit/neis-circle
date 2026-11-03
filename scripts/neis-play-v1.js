@@ -467,8 +467,10 @@ async function action(a){
   if(a==='invite'){copyInvite();return}
   if(a==='chatinvite'){currentChatInvite();return}
   if(a==='suggest'){
-   const q=prompt(t('Your suggested daily question:','سؤالك المقترح:'));if(!q)return;
-   await request(api().from('neis_play_daily_suggestions').insert({author_id:who(),question:q.trim()}));
+   const q=prompt(t('Your suggested daily question (10–300 characters):','اقترح سؤالًا من 10 إلى 300 حرف:'));if(q===null)return;
+   const question=q.trim();
+   if(question.length<10||question.length>300){S.status=t('Question must contain 10–300 characters.','السؤال لازم يكون من 10 إلى 300 حرف.');render();return}
+   await request(api().from('neis_play_daily_suggestions').insert({author_id:who(),question}));
    S.status=t('Your question was submitted for review.','أُرسل سؤالك للمراجعة.');render();return;
   }
   if(a==='publish'){
