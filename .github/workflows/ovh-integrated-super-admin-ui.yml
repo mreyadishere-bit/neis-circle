@@ -37,6 +37,7 @@ jobs:
           node --check scripts/super-admin-management-v1.js
           node --check scripts/main-admin-auth-studio-v5.js
           node qa/super-admin-access-control.test.mjs
+          npm install --no-audit --no-fund
           python3 -m py_compile scripts/ops/ovh-deploy-super-admin-integrated-20261103.py
           node qa/static-check.mjs
   deploy:
