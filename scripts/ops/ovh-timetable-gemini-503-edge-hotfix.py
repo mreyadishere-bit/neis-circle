@@ -1,132 +1,191 @@
 #!/usr/bin/env python3
-"""Backend-only Gemini 503 hotfix on the existing NEIS Circle OVH Edge runtime.
+"""Safe, isolated Timetable Gemini HTTP 503 Edge-only recovery.
 
-Reuses the previously tested immutable-release / Compose-preservation / automatic
-rollback code. Does NOT touch front-end files, Caddy, existing database, API
-routes, timetable drafts, RPCs, or unrelated Edge functions.
-
-Run on OVH only after GitHub Actions verifies model metadata and regression tests.
+Uses the SAME active Edge Compose chain as the latest Magnus runtime:
+base + edge/timetable/gemini/cloudflare + Magnus (last precedence).
+Verifies the actual running mount, clones it to an immutable release,
+replaces ONLY timetable-ai/index.ts and switches the Magnus-owned mount.
+Does not change the live website, keys, database, timetable schema or
+other AI functions. Strict config parity and automatic rollback.
 """
 from __future__ import annotations
+
 import argparse
+import copy
 import hashlib
 import importlib.util
 import json
 import os
-import sys
 from pathlib import Path
-import subprocess
+import shutil
+import sys
+import urllib.error
+import urllib.request
+import uuid
 
 STAGE=Path('/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3')
 SOURCE=STAGE/'index.ts'
-IMPL=STAGE/'ovh-deploy-timetable-ai-gemini-v1.py'
+HELPER=STAGE/'ovh-deploy-magnus-speed-20261103.py'
+REV=uuid.uuid4().hex[:12]
+OVERLAY=Path('/home/ubuntu/neis-supabase/docker-compose.magnus-neis.yml')
+DEST=Path('/home/ubuntu/neis-backups/timetable-503-edge-release-'+REV)
 
-def require(condition, message):
-    if not condition:
-        raise RuntimeError(message)
+def require(ok,code):
+    if not ok:
+        raise RuntimeError(code)
 
-def load_original():
-    require(IMPL.is_file() and not IMPL.is_symlink(), 'BACKEND_ONLY_DEPLOY_HELPER_MISSING')
-    spec=importlib.util.spec_from_file_location('neis_gemini_immutable_deployer',IMPL)
-    require(spec is not None and spec.loader is not None,'ORIGINAL_EDGE_DEPLOYER_UNAVAILABLE')
-    mod=importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    require(mod.STAGE==STAGE,'RELEASE_STAGING_CHANGED')
-    return mod
-
-def fingerprint(path):
+def digest(path):
     h=hashlib.sha256()
-    with path.open('rb') as source:
-        for block in iter(lambda:source.read(1024*1024),b''):
+    with path.open('rb') as stream:
+        for block in iter(lambda:stream.read(1024*1024),b''):
             h.update(block)
     return h.hexdigest()
 
-def validate_candidate():
-    require(STAGE.is_dir() and not STAGE.is_symlink(),'GEMINI_STAGE_UNSAFE')
-    require(SOURCE.is_file() and not SOURCE.is_symlink(),'GEMINI_HOTFIX_SOURCE_MISSING')
-    expected=(STAGE/'index.ts.sha256').read_text().strip()
-    require(len(expected)==64 and expected==fingerprint(SOURCE),'HOTFIX_SOURCE_HASH_MISMATCH')
-    source=SOURCE.read_text()
-    for needle in (
-       'const PRIMARY_MODEL = "gemini-3.8-flash"',
-       'const OVERLOAD_FALLBACK_MODEL = "gemini-3.6-flash"',
-       'responseSchema: TIMETABLE_RESPONSE_SCHEMA',
-       'client.auth.getUser(jwt)',
-       'inlineData:',
-       'GEMINI_SERVICE_UNAVAILABLE_503',
-       'validateAndNormalizeEntries(',
-    ):
-        require(needle in source,'HOTFIX_MISSING_INVARIANT')
-    require('decodeVerifiedJwtClaims' not in source,'UNVERIFIED_AUTH_FORBIDDEN')
-    require('groq' not in source.lower(),'UNEXPECTED_AI_PROVIDER')
-    # The Frontend Timetable AI contract and existing save RPC are deliberately
-    # not redeployed or rewritten by this hotfix.
-    return source
+def load_helper():
+    require(HELPER.is_file() and not HELPER.is_symlink(),'ACTIVE_EDGE_HELPER_MISSING')
+    spec=importlib.util.spec_from_file_location('active_edge_runtime',HELPER)
+    require(spec is not None and spec.loader is not None,'ACTIVE_EDGE_HELPER_INVALID')
+    helper=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    require(helper.OVERLAY==OVERLAY,'ACTIVE_EDGE_OVERLAY_CHANGED')
+    return helper
 
-def preflight(mod):
-    validate_candidate()
-    anon,gemini_key=mod.read_ovh_env()
-    before=mod.read_compose_config(include_gemini=True)
-    existing_mount=mod.edge_mount(before)
-    require(existing_mount.get('read_only') is True,'EDGE_MOUNT_NOT_READONLY')
-    existing_path=Path(existing_mount['source'])
-    require((existing_path/'timetable-ai/index.ts').is_file(),'LIVE_TIMETABLE_FUNCTION_MISSING')
-    require((existing_path/'main/index.ts').is_file(),'EDGE_ROUTER_MISSING')
-    # Discover existing Edge function names instead of assuming an unrelated
-    # bot's route name. The mounted release may contain multiple AI services.
-    other_routes=sorted(path for path in existing_path.glob('*/index.ts')
-                        if path.parent.name!='timetable-ai')
-    require(any(path.parent.name=='main' for path in other_routes),
-            'EDGE_ROUTER_MISSING')
-    inspect=json.loads(mod.call(mod.DOCKER+['inspect','supabase-edge-functions'],timeout=20))[0]
-    mounts=[m.get('Source') for m in inspect.get('Mounts',[])
-           if m.get('Destination')=='/home/deno/functions']
-    require(inspect.get('State',{}).get('Running') is True,'EDGE_RUNTIME_NOT_RUNNING')
-    require(mounts==[str(existing_path)],'EDGE_RUNTIME_COMPOSE_MOUNT_MISMATCH')
-    # Check obvious non-target routes before changing the mounted release.
-    preserved={
-      str(path.relative_to(existing_path)):fingerprint(path)
-      for path in other_routes
-    }
-    require(len(preserved)>=1,'OTHER_EDGE_FUNCTIONS_NOT_DISCOVERED')
-    return anon,gemini_key,preserved
+def validate():
+    require(STAGE.is_dir() and not STAGE.is_symlink(),'SOURCE_STAGE_UNSAFE')
+    require(SOURCE.is_file() and not SOURCE.is_symlink(),'SOURCE_MISSING')
+    expected=(STAGE/'index.ts.sha256').read_text().strip()
+    require(len(expected)==64 and expected==digest(SOURCE),'SOURCE_HASH_MISMATCH')
+    edge=SOURCE.read_text()
+    for token in (
+        'const PRIMARY_MODEL = "gemini-3.8-flash"',
+        'const OVERLOAD_FALLBACK_MODEL = "gemini-3.6-flash"',
+        'responseSchema: TIMETABLE_RESPONSE_SCHEMA',
+        'client.auth.getUser(jwt)',
+        'inlineData:',
+        'GEMINI_SERVICE_UNAVAILABLE_503',
+        'validateAndNormalizeEntries(',
+    ):
+        require(token in edge,'ORIGINAL_TIMETABLE_CONTRACT_CHANGED')
+    require('decodeVerifiedJwtClaims' not in edge,'AUTH_SECURITY_REGRESSION')
+    require('groq' not in edge.lower(),'UNKNOWN_AI_PROVIDER')
+    require(OVERLAY.is_file() and not OVERLAY.is_symlink(),'ACTIVE_MAGNUS_OVERLAY_MISSING')
+    require((OVERLAY.stat().st_mode&0o777)==0o600,'OVERLAY_PERMISSIONS_UNSAFE')
+
+def preflight(h):
+    validate()
+    before=h.config()
+    mount=h.mount(before)
+    require(mount.get('type')=='bind' and mount.get('read_only') is True,
+            'ACTIVE_EDGE_MOUNT_NOT_READONLY')
+    active=h.current()
+    require(active==Path(mount['source']),'ACTIVE_EDGE_CONFIG_MISMATCH')
+    require((active/'main/index.ts').is_file(),'MAIN_ROUTER_MISSING')
+    require((active/'timetable-ai/index.ts').is_file(),'TIMETABLE_EDGE_MISSING')
+    # Preserve every existing function in the active directory, without
+    # hard-coding the name or location of Magnus or any other Edge function.
+    other={str(f.relative_to(active)):digest(f)
+           for f in active.glob('*/index.ts')
+           if f.parent.name!='timetable-ai'}
+    require('main/index.ts' in other,'MAIN_ROUTER_MISSING')
+    require(not DEST.exists() and not Path(str(DEST)+'.building').exists(),
+            'IMMUTABLE_EDGE_RELEASE_COLLISION')
+    h.run(h.cmd()+['config','--quiet'],timeout=40)
+    h.run(h.DOCKER+['exec','supabase-edge-functions','sh','-c',
+         'test -n "$GEMINI_API_KEY"'],timeout=15)
+    return before,active,other
+
+def write_overlay_atomic(data):
+    tmp=OVERLAY.with_name(OVERLAY.name+'.timetable-hotfix-'+REV)
+    fd=os.open(str(tmp),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    try:
+        with os.fdopen(fd,'wb') as out:
+            out.write(data)
+        os.replace(tmp,OVERLAY)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+def verify_timetable_auth_gate():
+    req=urllib.request.Request(
+       'https://supabase.neiscircle.site/functions/v1/timetable-ai',
+       data=b'{"prompt":"ping"}',
+       headers={'Content-Type':'application/json'},
+       method='POST')
+    try:
+        with urllib.request.urlopen(req,timeout=18) as response:
+            status=response.status
+    except urllib.error.HTTPError as error:
+        status=error.code
+    require(status==401,'TIMETABLE_EDGE_AUTH_GATE_NOT_READY')
+
+def deploy(h,before,active,other):
+    old_overlay=OVERLAY.read_bytes()
+    tmp=Path(str(DEST)+'.building')
+    # Copy only from the actual live Edge mount; never assemble functions
+    # from an outdated GitHub snapshot that might remove newer AI routes.
+    shutil.copytree(active,tmp)
+    shutil.copy2(SOURCE,tmp/'timetable-ai/index.ts')
+    tmp.rename(DEST)
+    for path,hash_before in other.items():
+        require(digest(DEST/path)==hash_before,'UNRELATED_EDGE_FUNCTION_CHANGED')
+    require(digest(DEST/'timetable-ai/index.ts')==digest(SOURCE),
+            'TIMETABLE_SOURCE_NOT_COPIED')
+
+    updated=copy.deepcopy(h.mount(before))
+    updated['source']=str(DEST)
+    new_overlay=(
+        'services:\n'
+        '  functions:\n'
+        '    volumes:\n'
+        '      - '+json.dumps(updated,separators=(',',':'))+'\n'
+    ).encode('utf-8')
+    changed=False
+    try:
+        write_overlay_atomic(new_overlay)
+        changed=True
+        candidate=h.config()
+        h.assert_parity(before,candidate)
+        require(Path(h.mount(candidate)['source'])==DEST,'WRONG_EDGE_MOUNT')
+        h.run(h.cmd()+['config','--quiet'],timeout=40)
+        h.run(h.cmd()+['up','-d','--no-deps','--force-recreate','functions'],timeout=125)
+        require(h.current()==DEST,'EDGE_ACTIVATION_MOUNT_MISMATCH')
+        verify_timetable_auth_gate()
+        h.verify_route()  # Magnus OPTIONS + unauthenticated POST must still work.
+        for path,hash_before in other.items():
+            require(digest(DEST/path)==hash_before,'POST_DEPLOY_FUNCTION_CHANGED')
+    except Exception:
+        if changed:
+            write_overlay_atomic(old_overlay)
+            try:
+                h.run(h.cmd()+['up','-d','--no-deps','--force-recreate','functions'],
+                      timeout=115,check=False)
+            except Exception:
+                pass
+            print('TIMETABLE_503_EDGE=ROLLBACK_ATTEMPTED')
+        raise
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--preflight',action='store_true')
-    parser.add_argument('--deploy',action='store_true')
-    parser.add_argument('--key-stdin',action='store_true')
+    mode=parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument('--preflight',action='store_true')
+    mode.add_argument('--deploy',action='store_true')
     args=parser.parse_args()
-    require(args.preflight != args.deploy,'SELECT_PREFLIGHT_OR_DEPLOY')
-    if args.key_stdin:
-        # GitHub Secrets arrives only via encrypted SSH stdin. The key is
-        # never embedded in an SSH command, a URL, repository file or logs.
-        key=sys.stdin.read(256).strip()
-        require(len(key)>=20 and '\n' not in key,'GEMINI_KEY_STDIN_INVALID')
-        os.environ['GEMINI_API_KEY']=key
-    mod=load_original()
-    anon,key,preserved=preflight(mod)
+    h=load_helper()
+    before,active,other=preflight(h)
     if args.preflight:
         print('TIMETABLE_503_EDGE_PREFLIGHT=PASS')
-        print('TIMETABLE_503_FRONTEND=UNTOUCHED')
-        print('TIMETABLE_503_OTHER_FUNCTIONS=UNTOUCHED')
+        print('TIMETABLE_ACTIVE_COMPOSE=VERIFIED_WITH_MAGNUS')
+        print('TIMETABLE_FRONTEND_DATABASE=UNCHANGED')
         return
-    # This existing helper performs an immutable full Edge function tree copy,
-    # compares complete Compose service config (only functions source changes),
-    # recreates ONLY the functions service and rolls back on failure.
-    mod.deploy_edge_function(anon,key)
-    after=mod.read_compose_config(include_gemini=True)
-    new_path=Path(mod.edge_mount(after)['source'])
-    require(fingerprint(new_path/'timetable-ai/index.ts')==fingerprint(SOURCE),
-            'DEPLOYED_TIMETABLE_FUNCTION_HASH_MISMATCH')
-    for path,digest in preserved.items():
-        require(fingerprint(new_path/path)==digest,'UNRELATED_FUNCTION_CHANGED_'+path)
-    # The original deploy helper already checked endpoint returns 401 without
-    # credentials; never send a production user's PDF or chat content here.
+    deploy(h,before,active,other)
     print('TIMETABLE_GEMINI_503_HOTFIX=DEPLOYED_AND_VERIFIED')
     print('TIMETABLE_PRIMARY=gemini-3.8-flash')
     print('TIMETABLE_503_FALLBACK=gemini-3.6-flash')
-    print('TIMETABLE_FRONTEND_DATABASE_AND_OTHER_FUNCTIONS=UNCHANGED')
+    print('TIMETABLE_OTHER_EDGE_FUNCTIONS=UNCHANGED')
+    print('TIMETABLE_FRONTEND_DATABASE=UNCHANGED')
 
 if __name__=='__main__':
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print('TIMETABLE_503_EDGE_HOTFIX_FAILED='+str(exc),file=sys.stderr)
+        raise SystemExit(1)
