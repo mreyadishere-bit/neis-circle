@@ -2,13 +2,13 @@
 (function(){
 'use strict';
 if(window.NEISPlay)return;
-const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
+const S={open:false,tab:'home',room:null,events:[],seq:0,deck:null,cards:[],decks:[],quizzes:[],quiz:null,quizQuestions:[],quizPosition:0,quizFeedback:null,quizScore:0,quizImport:null,daily:null,dailyResult:null,championships:[],myRooms:[],status:'',busy:false,selected:'',chessFactory:null,sketchPoints:null,originalView:null,timer:null,loadId:0};
 const t=(en,ar)=>typeof state!=='undefined'&&state.lang==='ar'?ar:en;
 const e=v=>String(v??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const api=()=>typeof sb!=='undefined'?sb:null;
 const who=()=>typeof authUser!=='undefined'?authUser?.id:null;
 const root=()=>document.getElementById('neisPlayRoot');
-const label=(game)=>({chess:t('Chess Arena','ساحة الشطرنج'),sketch:t('Sketch & Guess','ارسم وخمّن'),flashcards:t('Flashcard Battles','تحدي البطاقات')})[game]||game;
+const label=(game)=>({chess:t('Chess Arena','ساحة الشطرنج'),sketch:t('Sketch & Guess','ارسم وخمّن'),flashcards:t('Flashcard Battles','تحدي البطاقات'),quiz:t('Quiz Clash','تحدي الأسئلة')})[game]||game;
 const error=err=>{S.status=String(err?.message||err||t('Something went wrong.','حدث خطأ.')).replace(/[_]/g,' ');render()};
 function button(text,action,more=''){return '<button type="button" data-play="'+action+'" '+more+'>'+text+'</button>'}
 async function request(q){if(!api()||!who())throw Error(t('Please sign in first.','سجّل الدخول أولاً.'));const res=await q;if(res.error)throw res.error;return res.data}
@@ -69,15 +69,15 @@ function render(){
   body='<div class="neis-play-empty"><h3>'+t('Sign in to play','سجّل الدخول للعب')+'</h3><p>'+t('Play and compete with real NEIS Circle accounts.','العب وتنافس باستخدام حساب NEIS Circle حقيقي.')+'</p></div>';
  }else if(S.room){body=roomPage()}
  else if(S.tab==='daily')body=dailyPage();
- else if(S.tab==='decks')body=decksPage();
+ else if(S.tab==='decks')body=quizStudioPage();
  else if(S.tab==='championships')body=championshipPage();
  else body=homePage();
- const tabs=['home','daily','decks','championships'].map((a,i)=>button([t('Games','الألعاب'),t('Daily Challenge','سؤال اليوم'),t('Flashcards','البطاقات'),t('Championships','البطولات')][i],a,'class="'+(S.tab===a&&!S.room?'active':'')+'"')).join('');
+ const tabs=['home','daily','decks','championships'].map((a,i)=>button([t('Games','الألعاب'),t('Daily Challenge','سؤال اليوم'),t('Quiz Studio','استوديو الاختبارات'),t('Championships','البطولات')][i],a,'class="'+(S.tab===a&&!S.room?'active':'')+'"')).join('');
  el.innerHTML='<nav class="neis-play-tabs">'+tabs+'</nav>'+(S.status?'<div class="neis-play-alert" role="status">'+e(S.status)+'</div>':'')+body;
  if(S.room?.game==='sketch')setupCanvas();
 }
 function homePage(){
- const items=[['chess','♟',t('Chess Arena','ساحة الشطرنج'),t('Challenge a friend to a casual chess match.','تحدّ صديقك في مباراة شطرنج ودية.')],['sketch','✎',t('Sketch & Guess','ارسم وخمّن'),t('Draw with friends. Guess in the room chat.','ارسم مع أصدقائك وخمّن في دردشة الغرفة.')],['flashcards','▣',t('Flashcard Battles','تحدي البطاقات'),t('Review a shared deck in a multiplayer room.','راجع مجموعة بطاقات مع أصدقائك.')]];
+ const items=[['chess','♟',t('Chess Arena','ساحة الشطرنج'),t('Challenge a friend to a casual chess match.','تحدّ صديقك في مباراة شطرنج ودية.')],['sketch','✎',t('Sketch & Guess','ارسم وخمّن'),t('Draw with friends. Guess in the room chat.','ارسم مع أصدقائك وخمّن في دردشة الغرفة.')],['quiz','◎',t('Quiz Clash','تحدي الأسئلة'),t('Create quizzes, invite friends, and compete live.','أنشئ اختبارات وادعُ أصدقاءك للتنافس مباشرًة.')]];
  const cards=items.map(([kind,icon,title,desc])=>'<article class="neis-play-card"><div class="neis-play-symbol">'+icon+'</div><h3>'+title+'</h3><p>'+desc+'</p>'+button(t('Create room','إنشاء غرفة'),'create:'+kind)+'</article>').join('');
  return '<section class="neis-play-hero"><div><small>PLAY • LEARN • CONNECT</small><h1>'+t('Better together.','الأفضل معًا.')+'</h1><p>'+t('Real rooms. Real classmates. No paid subscriptions.','غرف حقيقية وطلاب حقيقيون بدون اشتراكات مدفوعة.')+'</p></div><div class="neis-play-hero-symbol">♟ ✎ ▣</div></section><div class="neis-play-card-grid">'+cards+'</div><section class="neis-play-section"><h3>'+t('Join a friend','انضم إلى صديق')+'</h3><form data-play-form="join" class="neis-play-form-inline"><input name="code" required maxlength="16" placeholder="'+t('Invitation code','رمز الدعوة')+'" autocomplete="off"><button type="submit">'+t('Join room','انضمام')+'</button></form></section><section class="neis-play-section"><h3>'+t('Your active rooms','غرفك النشطة')+'</h3><div class="neis-play-list">'+(S.myRooms.length?S.myRooms.map(r=>'<div class="neis-play-list-item"><span>'+e(label(r.game))+' · '+e(r.status)+'</span>'+button(t('Open','فتح'),'room:'+e(r.id))+'</div>').join(''):'<p class="neis-play-muted">'+t('No active rooms.','لا توجد غرف نشطة.')+'</p>')+'</div></section><p class="neis-play-note">'+t('Casual beta: competitive ratings and automatic anti-cheat results are not enabled.','نسخة تجريبية ودية: التصنيفات التنافسية ونتائج مكافحة الغش لم تُفعّل بعد.')+'</p>';
 }
@@ -88,8 +88,29 @@ function dailyPage(){
  const answered=S.dailyResult;
  return '<section class="neis-play-section"><small>'+e(d.day)+'</small><h2>'+t('Question of the Day','سؤال اليوم')+'</h2><h3>'+e(d.question)+'</h3><div class="neis-play-options">'+options.map((o,i)=>button(e(o)+(answered?' '+(answered.correct===i?'✓':''):'') ,'daily:'+i,'class="'+(answered?.chosen===i?'active':'')+'" '+(answered?'disabled':''))).join('')+'</div>'+(answered?'<p class="neis-play-result">'+(answered.is_correct?t('Correct answer!','إجابة صحيحة!'):t('Keep learning!','استمر في التعلم!'))+' '+e(answered.explanation||'')+'</p>':'')+button(t('Suggest a future question','اقترح سؤالاً جديدًا'),'suggest')+'</section>';
 }
-function decksPage(){
- return '<section class="neis-play-section"><h2>'+t('Flashcard decks','مجموعات البطاقات')+'</h2><p>'+t('Create real study decks and use them in Flashcard Battles.','أنشئ بطاقات مذاكرة حقيقية واستخدمها في التحديات.')+'</p><form data-play-form="deck" class="neis-play-form"><label>'+t('Deck title','اسم المجموعة')+'<input name="title" minlength="3" maxlength="90" required placeholder="Physics — Electricity"></label><label>'+t('Subject','المادة')+'<input name="subject" maxlength="80"></label><button type="submit">'+t('Create deck','إنشاء مجموعة')+'</button></form></section><div class="neis-play-card-grid">'+(S.decks.length?S.decks.map(d=>'<article class="neis-play-card"><h3>'+e(d.title)+'</h3><p>'+e(d.subject)+'</p>'+button(t('View cards','عرض البطاقات'),'deck:'+e(d.id))+'</article>').join(''):'<p class="neis-play-muted">'+t('No decks have been created yet.','لم يتم إنشاء بطاقات بعد.')+'</p>')+'</div>'+(S.deck?'<section class="neis-play-section"><h3>'+e(S.deck.title)+'</h3><div class="neis-play-list">'+S.cards.map(c=>'<div class="neis-play-list-item"><div><strong>'+e(c.question)+'</strong><p>'+e(c.answer)+'</p></div></div>').join('')+'</div>'+(S.deck.owner_id===who()?'<form data-play-form="card" class="neis-play-form"><label>'+t('Question','السؤال')+'<input name="question" minlength="3" maxlength="300" required></label><label>'+t('Answer','الإجابة')+'<input name="answer" maxlength="300" required></label><button type="submit">'+t('Add card','إضافة بطاقة')+'</button></form>':'')+'</section>':'');
+function quizStudioPage(){
+ const quizzes=S.quizzes||[];
+ const own=quizzes.filter(q=>q.owner_id===who());
+ const detail=S.quiz;
+ let detailHtml='';
+ if(detail){
+  detailHtml='<section class="neis-play-section"><div class="neis-play-room-top"><div><small class="neis-quiz-step">'+t('QUIZ EDITOR','محرر الاختبار')+'</small><h2>'+e(detail.title)+'</h2><p>'+e(S.quizQuestions.length)+' '+t('questions','أسئلة')+'</p></div>'+button(t('Practice solo','تدرب منفردًا'),'quiz-practice')+'</div>'+
+   '<div class="neis-play-quiz-wizard"><div><h3>'+t('Add a question','أضف سؤالًا')+'</h3><form data-play-form="quiz-question" class="neis-play-form"><label>'+t('Question','السؤال')+'<textarea name="prompt" minlength="5" maxlength="600" required rows="2"></textarea></label>'+
+   [0,1,2,3].map(i=>'<label>'+String.fromCharCode(65+i)+'<input name="option'+i+'" maxlength="200" required></label>').join('')+
+   '<label>'+t('Correct answer','الإجابة الصحيحة')+'<select name="correct"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label><label>'+t('Explanation (optional)','الشرح اختياري')+'<textarea name="explanation" rows="2" maxlength="1000"></textarea></label><button type="submit">'+t('Add question','إضافة السؤال')+'</button></form></div>'+
+   '<div><h3>'+t('Import or generate','استيراد أو إنشاء')+'</h3><div class="neis-quiz-import"><p>'+t('Upload an HTML/TXT AI summary, or paste notes. The text is read safely without executing HTML.','ارفع ملخص HTML أو TXT، أو الصق ملاحظاتك. لا يتم تشغيل أي كود HTML.')+'</p>'+
+   '<form data-play-form="quiz-generate" class="neis-play-form"><label>'+t('Topic or study notes','الموضوع أو الملاحظات')+'<textarea name="notes" id="neisQuizNotes" rows="6" maxlength="18000" placeholder="Electricity: Ohm’s law, resistance, power..." required></textarea></label><label>'+t('Optional HTML or TXT file','ملف HTML أو TXT اختياري')+'<input id="neisQuizFile" name="file" type="file" accept=".html,.htm,.txt,text/plain,text/html"></label><label>'+t('Number of questions','عدد الأسئلة')+'<select name="count"><option value="5">5</option><option value="10">10</option><option value="15">15</option></select></label><button type="submit">'+t('Generate questions with AI','إنشاء الأسئلة بالذكاء الاصطناعي')+'</button></form></div></div></div>'+
+   '<div class="neis-play-list">'+S.quizQuestions.map((q,i)=>'<div class="neis-play-list-item"><strong>'+(i+1)+'. '+e(q.prompt)+'</strong><span>'+e(q.options?.length||0)+' options</span></div>').join('')+'</div></section>';
+ }
+ return '<div class="neis-play-quiz-wizard"><section class="neis-play-section"><small class="neis-quiz-step">CREATE</small><h2>'+t('Quiz Studio','استوديو الاختبارات')+'</h2><p>'+t('Build a quiz from scratch, or turn your own notes into review questions. Every generated question is editable before you share it.','أنشئ اختبارًا يدويًا أو حوّل ملاحظاتك إلى أسئلة، مع مراجعتها قبل المشاركة.')+'</p><form data-play-form="quiz-new" class="neis-play-form"><label>'+t('Quiz title','عنوان الاختبار')+'<input name="title" minlength="3" maxlength="100" required placeholder="Physics • Chapter 3"></label><label>'+t('Subject','المادة')+'<input name="subject" maxlength="90"></label><button type="submit">'+t('Create quiz','إنشاء اختبار')+'</button></form></section><section class="neis-play-section"><small class="neis-quiz-step">YOUR LIBRARY</small><h3>'+t('My quizzes','اختباراتي')+'</h3><div class="neis-play-list">'+(own.length?own.map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+'</span>'+button(t('Edit','تعديل'),'quiz-open:'+e(q.id))+'</div>').join(''):'<p>'+t('No quizzes yet. Make your first one.','لا توجد اختبارات بعد.')+'</p>')+'</div></section></div>'+
+ (detailHtml||'<section class="neis-play-section"><h3>'+t('Explore community quizzes','اختبارات المجتمع')+'</h3><div class="neis-play-list">'+quizzes.slice(0,25).map(q=>'<div class="neis-play-list-item"><span>'+e(q.title)+' · '+e(q.subject||'')+'</span>'+button(t('Practice','تدرب'),'quiz-open:'+e(q.id))+'</div>').join('')+'</div></section>');
+}
+function quizBattlePage(){
+ if(!S.quiz||!S.quizQuestions.length)return '<section class="neis-play-section"><h3>'+t('Quiz is unavailable','الاختبار غير متاح')+'</h3></section>';
+ const answeredByMe=new Set(S.events.filter(x=>x.type==='answer'&&x.user_id===who()).map(x=>x.payload.card_id));
+ const question=S.quizQuestions.find(q=>!answeredByMe.has(q.id));
+ const current=S.quizQuestions.length-answeredByMe.size;
+ return '<section class="neis-play-game-layout"><div class="neis-play-section"><small class="neis-quiz-step">'+t('LIVE QUIZ','اختبار مباشر')+'</small><h2>'+e(S.quiz.title)+'</h2><div class="neis-quiz-progress"><span style="width:'+Math.min(100,Math.max(0,100*(current-1)/S.quizQuestions.length))+'%"></span></div>'+(question?'<p class="neis-quiz-question">'+e(question.prompt)+'</p><div class="neis-quiz-option-grid">'+question.options.map((o,i)=>button(String.fromCharCode(65+i)+'. '+e(o),'quiz-answer:'+e(question.id)+':'+i)).join('')+'</div>':'<h3>'+t('All questions answered!','أجبت عن جميع الأسئلة!')+'</h3>')+'</div><div class="neis-play-section"><h3>'+t('Live standings','الترتيب المباشر')+'</h3><div class="neis-play-list">'+(S.quizScores||[]).map((a,i)=>'<div class="neis-play-list-item"><strong>'+(i+1)+'. '+(a.user_id===who()?t('You','أنت'):t('Player','لاعب'))+'</strong><span>'+a.correct+'/'+a.answered+'</span></div>').join('')+'</div><p class="neis-play-muted">'+t('Scores are verified on the server; each student can answer a question once.','النقاط معتمدة من الخادم، وكل طالب يجيب عن السؤال مرة واحدة فقط.')+'</p></div></section>';
 }
 function championshipPage(){
  const circles=Array.isArray(state?.circleRows)?state.circleRows:[];
@@ -132,6 +153,7 @@ function roomPage(){
  else if(r.status==='finished')game='<section class="neis-play-section"><h3>'+t('Room finished','انتهت الغرفة')+'</h3></section>';
  else if(r.game==='chess')game=chessPage();
  else if(r.game==='sketch')game=sketchPage();
+ else if(r.game==='quiz')game=quizBattlePage();
  else game=flashcardPage();
  return header+(S.invitesOpen?invitationPanel():'')+game+(r.status==='playing'&&host?'<div class="neis-play-section">'+button(t('End room','إنهاء الغرفة'),'end','class="neis-play-danger"')+'</div>':'');
 }
