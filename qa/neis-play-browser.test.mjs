@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
-const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox']});
 try{
   for(const mobile of [false,true]){
     const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:900}});
