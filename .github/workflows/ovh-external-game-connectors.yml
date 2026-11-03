@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/neis-game-connectors-v1.js'
       - 'styles/neis-game-connectors-v1.css'
+      - 'scripts/navigation-v14.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'scripts/neis-game-connectors-v1.js'
       - 'styles/neis-game-connectors-v1.css'
+      - 'scripts/navigation-v14.js'
       - 'qa/neis-external-game-connectors.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
@@ -76,6 +78,7 @@ jobs:
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "install -d -m 700 $stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py --dry-run"
   deploy:
@@ -109,5 +112,6 @@ jobs:
           stage="/home/ubuntu/neis-backups/neis-connectors-v1-stage"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$remote:$stage/neis-game-connectors-v1.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$remote:$stage/neis-game-connectors-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/navigation-v14.js "$remote:$stage/navigation-v14.js"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-game-connectors-v1.py "$remote:$stage/deploy.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"
