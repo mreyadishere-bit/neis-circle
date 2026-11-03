@@ -55,7 +55,7 @@ function attachActivityEntries(){
 function observeApp(){
  const view=document.getElementById('view');if(!view)return;
  attachActivityEntries();
- const observer=new MutationObserver(()=>{if(S.open&&!root())show();else if(!S.open)attachActivityEntries()});
+ const observer=new MutationObserver(()=>{if(S.open&&!root()){if(state.view!==S.originalView){S.open=false;clearInterval(S.timer);S.timer=null;S.room=null;S.events=[];}else show();}else if(!S.open)attachActivityEntries()});
  observer.observe(view,{childList:true,subtree:false});
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';const view=document.getElementById('view');if(!view)throw Error('NEIS page container unavailable');view.replaceChildren(r)}
@@ -89,7 +89,7 @@ function homePage(){
  const daily=S.daily;
  const title=daily?e(daily.question):t('No question published today.','لم يُنشر سؤال اليوم بعد.');
  const day=daily?e(daily.day):t('Your next daily challenge','تحديك اليومي القادم');
- const openRooms=(S.myRooms||[]).filter(room=>room.status!=='finished');
+ const openRooms=[...new Map((S.myRooms||[]).filter(r=>r&&r.id&&['waiting','playing'].includes(r.status)).map(r=>[r.id,r])).values()];
  const upcoming=S.championships||[];
  const totalOpen=openRooms.length;
  const mutual=(()=>{const uid=who();if(!uid)return 0;const list=state.follows||[];const following=new Set(list.filter(x=>x.follower_id===uid&&x.status==='accepted').map(x=>x.following_id));return list.filter(x=>x.following_id===uid&&x.status==='accepted'&&following.has(x.follower_id)).length})();
@@ -98,7 +98,7 @@ function homePage(){
  '<div class="neis-hub-section-title"><div><small>'+t('CHOOSE YOUR GAME','اختار اللعبة')+'</small><h2>'+t('Play something together','العبوا حاجة سوا')+'</h2></div></div>'+
  '<section class="neis-game-grid">'+gameCards+'</section>'+
  '<section class="neis-hub-discover-grid"><article class="neis-hub-daily"><div class="neis-hub-meta"><span>'+t('QUESTION OF THE DAY','سؤال اليوم')+'</span><span>'+day+'</span></div><h3>'+title+'</h3><p>'+t('Think it through, make your pick, and see the explanation.','فكّر في الإجابة، اختار، وشوف الشرح.')+'</p>'+button(t('Open daily challenge','افتح سؤال اليوم'),'daily')+'</article><article class="neis-hub-events"><div class="neis-hub-meta"><span>'+t('CIRCLE CHAMPIONSHIPS','بطولات المجتمعات')+'</span></div><h3>'+t('Your next competition','منافستك القادمة')+'</h3>'+(upcoming.length?'<p>'+e(upcoming[0].title)+'</p><small>'+e(new Date(upcoming[0].starts_at).toLocaleString())+'</small>':'<p>'+t('No upcoming championships yet. Start one with your Circle.','لا توجد بطولات قادمة. أنشئ واحدة مع مجتمعك.')+'</p>')+button(t('Explore championships','استكشف البطولات'),'championships')+'</article></section>'+
- '<section class="neis-hub-active"><div class="neis-hub-section-title"><div><small>'+t('PICK UP WHERE YOU LEFT OFF','كمّل من مكان ما وقفت')+'</small><h2>'+t('Your game rooms','غرف ألعابك')+'</h2></div></div><div class="neis-play-list">'+(openRooms.length?openRooms.map(r=>'<article class="neis-hub-room"><div class="neis-hub-room-icon">'+({chess:'♟',sketch:'✎',quiz:'◎',flashcards:'▣'}[r.game]||'◇')+'</div><div><strong>'+e(r.title||label(r.game))+'</strong><p>'+e(label(r.game))+' · '+e(r.status)+'</p></div>'+button(t('Open room','افتح الغرفة'),'room:'+e(r.id))+'</article>').join(''):'<div class="neis-hub-empty"><strong>'+t('No open games yet.','لسه مفيش ألعاب مفتوحة.')+'</strong><p>'+t('Create a game above and invite your friends to join.','ابدأ لعبة من فوق وادعُ أصحابك يشاركوا.')+'</p></div>')+'</div></section>'+
+ '<section class="neis-hub-active"><div class="neis-hub-section-title"><div><small>'+t('PICK UP WHERE YOU LEFT OFF','كمّل من مكان ما وقفت')+'</small><h2>'+t('Your game rooms','غرف ألعابك')+'</h2></div></div><div class="neis-play-list">'+(openRooms.length?openRooms.map(r=>'<article class="neis-hub-room"><div class="neis-hub-room-icon">'+({chess:'♟',sketch:'✎',quiz:'◎',flashcards:'▣'}[r.game]||'◇')+'</div><div class="neis-hub-room-copy"><strong>'+e(r.title||label(r.game))+'</strong><p>'+e(label(r.game))+' · '+e(r.status)+' · '+e(r.member_count||1)+' '+t('players','لاعبين')+'</p></div><div class="neis-hub-room-actions">'+button(t('Open','فتح'),'room:'+e(r.id))+(r.creator_id===who()?(r.status==='waiting'?button(t('Delete','حذف'),'manage:delete:'+e(r.id),'class="neis-room-danger"'):button(t('End','إنهاء'),'manage:end:'+e(r.id),'class="neis-room-danger"')):button(t('Leave','مغادرة'),'manage:leave:'+e(r.id),'class="neis-room-quiet"'))+'</div></article>').join(''):'<div class="neis-hub-empty"><strong>'+t('No open games yet.','لسه مفيش ألعاب مفتوحة.')+'</strong><p>'+t('Create a game above and invite your friends to join.','ابدأ لعبة من فوق وادعُ أصحابك يشاركوا.')+'</p></div>')+'</div></section>'+
  '<p class="neis-play-note">'+t('Casual play: ranked chess and automated anti-cheat reviews are not yet enabled.','اللعب ودي حاليًا: التصنيف الاحترافي ومراجعات مكافحة الغش لسه غير مفعّلة.')+'</p></div>';
 }
 function dailyPage(){
@@ -174,7 +174,7 @@ function roomPage(){
  const r=S.room;
  const members=r.members||[];
  const host=r.creator_id===who();
- const header='<section class="neis-play-section"><div class="neis-play-room-top"><div><small>'+e(label(r.game))+'</small><h2>'+e(r.title||t('Friendly room','غرفة ودية'))+'</h2><p>'+t('Room code','رمز الغرفة')+': <strong>'+e(r.code)+'</strong> · '+members.length+'/'+(r.game==='chess'?'2':r.game==='sketch'?'12':'8')+' · '+e(r.status)+'</p></div><div>'+button(t('Copy invitation','نسخ الدعوة'),'invite')+button(t('Invite friends','دعوة الأصدقاء'),'show-invite')+button(t('Back to Play','العودة'),'leave')+'</div></div></section>';
+ const header='<section class="neis-play-section"><div class="neis-play-room-top"><div><small>'+e(label(r.game))+'</small><h2>'+e(r.title||t('Friendly room','غرفة ودية'))+'</h2><p>'+t('Room code','رمز الغرفة')+': <strong>'+e(r.code)+'</strong> · '+members.length+'/'+(r.game==='chess'?'2':r.game==='sketch'?'12':'8')+' · '+e(r.status)+'</p></div><div>'+button(t('Copy invitation','نسخ الدعوة'),'invite')+button(t('Invite friends','دعوة الأصدقاء'),'show-invite')+button(t('Back to Play','العودة'),'leave')+(host?(r.status==='waiting'?button(t('Delete room','حذف الغرفة'),'manage:delete:'+e(r.id),'class="neis-room-danger"'):button(t('End room','إنهاء الغرفة'),'manage:end:'+e(r.id),'class="neis-room-danger"')):button(t('Leave room','مغادرة الغرفة'),'manage:leave:'+e(r.id),'class="neis-room-quiet"'))+'</div></div></section>';
  let game='';
  if(r.status==='waiting')game='<div class="neis-play-section"><h3>'+t('Waiting for players','في انتظار اللاعبين')+'</h3><p>'+members.map((m,i)=>e(m.id===who()?t('You','أنت'):t('Player','لاعب')+' '+(i+1))).join(' • ')+'</p>'+(host?button(t('Start game','ابدأ اللعبة'),'start','class="neis-play-primary"'):'<p>'+t('The host will start the game.','المضيف سيبدأ اللعبة.')+'</p>')+'</div>';
  else if(r.status==='finished')game='<section class="neis-play-section"><h3>'+t('Room finished','انتهت الغرفة')+'</h3></section>';
@@ -351,6 +351,17 @@ function currentChatInvite(){
  if(field){field.value=(field.value?field.value+'\n':'')+t('Join my NEIS Play game: ','انضم للعبتي في NEIS Play: ')+link;field.dispatchEvent(new Event('input',{bubbles:true}));field.focus();return}
  navigator.clipboard.writeText(link).then(()=>{if(typeof toast==='function')toast(t('Invitation copied. Paste it into a DM or Circle chat.','تم نسخ الدعوة. الصقها في الرسائل أو دردشة المجتمع.'))}).catch(()=>{});
 }
+async function manageRoom(type,id){
+ const row=(S.myRooms||[]).find(r=>r.id===id);
+ if(!row||!['delete','end','leave'].includes(type))throw Error('Invalid room action');
+ const promptText={delete:t('Delete this waiting room for everyone? This cannot be undone.','حذف الغرفة للجميع؟ لا يمكن التراجع.'),end:t('End this room for everyone?','إنهاء الغرفة للجميع؟'),leave:t('Leave this room?','مغادرة هذه الغرفة؟')}[type];
+ if(!confirm(promptText))return;
+ await request(api().rpc('neis_play_manage_room',{p_id:id,p_action:type}));
+ if(S.room?.id===id){S.room=null;S.events=[];S.seq=0;clearInterval(S.timer)}
+ S.myRooms=(S.myRooms||[]).filter(r=>r.id!==id);
+ S.status=type==='delete'?t('Room deleted.','تم حذف الغرفة.'):type==='end'?t('Room ended.','انتهت الغرفة.'):t('You left the room.','غادرت الغرفة.');
+ render();await fetchLists();
+}
 async function action(a){
  S.status='';
  try{
@@ -359,6 +370,7 @@ async function action(a){
   if(a==='leave'){S.room=null;S.events=[];S.seq=0;clearInterval(S.timer);S.tab='home';render();await fetchLists();return}
   if(a.startsWith('create:'))return await create(a.slice(7));
   if(a.startsWith('room:'))return await openRoom(a.slice(5));
+  if(a.startsWith('manage:')){const [,type,id]=a.split(':');await manageRoom(type,id);return}
   if(a.startsWith('deck:')){
    const id=a.slice(5);S.deck=S.decks.find(x=>x.id===id)||null;
    S.cards=await request(api().from('neis_play_cards').select('id,deck_id,question,answer,created_at').eq('deck_id',id).order('created_at').limit(100));render();return;
