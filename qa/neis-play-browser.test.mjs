@@ -5,13 +5,14 @@ try{
   for(const mobile of [false,true]){
     const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1440,height:900}});
     await page.setContent('<nav class="rail-nav"><button data-nav="library">Saved</button></nav><nav class="bottom-nav"><button data-mobile-more>More</button></nav><div id="view"><div class="dashboard"><div class="main-column"><p id="original-home">Existing Home remains intact</p></div></div></div>');
-    await page.evaluate(()=>{window.state={view:'home',lang:'en'}});
+    await page.evaluate(()=>{window.state={view:'home',lang:'en'};window.nav=v=>{window.state.view=v;document.getElementById('view').innerHTML='<div class="dashboard"><div class="main-column"><p id="original-home">Existing Home remains intact</p></div></div>'}});
     await page.addStyleTag({path:'styles/neis-play-v1.css'});
     await page.addScriptTag({path:'scripts/neis-play-v1.js'});
     assert.ok((await page.locator('[data-neis-play-open]').count())>=3,'sidebar, mobile and Home entry points');
     await page.locator('[data-neis-play-open]').nth(mobile?1:0).click({force:true});
     await page.locator('#neisPlayRoot').waitFor();
-    assert.equal(await page.locator('#original-home').count(),1,'original page must remain untouched');
+    assert.equal(await page.locator('#original-home').count(),0,'native Play page replaces only stage content');
+    assert.equal(await page.locator('#view #neisPlayRoot').count(),1,'Play lives inside website main stage');
     assert.ok((await page.locator('#neisPlayContent').innerText()).includes('Sign in to play'));
     await page.locator('#neisPlayRoot [data-play="close"]').click();
     assert.equal(await page.locator('#neisPlayRoot').count(),0);
