@@ -71,3 +71,43 @@
 .neis-play-home-shortcut button{flex:0 0 auto;border:0;border-radius:12px;background:var(--accent,#2874b2);color:#fff;padding:11px 15px;font:inherit;font-size:12px;font-weight:750;cursor:pointer}
 .chat-form .neis-play-chat-trigger{display:grid;place-items:center;flex:0 0 36px;width:36px;min-width:36px;height:36px;min-height:36px;padding:0;border:1px solid var(--line,#dae3e9);border-radius:10px;background:var(--soft,#eaf1f8);color:var(--accent,#2874b2);font-size:19px;cursor:pointer}
 @media(max-width:600px){.neis-play-home-shortcut{padding:14px;gap:10px}.neis-play-home-shortcut p{display:none}.neis-play-home-shortcut button{padding:10px 11px}}
+
+/* v2 — NEIS Play is part of the native page, never a detached full-screen overlay. */
+#view .neis-play-root{position:relative;inset:auto;z-index:auto;overflow:visible;overscroll-behavior:auto;background:transparent;color:var(--ink);min-height:70vh;font-family:inherit}
+#view .neis-play-shell{max-width:1200px;min-height:0;padding:0 0 48px;margin:0 auto}
+#view .neis-play-header{padding:0 0 18px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+#view .neis-play-header h2{font-size:30px;letter-spacing:-.045em}
+#view .neis-play-tabs{gap:5px;padding:5px;border-radius:15px;width:max-content;max-width:100%;background:color-mix(in srgb,var(--soft) 75%,var(--card));border:1px solid var(--line)}
+#view .neis-play-tabs button{border:0;background:transparent;color:var(--muted);border-radius:11px}
+#view .neis-play-tabs button.active{background:var(--card);color:var(--ink);box-shadow:0 1px 5px #1b32421a}
+#view .neis-play-hero{background:linear-gradient(115deg,#15334a 0%,#1e5475 55%,#257aa9 100%);border-radius:20px}
+#view .neis-play-card,#view .neis-play-section{border-radius:18px;box-shadow:0 6px 26px #21374a08}
+#view .neis-play-card:hover{border-color:color-mix(in srgb,var(--accent) 32%,var(--line));transform:translateY(-2px);transition:transform .16s,border-color .16s}
+#view .neis-play-card-grid{gap:14px}
+#view .neis-play-card h3{font-size:19px}
+#view .neis-play-card p{font-size:13px}
+#view .neis-play-room-top{padding:0}
+#view .neis-play-alert{box-shadow:none}
+#view .neis-play-chat-trigger{border-color:var(--line);box-shadow:none}
+.neis-play-invite-heading{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.neis-invite-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:15px}
+.neis-invite-groups h4{font-size:13px;margin:0 0 10px}
+.neis-invite-list{display:grid;gap:6px;max-height:250px;overflow-y:auto}
+.neis-invite-choice{display:flex;align-items:center;text-align:start;gap:10px!important;width:100%;background:var(--soft)!important;color:var(--ink)!important;padding:9px!important;border:1px solid var(--line)!important;border-radius:11px!important}
+.neis-invite-choice span:nth-child(2){flex:1;font-weight:650;font-size:13px}
+.neis-invite-choice small{font-size:11px;color:var(--muted)}
+.neis-invite-avatar{width:33px;height:33px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:#fff}
+.neis-play-quiz-wizard{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.7fr);gap:17px;align-items:start}
+.neis-quiz-step{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:800}
+.neis-quiz-question{font-size:19px;line-height:1.4;font-weight:720}
+.neis-quiz-option-grid{display:grid;gap:9px;margin:16px 0}
+.neis-quiz-option-grid button{background:var(--soft)!important;color:var(--ink)!important;text-align:left;border:1px solid var(--line)!important;min-height:48px}
+.neis-quiz-option-grid button:disabled{opacity:1}
+.neis-quiz-option-grid button.correct{border-color:#348f66!important;background:#e5f5ed!important}
+.neis-quiz-option-grid button.wrong{border-color:#d16464!important;background:#fff0f0!important}
+.neis-quiz-progress{height:6px;border-radius:10px;background:var(--soft);overflow:hidden;margin:14px 0}
+.neis-quiz-progress span{height:100%;display:block;background:var(--accent);transition:width .2s}
+.neis-quiz-import{padding:13px;border:1px dashed var(--line);border-radius:12px}
+.neis-quiz-import input{display:block;width:100%}
+@media(max-width:900px){.neis-play-quiz-wizard{grid-template-columns:1fr}.neis-invite-groups{grid-template-columns:1fr}}
+@media(max-width:600px){#view .neis-play-shell{padding:0 0 32px}#view .neis-play-header h2{font-size:25px}#view .neis-play-tabs{width:100%}.neis-play-room-top button{font-size:12px}}
