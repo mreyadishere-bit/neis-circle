@@ -7,6 +7,7 @@ on:
       - 'styles/neis-play-v1.css'
       - 'supabase/migrations/20261103200000_neis_play_foundation.sql'
       - 'scripts/ops/ovh-deploy-neis-play-v1.py'
+      - 'scripts/ops/ovh-neis-play-authenticated-smoke.py'
       - 'qa/neis-play-*.test.mjs'
       - 'index.html'
       - '.github/workflows/ovh-neis-play-v1.yml'
@@ -17,6 +18,7 @@ on:
       - 'styles/neis-play-v1.css'
       - 'supabase/migrations/20261103200000_neis_play_foundation.sql'
       - 'scripts/ops/ovh-deploy-neis-play-v1.py'
+      - 'scripts/ops/ovh-neis-play-authenticated-smoke.py'
       - '.github/workflows/ovh-neis-play-v1.yml'
 permissions:
   contents: read
@@ -38,6 +40,7 @@ jobs:
           node --check qa/neis-play-v1.test.mjs
           node --check qa/neis-play-browser.test.mjs
           python3 -m py_compile scripts/ops/ovh-deploy-neis-play-v1.py
+          python3 -m py_compile scripts/ops/ovh-neis-play-authenticated-smoke.py
           node qa/neis-play-v1.test.mjs
   browser:
     needs: static
@@ -83,6 +86,7 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103200000_neis_play_foundation.sql "$target:$stage/migration.sql"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-neis-play-v1.py "$target:$stage/deploy.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-neis-play-authenticated-smoke.py "$target:$stage/auth-smoke.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "python3 $stage/deploy.py --dry-run"
   deploy:
     if: github.ref == 'refs/heads/main'
@@ -117,4 +121,5 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-play-v1.css "$target:$stage/neis-play-v1.css"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261103200000_neis_play_foundation.sql "$target:$stage/migration.sql"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-neis-play-v1.py "$target:$stage/deploy.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-neis-play-authenticated-smoke.py "$target:$stage/auth-smoke.py"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "GITHUB_SHA=$GITHUB_SHA python3 $stage/deploy.py"

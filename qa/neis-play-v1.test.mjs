@@ -27,7 +27,7 @@ assert.ok(css.includes('@media(max-width:600px)'),'mobile layout');
 assert.equal((html.match(/scripts\/neis-play-v1\.js/g)||[]).length,1,'script once');
 assert.equal((html.match(/styles\/neis-play-v1\.css/g)||[]).length,1,'style once');
 assert.ok(!ui.includes('window.render='),'must not override app render');
-assert.ok(!ui.includes('state.view='),'must not replace app routes');
+assert.ok(!/\bstate\.view\s*=(?!=)/.test(ui),'must not assign app routes');
 assert.ok(deploy.includes('rollback;'),'transaction-only dry run');
 assert.ok(deploy.includes('NEIS_PLAY_FRONTEND=ROLLED_BACK'),'reversible frontend');
 assert.ok(deploy.includes("['up','-d','--no-deps','caddy']"),'no full-stack restart');
