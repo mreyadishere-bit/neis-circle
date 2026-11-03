@@ -27,6 +27,8 @@ Deno.serve(async(req:Request)=>{
   const topic=String(payload?.topic||"").trim().slice(0,100);
   const count=Math.max(3,Math.min(15,Math.floor(Number(payload?.count)||5)));
   if(notes.length<30||notes.length>18000)return reply({error:"Provide 30–18,000 characters of notes."},400);
+  const limit=await client.rpc("neis_quiz_ai_claim");
+  if(limit.error)return reply({error:"Daily AI limit reached (6 requests). Please use manual Quiz Studio or retry tomorrow."},429);
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),18000);
   let result:Response;
