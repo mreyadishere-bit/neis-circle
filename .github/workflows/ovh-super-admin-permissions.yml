@@ -5,26 +5,13 @@ on:
     paths:
       - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
       - 'supabase/migrations/20261103014000_super_admin_owner_console_parity.sql'
-      - 'scripts/super-admin-management-v1.js'
-      - 'scripts/server-usage-admin-v1.js'
-      - 'scripts/main-admin-auth-studio-v5.js'
-      - 'scripts/main-admin-db-storage-v1.js'
-      - 'index.html'
       - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
-      - 'qa/super-admin-contract.test.mjs'
-      - '.github/workflows/ovh-super-admin-permissions.yml'
   push:
     branches: [main]
     paths:
       - 'supabase/migrations/20261103013000_super_admin_permissions.sql'
       - 'supabase/migrations/20261103014000_super_admin_owner_console_parity.sql'
-      - 'scripts/super-admin-management-v1.js'
-      - 'scripts/server-usage-admin-v1.js'
-      - 'scripts/main-admin-auth-studio-v5.js'
-      - 'scripts/main-admin-db-storage-v1.js'
-      - 'index.html'
       - 'scripts/ops/ovh-deploy-super-admin-20261103.py'
-      - '.github/workflows/ovh-super-admin-permissions.yml'
 permissions:
   contents: read
 concurrency:

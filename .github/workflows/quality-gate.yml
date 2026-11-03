@@ -39,6 +39,8 @@ jobs:
         run: bash -n scripts/ops/ovh-cli-isolated-restore.sh
       - name: Compile critical OVH production migration Python
         run: python3 -m py_compile scripts/ops/ovh-final-live-database-import.py
+      - name: Install QA dependencies
+        run: npm install --no-audit --no-fund
       - run: npm run qa:static
       - name: Preserve original Google-only authentication flow
         run: node qa/google-only-auth-contract.mjs
