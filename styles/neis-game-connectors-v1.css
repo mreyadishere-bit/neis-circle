@@ -201,8 +201,8 @@
  background:var(--card,#fff);
  color:var(--ink,#1d3345);
  text-decoration:none!important;
- direction:ltr;
- text-align:left;
+ direction:inherit;
+ text-align:start;
  transition:border-color .15s,box-shadow .15s;
 }
 #view .chat-message .neis-chat-game-card:hover{
