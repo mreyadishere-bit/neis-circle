@@ -85,7 +85,31 @@ def main():
  require(live_admin.count(OLD_ADMIN_COLUMNS)==1 or live_admin.count(NEW_ADMIN_COLUMNS)==1,'ADMIN_COLUMNS_CHANGED')
  # Validate migrations in a transaction, even when new tables already exist.
  witness="select case when to_regclass('public.neis_quizzes') is not null and to_regclass('public.neis_quiz_answers') is not null and to_regprocedure('public.neis_quiz_room_scores(uuid)') is not null and to_regprocedure('public.neis_quiz_ai_claim()') is not null then 'PLAY_V2_SQL=PASS' else 'PLAY_V2_SQL=FAIL' end;"
- outcome=db('begin;\n'+sql+'\n'+witness+'\nrollback;\n',timeout=180)
+ smoke="""
+select set_config('request.jwt.claim.sub',(select id::text from auth.users where deleted_at is null order by created_at limit 1),true);
+set local role authenticated;
+do $neis_quiz_smoke$
+declare quiz uuid; qid uuid; room uuid; code text; grade jsonb;
+begin
+ if auth.uid() is null then raise exception 'NO_AUTHENTICATED_TEST_USER';end if;
+ insert into public.neis_quizzes(owner_id,title,subject) values(auth.uid(),'Transactional quiz smoke','Physics') returning id into quiz;
+ qid:=public.neis_quiz_add_question(quiz,'Which answer equals 4?', '["1","2","3","4"]'::jsonb,3,'Addition');
+ select room_id,invite_code into room,code from public.neis_play_create_room('quiz','Quiz smoke',null,jsonb_build_object('quiz_id',quiz::text));
+ if room is null or code is null then raise exception 'QUIZ_ROOM_FAILED';end if;
+ grade:=public.neis_quiz_grade(qid,3);
+ if grade->>'is_correct'<>'true' then raise exception 'QUIZ_GRADE_FAILED';end if;
+ perform public.neis_quiz_ai_claim();
+ begin
+  perform 1 from public.neis_quiz_answers;
+  raise exception 'ANSWER_KEYS_EXPOSED';
+ exception when insufficient_privilege then null;
+ end;
+end;
+$neis_quiz_smoke$;
+select 'PLAY_V2_AUTH_SMOKE=PASS';
+"""
+ outcome=db('begin;\n'+sql+'\n'+witness+'\n'+smoke+'\nrollback;\n',timeout=180)
+ require('PLAY_V2_AUTH_SMOKE=PASS' in outcome,'AUTHENTICATED_QUIZ_SMOKE_FAILED')
  require('PLAY_V2_SQL=PASS' in outcome,'DB_MIGRATION_DRY_RUN_FAILED')
  print('PLAY_V2_SQL_DRY_RUN=PASS')
  if '--dry-run' in sys.argv:
