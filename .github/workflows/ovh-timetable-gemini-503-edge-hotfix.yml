@@ -5,6 +5,7 @@ on:
     paths:
       - 'supabase/functions/timetable-ai/index.ts'
       - 'qa/timetable-ai-gemini-503.test.mjs'
+      - 'qa/timetable-ai-timeout.test.mjs'
       - 'scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py'
       - '.github/workflows/ovh-timetable-gemini-503-edge-hotfix.yml'
   workflow_dispatch:
