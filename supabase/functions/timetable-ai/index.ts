@@ -515,7 +515,7 @@ Deno.serve(async (request: Request) => {
     const adviceOnly = multimodalParts.length === 0 &&
       /(?:how (?:can|should|do|to)|best way|tips? (?:for|to)|advice (?:for|on)|إزاي|كيف|نصائح|أفضل طريقة)/i.test(userPrompt) &&
       /(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|ذاكر|تنظيم|جدول|مذاكرة|وقت)/i.test(userPrompt) &&
-      !/(?:\b(?:add|remove|delete|move|edit|change|create|generate|put|schedule)\s+(?:my\s+)?(?:class|lesson|subject|period)|(?:أضف|احذف|انقل|عدّل|غير|أنشئ)\s+(?:حصة|مادة|الجدول))/i.test(userPrompt);
+      !/(?:\b(?:add|remove|delete|move|edit|change|create|generate|put|schedule)\s+(?:(?:my|a|the)\s+)?(?:class|lesson|subject|period)|(?:أضف|احذف|انقل|عدّل|غير|أنشئ)\s+(?:حصة|مادة|الجدول))/i.test(userPrompt);
     if (adviceOnly) {
       const textRequest = {
         role: "user",
