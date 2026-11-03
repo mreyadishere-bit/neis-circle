@@ -336,18 +336,19 @@ function syncHomeAppyLink(){
  let link=actions.querySelector('.neis-home-appy-link');
  if(!link){
   link=document.createElement('a');
-  link.className='secondary neis-home-appy-link';
+  link.className='primary neis-home-appy-link';
   connections.insertAdjacentElement('afterend',link);
  }
  // Keep this updater idempotent: replacing textContent on every render
  // creates childList mutations that retrigger the #view MutationObserver forever.
+ if(link.className!=='primary neis-home-appy-link')link.className='primary neis-home-appy-link';
  const href='https://appy.neiscircle.site/';
  const aria=tr('Open APPY in a new tab','افتح APPY في تبويب جديد');
  if(link.getAttribute('href')!==href)link.setAttribute('href',href);
  if(link.getAttribute('target')!=='_blank')link.setAttribute('target','_blank');
  if(link.getAttribute('rel')!=='noopener noreferrer')link.setAttribute('rel','noopener noreferrer');
  if(link.getAttribute('aria-label')!==aria)link.setAttribute('aria-label',aria);
- if(link.textContent!=='APPY ↗')link.textContent='APPY ↗';
+ if(link.textContent!=='APPY')link.textContent='APPY';
 }
 let legacyGamesCleaned=false;
 function attach(){
