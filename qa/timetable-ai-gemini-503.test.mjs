@@ -94,12 +94,12 @@ for(const bad of [quota,badDocument,transient]){
  assert.equal(h.requests.length,1,'never retry or switch on '+bad.status);
 }
 {
- const h=harness([unavailable,unavailable],{atTime:()=>9500});
+ const h=harness([unavailable,unavailable],{atTime:(tick,count)=>count?9500:0});
  await assert.rejects(h.fn(h.ai,contents),err=>err.status===503);
  assert.equal(h.requests.length,1,'late 503 cannot start another request beyond 95s UI deadline');
 }
 {
- const h=harness([unavailable,unavailable],{atTime:(tick)=>tick>=2?9500:0});
+ const h=harness([unavailable,unavailable],{atTime:(tick,count)=>count>=2?9500:0});
  await assert.rejects(h.fn(h.ai,contents),err=>err.status===503);
  assert.equal(h.requests.length,2,'late second 503 cannot launch a third 80s call');
 }
