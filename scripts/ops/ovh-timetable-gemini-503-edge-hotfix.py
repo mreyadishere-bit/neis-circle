@@ -72,7 +72,12 @@ def preflight(mod):
     existing_path=Path(existing_mount['source'])
     require((existing_path/'timetable-ai/index.ts').is_file(),'LIVE_TIMETABLE_FUNCTION_MISSING')
     require((existing_path/'main/index.ts').is_file(),'EDGE_ROUTER_MISSING')
-    require((existing_path/'magnus-chat/index.ts').is_file(),'MAGNUS_FUNCTION_MISSING')
+    # Discover existing Edge function names instead of assuming an unrelated
+    # bot's route name. The mounted release may contain multiple AI services.
+    other_routes=sorted(path for path in existing_path.glob('*/index.ts')
+                        if path.parent.name!='timetable-ai')
+    require(any(path.parent.name=='main' for path in other_routes),
+            'EDGE_ROUTER_MISSING')
     inspect=json.loads(mod.call(mod.DOCKER+['inspect','supabase-edge-functions'],timeout=20))[0]
     mounts=[m.get('Source') for m in inspect.get('Mounts',[])
            if m.get('Destination')=='/home/deno/functions']
@@ -80,9 +85,10 @@ def preflight(mod):
     require(mounts==[str(existing_path)],'EDGE_RUNTIME_COMPOSE_MOUNT_MISMATCH')
     # Check obvious non-target routes before changing the mounted release.
     preserved={
-      'main/index.ts':fingerprint(existing_path/'main/index.ts'),
-      'magnus-chat/index.ts':fingerprint(existing_path/'magnus-chat/index.ts'),
+      str(path.relative_to(existing_path)):fingerprint(path)
+      for path in other_routes
     }
+    require(len(preserved)>=1,'OTHER_EDGE_FUNCTIONS_NOT_DISCOVERED')
     return anon,gemini_key,preserved
 
 def main():
