@@ -58,10 +58,9 @@ function setNotice(message,type){
 }
 function external(raw){
  const url=verify(raw);
- const win=window.innerWidth>760?window.open('','neis-game-provider','width=1080,height=780,scrollbars=yes,resizable=yes'):window.open('','_blank');
- if(!win){setNotice(tr('Your browser blocked the game window. Allow pop-ups for NEIS Circle and try again.','المتصفح منع فتح اللعبة. اسمح بالنوافذ المنبثقة لموقع NEIS Circle وحاول مجددًا.'),'error');return}
- try{win.opener=null}catch(_){}
- win.location.replace(url);
+ // Every game opens in a separate browser tab on desktop, tablet and mobile.
+ // No named or sized popup windows, and no access back to the NEIS Circle page.
+ window.open(url,'_blank','noopener,noreferrer');
 }
 function connections(){
  const me=identity(who()),rels=[...(app().follows||[]),...UI.cachedFollows].filter(x=>x.status==='accepted');
