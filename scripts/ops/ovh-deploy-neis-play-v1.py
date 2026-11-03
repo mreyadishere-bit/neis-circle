@@ -36,12 +36,14 @@ def active_frontend():
  return mounts[0]
 def test_database(sql):
  # Nothing in this test survives. Existing tables, messages and student accounts are untouched.
- witness="select case when to_regclass('public.neis_play_rooms') is not null "+
-  "and to_regclass('public.neis_play_decks') is not null "+
-  "and to_regclass('public.neis_play_daily_keys') is not null "+
-  "and to_regprocedure('public.neis_play_create_room(text,text,uuid,jsonb)') is not null "+
-  "and to_regprocedure('public.neis_play_room_snapshot(uuid,bigint)') is not null "+
+ witness=(
+  "select case when to_regclass('public.neis_play_rooms') is not null "
+  "and to_regclass('public.neis_play_decks') is not null "
+  "and to_regclass('public.neis_play_daily_keys') is not null "
+  "and to_regprocedure('public.neis_play_create_room(text,text,uuid,jsonb)') is not null "
+  "and to_regprocedure('public.neis_play_room_snapshot(uuid,bigint)') is not null "
   "then 'NEIS_PLAY_SQL_DRY_RUN=PASS' else 'NEIS_PLAY_SQL_DRY_RUN=FAIL' end;"
+ )
  output=db('begin;\n'+sql+'\n'+witness+'\nrollback;\n')
  check('NEIS_PLAY_SQL_DRY_RUN=PASS' in output,'SQL_DRY_RUN_FAILED')
  print('NEIS_PLAY_SQL_DRY_RUN=PASS')
