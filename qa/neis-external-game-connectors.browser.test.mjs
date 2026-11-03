@@ -67,12 +67,26 @@ try {
   await page.locator('#neisGamesOverlay').waitFor();
   assert.equal(await page.locator('.neis-connect-card').count(),13,'thirteen carefully chosen games in catalog');
   assert.equal(await page.locator('.neis-connect-list-heading,.neis-connect-provider-note').count(),0,'redundant Discover Games and Official Sites headers removed');
-  const appy=page.locator('.neis-connect-filters .neis-connect-appy-link');
-  assert.equal(await appy.count(),1,'APPY shortcut appears once beside category filters');
-  assert.equal(await appy.getAttribute('href'),'https://appy.neiscircle.site/','APPY shortcut targets the requested site');
-  assert.equal(await appy.getAttribute('target'),'_blank','APPY opens in its own browser tab');
-  assert.equal(await appy.getAttribute('rel'),'noopener noreferrer','APPY has safe external-link isolation');
+  assert.equal(await page.locator('.neis-connect-filters .neis-connect-appy-link').count(),0,'APPY removed from Games filters');
   assert.equal(await page.locator('.neis-connect-filters [data-game^="filter:"]').count(),5,'all category filters remain');
+  // Render the actual home banner actions after Games initialises, then confirm the
+  // shortcut is inserted next to Explore Circles and Your connections.
+  await page.locator('#view').evaluate(view=>{
+   const hero=document.createElement('section');hero.className='hero';
+   hero.innerHTML='<div class="hero-main"><div style="display:flex;gap:8px"><button class="primary" data-nav="circles">Explore Circles</button><button class="secondary" data-nav="connections">Your connections</button></div></div>';
+   view.prepend(hero);
+  });
+  const appy=page.locator('#view .hero-main .neis-home-appy-link');
+  await appy.waitFor();
+  assert.equal(await appy.count(),1,'one APPY action in home banner');
+  assert.equal(await appy.getAttribute('href'),'https://appy.neiscircle.site/','APPY opens the requested website');
+  assert.equal(await appy.getAttribute('target'),'_blank','APPY opens in a separate browser tab');
+  assert.equal(await appy.getAttribute('rel'),'noopener noreferrer','APPY uses safe new-tab navigation');
+  assert.equal(await appy.evaluate(el=>el.previousElementSibling?.dataset.nav),'connections','APPY is immediately after Your connections');
+  assert.equal(await page.locator('#view .hero-main .neis-home-actions').count(),1,'home actions wrap on small screens');
+  await page.locator('#view .hero').evaluate(el=>el.replaceWith(el.cloneNode(true)));
+  await page.waitForTimeout(30);
+  assert.equal(await appy.count(),1,'home re-render never duplicates the APPY button');
 
   assert.equal(await page.locator('.neis-connect-cover svg').count(),14,'distinct vector covers on every card and active game');
   assert.equal(await page.evaluate(()=>window.__reads.length),0,'opening games must not query contacts or Circles');
