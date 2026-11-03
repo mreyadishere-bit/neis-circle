@@ -2,7 +2,7 @@
 -- Game rooms are CASUAL ONLY until authoritative chess/drawing engines are deployed.
 create table if not exists public.neis_play_rooms (
  id uuid primary key default gen_random_uuid(),
- code text not null unique default upper(substr(replace(gen_random_uuid()::text,'-',''),1,10)),
+ code text not null unique default upper(substr(replace(gen_random_uuid()::text,'-',''),1,16)),
  creator_id uuid not null references auth.users(id) on delete cascade,
  circle_id uuid references public.circles(id) on delete set null,
  game text not null check (game in ('chess','sketch','flashcards')),
@@ -135,6 +135,7 @@ begin
  if p_circle is not null and public.circle_role(p_circle) is null and not public.is_admin() then raise exception 'circle_members_only';end if;
  if (select count(*) from public.neis_play_rooms where creator_id=auth.uid() and expires_at>now() and status<>'finished')>=5 then raise exception 'too_many_open_rooms';end if;
  if jsonb_typeof(coalesce(p_settings,'{}'::jsonb))<>'object' or length(p_settings::text)>1000 then raise exception 'invalid_settings';end if;
+ if p_game='flashcards' and not exists(select 1 from public.neis_play_decks d join public.neis_play_cards c on c.deck_id=d.id where d.id::text=coalesce(p_settings->>'deck_id','') and d.owner_id=auth.uid()) then raise exception 'choose_your_nonempty_deck';end if;
  cap:=case p_game when 'chess' then 2 when 'sketch' then 12 else 8 end;
  insert into public.neis_play_rooms(creator_id,circle_id,game,title,max_players,settings)
  values(auth.uid(),p_circle,p_game,left(btrim(coalesce(p_title,'')),90),cap,coalesce(p_settings,'{}'::jsonb))
@@ -192,6 +193,7 @@ begin
  if r.status='finished' then raise exception 'game_finished';end if;
  select count(*) into n from public.neis_play_events where room_id=p_room;
  if n>=1500 then raise exception 'event_limit_reached';end if;
+ if (select count(*) from public.neis_play_events where room_id=p_room and user_id=auth.uid() and created_at>now()-interval '1 minute')>=100 then raise exception 'room_rate_limit';end if;
  if p_type='start' then
   if r.creator_id<>auth.uid() or r.status<>'waiting' then raise exception 'host_only';end if;
   if (select count(*) from public.neis_play_members where room_id=p_room)<2 then raise exception 'need_two_players';end if;
@@ -208,11 +210,12 @@ begin
    current_turn:=player_order[1+(move_count%2)];
    if current_turn<>auth.uid() then raise exception 'not_your_turn';end if;
   elsif p_type='stroke' then
-   if r.game<>'sketch' or jsonb_typeof(p_payload->'points')<>'array' or jsonb_array_length(p_payload->'points')>120 then raise exception 'invalid_stroke';end if;
+   if r.game<>'sketch' or jsonb_typeof(p_payload->'points')<>'array' or jsonb_array_length(p_payload->'points')<2 or jsonb_array_length(p_payload->'points')>120 then raise exception 'invalid_stroke';end if;
   elsif p_type='guess' then
    if r.game<>'sketch' or char_length(coalesce(p_payload->>'text',''))>80 then raise exception 'invalid_guess';end if;
   elsif p_type='answer' then
-   if r.game<>'flashcards' or length(coalesce(p_payload->>'text',''))>300 then raise exception 'invalid_answer';end if;
+   if r.game<>'flashcards' or length(coalesce(p_payload->>'text',''))>300 or
+    not exists(select 1 from public.neis_play_cards where id::text=coalesce(p_payload->>'card_id','') and deck_id::text=coalesce(r.settings->>'deck_id','')) then raise exception 'invalid_answer';end if;
   elsif p_type<>'chat' or length(coalesce(p_payload->>'text',''))>500 then
    raise exception 'invalid_chat';end if;
  end if;
