@@ -223,6 +223,8 @@ function draw(){
   compose.onsubmit=event=>{
     event.preventDefault();const text=input.value.trim();
     if(!text&&!stateAI.file)return;
+    // Sending from a touch/mobile viewport must not reopen the soft keyboard.
+    if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app'))input.blur();
     void submit(text);
   };
   footer.append(compose);
