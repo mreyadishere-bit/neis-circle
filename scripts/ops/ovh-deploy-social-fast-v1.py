@@ -49,13 +49,13 @@ def main():
    'const coreLoad=loadLiveData;',
    'loadLiveData=async function(){',
    '  const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{',
-   'const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([',
-   '  await directChatPromise;\\n  if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;'.replace('\\n','\n'),
    'circles=function(){',
    'function circleCard(c){',
-   'circleRows:[],circleMembers:[]'
+   'circle-discovery-grid'
   ]
-  check(all(item in running for item in required),'LIVE_SOCIAL_PREVIEW_ANCHOR_CHANGED')
+  missing=[str(index+1) for index,item in enumerate(required) if item not in running]
+  if missing:print('NEIS_SOCIAL_LIVE_MISSING_ANCHORS='+','.join(missing))
+  check(not missing,'LIVE_SOCIAL_PREVIEW_ANCHOR_CHANGED')
   print('NEIS_SOCIAL_FAST_PREFLIGHT=PASS')
   return
  rev=os.environ.get('GITHUB_SHA','')[:12]
@@ -76,18 +76,6 @@ def main():
  insert_before='  const notificationSetupPromise=setupNotificationRealtime(uid).catch(error=>{'
  check(live_social.count(insert_before)==1,'NOTIFICATION_BOOTSTRAP_MISSING')
  live_social=live_social.replace(insert_before,'  const circlesEarly=loadCirclesFast();\n'+insert_before,1)
- old_queries='const [followRes,circleRes,circleMemberRes,meetingRes,commentRes]=await Promise.all(['
- check(old_queries in live_social,'SOCIAL_QUERY_ANCHOR_MISSING')
- live_social=live_social.replace(old_queries,'const [followRes,circleMemberRes,meetingRes,commentRes]=await Promise.all([',1)
- circles_query="    sb.from('circles').select('id,owner_id,name,description,category,privacy,created_at').order('created_at',{ascending:false}),\n"
- check(live_social.count(circles_query)==1,'CIRCLES_QUERY_CHANGED')
- live_social=live_social.replace(circles_query,'',1)
- old_finish="  await directChatPromise;\n  if(!circleRes.error)state.circleRows=circleRes.data||[];else state.dataErrors.circles=circleRes.error;"
- check(live_social.count(old_finish)==1,'CIRCLES_BOOTSTRAP_FINISH_CHANGED')
- live_social=live_social.replace(old_finish,'  await circlesEarly;\n  await directChatPromise;',1)
- old_state='circleRows:[],circleMembers:[]'
- check(old_state in live_social,'CIRCLES_STATE_INIT_CHANGED')
- live_social=live_social.replace(old_state,'circleRows:[],circlesLoading:true,circleMembers:[]',1)
  view_start='circles=function(){'
  view_end='function circleCard(c){'
  check(social.count(view_start)==1 and social.count(view_end)==1 and live_social.count(view_start)==1 and live_social.count(view_end)==1,'CIRCLES_VIEW_ANCHORS_CHANGED')
@@ -97,6 +85,7 @@ def main():
  live_social=live_social.replace(original_view,revised_view,1)
  check(live_social.count('async function loadCirclesFast(force=false)')==1,'DUPLICATE_CIRCLES_LOADER')
  check(live_social.count('const circlesEarly=loadCirclesFast();')==1,'CIRCLES_EARLY_LAUNCH_MISSING')
+ check('circle-discovery-grid' in live_social and 'data-circle-retry' in live_social,'CIRCLES_VIEW_MISSING')
  (tmp/SOCIAL).write_text(live_social)
  call(['node','--check',str(tmp/SOCIAL)],timeout=25)
  for src,target in FILES.items():shutil.copy2(STAGE/src,tmp/target)
