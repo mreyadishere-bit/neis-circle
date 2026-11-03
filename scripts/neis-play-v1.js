@@ -22,6 +22,12 @@ function nav(){
  btn.innerHTML='<span aria-hidden="true" style="font-size:20px;font-weight:700">♟</span>';
  const saved=rail.querySelector('[data-nav="library"]');
  if(saved)saved.insertAdjacentElement('afterend',btn);else rail.appendChild(btn);
+ const mobile=document.querySelector('.bottom-nav');
+ if(mobile&&!mobile.querySelector('[data-neis-play-open]')){
+  const small=document.createElement('button');small.type='button';small.dataset.neisPlayOpen='1';small.title=t('NEIS Play','NEIS ألعاب');
+  small.innerHTML='<span aria-hidden="true" style="font-size:20px">♟</span><span>'+t('Play','ألعاب')+'</span>';
+  const more=mobile.querySelector('[data-mobile-more]');if(more)mobile.insertBefore(small,more);else mobile.appendChild(small);
+ }
 }
 function show(){if(!S.open)return;let r=root();if(!r){r=document.createElement('div');r.id='neisPlayRoot';r.className='neis-play-root';document.body.appendChild(r)}
  r.innerHTML='<div class="neis-play-shell"><header class="neis-play-header"><div><small>NEIS CIRCLE</small><h2>NEIS Play</h2></div><div>'+button(t('Close','إغلاق'),'close','class="neis-play-quiet"')+'</div></header><main class="neis-play-content" id="neisPlayContent"></main></div>';
