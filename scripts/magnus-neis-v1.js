@@ -14,9 +14,6 @@
     <div><b>${title(lang)}</b><small>${lang==='ar'?'مساعد ذكاء اصطناعي خاص':'Private AI companion'}</small></div>
     <span class="magnus-ai-tag">AI</span>
   </button>`;
-  const welcome=lang=>lang==='ar'
-    ?'أنا ماجنوس ✦ اسألني، اهزر معايا، أو خلّيني أساعدك في المذاكرة. دي محادثة خاصة بينك وبيني.'
-    :"I'm Magnus ✦ Ask me anything, joke around, or get help studying. This chat is private to you.";
   function bubble(item){
     const mine=item.role==='user';
     return `<div class="magnus-line ${mine?'mine':'bot'}"><span class="magnus-bubble">
@@ -29,7 +26,7 @@
     const rows=state.messages;
     return `<div class="magnus-scroll" id="magnusFlow" role="log" aria-live="polite">
       <div class="magnus-intro"><div class="magnus-intro-mark">✦</div>
-        <strong>Magnus</strong><p>${welcome(lang)}</p></div>
+        <strong>Magnus</strong></div>
       ${rows.map(bubble).join('')}
       ${state.loading?'<div class="magnus-loading">Loading conversation…</div>':''}
       ${state.busy?'<div class="magnus-typing" role="status">Magnus is thinking <span>● ● ●</span></div>':''}
