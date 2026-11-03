@@ -339,11 +339,15 @@ function syncHomeAppyLink(){
   link.className='secondary neis-home-appy-link';
   connections.insertAdjacentElement('afterend',link);
  }
- link.href='https://appy.neiscircle.site/';
- link.target='_blank';
- link.rel='noopener noreferrer';
- link.setAttribute('aria-label',tr('Open APPY in a new tab','افتح APPY في تبويب جديد'));
- link.textContent='APPY ↗';
+ // Keep this updater idempotent: replacing textContent on every render
+ // creates childList mutations that retrigger the #view MutationObserver forever.
+ const href='https://appy.neiscircle.site/';
+ const aria=tr('Open APPY in a new tab','افتح APPY في تبويب جديد');
+ if(link.getAttribute('href')!==href)link.setAttribute('href',href);
+ if(link.getAttribute('target')!=='_blank')link.setAttribute('target','_blank');
+ if(link.getAttribute('rel')!=='noopener noreferrer')link.setAttribute('rel','noopener noreferrer');
+ if(link.getAttribute('aria-label')!==aria)link.setAttribute('aria-label',aria);
+ if(link.textContent!=='APPY ↗')link.textContent='APPY ↗';
 }
 let legacyGamesCleaned=false;
 function attach(){
