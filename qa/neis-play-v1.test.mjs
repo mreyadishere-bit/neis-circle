@@ -16,7 +16,7 @@ assert.ok(sql.includes('room_rate_limit'),'server rate cap');
 assert.ok(sql.includes('correct_index int not null'),'private daily answer');
 assert.ok(!/create table if not exists public\.neis_play_daily \([\s\S]*?correct_index/.test(sql.split('create table if not exists public.neis_play_daily_keys')[0]),'do not leak daily answer into public readable table');
 assert.ok(ui.includes("new URL(location.href)"),'invitation preservation');
-assert.ok(ui.includes("u.searchParams.delete('play')"),'do not discard other URL params');
+assert.ok(ui.includes("url.searchParams.delete('play')"),'do not discard unrelated URL params');
 assert.ok(ui.includes('data-neis-play-open'),'navigation');
 assert.ok(ui.includes('data-play-form="join"'),'join form');
 assert.ok(ui.includes('S.chessFactory'),'chess engine');
