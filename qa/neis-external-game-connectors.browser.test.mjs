@@ -92,6 +92,9 @@ try {
   await page.evaluate(()=>{window.state.lang='ar'});
   await page.locator('[data-game="filter:chess"]').click();
   assert.match(await page.locator('.neis-connect-card-caption').first().innerText(),/[\u0600-\u06ff]/,'Arabic tags');
+  await page.locator('[data-game="filter:all"]').click();
+  assert.ok((await page.locator('.neis-connect-card-caption').allTextContents()).every(label=>/[\u0600-\u06ff]/.test(label)),'all 13 games have Arabic descriptions');
+  await page.locator('[data-game="filter:chess"]').click();
   assert.match(await page.locator('.neis-connect-instructions').innerText(),/[\u0600-\u06ff]/,'Arabic game instructions');
   await page.locator('#chatFlow').evaluate(el=>{
    const bubble=document.createElement('div');bubble.className='chat-message';
@@ -105,6 +108,12 @@ try {
   assert.ok(await page.locator('.neis-connect-dialog').evaluate(x=>x.scrollWidth<=x.clientWidth+2),'dialog does not overflow at '+width+'px');
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#neisGamesOverlay').count(),0,'Escape closes modal');
+  await page.locator('[data-mobile-more]').click();
+  assert.equal(await page.locator('#mobileNavRoot [data-neis-connect-open]').count(),1,'Games appears exactly once in More sheet');
+  await page.locator('#mobileNavRoot [data-neis-connect-open]').click();
+  await page.locator('#neisGamesOverlay').waitFor();
+  assert.equal(await page.locator('#mobileNavRoot [data-neis-connect-open]').count(),0,'More sheet closes when Games opens');
+  await page.keyboard.press('Escape');
   assert.equal(await page.locator('#messages-view').count(),1,'chat stays untouched');
   assert.equal(errors.length,0,'browser errors at '+width+'px: '+errors.join('; '));
   await page.close();
