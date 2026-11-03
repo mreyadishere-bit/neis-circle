@@ -14,7 +14,7 @@ def check(ok,msg):
  if not ok:raise RuntimeError(msg)
 def call(args,timeout=100,require=True,stdin=None):
  p=subprocess.run(args,cwd=ROOT,input=stdin,capture_output=True,text=True,timeout=timeout)
- if p.returncode and require:raise RuntimeError('COMMAND_FAILED_'+str(p.returncode))
+ if p.returncode and require:raise RuntimeError('COMMAND_FAILED_'+str(p.returncode)+':'+(p.stderr or p.stdout)[-300:])
  return p.stdout
 def sha(s):return hashlib.sha256(s.encode()).hexdigest()
 def active():
