@@ -7,12 +7,6 @@ on:
       - 'qa/livekit-screen-stability.test.mjs'
       - 'scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py'
       - '.github/workflows/ovh-meeting-screen-stability.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/05-social.js'
-      - 'scripts/ops/ovh-deploy-meeting-screen-stability-20261103.py'
-      - '.github/workflows/ovh-meeting-screen-stability.yml'
 permissions:
   contents: read
 concurrency:
