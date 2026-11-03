@@ -19,8 +19,7 @@
   const available=[
     ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
     ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
-    ['last_sign_in_at','Last sign in at'],['status','Status'],['branch','Branch'],
-    ['grade','Grade'],['role','Role'],['actions','Actions']
+    ['last_sign_in_at','Last sign in at'],['status','Status'],['actions','Actions']
   ];
   let columns=new Set(available.map(x=>x[0]));
   const when=(raw,long=false)=>{
@@ -100,7 +99,9 @@
     '#neisAuthStudio .st-meta{display:flex;gap:12px;flex-wrap:wrap;align-items:center}',
     '#neisAuthStudio .st-permanent-delete{border:1px solid #dc7474;background:transparent;color:#bf2b2b;border-radius:7px;padding:6px 9px;cursor:pointer;font:inherit;font-size:11px;white-space:nowrap}',
     '#neisAuthStudio .st-permanent-delete:disabled{opacity:.45;cursor:wait}',
-    '#neisAuthStudio .st-moderation{display:flex;align-items:center;flex-wrap:wrap;gap:7px}',
+    '#neisAuthStudio .st-moderation{display:flex;align-items:center;flex-wrap:nowrap;gap:8px;width:max-content}',
+    '#neisAuthStudio .st-actions{width:265px;min-width:265px;overflow:visible}',
+    '#neisAuthStudio td.st-actions button{flex:0 0 auto}',
     '#neisAuthStudio .st-detail{border-top:1px solid var(--st-border);padding:24px;background:var(--soft)}',
     '#neisAuthStudio .st-detail-head{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:18px}',
     '#neisAuthStudio .st-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 0}',
@@ -187,7 +188,7 @@
   }
   function colClass(k){
     return ['user_id'].includes(k)?'st-uid':
-      k==='display_name'?'st-name':k==='profile'?'st-other':k==='actions'?'st-other':k==='email'?'st-mail':
+      k==='display_name'?'st-name':k==='profile'?'st-other':k==='actions'?'st-actions':k==='email'?'st-mail':
       k==='phone'?'st-phone':k==='providers'?'st-provider':
       k==='provider_type'?'st-provider-type':
       ['created_at','last_sign_in_at'].includes(k)?'st-datetime':'st-other';
