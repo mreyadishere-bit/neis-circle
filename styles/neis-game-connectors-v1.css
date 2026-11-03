@@ -150,3 +150,124 @@
  .neis-games-overlay .neis-connect-steps>div{padding:8px}
 }
 @media(prefers-reduced-motion:reduce){.neis-games-overlay *{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+
+
+/* Game hub v2.2 — one chat-composer entry and readable native chat invitations. */
+#view #liveChatForm .neis-connect-chat-trigger,
+#view #circleChatForm .neis-connect-chat-trigger{
+ flex:0 0 auto!important;
+ width:auto!important;
+ min-width:75px!important;
+ height:38px!important;
+ padding:0 10px!important;
+ display:inline-flex!important;
+ align-items:center!important;
+ justify-content:center!important;
+ gap:6px!important;
+ border-radius:11px!important;
+ border:1px solid var(--line,#d8e4ee)!important;
+ background:var(--card,#fff)!important;
+ color:var(--ink,#22394c)!important;
+ font:700 11px/1.2 inherit!important;
+ white-space:nowrap!important;
+}
+#view #liveChatForm .neis-connect-chat-trigger:hover,
+#view #circleChatForm .neis-connect-chat-trigger:hover{
+ border-color:var(--accent,#2678b3)!important;
+ background:var(--soft,#eaf3f8)!important;
+}
+#view .neis-connect-chat-trigger span:first-child{font-size:17px;line-height:1}
+.neis-mobile-game-entry .neis-mobile-game-icon{display:grid;place-items:center;width:23px;height:23px;font-size:20px;flex-shrink:0}
+
+#view .chat-message .message-text[data-neis-game-enhanced="1"]{
+ display:grid;
+ gap:7px;
+ min-width:0;
+ white-space:normal;
+ width:min(100%,330px);
+}
+#view .chat-message .neis-chat-game-card{
+ min-width:0;
+ width:100%;
+ display:flex;
+ align-items:center;
+ gap:11px;
+ padding:11px;
+ border:1px solid var(--line,#d7e4ee);
+ border-radius:13px;
+ background:var(--card,#fff);
+ color:var(--ink,#1d3345);
+ text-decoration:none!important;
+ direction:ltr;
+ text-align:left;
+ transition:border-color .15s,box-shadow .15s;
+}
+#view .chat-message .neis-chat-game-card:hover{
+ border-color:var(--accent,#2c79b4);
+ box-shadow:0 4px 14px rgba(15,46,77,.12);
+}
+#view .chat-message .neis-chat-game-art{
+ width:46px;
+ height:46px;
+ flex:0 0 46px;
+ border-radius:12px;
+ display:grid;
+ place-items:center;
+ background:var(--game-accent,#2874b2);
+ color:white;
+ font:700 28px/1 Georgia,serif;
+}
+#view .chat-message .neis-chat-game-detail{
+ display:grid;gap:3px;min-width:0;flex:1;overflow:hidden;
+}
+#view .chat-message .neis-chat-game-eyebrow{
+ font-size:9px;line-height:1.25;font-weight:850;letter-spacing:.09em;
+ color:var(--accent,#2977b5);
+}
+#view .chat-message .neis-chat-game-detail strong{
+ font-size:13px;line-height:1.2;font-weight:820;
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#view .chat-message .neis-chat-game-detail small{
+ font-size:10px;line-height:1.2;color:var(--muted,#728697);
+ overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+#view .chat-message .neis-chat-game-cta{
+ align-self:center;
+ border-radius:9px;
+ background:var(--soft,#e9f2fa);
+ color:var(--accent,#2378b4);
+ padding:8px;
+ max-width:95px;
+ font-size:10px;
+ line-height:1.35;
+ text-align:center;
+ font-weight:800;
+ flex:0 0 auto;
+}
+#view .chat-message button.neis-chat-game-copy{
+ justify-self:start;
+ width:auto!important;
+ min-height:26px;
+ padding:4px 8px;
+ border:1px solid transparent;
+ background:transparent;
+ color:inherit;
+ font-size:10px;
+ font-weight:700;
+ border-radius:7px;
+ cursor:pointer;
+}
+#view .chat-message button.neis-chat-game-copy:hover{
+ background:color-mix(in srgb,var(--accent,#2579b6) 10%,transparent);
+}
+@media(max-width:520px){
+ #view #liveChatForm .neis-connect-chat-trigger,
+ #view #circleChatForm .neis-connect-chat-trigger{
+  width:38px!important;min-width:38px!important;padding:0!important;
+ }
+ #view .neis-connect-chat-trigger .neis-connect-chat-label{display:none}
+ #view .chat-message .neis-chat-game-card{gap:7px;padding:9px}
+ #view .chat-message .neis-chat-game-art{width:33px;height:38px;flex-basis:33px;font-size:22px;border-radius:9px}
+ #view .chat-message .neis-chat-game-cta{font-size:9px;padding:6px;max-width:63px}
+}
