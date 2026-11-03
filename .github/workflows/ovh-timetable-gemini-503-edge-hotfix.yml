@@ -35,7 +35,7 @@ jobs:
           node qa/timetable-ai-gemini.test.mjs
           node qa/static-check.mjs
           npm run qa:unit
-          python3 -m py_compile scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py
+          python3 -m py_compile scripts/ops/ovh-deploy-magnus-speed-20261103.py
           python3 -m py_compile scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py
   edge-deploy:
     needs: regressions
@@ -79,24 +79,22 @@ jobs:
       - name: Stage candidate and verify Edge service without modifying production
         env:
           HOST: ${{ secrets.OVH_HOST }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
           remote="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "install -d -m 700 '$stage'"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/timetable-ai/index.ts "$remote:$stage/index.ts"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-timetable-ai-gemini-v1.py "$remote:$stage/ovh-deploy-timetable-ai-gemini-v1.py"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-deploy-magnus-speed-20261103.py "$remote:$stage/ovh-deploy-magnus-speed-20261103.py"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-timetable-gemini-503-edge-hotfix.py "$remote:$stage/ovh-timetable-gemini-503-edge-hotfix.py"
           sha256sum supabase/functions/timetable-ai/index.ts | cut -d' ' -f1 > /tmp/timetable-503-source.sha256
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/timetable-503-source.sha256 "$remote:$stage/index.ts.sha256"
-          printf '%s' "$GEMINI_API_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --preflight --key-stdin"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --preflight"
       - name: Deploy ONLY Timetable AI Edge function with automatic rollback
         env:
           HOST: ${{ secrets.OVH_HOST }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
           remote="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3"
-          printf '%s' "$GEMINI_API_KEY" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --deploy --key-stdin"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$remote" "python3 '$stage/ovh-timetable-gemini-503-edge-hotfix.py' --deploy"
