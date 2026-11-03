@@ -51,4 +51,21 @@ end;
 $$;
 revoke all on function public.neis_play_manage_room(uuid,text) from public;
 grant execute on function public.neis_play_manage_room(uuid,text) to authenticated;
+alter table public.neis_play_championships drop constraint if exists neis_play_championships_game_check;
+alter table public.neis_play_championships add constraint neis_play_championships_game_check check(game in ('chess','sketch','flashcards','quiz'));
+create or replace function public.neis_play_create_championship(p_circle uuid,p_title text,p_game text,p_start timestamptz)
+returns uuid language plpgsql security definer set search_path=public
+as $
+declare new_id uuid;
+begin
+ if auth.uid() is null then raise exception 'login_required';end if;
+ if public.circle_role(p_circle) not in ('owner','admin','moderator') and not public.is_admin() then raise exception 'circle_admin_only';end if;
+ if p_game not in ('chess','sketch','flashcards','quiz') or length(btrim(coalesce(p_title,''))) not between 3 and 100 or p_start<now() or p_start>now()+interval '180 days' then raise exception 'invalid_championship';end if;
+ insert into public.neis_play_championships(circle_id,organizer_id,title,game,starts_at)
+ values(p_circle,auth.uid(),btrim(p_title),p_game,p_start) returning id into new_id;
+ return new_id;
+end;
+$;
+
+
 notify pgrst,'reload schema';
