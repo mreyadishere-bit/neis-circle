@@ -509,6 +509,60 @@ Deno.serve(async (request: Request) => {
       httpOptions: { timeout: 80000, headers: { "User-Agent": "aistudio-build" } },
     });
 
+    // Advice-only questions need ordinary conversation, not a timetable
+    // mutation or a strict JSON lesson extraction. Keep all PDF/image and
+    // lesson-edit commands on the existing validated structured path below.
+    const adviceOnly = multimodalParts.length === 0 &&
+      /(?:how (?:can|should|do|to)|best way|tips? (?:for|to)|advice (?:for|on)|إزاي|كيف|نصائح|أفضل طريقة)/i.test(userPrompt) &&
+      /(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|ذاكر|تنظيم|جدول|مذاكرة|وقت)/i.test(userPrompt) &&
+      !/(?:\b(?:add|remove|delete|move|edit|change|create|generate|put|schedule)\s+(?:my\s+)?(?:class|lesson|subject|period)|(?:أضف|احذف|انقل|عدّل|غير|أنشئ)\s+(?:حصة|مادة|الجدول))/i.test(userPrompt);
+    if (adviceOnly) {
+      const textRequest = {
+        role: "user",
+        parts: [{
+          text: `You are the NEIS Circle student timetable assistant. Answer this
+student's general question about time management clearly and concisely in
+${body.lang === "ar" ? "Arabic" : "English"}. Do not invent classes, imply a
+schedule was modified, or request personal information. Student question:
+${userPrompt.slice(0, 1400)}`,
+        }],
+      };
+      let advice: { text?: string; modelVersion?: string } | null = null;
+      try {
+        advice = await ai.models.generateContent({
+          model: PRIMARY_MODEL,
+          contents: [textRequest],
+          config: { maxOutputTokens: 450, temperature: 0.55 },
+        });
+      } catch (adviceError: unknown) {
+        const status = Number((adviceError as { status?: number })?.status || 0);
+        if (status !== 503) throw adviceError;
+        advice = await ai.models.generateContent({
+          model: OVERLOAD_FALLBACK_MODEL,
+          contents: [textRequest],
+          config: { maxOutputTokens: 450, temperature: 0.55 },
+        });
+      }
+      const adviceText = String(advice?.text ?? "").trim();
+      if (!adviceText) {
+        return respond({ error: "The AI response was empty. Please retry.", code: "EMPTY_MODEL_OUTPUT" }, 502);
+      }
+      return respond({
+        reply: adviceText.slice(0, 1800),
+        changed: false,
+        entries: draftEntries,
+        extracted: previousExtracted ?? {
+          summary: "",
+          document_language: body.lang === "ar" ? "ar" : "en",
+          all_detected_subjects: [],
+          ambiguous_items: [],
+          detected_lessons: [],
+        },
+        model: String(advice?.modelVersion ?? PRIMARY_MODEL).replace(/^models\//, ""),
+        provider: "gemini",
+      });
+    }
+
     const response = await callGeminiWithRetry(ai, [
       {
         role: "user",
