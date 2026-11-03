@@ -51,7 +51,7 @@ def test_in_rollback(migration):
       line.strip().lower() not in ('begin;','commit;')
       and not line.strip().lower().startswith('notify pgrst')]
     payload=('begin;\n'+'\n'.join(lines)+
-      '\nselect set_config(\'magnus.test.user\',(select id::text from auth.users order by created_at limit 1),true);'+
+      '\nselect set_config(\'magnus.test.user\',(select id::text from auth.users where deleted_at is null order by created_at limit 1),true);'+
       '\nselect set_config(\'request.jwt.claim.sub\',current_setting(\'magnus.test.user\'),true);'+
       '\nset local role authenticated;\nselect public.magnus_claim_turn();'+
       '\nset local role service_role;\nselect public.magnus_commit_turn('+
