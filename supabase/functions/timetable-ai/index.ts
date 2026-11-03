@@ -566,7 +566,7 @@ Deno.serve(async (request: Request) => {
           ? validateAndNormalizeEntries(extractedObj.detected_lessons)
           : validatedEntries,
       },
-      model: String(response?.modelVersion ?? PRIMARY_MODEL).replace(/^models\\//, ""),
+      model: String(response?.modelVersion ?? PRIMARY_MODEL).replace(/^models\//, ""),
       provider: "gemini",
     });
   } catch (error: unknown) {
