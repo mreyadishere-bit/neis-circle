@@ -1,25 +1,6 @@
 name: NEIS Play V1 Safe Rollout
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
-      - 'supabase/migrations/20261103200000_neis_play_foundation.sql'
-      - 'scripts/ops/ovh-deploy-neis-play-v1.py'
-      - 'scripts/ops/ovh-neis-play-authenticated-smoke.py'
-      - 'qa/neis-play-*.test.mjs'
-      - 'index.html'
-      - '.github/workflows/ovh-neis-play-v1.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/neis-play-v1.js'
-      - 'styles/neis-play-v1.css'
-      - 'supabase/migrations/20261103200000_neis_play_foundation.sql'
-      - 'scripts/ops/ovh-deploy-neis-play-v1.py'
-      - 'scripts/ops/ovh-neis-play-authenticated-smoke.py'
-      - '.github/workflows/ovh-neis-play-v1.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
