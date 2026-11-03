@@ -7,7 +7,8 @@ RELEASES=pathlib.Path('/home/ubuntu/neis-frontend/releases')
 OVERLAY=ROOT/'docker-compose.frontend-public.yml'
 DOCKER=['sudo','-n','/usr/bin/docker']
 FILES={'neis-game-connectors-v1.js':'scripts/neis-game-connectors-v1.js',
-       'neis-game-connectors-v1.css':'styles/neis-game-connectors-v1.css'}
+       'neis-game-connectors-v1.css':'styles/neis-game-connectors-v1.css',
+       'navigation-v14.js':'scripts/navigation-v14.js'}
 COMPOSE=DOCKER+['compose']+[x for f in ('docker-compose.yml','docker-compose.security.yml',
  'docker-compose.caddy.yml','docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml')
  for x in ('-f',f)]
@@ -31,6 +32,7 @@ def main():
  css=(STAGE/'neis-game-connectors-v1.css').read_text()
  check('window.NEISPlayConnectors' in js and 'start_direct_conversation' in js and 'circle_messages' in js,'CONNECTOR_FUNCTIONS_MISSING')
  check('.neis-connect-dialog' in css and '@media(max-width:560px)' in css,'RESPONSIVE_CSS_MISSING')
+ check('neis-mobile-game-entry' in (STAGE/'navigation-v14.js').read_text(),'MOBILE_GAME_ENTRY_MISSING')
  call(['node','--check',str(STAGE/'neis-game-connectors-v1.js')],timeout=25)
  call(COMPOSE+['config','--quiet'],timeout=45)
  previous=active();check(previous.parent==RELEASES,'FRONTEND_RELEASE_NOT_PINNED')
@@ -63,7 +65,9 @@ def main():
   raise RuntimeError('INDEX_GAME_ASSET_REFERENCE_MISSING_'+newpath)
  html=swap(html,old_styles,'styles/neis-game-connectors-v1.css')
  html=swap(html,old_scripts,'scripts/neis-game-connectors-v1.js')
+ html=swap(html,['scripts/navigation-v14.js'],'scripts/navigation-v14.js')
  check(html.count('scripts/neis-game-connectors-v1.js')==1,'GAME_SCRIPT_DUPLICATE')
+ check(html.count('scripts/navigation-v14.js')==1,'MOBILE_NAV_SCRIPT_DUPLICATE')
  check(html.count('styles/neis-game-connectors-v1.css')==1,'GAME_STYLE_DUPLICATE')
  check('scripts/neis-play-v1.js' not in html,'OLD_GAME_ENGINE_STILL_LOADED')
  check(html.index('scripts/neis-game-connectors-v1.js')<html.index('scripts/data-coordinator-v171.js'),'LOAD_ORDER_CHANGED')
