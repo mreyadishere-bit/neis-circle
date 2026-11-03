@@ -12,8 +12,8 @@ DOCKER=['sudo','-n','/usr/bin/docker']
 COMPOSE=DOCKER+['compose']+[x for file in ('docker-compose.yml','docker-compose.security.yml','docker-compose.caddy.yml','docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml') for x in ('-f',file)]
 def check(ok,msg):
  if not ok:raise RuntimeError(msg)
-def call(args,timeout=100,require=True):
- p=subprocess.run(args,cwd=ROOT,capture_output=True,text=True,timeout=timeout)
+def call(args,timeout=100,require=True,stdin=None):
+ p=subprocess.run(args,cwd=ROOT,input=stdin,capture_output=True,text=True,timeout=timeout)
  if p.returncode and require:raise RuntimeError('COMMAND_FAILED_'+str(p.returncode))
  return p.stdout
 def sha(s):return hashlib.sha256(s.encode()).hexdigest()
