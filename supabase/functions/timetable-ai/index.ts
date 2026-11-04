@@ -553,10 +553,22 @@ ${userPrompt.slice(0, 1400)}`,
           // guidance, provide transparent offline help instead of a 503 bubble.
           // This is never used for PDF extraction or actual timetable edits.
           const offlineReply = body.lang === "ar"
-            ? "خدمة Gemini مشغولة حاليًا، لكن دي نصائح عامة تساعدك:\\n1. اكتب مواعيد حصصك والتزاماتك الثابتة أولًا.\\n2. حدد أهم 3 مهام يوميًا وابدأ بالأصعب وقت تركيزك.\\n3. قسّم المذاكرة لفترات 25–45 دقيقة مع راحة قصيرة.\\n4. خصص وقتًا للمراجعة والنوم والأنشطة، وسيب مساحة للطوارئ.\\n5. راجع خطتك كل أسبوع وعدّلها حسب الواقع.\\nلم أغير أي شيء في جدولك."
-            : "Gemini is temporarily busy, so here are practical general tips (not an AI-generated reply):\\n1. Put fixed classes and commitments on your calendar first.\\n2. Pick your top three priorities each day and tackle difficult work when you focus best.\\n3. Study in 25–45 minute blocks with short breaks.\\n4. Reserve time for revision, sleep, and unexpected tasks.\\n5. Review and adjust your plan each week.\\nYour timetable has not been changed.";
+            ? `خدمة Gemini مشغولة حاليًا، لكن دي نصائح عامة تساعدك:
+1. اكتب مواعيد حصصك والتزاماتك الثابتة أولًا.
+2. حدد أهم 3 مهام يوميًا وابدأ بالأصعب وقت تركيزك.
+3. قسّم المذاكرة لفترات 25–45 دقيقة مع راحة قصيرة.
+4. خصص وقتًا للمراجعة والنوم والأنشطة، وسيب مساحة للطوارئ.
+5. راجع خطتك كل أسبوع وعدّلها حسب الواقع.
+لم أغير أي شيء في جدولك.`
+            : `Gemini is temporarily busy, so here are practical general tips (not an AI-generated reply):
+1. Put fixed classes and commitments on your calendar first.
+2. Pick your top three priorities each day and tackle difficult work when you focus best.
+3. Study in 25–45 minute blocks with short breaks.
+4. Reserve time for revision, sleep, and unexpected tasks.
+5. Review and adjust your plan each week.
+Your timetable has not been changed.`;
           return respond({
-            reply: offlineReply.replaceAll("\\\\n", "\\n"),
+            reply: offlineReply,
             changed: false,
             entries: draftEntries,
             extracted: previousExtracted ?? {
