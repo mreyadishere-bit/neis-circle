@@ -79,7 +79,7 @@
         }
         localStorage.setItem(migrationKey,'1');
       }
-      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=13',{scope:'/'}),'worker_register',10000);
+      serviceWorkerRegistration=await pushWithTimeout(navigator.serviceWorker.register('/neis-pwa-sw.js?v=14',{scope:'/'}),'worker_register',10000);
       serviceWorkerRegistration.update().catch(()=>{});
       navigator.serviceWorker.ready.then(reg=>{
         serviceWorkerRegistration=reg;
@@ -365,6 +365,9 @@
       </div>
       <div class="modal-actions pwa-notification-actions">
         <button type="button" class="secondary" data-pwa-toggle-all></button>
+        <p data-pwa-push-health role="status" style="margin:4px 0;font-size:12px;line-height:1.5"></p>
+        <button type="button" class="secondary" data-test-system-notification>${lang('Test Windows notification','اختبار إشعار ويندوز')}</button>
+        <button type="button" class="secondary" data-pwa-repair-push>${lang('Repair background notifications','إصلاح إشعارات الخلفية')}</button>
         <button type="button" class="secondary" data-test-notification-sound>${lang('Test sound','اختبار الصوت')}</button>
         <button type="button" class="secondary" data-test-incoming-alert>${lang('Test incoming alert','اختبار تنبيه رسالة واردة')}</button>
         <p data-incoming-audio-diagnostic style="margin:6px 0;font-size:12px;opacity:.85"></p>
@@ -373,6 +376,61 @@
       </div>
     `);
 
+    const health=document.querySelector('[data-pwa-push-health]');
+    async function checkDesktopPushHealth(){
+      if(!health?.isConnected)return;
+      if(!('Notification' in window)||Notification.permission!=='granted'){
+        health.textContent=lang('Desktop alerts are blocked or not enabled in this browser.',
+          'إشعارات سطح المكتب غير مفعلة أو محظورة في هذا المتصفح.');
+        return;
+      }
+      health.textContent=lang('Checking background push subscription…','جاري فحص اشتراك إشعارات الخلفية…');
+      try{
+        const sub=await pushWithTimeout(currentSubscription(),'desktop_subscription',8000);
+        const status=sub?await serverSubscriptionStatus(sub):'missing';
+        health.textContent= status==='active'||status==='enabled'||status==='registered'
+          ?lang('Notifications: allowed. Background subscription: registered. Windows Focus/Do Not Disturb settings may still suppress banners.',
+                'الإشعارات مسموحة والاشتراك مسجل. قد تمنع إعدادات عدم الإزعاج في ويندوز ظهور التنبيه.')
+          :sub&&status==='unknown'
+            ?lang('Browser subscription exists, but server delivery could not be verified. Use Repair background notifications.',
+                  'يوجد اشتراك في المتصفح لكن لم يمكن التحقق من وصوله للسيرفر. استخدم إصلاح إشعارات الخلفية.')
+            :lang('Background push subscription is missing or disabled. Click Repair background notifications.',
+                  'اشتراك إشعارات الخلفية غير موجود أو معطل. اضغط إصلاح إشعارات الخلفية.');
+      }catch(_){
+        health.textContent=lang('Could not check push delivery. Please retry.','تعذر فحص الإشعارات. حاول مرة أخرى.');
+      }
+    }
+    void checkDesktopPushHealth();
+    const repair=document.querySelector('[data-pwa-repair-push]');
+    if(repair)repair.onclick=async()=>{
+      repair.disabled=true;
+      try{
+        const ok=await ensureWebPush(true);
+        if(typeof toast==='function')toast(ok
+          ?lang('Background push registered successfully.','تم تسجيل اشتراك إشعارات الخلفية بنجاح.')
+          :lang('Could not register background push. Check browser and Windows permissions.','تعذر تسجيل الإشعارات. افحص أذونات المتصفح وويندوز.'));
+      }finally{repair.disabled=false;await checkDesktopPushHealth()}
+    };
+    const testSystem=document.querySelector('[data-test-system-notification]');
+    if(testSystem)testSystem.onclick=async()=>{
+      testSystem.disabled=true;
+      try{
+        if(!('Notification' in window)||Notification.permission!=='granted'){
+          if(typeof toast==='function')toast(lang('Enable notifications first.','فعّل الإشعارات أولًا.'));return;
+        }
+        const reg=serviceWorkerRegistration||await navigator.serviceWorker.ready;
+        await reg.showNotification('NEIS Circle', {
+          body:lang('Windows notification test — if this appears, system notifications are working.','اختبار إشعارات ويندوز — إذا ظهر التنبيه فإشعارات النظام تعمل.'),
+          icon:'/assets/email-logo.png',badge:'/assets/notification-badge.png?v=2',
+          tag:'neis-desktop-notification-test',data:{route:'notifications'},
+          silent:false,renotify:true
+        });
+        if(typeof toast==='function')toast(lang('Test notification sent to Windows.','تم إرسال إشعار اختباري إلى ويندوز.'));
+      }catch(error){
+        console.warn('[NEIS desktop notification test]',error);
+        if(typeof toast==='function')toast(lang('System notification failed. Check Edge and Windows notification permissions.','فشل إشعار النظام. راجع أذونات Edge وويندوز.'));
+      }finally{testSystem.disabled=false}
+    };
     const preferenceInputs=()=>[...document.querySelectorAll('[data-pwa-push-pref]')];
     const toggleAllButton=document.querySelector('[data-pwa-toggle-all]');
     const syncToggleAllLabel=()=>{
