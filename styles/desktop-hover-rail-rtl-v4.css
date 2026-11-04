@@ -1,6 +1,6 @@
 /* Desktop RTL sidebar polish. Do not alter document-wide scrolling.
    Only the sidebar's own internal scrolling may be visually suppressed. */
-@media (min-width: 1024px) {
+@media (min-width: 761px) {
   html body .rail.neis-hover-rail {
     overflow: hidden;
     scrollbar-width: none;
@@ -32,7 +32,7 @@
 }
 /* Desktop rail: never expose truncated labels or pin while collapsed.
    The original hover/pin mechanism controls is-expanded. */
-@media(min-width:1024px){
+@media(min-width:761px){
  html body .rail.neis-hover-rail:not(.is-expanded){
    overflow:hidden!important;min-width:0;max-width:var(--neis-rail-closed,84px)
  }
