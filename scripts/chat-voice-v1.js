@@ -8,7 +8,8 @@ if(window.__neisChatVoiceV1)return;
 window.__neisChatVoiceV1=true;
 const targets=["liveChatInput","circleChatInput","magnusInput"];
 const SUPPORTED=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;codecs=opus"];
-const clipLength=7000;
+const clipLength=4000;
+const maxParallel=2;
 let active=null;
 const tr=(ar,en)=>document.documentElement.lang?.startsWith("ar")?ar:en;
 const formatError=(err)=>String(err?.message||err||"").slice(0,140);
@@ -47,45 +48,60 @@ async function recognizeClip(s,blob){
  }
  return data.text.trim();
 }
+// Run up to two independent transcription requests at a time, while committing
+// their results in recording order (not response order). This cuts latency on
+// slow networks without scrambling Arabic/English mixed speech.
+function flushResults(s){
+ while(s.results.has(s.nextCommit)){
+  const result=s.results.get(s.nextCommit);
+  s.results.delete(s.nextCommit++);
+  if(result.error){
+   s.failedClips++;
+   const detail=formatError(result.error).toLowerCase();
+   console.warn('[NEIS voice clip]',formatError(result.error));
+   if(s.status?.isConnected){
+    s.status.textContent=detail.includes('rate_limit')||detail.includes('429')||detail.includes('provider_limit')
+     ?tr("خدمة التفريغ مشغولة. حاول تاني بعد شوية.","Speech service is busy. Please retry shortly.")
+     :detail.includes('authentication')||detail.includes('401')
+      ?tr("سجّل الدخول من جديد عشان تحول الصوت لكلام.","Sign in again to use speech-to-text.")
+      :tr("تعذر تحويل جزء من الصوت؛ التسجيل مستمر.","A short clip failed; still listening.");
+   }
+  }else{
+   s.failedClips=0;
+   if(result.words&&s.input.isConnected&&!s.discardPending){
+    update(s.input,combine(s.input.value.trim(),result.words));
+   }
+   if(!s.stopped&&s.status?.isConnected)s.status.textContent=tr("جاري الاستماع…","Listening…");
+  }
+ }
+ if(s.stopped&&s.pending===0&&s.status?.isConnected)s.status.textContent="";
+}
+function pumpClips(s){
+ while(s.inflight<maxParallel&&s.jobs.length){
+  const job=s.jobs.shift();
+  s.inflight++;
+  (async()=>{
+   try{s.results.set(job.id,{words:await recognizeClip(s,job.blob)})}
+   catch(error){s.results.set(job.id,{error})}
+   finally{
+    s.inflight--;s.pending--;
+    // Do not leave a permanently blocking gap when the network fails.
+    flushResults(s);
+    pumpClips(s);
+   }
+  })();
+ }
+}
 function queue(s,blob){
  if(!blob||blob.size<1500)return;
- // Bound queued mobile clips when provider/network is slow.
- if(s.pending>=8){
-  if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ سيُستكمل التسجيل مع تجاهل مقطع مؤقت.","Connection slow; continuing to listen while skipping one clip.");
+ if(s.pending>=6){
+  if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ هكمل التسجيل مع تخطي مقطع واحد.","Connection slow; skipping a clip while continuing to listen.");
   return;
  }
+ const id=s.sequence++;
  s.pending++;
- s.chain=s.chain.then(async()=>{
-  try{
-   const words=await recognizeClip(s,blob);
-   s.failedClips=0;
-   if(words&&s.input.isConnected&&!s.discardPending){
-    // Respect the user's current edits, rather than replacing the text
-    // they typed during an asynchronous transcription.
-    update(s.input,combine(s.input.value.trim(),words));
-   }
-   if(!s.stopped&&s.status.isConnected)s.status.textContent=tr("جاري الاستماع…","Listening…");
-  }catch(e){
-   s.failedClips=(s.failedClips||0)+1;
-   console.warn('[NEIS voice clip]',formatError(e));
-   if(s.status.isConnected){
-    const detail=formatError(e).toLowerCase();
-    s.status.textContent=detail.includes('rate_limit')||detail.includes('429')
-      ?tr("خدمة تحويل الصوت مشغولة. جرّب تاني بعد شوية.","Speech service is busy. Try again shortly.")
-      :detail.includes('authentication')||detail.includes('401')
-       ?tr("سجل الدخول تاني لتفعيل الإملاء الصوتي.","Please sign in again to use speech-to-text.")
-       :tr("تعذر تحويل آخر جزء. التسجيل مستمر؛ جرّب الكلام تاني.","Could not transcribe the last clip. Still listening; please retry.");
-   }
-   // A transient network/provider failure must not stop a continuous recording.
-   // Stop after repeated failures to avoid an unbounded queue and API requests.
-   if(!s.stopped&&s.failedClips>=3&&s.status.isConnected){
-    s.status.textContent=tr("خدمة تحويل الصوت لا تستجيب؛ التسجيل مستمر، لكن النص قد لا يظهر حتى تعود الخدمة.","Transcription service is unavailable. Recording continues, but text may not appear until it recovers.");
-   }
-  }finally{
-   s.pending--;
-   if(s.stopped&&s.pending===0&&s.status.isConnected&&!s.failed)s.status.textContent="";
-  }
- });
+ s.jobs.push({id,blob});
+ pumpClips(s);
 }
 function nextClip(s){
  if(s.stopped||!s.input.isConnected)return;
@@ -112,7 +128,7 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,chain:Promise.resolve(),pending:0,failed:false,failedClips:0,stopped:false,discardPending:false};
+ const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,stopped:false,discardPending:false};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  status.textContent=tr("جاري الاستماع للعربي والإنجليزي…","Listening to Arabic and English…");
