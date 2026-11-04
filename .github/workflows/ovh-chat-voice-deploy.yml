@@ -30,6 +30,9 @@ jobs:
           grep -Fq "MediaRecorder" scripts/chat-voice-v1.js
           grep -Fq "chat-voice-transcribe" scripts/chat-voice-v1.js
           grep -Fq "function mountTimetable()" scripts/chat-voice-v1.js
+          grep -Fq "s.failedClips>=3" scripts/chat-voice-v1.js
+          grep -Fq "s.pending>=3" scripts/chat-voice-v1.js
+          ! grep -Fq 'if(document.hidden)stop()' scripts/chat-voice-v1.js
           grep -Fq "styles/chat-voice-v1.css?v=20261104v3" index.html
           grep -Fq "scripts/chat-voice-v1.js?v=20261104v4" index.html
       - name: Configure pinned SSH
@@ -114,6 +117,7 @@ jobs:
           "${docker[@]}" exec "$cid" grep -Fq 'circleChatInput' /srv/neis-circle/scripts/chat-voice-v1.js
           "${docker[@]}" exec "$cid" grep -Fq 'liveChatInput' /srv/neis-circle/scripts/chat-voice-v1.js
           "${docker[@]}" exec "$cid" grep -Fq 'magnusInput' /srv/neis-circle/scripts/chat-voice-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq 's.failedClips>=3' /srv/neis-circle/scripts/chat-voice-v1.js
           "${docker[@]}" exec "$cid" grep -Fq 'scripts/chat-voice-v1.js?v=20261104v4' /srv/neis-circle/index.html
           "${docker[@]}" exec "$cid" test -s /srv/neis-circle/styles/chat-voice-v1.css
           trap - ERR
