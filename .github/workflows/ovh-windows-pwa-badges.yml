@@ -1,0 +1,113 @@
+name: Deploy Windows PWA notifications and taskbar badges
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-windows-pwa-badges.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate PWA worker, push notifications and badges
+        run: |
+          set -euo pipefail
+          node --check neis-pwa-sw.js
+          node --check scripts/social/notifications-v174.js
+          node --check scripts/pwa-install-v117.js
+          grep -Fq 'navigator.setAppBadge' scripts/social/notifications-v174.js
+          grep -Fq 'navigator.clearAppBadge' scripts/social/notifications-v174.js
+          grep -Fq 'signalBackgroundAppBadge' neis-pwa-sw.js
+          grep -Fq 'showNotification(title, options)' neis-pwa-sw.js
+          grep -Fq 'data-test-system-notification' scripts/pwa-install-v117.js
+          grep -Fq 'data-pwa-repair-push' scripts/pwa-install-v117.js
+          grep -Fq "register('/neis-pwa-sw.js?v=14'" scripts/pwa-install-v117.js
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage three isolated PWA assets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/windows-pwa-badge-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes neis-pwa-sw.js "$host:$stage/neis-pwa-sw.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "$host:$stage/notifications-v174.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "$host:$stage/pwa-install-v117.js"
+      - name: Atomic PWA frontend activation with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/windows-pwa-badge-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/windows-pwa-badge-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/neis-pwa-sw.js" && test -s "$stage/notifications-v174.js" && test -s "$stage/pwa-install-v117.js"
+          test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/neis-pwa-sw.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/neis-pwa-sw.js" "$dest/neis-pwa-sw.js"
+          cp "$stage/notifications-v174.js" "$dest/scripts/social/notifications-v174.js"
+          cp "$stage/pwa-install-v117.js" "$dest/scripts/pwa-install-v117.js"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);h=p.read_text()
+          for name in ('scripts/social/notifications-v174.js','scripts/pwa-install-v117.js'):
+            pat=re.escape(name)+r'(?:\?[^"\x27<>]*)?'
+            if len(re.findall(pat,h))!=1:raise SystemExit('PWA_ASSET_REFERENCE_MISMATCH_'+name)
+            h=re.sub(pat,name+'?v=windows-push-badge-${{ github.run_id }}',h)
+          p.write_text(h)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo WINDOWS_PWA_BADGE=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'navigator.setAppBadge' /srv/neis-circle/scripts/social/notifications-v174.js
+          "${docker[@]}" exec "$cid" grep -Fq 'data-pwa-repair-push' /srv/neis-circle/scripts/pwa-install-v117.js
+          "${docker[@]}" exec "$cid" grep -Fq 'neis-pwa-ovh-v14' /srv/neis-circle/neis-pwa-sw.js
+          "${docker[@]}" exec "$cid" grep -Fq 'windows-push-badge-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo WINDOWS_PWA_BADGE=SUCCESS
+          echo DATABASE_AND_OTHER_SERVICES=UNCHANGED
+          REMOTE
