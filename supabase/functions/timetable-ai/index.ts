@@ -484,25 +484,17 @@ Deno.serve(async (request: Request) => {
       : [];
     const history = rawHistory.slice(-12);
 
-    const isDocumentUpload = multimodalParts.length > 0;
-    // A document upload only needs visual extraction. Sending the entire saved
-    // schedule/history makes large image requests slower and can cause Gemini
-    // to replace unrelated lessons before the student selects subjects.
-    const contextSummary = JSON.stringify(isDocumentUpload
-      ? { language: body.lang === "ar" ? "ar" : "en",
-          mode: "extract_all_lessons_for_interactive_subject_selection",
-          instruction: "Extract EVERY visible subject and its verified weekly lesson times into extracted.detected_lessons. Include levels (L1/L2, grade) in exact titles. List all subjects in extracted.all_detected_subjects. Return entries: [] and changed: false; selection happens in the client. Do not ask the student to type subjects or grade. Do not invent unknown times." }
-      : {
-          language: body.lang === "ar" ? "ar" : "en",
-          current_saved_timetable: currentEntries,
-          active_draft_entries: draftEntries,
-          previous_draft_entries_for_undo: previousDraftEntries,
-          cached_visual_document_extraction: previousExtracted,
-          conversation_history: history.slice(-6).map((m: Record<string, unknown>) => ({
-            role: m?.role === "assistant" ? "assistant" : "user",
-            content: String(m?.content ?? m?.text ?? "").slice(0, 1000),
-          })),
-        });
+    const contextSummary = JSON.stringify({
+      language: body.lang === "ar" ? "ar" : "en",
+      current_saved_timetable: currentEntries,
+      active_draft_entries: draftEntries,
+      previous_draft_entries_for_undo: previousDraftEntries,
+      cached_visual_document_extraction: previousExtracted,
+      conversation_history: history.map((m: Record<string, unknown>) => ({
+        role: m?.role === "assistant" ? "assistant" : "user",
+        content: String(m?.content ?? m?.text ?? "").slice(0, 1500),
+      })),
+    });
 
     const userParts: Array<Record<string, unknown>> = [
       ...multimodalParts,
