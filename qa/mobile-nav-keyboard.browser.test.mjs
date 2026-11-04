@@ -28,6 +28,8 @@ try{
   const list=page.locator('.mobile-nav-list');
   await list.waitFor();
   assert.equal(await list.locator('button').first().innerText(),'Connections','first item is Connections');
+  // Allow the bounded initial PWA reset to finish before testing user scroll.
+  await page.waitForTimeout(540);
   await list.evaluate(el=>{el.scrollTop=el.scrollHeight});
   const scrolled=await list.evaluate(el=>el.scrollTop);
   assert.ok(scrolled>0,'mobile All tools list is scrollable');
@@ -42,15 +44,15 @@ try{
   await page.waitForTimeout(370);
   assert.equal(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop),0,
     'delayed PWA scroll restoration does not clip top rows');
-  await page.locator('.mobile-nav-list').evaluate(el=>{el.dispatchEvent(new Event('touchstart'));el.scrollTop=110});
-  await page.waitForTimeout(180);
-  assert.ok(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop)>0,
-    'genuine user scrolling is not reset after interaction');
   assert.ok(await page.locator('.mobile-nav-list button').first().evaluate(el=>{
    const list=el.closest('.mobile-nav-list').getBoundingClientRect();
    const item=el.getBoundingClientRect();
    return item.top>=list.top-2&&item.bottom<=list.bottom+2;
   }),'top item visible, not clipped');
+  await page.locator('.mobile-nav-list').evaluate(el=>{el.dispatchEvent(new Event('touchstart'));el.scrollTop=110});
+  await page.waitForTimeout(180);
+  assert.ok(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop)>0,
+    'genuine user scrolling is not reset after interaction');
   assert.equal(errors.length,0,'no JS errors in More sheet: '+errors.join('; '));
   await page.close();
  }
