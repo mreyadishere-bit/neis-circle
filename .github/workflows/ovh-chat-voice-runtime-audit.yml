@@ -60,6 +60,28 @@ jobs:
             print('VOICE_PROVIDER_PROBE=ERROR')
           PY
           python3 - <<'PY'
+          import subprocess,urllib.request,urllib.error,base64,struct,math,io,wave,json
+          p=subprocess.run(['sudo','-n','/usr/bin/docker','exec','supabase-edge-functions','printenv','GEMINI_API_KEY'],capture_output=True,text=True,timeout=12)
+          key=p.stdout.strip() if p.returncode==0 else ''
+          if key:
+            f=io.BytesIO()
+            with wave.open(f,'wb') as w:
+              w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000)
+              w.writeframes(b''.join(struct.pack('<h',int(1400*math.sin(2*math.pi*440*i/16000))) for i in range(16000)))
+            request=json.dumps({'contents':[{'role':'user','parts':[{'text':'Transcribe any speech, or return an empty string.'},{'inlineData':{'mimeType':'audio/wav','data':base64.b64encode(f.getvalue()).decode()}}]}],'generationConfig':{'temperature':0,'maxOutputTokens':50,'thinkingConfig':{'thinkingLevel':'minimal'}}}).encode()
+            for model in ('gemini-3.5-flash-lite','gemini-2.5-flash-lite'):
+              req=urllib.request.Request('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',data=request,headers={'x-goog-api-key':key,'content-type':'application/json'},method='POST')
+              try:
+                with urllib.request.urlopen(req,timeout=20) as resp:print('VOICE_AUDIO_GENERATION_'+model+'='+str(resp.status))
+              except urllib.error.HTTPError as e:
+                body=e.read().decode('utf-8','replace')
+                try:
+                  obj=json.loads(body);status=obj.get('error',{}).get('status','UNKNOWN')
+                except Exception:status='UNKNOWN'
+                print('VOICE_AUDIO_GENERATION_'+model+'='+str(e.code)+'_'+str(status)[:40])
+              except Exception:print('VOICE_AUDIO_GENERATION_'+model+'=NETWORK_ERROR')
+          PY
+          python3 - <<'PY'
           import urllib.request,urllib.error
           url='https://supabase.neiscircle.site/functions/v1/chat-voice-transcribe'
           req=urllib.request.Request(url,method='OPTIONS',headers={'Origin':'https://neiscircle.site','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,apikey,content-type,x-client-info'})
