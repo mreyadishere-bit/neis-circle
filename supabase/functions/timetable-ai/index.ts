@@ -526,7 +526,10 @@ Deno.serve(async (request: Request) => {
           text: `You are the NEIS Circle student timetable assistant. Answer this
 student's general question about time management clearly and concisely in
 ${body.lang === "ar" ? "Arabic" : "English"}. Do not invent classes, imply a
-schedule was modified, or request personal information. Student question:
+schedule was modified, or request personal information. Give 4–6
+specific, actionable tips in short numbered lines (not a long introduction).
+Conclude with one brief question if the student wants a personal plan.
+The answer must finish all points. Student question:
 ${userPrompt.slice(0, 1400)}`,
         }],
       };
@@ -549,7 +552,7 @@ ${userPrompt.slice(0, 1400)}`,
         const finish = String(reply?.candidates?.[0]?.finishReason ?? "").toUpperCase();
         // Reject token-limited, incomplete or implausibly short replies.
         return finish !== "MAX_TOKENS" && answer.length >= 160 &&
-          /(?:[.!?؟]|[\\u0600-\\u06FF])$/.test(answer);
+          !/[,:;،-]$/.test(answer);
       };
       let advice: { text?: string; modelVersion?: string; candidates?: Array<{ finishReason?: string }> } | null = null;
       try {
