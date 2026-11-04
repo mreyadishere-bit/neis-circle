@@ -11,6 +11,7 @@ const SUPPORTED=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;co
 // Keep one uninterrupted recording. Four-second cuts lose words at their edges.
 const MAX_RECORDING_BYTES=1_350_000;
 let active=null;
+const inputSessions=new WeakMap();
 const tr=(ar,en)=>document.documentElement.lang?.startsWith("ar")?ar:en;
 const formatError=(err)=>String(err?.message||err||"").slice(0,140);
 function update(input,value){
@@ -60,6 +61,7 @@ function setVoiceStatus(s,ar,en){
  if(s.status?.isConnected)s.status.textContent=tr(ar,en);
 }
 function finalize(s){
+ if(inputSessions.get(s.input)!==s)s.discardPending=true;
  if(!s.stopped||!s.recorderEnded||s.processing||s.finalized)return;
  s.finalized=true;
  if(s.discardPending){
@@ -84,6 +86,7 @@ function finalize(s){
  (async()=>{
   try{
    const words=await recognizeClip(s,audio);
+   if(inputSessions.get(s.input)!==s)s.discardPending=true;
    if(!s.discardPending&&s.input.isConnected&&words){
     update(s.input,combine(s.input.value.trim(),words));
     setVoiceStatus(s,"","");
@@ -118,6 +121,7 @@ function showRetry(s){
   const audio=s.retryAudio;
   try{
    const words=await recognizeClip(s,audio);
+   if(inputSessions.get(s.input)!==s)s.discardPending=true;
    if(!s.discardPending&&s.input.isConnected&&words){
     update(s.input,combine(s.input.value.trim(),words));
     s.retryAudio=null;
@@ -194,6 +198,8 @@ function startRecording(s){
 async function start(input,button,status){
  if(active?.input===input){stop();return}
  stop();
+ const previous=inputSessions.get(input);
+ if(previous)previous.discardPending=true;
  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){
   status.textContent=tr("المتصفح مش بيدعم التسجيل الصوتي المطلوب.","This browser does not support audio recording.");return;
  }
@@ -205,6 +211,7 @@ async function start(input,button,status){
  if(active){stream.getTracks().forEach(t=>t.stop());return}
  const s={input,button,status,stream,mime,recorder:null,chunks:[],stopped:false,discardPending:false,recorderEnded:false,finalized:false,processing:false,retryAudio:null,meterFrame:0};
  active=s;
+ inputSessions.set(input,s);
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  button.setAttribute("aria-label",tr("إيقاف الإملاء الصوتي وإظهار الكلام","Stop dictation and insert text"));
  status.textContent=tr("جاري الاستماع… اضغط إيقاف لإظهار الكلام.","Listening… tap Stop to insert the text.");
@@ -232,7 +239,11 @@ function mount(input){
  const send=form.querySelector('button[type=submit],[data-chat-send],#magnusSend');
  if(send)form.insertBefore(wrap,send);else form.append(wrap);
  form.insertAdjacentElement("afterend",status);
- form.addEventListener("submit",()=>{if(active?.input===input)stop(active,{discard:true})});
+ form.addEventListener("submit",()=>{
+  const session=inputSessions.get(input);
+  if(session){session.discardPending=true;session.retryAudio=null}
+  if(active?.input===input)stop(active,{discard:true});
+ });
 }
 function mountTimetable(){
  const panel=document.getElementById("ttAiPanel");
