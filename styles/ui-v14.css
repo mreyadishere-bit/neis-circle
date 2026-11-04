@@ -70,7 +70,7 @@ body.mobile-nav-open{overflow:hidden}
 }
 
 /* Mobile polish: Games menu pictogram, circle create action and Home composer. */
-.mobile-nav-item .neis-mobile-game-icon{width:36px;height:36px;display:grid;place-items:center;flex:0 0 36px}
+.mobile-nav-item .neis-mobile-game-icon{width:36px;height:36px;display:grid;place-items:center;flex:0 0 36px;font-size:19px;line-height:1;font-weight:400;font-style:normal}
 .mobile-nav-item .neis-mobile-game-icon svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}
 @media(max-width:760px){
  #view .page-title .circle-create-button{
