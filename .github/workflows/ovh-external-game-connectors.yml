@@ -16,6 +16,7 @@ on:
       - 'qa/mobile-nav-keyboard.browser.test.mjs'
       - 'qa/neis-mobile-ui-polish.browser.test.mjs'
       - 'qa/timetable-ai-speech.browser.test.mjs'
+      - 'qa/admin-dark-responsive.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -35,6 +36,7 @@ on:
       - 'qa/mobile-nav-keyboard.browser.test.mjs'
       - 'qa/neis-mobile-ui-polish.browser.test.mjs'
       - 'qa/timetable-ai-speech.browser.test.mjs'
+      - 'qa/admin-dark-responsive.browser.test.mjs'
       - 'scripts/ops/ovh-deploy-game-connectors-v1.py'
       - 'index.html'
       - '.github/workflows/ovh-external-game-connectors.yml'
@@ -76,6 +78,7 @@ jobs:
       - run: timeout --signal=TERM --kill-after=15s 150s node qa/mobile-nav-keyboard.browser.test.mjs
       - run: timeout --signal=TERM --kill-after=15s 150s node qa/neis-mobile-ui-polish.browser.test.mjs
       - run: timeout --signal=TERM --kill-after=15s 150s node qa/timetable-ai-speech.browser.test.mjs
+      - run: timeout --signal=TERM --kill-after=15s 150s node qa/admin-dark-responsive.browser.test.mjs
   preflight:
     needs: browser
     runs-on: ubuntu-24.04
