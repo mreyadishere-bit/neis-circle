@@ -47,7 +47,16 @@ try{
     await page.locator('.ttai-send').click();
     await page.waitForFunction(()=>window.__requests.length===1);
     assert.equal(await page.evaluate(()=>window.__requests[0].body.message),'help me manage my timetable please');
-    await page.waitForFunction(()=>document.querySelector('.ttai-chat')?.textContent?.includes('Here is a plan.'),null,{timeout:9000});
+    try{
+      await page.waitForFunction(()=>document.querySelector('.ttai-chat')?.textContent?.includes('Here is a plan.'),null,{timeout:9000});
+    }catch(error){
+      const details=await page.evaluate(()=>({
+        text:document.querySelector('.ttai-chat')?.textContent?.slice(-650),
+        errors:window.__requests.length,
+        panel:document.querySelector('.ttai-panel')?.hidden,
+      }));
+      throw new Error('Speech test reply was not rendered: '+JSON.stringify(details)+'; '+error.message);
+    }
     await page.locator('.ttai-mic').click();
     await page.locator('.ttai-icon-btn').last().click();
     assert.ok(await page.evaluate(()=>window.__aborted)>0,'closing must release microphone');
