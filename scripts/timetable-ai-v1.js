@@ -109,7 +109,19 @@ function el(tag,cls,textValue){
   return node;
 }
 function message(body,role){
-  const p=el("div","ttai-bubble ttai-"+role,body);
+  const p=el("div","ttai-bubble ttai-"+role);
+  const plain=String(body??"");
+  if(role==="assistant"){
+    // Safe formatting for Gemini's short Markdown emphasis. Only create
+    // text nodes and strong elements; never inject model-generated HTML.
+    for(const chunk of plain.split(/(\\*\\*[^*\\n]{1,140}\\*\\*)/g)){
+      if(/^\\*\\*[^*\\n]{1,140}\\*\\*$/.test(chunk)){
+        const strong=document.createElement("strong");
+        strong.textContent=chunk.slice(2,-2);
+        p.appendChild(strong);
+      }else if(chunk)p.appendChild(document.createTextNode(chunk));
+    }
+  }else p.textContent=plain;
   return p;
 }
 function syncMobileViewport(){
