@@ -530,73 +530,81 @@ schedule was modified, or request personal information. Student question:
 ${userPrompt.slice(0, 1400)}`,
         }],
       };
-      // General conversation should not wait for the 80-second multimodal
-      // parser timeout. Limit ONLY advice requests to 11 seconds per model.
-      // Keep PDF/image extraction, structured JSON and save RPC untouched.
-      const adviceHttpOptions = { timeout: 11000, headers: {} };
-      const adviceUnavailable = (err: unknown) => {
-        const status = Number((err as { status?: number })?.status || 0);
-        const message = err instanceof Error ? err.message : String(err);
-        return status === 503 || (status === 0 &&
-          /503|high demand|service unavailable|overloaded|timed?\s*out|timeout|aborterror|aborted/i.test(message));
+      // Text-only guidance: do not alter multimodal/structured timetable work.
+      // A 450-token budget previously allowed reasoning to exhaust output
+      // before the actual advice, leading to two-sentence "answers".
+      const adviceConfig = {
+        maxOutputTokens: 1800,
+        temperature: 0.45,
+        httpOptions: { timeout: 14000, headers: {} },
       };
-      let advice: { text?: string; modelVersion?: string } | null = null;
+      const adviceUnavailable = (error: unknown) => {
+        const status = Number((error as { status?: number })?.status || 0);
+        const message = error instanceof Error ? error.message : String(error);
+        return [500, 502, 503, 504].includes(status) ||
+          (status === 0 && /503|502|504|high demand|service unavailable|overloaded|timeout|timed?\\s*out|aborterror|aborted|fetch failed/i.test(message));
+      };
+      const usableAdvice = (reply: { text?: string; candidates?: Array<{ finishReason?: string }> } | null) => {
+        const answer = String(reply?.text ?? "").trim();
+        const finish = String(reply?.candidates?.[0]?.finishReason ?? "").toUpperCase();
+        // Reject token-limited, incomplete or implausibly short replies.
+        return finish !== "MAX_TOKENS" && answer.length >= 160 &&
+          /(?:[.!?؟]|[\\u0600-\\u06FF])$/.test(answer);
+      };
+      let advice: { text?: string; modelVersion?: string; candidates?: Array<{ finishReason?: string }> } | null = null;
       try {
         advice = await ai.models.generateContent({
-          model: PRIMARY_MODEL,
-          contents: [textRequest],
-          config: { maxOutputTokens: 450, temperature: 0.55, httpOptions: adviceHttpOptions },
+          model: PRIMARY_MODEL, contents: [textRequest], config: adviceConfig,
         });
+        if (!usableAdvice(advice)) advice = null;
       } catch (adviceError: unknown) {
         if (!adviceUnavailable(adviceError)) throw adviceError;
+      }
+      if (!advice) {
         try {
           advice = await ai.models.generateContent({
-            model: OVERLOAD_FALLBACK_MODEL,
-            contents: [textRequest],
-            config: { maxOutputTokens: 450, temperature: 0.55, httpOptions: adviceHttpOptions },
+            model: OVERLOAD_FALLBACK_MODEL, contents: [textRequest], config: adviceConfig,
           });
+          if (!usableAdvice(advice)) advice = null;
         } catch (fallbackError: unknown) {
           if (!adviceUnavailable(fallbackError)) throw fallbackError;
-          // Both Gemini models are overloaded. Only for general study/time
-          // guidance, provide transparent offline help instead of a 503 bubble.
-          // This is never used for PDF extraction or actual timetable edits.
-          const offlineReply = body.lang === "ar"
-            ? `خدمة Gemini مشغولة حاليًا، لكن دي نصائح عامة تساعدك:
+        }
+      }
+      if (!advice) {
+        // Explicitly labelled general guidance is only served to advice
+        // queries, never PDF analysis, timetable modifications or saving.
+        const offlineReply = body.lang === "ar"
+          ? `خدمة Gemini مشغولة حاليًا، لكن دي نصائح عامة تساعدك:
 1. اكتب مواعيد حصصك والتزاماتك الثابتة أولًا.
 2. حدد أهم 3 مهام يوميًا وابدأ بالأصعب وقت تركيزك.
 3. قسّم المذاكرة لفترات 25–45 دقيقة مع راحة قصيرة.
 4. خصص وقتًا للمراجعة والنوم والأنشطة، وسيب مساحة للطوارئ.
 5. راجع خطتك كل أسبوع وعدّلها حسب الواقع.
 لم أغير أي شيء في جدولك.`
-            : `Gemini is temporarily busy, so here are practical general tips (not an AI-generated reply):
+          : `Gemini is temporarily busy, so here are practical general tips (not an AI-generated reply):
 1. Put fixed classes and commitments on your calendar first.
 2. Pick your top three priorities each day and tackle difficult work when you focus best.
 3. Study in 25–45 minute blocks with short breaks.
 4. Reserve time for revision, sleep, and unexpected tasks.
 5. Review and adjust your plan each week.
 Your timetable has not been changed.`;
-          return respond({
-            reply: offlineReply,
-            changed: false,
-            entries: draftEntries,
-            extracted: previousExtracted ?? {
-              summary: "",
-              document_language: body.lang === "ar" ? "ar" : "en",
-              all_detected_subjects: [],
-              ambiguous_items: [],
-              detected_lessons: [],
-            },
-            provider: "offline-guidance",
-            model: "offline-guidance",
-          });
-        }
-      }
-      const adviceText = String(advice?.text ?? "").trim();
-      if (!adviceText) {
-        return respond({ error: "The AI response was empty. Please retry.", code: "EMPTY_MODEL_OUTPUT" }, 502);
+        return respond({
+          reply: offlineReply,
+          changed: false,
+          entries: draftEntries,
+          extracted: previousExtracted ?? {
+            summary: "",
+            document_language: body.lang === "ar" ? "ar" : "en",
+            all_detected_subjects: [],
+            ambiguous_items: [],
+            detected_lessons: [],
+          },
+          provider: "offline-guidance",
+          model: "offline-guidance",
+        });
       }
       return respond({
-        reply: adviceText.slice(0, 1800),
+        reply: String(advice.text ?? "").trim().slice(0, 5000),
         changed: false,
         entries: draftEntries,
         extracted: previousExtracted ?? {
@@ -606,7 +614,7 @@ Your timetable has not been changed.`;
           ambiguous_items: [],
           detected_lessons: [],
         },
-        model: String(advice?.modelVersion ?? PRIMARY_MODEL).replace(/^models\//, ""),
+        model: String(advice.modelVersion ?? PRIMARY_MODEL).replace(/^models\\//, ""),
         provider: "gemini",
       });
     }
