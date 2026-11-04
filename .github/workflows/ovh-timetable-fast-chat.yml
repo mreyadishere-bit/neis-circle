@@ -1,0 +1,52 @@
+name: OVH Timetable AI fast text responses
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-timetable-fast-chat.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-timetable-ai-production-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: oven-sh/setup-bun@v2
+      - name: Validate isolated fast backend
+        run: |
+          set -euo pipefail
+          bun build supabase/functions/timetable-ai-cloudflare/index.ts --target=browser --external '*' --outdir=/tmp/timetable-fast-check
+          python3 -m py_compile scripts/ops/ovh-timetable-fast-chat-deploy.py
+          node qa/timetable-fast-import.test.mjs
+          node qa/timetable-grounded-regression.test.mjs
+      - name: Configure known-host SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Upload and activate rollback-protected timetable function
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/timetable-fast-chat-stage"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$dest" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/timetable-ai-cloudflare/index.ts "$dest:$stage/index.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-timetable-fast-chat-deploy.py "$dest:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$dest" "python3 '$stage/deploy.py'"
