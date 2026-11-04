@@ -45,5 +45,5 @@ assert.equal(calls.find(c=>c.table==='articles').eq[1],'published','private draf
 assert.ok(calls.every(c=>c.or.includes('ilike')),'partial title and body matching');
 const arabic=await context.find('الفيزياء');
 assert.equal(arabic.length,2);
-assert.ok(calls.find(c=>c.table==='articles').or.includes('الفيزياء'),'Arabic preserved');
+assert.ok(calls.some(c=>c.table==='articles'&&c.or.includes('الفيزياء')),'Arabic preserved');
 console.log('UNIFIED_SEARCH_SIDEBAR_REGRESSION=PASS');
