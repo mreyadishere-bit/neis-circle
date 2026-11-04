@@ -512,9 +512,12 @@ Deno.serve(async (request: Request) => {
     // Advice-only questions need ordinary conversation, not a timetable
     // mutation or a strict JSON lesson extraction. Keep all PDF/image and
     // lesson-edit commands on the existing validated structured path below.
+    // Also match natural guidance requests ("help me manage my time"),
+    // not only explicit "how can I..." questions. Never route uploads or
+    // schedule mutations through the advice-only path.
     const adviceOnly = multimodalParts.length === 0 &&
-      /(?:how (?:can|should|do|to)|best way|tips? (?:for|to)|advice (?:for|on)|إزاي|كيف|نصائح|أفضل طريقة)/i.test(userPrompt) &&
-      /(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|ذاكر|تنظيم|جدول|مذاكرة|وقت)/i.test(userPrompt) &&
+      /(?:\b(?:how|help|tips?|advice|recommend|suggest|explain|best|ways?|manage|organize|organise|balance|prioritize|improve)\b|إزاي|كيف|ساعدني|نصائح|أفضل طريقة|أنظم|تنظيم)/i.test(userPrompt) &&
+      /(?:\b(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|classes|focus|productivity)\b|ذاكر|تنظيم|جدول|مذاكرة|وقت|دراسة)/i.test(userPrompt) &&
       !/(?:\b(?:add|remove|delete|move|edit|change|create|generate|put|schedule)\s+(?:(?:my|a|the)\s+)?(?:class|lesson|subject|period)|(?:أضف|احذف|انقل|عدّل|غير|أنشئ)\s+(?:حصة|مادة|الجدول))/i.test(userPrompt);
     if (adviceOnly) {
       const textRequest = {
@@ -537,11 +540,36 @@ ${userPrompt.slice(0, 1400)}`,
       } catch (adviceError: unknown) {
         const status = Number((adviceError as { status?: number })?.status || 0);
         if (status !== 503) throw adviceError;
-        advice = await ai.models.generateContent({
-          model: OVERLOAD_FALLBACK_MODEL,
-          contents: [textRequest],
-          config: { maxOutputTokens: 450, temperature: 0.55 },
-        });
+        try {
+          advice = await ai.models.generateContent({
+            model: OVERLOAD_FALLBACK_MODEL,
+            contents: [textRequest],
+            config: { maxOutputTokens: 450, temperature: 0.55 },
+          });
+        } catch (fallbackError: unknown) {
+          const fallbackStatus = Number((fallbackError as { status?: number })?.status || 0);
+          if (fallbackStatus !== 503) throw fallbackError;
+          // Both Gemini models are overloaded. Only for general study/time
+          // guidance, provide transparent offline help instead of a 503 bubble.
+          // This is never used for PDF extraction or actual timetable edits.
+          const offlineReply = body.lang === "ar"
+            ? "خدمة Gemini مشغولة حاليًا، لكن دي نصائح عامة تساعدك:\\n1. اكتب مواعيد حصصك والتزاماتك الثابتة أولًا.\\n2. حدد أهم 3 مهام يوميًا وابدأ بالأصعب وقت تركيزك.\\n3. قسّم المذاكرة لفترات 25–45 دقيقة مع راحة قصيرة.\\n4. خصص وقتًا للمراجعة والنوم والأنشطة، وسيب مساحة للطوارئ.\\n5. راجع خطتك كل أسبوع وعدّلها حسب الواقع.\\nلم أغير أي شيء في جدولك."
+            : "Gemini is temporarily busy, so here are practical general tips (not an AI-generated reply):\\n1. Put fixed classes and commitments on your calendar first.\\n2. Pick your top three priorities each day and tackle difficult work when you focus best.\\n3. Study in 25–45 minute blocks with short breaks.\\n4. Reserve time for revision, sleep, and unexpected tasks.\\n5. Review and adjust your plan each week.\\nYour timetable has not been changed.";
+          return respond({
+            reply: offlineReply.replaceAll("\\\\n", "\\n"),
+            changed: false,
+            entries: draftEntries,
+            extracted: previousExtracted ?? {
+              summary: "",
+              document_language: body.lang === "ar" ? "ar" : "en",
+              all_detected_subjects: [],
+              ambiguous_items: [],
+              detected_lessons: [],
+            },
+            provider: "offline-guidance",
+            model: "offline-guidance",
+          });
+        }
       }
       const adviceText = String(advice?.text ?? "").trim();
       if (!adviceText) {
