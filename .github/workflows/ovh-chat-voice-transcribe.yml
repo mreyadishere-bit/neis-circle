@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ovh-chat-voice-transcribe.yml'
+      - 'supabase/functions/chat-voice-transcribe/index.ts'
+      - 'scripts/chat-voice-v1.js'
   workflow_dispatch:
 permissions:
   contents: read
