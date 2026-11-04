@@ -24,7 +24,7 @@ jobs:
           node --check scripts/05-social.js
           node --check scripts/desktop-hover-rail-v1.js
           node --check scripts/desktop-hover-rail-rtl-v4.js
-          node qa/static-check.mjs
+          node qa/unified-search-sidebar.test.mjs
           python3 - <<'PY'
           from pathlib import Path
           s=Path('scripts/05-social.js').read_text()
