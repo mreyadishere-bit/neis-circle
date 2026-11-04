@@ -38,9 +38,28 @@
     // Start at the first navigation item on every opening, even after a previous scroll.
     // Prevent focus restoration/visualViewport adjustments from scrolling the list.
     var list=root.querySelector('.mobile-nav-list');
-    if(list)list.scrollTop=0;
-    root.querySelector('.mobile-nav-close')?.focus({preventScroll:true});
-    if(list)requestAnimationFrame(function(){if(list.isConnected)list.scrollTop=0});
+    // Android PWA may restore the list's previous scroll offset after focus,
+    // viewport resizing, or its bottom-sheet layout settles. Reset until
+    // first user interaction, never while the user is actually scrolling.
+    if(list){
+      var interacted=false;
+      ['touchstart','pointerdown','wheel','keydown'].forEach(function(type){
+        list.addEventListener(type,function(){interacted=true},{once:true,passive:type!=='keydown'});
+      });
+      var reset=function(){
+        if(!interacted&&list.isConnected&&root.contains(list)){
+          list.scrollTop=0;
+          list.scrollTo?.({top:0,behavior:'instant'});
+        }
+      };
+      reset();
+      root.querySelector('.mobile-nav-close')?.focus({preventScroll:true});
+      requestAnimationFrame(function(){reset();requestAnimationFrame(reset)});
+      setTimeout(reset,90);
+      setTimeout(reset,280);
+      // Some native WebViews do one more visualViewport adjustment.
+      setTimeout(reset,500);
+    }
   }
   document.addEventListener('click',function(event){
     if(event.target.closest('[data-mobile-more]')){event.preventDefault();open();return}
