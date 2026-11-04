@@ -118,9 +118,26 @@ function mount(input){
  form.insertAdjacentElement("afterend",status);
  form.addEventListener("submit",()=>{if(active?.input===input){active.discardPending=true;stop()}});
 }
+function mountTimetable(){
+ const panel=document.getElementById("ttAiPanel");
+ if(!panel||panel.hidden)return;
+ const input=panel.querySelector(".ttai-input");
+ const mic=panel.querySelector(".ttai-mic");
+ const status=panel.querySelector(".ttai-speech-status");
+ if(!input||!mic||!status||mic.dataset.multilingualBound==="1")return;
+ mic.dataset.multilingualBound="1";
+ // Replace the old single-language Web Speech click handler, without
+ // replacing the native Timetable AI composer or changing its save logic.
+ mic.onclick=null;
+ mic.disabled=false;
+ mic.setAttribute("aria-label",tr("إملاء صوتي عربي وإنجليزي تلقائي","Automatic Arabic and English dictation"));
+ mic.title=tr("إملاء عربي وإنجليزي تلقائي","Automatic Arabic and English dictation");
+ mic.addEventListener("click",()=>{void start(input,mic,status)});
+}
 function scan(){
  if(active&&!active.input.isConnected)stop();
  for(const id of targets){const input=document.getElementById(id);if(input)mount(input)}
+ mountTimetable();
 }
 let queued=false;
 const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;scan()})};
