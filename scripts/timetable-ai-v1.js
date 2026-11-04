@@ -114,8 +114,8 @@ function message(body,role){
   if(role==="assistant"){
     // Safe formatting for Gemini's short Markdown emphasis. Only create
     // text nodes and strong elements; never inject model-generated HTML.
-    for(const chunk of plain.split(/(\\*\\*[^*\\n]{1,140}\\*\\*)/g)){
-      if(/^\\*\\*[^*\\n]{1,140}\\*\\*$/.test(chunk)){
+    for(const chunk of plain.split(/(\*\*[^*\n]{1,140}\*\*)/g)){
+      if(/^\*\*[^*\n]{1,140}\*\*$/.test(chunk)){
         const strong=document.createElement("strong");
         strong.textContent=chunk.slice(2,-2);
         p.appendChild(strong);
