@@ -1,0 +1,105 @@
+name: OVH Game Invite Banner Cards
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-game-invite-banners.yml']
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify original game cards, safe invites and responsive styles
+        run: |
+          set -euo pipefail
+          node --check scripts/neis-game-connectors-v1.js
+          node qa/neis-external-game-connectors.browser.test.mjs || {
+            echo 'Standalone browser test unavailable or failed; deployment stopped.' >&2
+            exit 1
+          }
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only Games artwork and styling
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/game-invite-banners-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/neis-game-connectors-v1.js "$host:$stage/neis-game-connectors-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/neis-game-connectors-v1.css "$host:$stage/neis-game-connectors-v1.css"
+      - name: Atomic frontend release with rollback and live asset checks
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/game-invite-banners-${{ github.run_id }}-${{ github.run_attempt }}"
+          new="/home/ubuntu/neis-frontend/releases/game-invite-banners-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/neis-game-connectors-v1.js" && test -s "$stage/neis-game-connectors-v1.css" && test ! -e "$new"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/05-social.js" && test -s "$old/scripts/neis-game-connectors-v1.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$new"
+          cp "$stage/neis-game-connectors-v1.js" "$new/scripts/neis-game-connectors-v1.js"
+          cp "$stage/neis-game-connectors-v1.css" "$new/styles/neis-game-connectors-v1.css"
+          python3 - "$new/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          for name in ('scripts/neis-game-connectors-v1.js','styles/neis-game-connectors-v1.css'):
+            pat=re.escape(name)+r'(?:\?[^"\x27<> ]*)?'
+            if len(re.findall(pat,s))!=1:raise SystemExit('GAME_ASSET_REFERENCE_MISMATCH')
+            s=re.sub(pat,name+'?v=invite-banner-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$new" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo GAME_INVITE_BANNERS=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'banner.innerHTML=cover(svc,false)' /srv/neis-circle/scripts/neis-game-connectors-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq '.neis-chat-game-banner' /srv/neis-circle/styles/neis-game-connectors-v1.css
+          "${docker[@]}" exec "$cid" grep -Fq 'invite-banner-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo GAME_INVITE_BANNERS=SUCCESS
+          echo MESSAGE_STORAGE_AND_OTHER_SERVICES=UNCHANGED
+          REMOTE
