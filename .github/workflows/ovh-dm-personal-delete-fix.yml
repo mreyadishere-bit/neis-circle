@@ -1,0 +1,120 @@
+name: OVH DM Delete For Me Safety Fix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-dm-personal-delete-fix.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate deletion scope and unchanged messages
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node qa/dm-delete-for-me.test.mjs
+          grep -Fq 'create or replace function public.delete_direct_conversation' supabase/migrations/20261104190000_dm_delete_only_for_me.sql
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage personal-DM fix
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/dm-personal-delete-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261104190000_dm_delete_only_for_me.sql "$host:$stage/fix.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$host:$stage/social.js"
+      - name: Apply SQL first, then atomically publish frontend
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/dm-personal-delete-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/dm-personal-delete-${{ github.run_id }}-${{ github.run_attempt }}"
+          docker=(sudo -n /usr/bin/docker)
+          overlay=docker-compose.frontend-public.yml
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/fix.sql" && test -s "$stage/social.js" && test ! -e "$dest"
+          # Validate the SQL on the real schema without persisting dry-run changes.
+          python3 - "$stage/fix.sql" <<'PY'
+          import pathlib,subprocess,sys
+          sql=pathlib.Path(sys.argv[1]).read_text()
+          inner='\n'.join(line for line in sql.splitlines() if line.strip().lower() not in ('begin;','commit;'))
+          cmd=['sudo','-n','/usr/bin/docker','exec','-i','supabase-db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-q']
+          p=subprocess.run(cmd,input='begin;\n'+inner+'\nrollback;\n',text=True,capture_output=True,timeout=60)
+          if p.returncode:
+            print('DM_PERSONAL_DELETE_SQL_DRY_RUN=FAILED')
+            print('\n'.join(x[:180] for x in p.stderr.splitlines() if 'ERROR:' in x)[:700])
+            raise SystemExit(1)
+          print('DM_PERSONAL_DELETE_SQL_DRY_RUN=PASS')
+          PY
+          # Prioritize database protection: stale mobile/browser clients are safe immediately.
+          "${docker[@]}" exec -i supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -q < "$stage/fix.sql"
+          "${docker[@]}" exec supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atqc "
+            select 'DM_PERSONAL_DELETE_RPC='||
+              (pg_get_functiondef('public.delete_direct_conversation(uuid)'::regprocedure)
+                like '%hide_conversation_for_me%')::text;
+          " | grep -Fx 'DM_PERSONAL_DELETE_RPC=true'
+          echo DM_GLOBAL_DELETE_BLOCKED=SUCCESS
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/05-social.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/social.js" "$dest/scripts/05-social.js"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          pat=r'scripts/05-social\.js(?:\?[^"\x27<> ]*)?'
+          if len(re.findall(pat,s))!=1:raise SystemExit('DM_SOCIAL_SCRIPT_REFERENCE_MISMATCH')
+          s=re.sub(pat,'scripts/05-social.js?v=dm-personal-delete-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('DM_FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo DM_FRONTEND=ROLLED_BACK_DATABASE_SAFETY_RETAINED
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq "sb.rpc('hide_conversation_for_me'" /srv/neis-circle/scripts/05-social.js
+          "${docker[@]}" exec "$cid" grep -Fq 'dm-personal-delete-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo DM_DELETE_FOR_ME_DEPLOY=SUCCESS
+          echo UNRELATED_SERVICES_AND_MESSAGES=UNCHANGED
+          REMOTE
