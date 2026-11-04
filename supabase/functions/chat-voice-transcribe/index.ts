@@ -25,7 +25,9 @@ Deno.serve(async(request:Request)=>{
   if(authError||!user)return respond({error:"Authentication required"},401);
   const now=Date.now(),prior=limits.get(user.id);
   const usage=prior&&now-prior.window<60000?prior:{count:0,window:now};
-  if(usage.count>=12)return respond({error:"Voice transcription rate limit. Try again shortly.",code:"RATE_LIMIT"},429);
+  // Four-second clips produce about fifteen requests per minute while dictating.
+  // Bound bursts without blocking normal continuous speech.
+  if(usage.count>=24)return respond({error:"Voice transcription rate limit. Try again shortly.",code:"RATE_LIMIT"},429);
   const body=await request.json().catch(()=>null);
   const mime=String(body?.mimeType||"").split(";")[0].toLowerCase();
   const supported=["audio/webm","audio/ogg","audio/mp4"];
