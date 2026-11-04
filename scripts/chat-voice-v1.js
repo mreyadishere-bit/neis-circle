@@ -31,6 +31,7 @@ function startMeter(s){
  if(!bars?.length||!AudioClass)return;
  try{
   s.meterContext=new AudioClass();
+  if(s.meterContext.state==="suspended")void s.meterContext.resume().catch(()=>{});
   s.meterSource=s.meterContext.createMediaStreamSource(s.stream);
   const analyser=s.meterContext.createAnalyser();
   analyser.fftSize=256;
@@ -63,7 +64,7 @@ function finalize(s){
   update(s.input,combine(s.input.value.trim(),s.transcript.trim()));
  }
  if(s.status?.isConnected){
-  s.status.textContent=s.failedClips
+  s.status.textContent=s.totalFailed
    ?tr("اكتمل التفريغ، لكن في أجزاء صوتية ما اتعرفتش بدقة.","Done, but some audio couldn't be transcribed.")
    :"";
  }
@@ -81,8 +82,9 @@ function stop(s=active,{discard=false}={}){
  stopMeter(s);
  try{
   if(s.recorder?.state==="recording")s.recorder.stop();
-  else if(s.recorder?.state!=="inactive")s.recorder?.stop();
-  else s.recorderEnded=true;
+  else if(!s.recorder)s.recorderEnded=true;
+  // An inactive recorder may still have an onstop event pending with its
+  // final audio data. Wait for that event before committing the transcript.
  }catch(_){s.recorderEnded=true}
  try{s.stream?.getTracks().forEach(t=>t.stop())}catch(_){}
  if(s.status?.isConnected)s.status.textContent=tr("جاري تجهيز الكلام…","Finishing transcription…");
@@ -116,7 +118,7 @@ function flushResults(s){
   const result=s.results.get(s.nextCommit);
   s.results.delete(s.nextCommit++);
   if(result.error){
-   s.failedClips++;
+   s.failedClips++;s.totalFailed++;
    const detail=formatError(result.error).toLowerCase();
    console.warn('[NEIS voice clip]',formatError(result.error));
    if(s.status?.isConnected){
@@ -155,7 +157,7 @@ function pumpClips(s){
 }
 function queue(s,blob){
  if(!blob||blob.size<1500)return;
- if(s.pending>=6){
+ if(s.pending>=6&&!s.stopped){
   if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ هكمل التسجيل مع تخطي مقطع واحد.","Connection slow; skipping a clip while continuing to listen.");
   return;
  }
@@ -192,7 +194,7 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,stopped:false,discardPending:false,recorderEnded:false,finalized:false,transcript:"",meterFrame:0};
+ const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,totalFailed:0,stopped:false,discardPending:false,recorderEnded:false,finalized:false,transcript:"",meterFrame:0};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  button.setAttribute("aria-label",tr("إيقاف الإملاء الصوتي وإظهار الكلام","Stop dictation and insert text"));
