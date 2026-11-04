@@ -454,7 +454,7 @@ async function submit(text,retrying=false){
     }
     if(Array.isArray(data.extracted))stateAI.source=data.extracted.slice(0,80);
     else if(data.extracted&&typeof data.extracted==="object")stateAI.source=data.extracted;
-    stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,1200)});
+    stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,5000)});
     stateAI.history[stateAI.history.length-2].failedPrompt=false;
     stateAI.file=null;
   }catch(e){
