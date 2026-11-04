@@ -530,31 +530,33 @@ schedule was modified, or request personal information. Student question:
 ${userPrompt.slice(0, 1400)}`,
         }],
       };
+      // General conversation should not wait for the 80-second multimodal
+      // parser timeout. Limit ONLY advice requests to 11 seconds per model.
+      // Keep PDF/image extraction, structured JSON and save RPC untouched.
+      const adviceHttpOptions = { timeout: 11000, headers: {} };
+      const adviceUnavailable = (err: unknown) => {
+        const status = Number((err as { status?: number })?.status || 0);
+        const message = err instanceof Error ? err.message : String(err);
+        return status === 503 || (status === 0 &&
+          /503|high demand|service unavailable|overloaded|timed?\\s*out|timeout|aborterror|aborted/i.test(message));
+      };
       let advice: { text?: string; modelVersion?: string } | null = null;
       try {
         advice = await ai.models.generateContent({
           model: PRIMARY_MODEL,
           contents: [textRequest],
-          config: { maxOutputTokens: 450, temperature: 0.55 },
+          config: { maxOutputTokens: 450, temperature: 0.55, httpOptions: adviceHttpOptions },
         });
       } catch (adviceError: unknown) {
-        const status = Number((adviceError as { status?: number })?.status || 0);
-        const message = adviceError instanceof Error ? adviceError.message : String(adviceError);
-        if (status !== 503 && !(status === 0 && /\\b503\\b|high demand|service unavailable|overloaded/i.test(message))) {
-          throw adviceError;
-        }
+        if (!adviceUnavailable(adviceError)) throw adviceError;
         try {
           advice = await ai.models.generateContent({
             model: OVERLOAD_FALLBACK_MODEL,
             contents: [textRequest],
-            config: { maxOutputTokens: 450, temperature: 0.55 },
+            config: { maxOutputTokens: 450, temperature: 0.55, httpOptions: adviceHttpOptions },
           });
         } catch (fallbackError: unknown) {
-          const fallbackStatus = Number((fallbackError as { status?: number })?.status || 0);
-          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
-          if (fallbackStatus !== 503 && !(fallbackStatus === 0 && /\\b503\\b|high demand|service unavailable|overloaded/i.test(fallbackMessage))) {
-            throw fallbackError;
-          }
+          if (!adviceUnavailable(fallbackError)) throw fallbackError;
           // Both Gemini models are overloaded. Only for general study/time
           // guidance, provide transparent offline help instead of a 503 bubble.
           // This is never used for PDF extraction or actual timetable edits.
