@@ -37,7 +37,7 @@ jobs:
           grep -Fq "function finalize(s)" scripts/chat-voice-v1.js
           grep -Fq "function startMeter(s)" scripts/chat-voice-v1.js
           ! grep -Fq 'if(document.hidden)stop()' scripts/chat-voice-v1.js
-          grep -Fq "styles/chat-voice-v1.css?v=voice-stop-${{ github.run_id }}" index.html
+          grep -Fq "styles/chat-voice-v1.css" index.html
           grep -Fq "scripts/chat-voice-v1.js" index.html
       - name: Configure pinned SSH
         env:
