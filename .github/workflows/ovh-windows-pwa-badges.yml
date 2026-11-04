@@ -32,6 +32,9 @@ jobs:
           grep -Fq 'showNotification(title, options)' neis-pwa-sw.js
           grep -Fq 'data-test-system-notification' scripts/pwa-install-v117.js
           grep -Fq 'data-pwa-repair-push' scripts/pwa-install-v117.js
+          grep -Fq 'async function ensureWebPush(requestPermission,renewSubscription=false)' scripts/pwa-install-v117.js
+          grep -Fq 'const ok=await ensureWebPush(true,true)' scripts/pwa-install-v117.js
+          grep -Fq 'push_server_verification_' scripts/pwa-install-v117.js
           grep -Fq "register('/neis-pwa-sw.js?v=15'" scripts/pwa-install-v117.js
       - name: Configure pinned SSH
         env:
@@ -107,6 +110,7 @@ jobs:
           cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
           "${docker[@]}" exec "$cid" grep -Fq 'navigator.setAppBadge' /srv/neis-circle/scripts/social/notifications-v174.js
           "${docker[@]}" exec "$cid" grep -Fq 'data-pwa-repair-push' /srv/neis-circle/scripts/pwa-install-v117.js
+          "${docker[@]}" exec "$cid" grep -Fq 'push_server_verification_' /srv/neis-circle/scripts/pwa-install-v117.js
           "${docker[@]}" exec "$cid" grep -Fq 'neis-pwa-ovh-v15' /srv/neis-circle/neis-pwa-sw.js
           "${docker[@]}" exec "$cid" grep -Fq 'windows-push-badge-${{ github.run_id }}' /srv/neis-circle/index.html
           trap - ERR
