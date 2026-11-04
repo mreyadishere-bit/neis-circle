@@ -289,10 +289,13 @@ function enhanceChatMessageText(el){
  link.referrerPolicy='no-referrer';
  link.setAttribute('dir',tr('ltr','rtl'));
  link.setAttribute('aria-label',tr('Open '+svc.name+' game','افتح لعبة '+svc.name));
- const icon=document.createElement('span');
- icon.className='neis-chat-game-art';
- icon.style.setProperty('--game-accent',svc.colors[0]);
- icon.textContent=svc.mark;
+ // Use the exact same game-specific illustrated cover as the Games tab.
+ const banner=document.createElement('span');
+ banner.className='neis-chat-game-banner';
+ banner.innerHTML=cover(svc,false);
+ banner.setAttribute('aria-hidden','true');
+ const content=document.createElement('span');
+ content.className='neis-chat-game-content';
  const info=document.createElement('span');
  info.className='neis-chat-game-detail';
  const eyebrow=document.createElement('span');
@@ -302,7 +305,8 @@ function enhanceChatMessageText(el){
  info.append(eyebrow,title,host);
  const cta=document.createElement('span');
  cta.className='neis-chat-game-cta';cta.textContent=tr('Join game ↗','انضم للعبة ↗');
- link.append(icon,info,cta);
+ content.append(info,cta);
+ link.append(banner,content);
  const copy=document.createElement('button');
  copy.type='button';copy.className='neis-chat-game-copy';
  copy.setAttribute('aria-label',tr('Copy game link','نسخ رابط اللعبة'));
