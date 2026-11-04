@@ -53,7 +53,7 @@ assert.match(js,/apply_timetable_ai_plan/,'RLS timetable save stays intact');
 assert.match(js,/stateAI\.lastFailed=\{text,file\}/,'retry draft and files stay intact');
 assert.match(js,/SpeechRecognition\|\|window\.webkitSpeechRecognition/,'native speech recognition supported with webkit fallback');
 assert.match(js,/recognition\.lang=lang\(\)===["']ar["']\?["']ar-EG["']:["']en-US["']/,'dictation follows Arabic or English locale');
-assert.match(js,/Deliberately do not submit/,'dictation never automatically sends a message');
+assert.match(js,/no automatic submission/,'dictation never automatically sends a message');
 assert.match(js,/recognition\.abort\(\)/,'speech recognition cleans up on redraw');
 assert.match(js,/stateAI\.advicePending=false;draw\(\)/,'advice loading state resets after request');
 
