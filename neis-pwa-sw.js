@@ -1,5 +1,5 @@
-const VERSION = "neis-pwa-ovh-v13";
-const STATIC_CACHE = "neis-static-ovh-v13";
+const VERSION = "neis-pwa-ovh-v14";
+const STATIC_CACHE = "neis-static-ovh-v14";
 
 
 const VAPID_PUBLIC_KEY = "BKPTZrkpcjMsJHXVOCnZHW-ht94oEPCIvZ8HMu65tQEnfjhoi5-HdBODDt1iNVBFIgsZoyMwXQxQJLJ62ZQoWYw";
