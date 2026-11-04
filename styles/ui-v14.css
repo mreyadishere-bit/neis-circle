@@ -269,6 +269,6 @@ body.mobile-nav-open{overflow:hidden}
  #view .admin-banner h1{font-size:clamp(25px,7vw,36px)}
  #view .admin-hero~.module-card{padding:14px!important;margin-inline:0!important}
  #view .admin-hero~.module-card :is(input,select,button,textarea){
-  font-size:max(12px,inherit);min-height:34px;
+  min-height:34px;
  }
 }
