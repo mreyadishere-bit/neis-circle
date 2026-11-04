@@ -15,7 +15,7 @@ try{
       window.sb={
         functions:{invoke:async(name,args)=>{
           window.__requests.push({name,body:args.body});
-          return {data:{entries:[],changed:false,reply:'Here is a plan.'},error:null};
+          return {data:{entries:[],changed:false,reply:'Here is a **plan**.'},error:null};
         }},
         rpc:async()=>({data:[],error:null})
       };
@@ -57,6 +57,11 @@ try{
       }));
       throw new Error('Speech test reply was not rendered: '+JSON.stringify(details)+'; '+error.message);
     }
+    const assistantBubble=page.locator('.ttai-bubble.ttai-assistant').last();
+    assert.equal((await assistantBubble.textContent()).trim(),'Here is a plan.',
+      'formatted answer preserves every character of the original message');
+    assert.equal(await assistantBubble.locator('strong').innerText(),'plan',
+      'Markdown emphasis renders safely as a strong element');
     await page.locator('.ttai-mic').click();
     await page.locator('.ttai-icon-btn').last().click();
     assert.ok(await page.evaluate(()=>window.__aborted)>0,'closing must release microphone');
