@@ -2506,7 +2506,7 @@ function mergeSearchMatches(...groups){
 async function searchAdditionalContent(query){
  // Avoid RPC changes and search only user-visible rows under existing RLS.
  // PostgREST's OR grammar requires an escaped, punctuation-free term.
- const term=String(query||'').replace(/[^\\p{L}\\p{N}\\s_-]/gu,' ').replace(/\\s+/g,' ').trim().slice(0,85);
+ const term=String(query||'').replace(/[^\p{L}\p{N}\s_-]/gu,' ').replace(/\s+/g,' ').trim().slice(0,85);
  if(!term||!sb)return [];
  const needle='%'+term+'%';
  const articleFilter=['title_en','title_ar','excerpt_en','excerpt_ar'].map(field=>field+'.ilike.'+needle).join(',');
@@ -3864,7 +3864,7 @@ function bindV6(root=document){
   root.querySelectorAll('[data-v6-circle-leave]').forEach(el=>el.onclick=async()=>{const circleId=el.dataset.v6CircleLeave,m=membership(circleId);if(m?.role==='owner'){toast(t('Transfer ownership before leaving.','انقل الملكية قبل المغادرة.'));return}if(!m||!await confirmAction(t('Leave this Circle?','مغادرة المجتمع؟'),t('You can join again later if it is public.','يمكنك الانضمام مرة أخرى لاحقًا إذا كان عامًا.')))return;const {error}=await sb.from('circle_members').delete().match({circle_id:circleId,user_id:authUser.id});if(error){toast(safeError(error,'leave this Circle'));return}await handleCircleMemberRealtime({eventType:'DELETE',old:m});toast(t('Left the Circle.','تمت مغادرة المجتمع.'))});
   root.querySelectorAll('[data-share-circle]').forEach(el=>el.onclick=async()=>{await navigator.clipboard.writeText(`${location.origin}${location.pathname}#/circles/${el.dataset.shareCircle}/home`);toast(t('Circle link copied.','تم نسخ رابط المجتمع.'))});
   root.querySelectorAll('[data-search-tab]').forEach(el=>el.onclick=()=>{state.searchTab=el.dataset.searchTab;render()});
-  root.querySelectorAll('[data-search-open]').forEach(el=>el.onclick=()=>{const type=el.dataset.searchOpen,id=el.dataset.searchId;$('#searchSuggestions')?.classList.add('hidden');routeTo(type==='profile'?`profile/${id}`:type==='circle'?`circles/${id}/home`:type==='article'?`articles/${id}`:type==='opportunity'?`opportunities?search=${encodeURIComponent(state.query)}`:`post/${id}`)});
+  root.querySelectorAll('[data-search-open]').forEach(el=>el.onclick=()=>{const type=el.dataset.searchOpen,id=el.dataset.searchId;$('#searchSuggestions')?.classList.add('hidden');routeTo(type==='profile'?`profile/${id}`:type==='circle'?`circles/${id}/home`:type==='article'?`articles/${id}`:type==='opportunity'?`opportunities`:`post/${id}`)});
   root.querySelectorAll('[data-retry-search]').forEach(el=>el.onclick=()=>performSearch(state.query,true));
   root.querySelectorAll('[data-retry-meetings]').forEach(el=>el.onclick=async()=>{el.disabled=true;await refreshCircleMeetingsOnly(state.activeCircleId);render()});
   if(state.view==='circle-detail'&&state.circleTab==='meetings'&&state.meetingInviteId){const card=root.querySelector(`[data-meeting-card="${CSS.escape(String(state.meetingInviteId))}"]`);if(card){card.classList.add('meeting-invite-target');setTimeout(()=>card.scrollIntoView({block:'center',behavior:'smooth'}),50)}}
