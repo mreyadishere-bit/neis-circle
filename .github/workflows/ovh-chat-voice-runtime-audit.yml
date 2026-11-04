@@ -69,7 +69,7 @@ jobs:
               w.setnchannels(1);w.setsampwidth(2);w.setframerate(16000)
               w.writeframes(b''.join(struct.pack('<h',int(1400*math.sin(2*math.pi*440*i/16000))) for i in range(16000)))
             request=json.dumps({'contents':[{'role':'user','parts':[{'text':'Transcribe any speech, or return an empty string.'},{'inlineData':{'mimeType':'audio/wav','data':base64.b64encode(f.getvalue()).decode()}}]}],'generationConfig':{'temperature':0,'maxOutputTokens':50,'thinkingConfig':{'thinkingLevel':'minimal'}}}).encode()
-            for model in ('gemini-3.5-flash-lite','gemini-2.5-flash-lite'):
+            for model in ('gemini-3.1-flash-lite','gemini-3-flash-preview'):
               req=urllib.request.Request('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',data=request,headers={'x-goog-api-key':key,'content-type':'application/json'},method='POST')
               try:
                 with urllib.request.urlopen(req,timeout=20) as resp:print('VOICE_AUDIO_GENERATION_'+model+'='+str(resp.status))
