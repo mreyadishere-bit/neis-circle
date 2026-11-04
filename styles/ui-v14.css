@@ -164,3 +164,39 @@ body.mobile-nav-open{overflow:hidden}
  }
  .ttai-panel .ttai-send,.ttai-panel .ttai-attach{flex-shrink:0!important}
 }
+
+/* Timetable AI: native browser speech-to-text control, no server-side audio. */
+.ttai-panel .ttai-mic{
+ display:inline-grid;place-items:center;flex:0 0 36px;
+ width:36px;height:36px;min-width:36px;
+ padding:0;border:1px solid transparent;border-radius:10px;
+ color:var(--ttai-muted,var(--muted,#66798a));background:transparent;
+ cursor:pointer;touch-action:manipulation;
+}
+.ttai-panel .ttai-mic svg{
+ display:block;width:19px;height:19px;fill:none;stroke:currentColor;
+ stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.ttai-panel .ttai-mic:hover:not(:disabled){
+ background:color-mix(in srgb,var(--ttai-accent,#2678b3) 9%,transparent);
+ color:var(--ttai-accent,#2678b3);
+}
+.ttai-panel .ttai-mic.is-listening{
+ color:#cf3047;border-color:color-mix(in srgb,#cf3047 35%,transparent);
+ background:color-mix(in srgb,#cf3047 11%,transparent);
+}
+.ttai-panel .ttai-mic:disabled{opacity:.4;cursor:not-allowed}
+.ttai-panel .ttai-mic:focus-visible{
+ outline:2px solid var(--ttai-accent,#2678b3);outline-offset:2px;
+}
+.ttai-panel .ttai-speech-status{
+ display:block;padding:2px 8px 3px;color:var(--ttai-muted,#62778a);
+ font-size:11px;line-height:1.35;overflow-wrap:anywhere;
+}
+.ttai-panel .ttai-speech-status:empty{display:none}
+@media(max-width:390px){
+ .ttai-panel .ttai-compose{gap:3px!important}
+ .ttai-panel .ttai-attach{width:31px!important;flex-basis:31px!important}
+ .ttai-panel .ttai-mic{width:32px;height:34px;min-width:32px;flex-basis:32px}
+ .ttai-panel .ttai-send{width:34px;flex-basis:34px}
+}
