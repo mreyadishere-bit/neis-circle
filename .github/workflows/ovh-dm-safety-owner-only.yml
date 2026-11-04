@@ -1,0 +1,127 @@
+name: OVH DM Safety Review Main Admin Only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-dm-safety-owner-only.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify main admin restriction and regression checks
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node qa/dm-safety-owner-only.test.mjs
+          grep -Fq 'neis_admin_is_owner()' supabase/migrations/20261104193500_dm_safety_review_owner_only.sql
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage main-admin DM safety assets only
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/dm-safety-owner-only-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261104193500_dm_safety_review_owner_only.sql "$host:$stage/owner-only.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$host:$stage/social.js"
+      - name: Apply database security before frontend activation
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/dm-safety-owner-only-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/dm-safety-owner-only-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/owner-only.sql" && test -s "$stage/social.js" && test ! -e "$dest"
+          python3 - "$stage/owner-only.sql" <<'PY'
+          from pathlib import Path
+          import subprocess,sys
+          sql=Path(sys.argv[1]).read_text()
+          commands='\n'.join(x for x in sql.splitlines() if x.strip().lower() not in ('begin;','commit;') and not x.strip().lower().startswith('notify pgrst'))
+          call=['sudo','-n','/usr/bin/docker','exec','-i','supabase-db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-q']
+          test=subprocess.run(call,input='begin;\n'+commands+'\nrollback;\n',capture_output=True,text=True,timeout=60)
+          if test.returncode:
+            print('DM_SAFETY_OWNER_SQL_DRY_RUN=FAILED')
+            print('\n'.join(line[:160] for line in test.stderr.splitlines() if 'ERROR:' in line)[:800])
+            raise SystemExit(1)
+          print('DM_SAFETY_OWNER_SQL_DRY_RUN=PASS')
+          PY
+          "${docker[@]}" exec -i supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -q < "$stage/owner-only.sql"
+          "${docker[@]}" exec supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atqc "
+            select 'DM_SAFETY_MAIN_ADMIN_ONLY='||(
+              select bool_and(
+                pg_get_functiondef(p.oid) like '%neis_admin_is_owner()%'
+                and pg_get_functiondef(p.oid) not like '%neis_admin_is_super()%'
+              )
+              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname in (
+                'admin_search_dm_users','admin_list_user_dm_conversations',
+                'admin_create_dm_review_request','admin_get_dm_review_messages'
+              )
+            )::text;
+          " | grep -Fx 'DM_SAFETY_MAIN_ADMIN_ONLY=true'
+          echo DM_SAFETY_DATABASE_LOCK=SUCCESS
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/05-social.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/social.js" "$dest/scripts/05-social.js"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          pat=r'scripts/05-social\.js(?:\?[^"\x27<> ]*)?'
+          if len(re.findall(pat,s))!=1:raise SystemExit('DM_SAFETY_SCRIPT_REF_MISMATCH')
+          s=re.sub(pat,'scripts/05-social.js?v=dm-safety-owner-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo DM_SAFETY_FRONTEND=ROLLED_BACK_DATABASE_PROTECTION_RETAINED
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'const canOpenDmSafetyReview=()=>state.isAdmin&&isMainAdminUser()' /srv/neis-circle/scripts/05-social.js
+          "${docker[@]}" exec "$cid" grep -Fq 'dm-safety-owner-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo DM_SAFETY_OWNER_ONLY_DEPLOY=SUCCESS
+          echo OTHER_ADMIN_FUNCTIONS_AND_SERVICES=UNCHANGED
+          REMOTE
