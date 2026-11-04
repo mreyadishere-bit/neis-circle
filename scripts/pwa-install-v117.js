@@ -187,7 +187,7 @@
   }
 
 
-  async function ensureWebPush(requestPermission){
+  async function ensureWebPush(requestPermission,renewSubscription=false){
     if(!('Notification' in window)||!('PushManager' in window)||!('serviceWorker' in navigator)){
       if(requestPermission&&typeof toast==='function')toast(lang('Notifications are not supported in this browser.','المتصفح الحالي لا يدعم الإشعارات.'));
       return false;
@@ -218,12 +218,24 @@
       const registration=serviceWorkerRegistration||await pushWithTimeout(registerServiceWorker(),'worker_ready',12000);
       if(!registration?.pushManager)throw new Error('push_worker_unavailable');
       let subscription=await pushWithTimeout(registration.pushManager.getSubscription(),'get_subscription',8000);
-      if(subscription){
-        const serverStatus=await serverSubscriptionStatus(subscription);
-        if(serverStatus==='disabled'){
-          await pushWithTimeout(subscription.unsubscribe(),'unsubscribe',6000).catch(()=>{});
-          subscription=null;
+      let mustRenew=renewSubscription;
+      if(subscription&&!mustRenew){
+        // Edge may retain an endpoint generated for an old VAPID identity.
+        const actualKey=subscription.options?.applicationServerKey;
+        const expectedKey=base64UrlToUint8Array(VAPID_PUBLIC_KEY);
+        if(actualKey){
+          const actual=new Uint8Array(actualKey);
+          mustRenew=actual.length!==expectedKey.length||actual.some((byte,i)=>byte!==expectedKey[i]);
         }
+        if(!mustRenew){
+          const serverStatus=await serverSubscriptionStatus(subscription);
+          mustRenew=serverStatus==='disabled';
+        }
+      }
+      if(subscription&&mustRenew){
+        const unsubscribed=await pushWithTimeout(subscription.unsubscribe(),'unsubscribe',8000);
+        if(!unsubscribed)throw new Error('push_unsubscribe_failed');
+        subscription=null;
       }
       if(!subscription){
         subscription=await pushWithTimeout(registration.pushManager.subscribe({
@@ -236,6 +248,8 @@
         if(requestPermission&&typeof toast==='function')toast(lang('Could not save notification subscription. Please retry.','تعذر حفظ اشتراك الإشعارات. حاول مجددًا.'));
         return false;
       }
+      const verified=await serverSubscriptionStatus(subscription);
+      if(verified!=='enabled')throw new Error('push_server_verification_'+verified);
       lastPushHealthAt=Date.now();
       lastPushHealthFailedAt=0;
       if(requestPermission&&typeof toast==='function')toast(lang('Notifications enabled.','تم تفعيل الإشعارات.'));
@@ -392,7 +406,7 @@
         const sub=await pushWithTimeout(currentSubscription(),'desktop_subscription',8000);
         const status=sub?await serverSubscriptionStatus(sub):'missing';
         health.textContent= status==='active'||status==='enabled'||status==='registered'
-          ?lang('Notifications: allowed. Background subscription: registered. Windows Focus/Do Not Disturb settings may still suppress banners.',
+          ?lang('Subscription registered. For closed-app alerts, enable Edge background apps and Windows notification banners. Test using a real message from another account.',
                 'الإشعارات مسموحة والاشتراك مسجل. قد تمنع إعدادات عدم الإزعاج في ويندوز ظهور التنبيه.')
           :sub&&status==='unknown'
             ?lang('Browser subscription exists, but server delivery could not be verified. Use Repair background notifications.',
@@ -408,7 +422,7 @@
     if(repair)repair.onclick=async()=>{
       repair.disabled=true;
       try{
-        const ok=await ensureWebPush(true);
+        const ok=await ensureWebPush(true,true);
         if(typeof toast==='function')toast(ok
           ?lang('Background push registered successfully.','تم تسجيل اشتراك إشعارات الخلفية بنجاح.')
           :lang('Could not register background push. Check browser and Windows permissions.','تعذر تسجيل الإشعارات. افحص أذونات المتصفح وويندوز.'));
