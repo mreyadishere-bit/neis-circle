@@ -1,12 +1,19 @@
 /* Unified DM, Circle and Magnus dictation controls. */
 .neis-voice-controls{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;min-width:0;vertical-align:middle;align-self:center}
-.neis-voice-language{width:44px;min-width:44px;height:36px;padding:0 3px;border:1px solid var(--line,#d7e0e9);border-radius:9px;background:var(--card,#fff);color:var(--ink,#253546);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+
 .neis-voice-mic{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;min-height:38px;border:1px solid var(--line,#d7e0e9);border-radius:12px;background:var(--card,#fff);color:var(--muted,#62748a);padding:0;cursor:pointer;touch-action:manipulation}
 .neis-voice-mic svg{display:block;pointer-events:none}
 .neis-voice-mic.is-listening{background:color-mix(in srgb,#e34848 13%,var(--card,#fff));border-color:#e34848;color:#d63838;animation:neis-voice-pulse 1.5s ease-in-out infinite}
-.neis-voice-mic:focus-visible,.neis-voice-language:focus-visible{outline:2px solid var(--accent,#2573b4);outline-offset:2px}
+.neis-voice-mic:focus-visible{outline:2px solid var(--accent,#2573b4);outline-offset:2px}
 .neis-voice-status{display:block;font-size:11px;line-height:1.4;color:var(--muted,#62748a);padding:0 10px;max-height:46px;overflow-wrap:anywhere}
 .neis-voice-status:empty{display:none}
 @keyframes neis-voice-pulse{50%{box-shadow:0 0 0 4px rgba(227,72,72,.15)}}
 @media(prefers-reduced-motion:reduce){.neis-voice-mic.is-listening{animation:none}}
-@media(max-width:450px){.neis-voice-language{width:39px;min-width:39px;font-size:10px}.neis-voice-mic{width:36px;height:36px;flex-basis:36px}.neis-voice-controls{gap:2px}}
+@media(max-width:450px){.neis-voice-mic{width:36px;height:36px;flex-basis:36px}.neis-voice-controls{gap:2px}}
+
+/* Same single-mic appearance as Timetable AI, without a language chip. */
+.neis-voice-controls{gap:0;flex:0 0 auto}
+.neis-voice-mic.ttai-mic{width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;flex:0 0 36px!important;border:0!important;border-radius:10px!important;background:transparent!important;color:var(--muted,#65758a)!important;box-shadow:none!important;padding:7px!important;display:grid!important;place-items:center!important}
+.neis-voice-mic.ttai-mic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8}
+.neis-voice-mic.ttai-mic:hover{background:color-mix(in srgb,var(--ink,#182b24) 5%,transparent)!important}
+.neis-voice-mic.ttai-mic.is-listening{color:#d33b42!important;background:color-mix(in srgb,#d33b42 9%,transparent)!important}
