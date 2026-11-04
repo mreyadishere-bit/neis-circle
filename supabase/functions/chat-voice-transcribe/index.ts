@@ -38,7 +38,7 @@ Deno.serve(async(request:Request)=>{
   const timeout=setTimeout(()=>controller.abort(),18000);
   let response:Response;
   try{
-   response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",{
+   response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",{
     method:"POST",signal:controller.signal,
     headers:{"x-goog-api-key":key,"content-type":"application/json"},
     body:JSON.stringify({
