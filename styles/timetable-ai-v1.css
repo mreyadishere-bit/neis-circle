@@ -232,3 +232,14 @@
 .ttai-save-warning{margin:0 0 5px;font-size:11px;line-height:1.5;color:var(--muted,#65758a);text-align:center}
 .ttai-issues{scroll-margin-top:12px}
 .ttai-issue-card{scroll-margin-top:12px}
+
+/* Interactive timetable subject picker */
+.ttai-subject-picker{padding:13px;margin:10px 0;display:grid;gap:11px;background:var(--card,#fff);border:1px solid var(--line,#d6e2ec);border-radius:16px;min-width:0}
+.ttai-subject-picker>strong{font-size:14px;color:var(--ink,#223044)}
+.ttai-subject-picker>p{font-size:12px;line-height:1.5;color:var(--muted,#65758a);margin:0}
+.ttai-picker-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ttai-subject-card{font:inherit;font-size:12px;text-align:start;line-height:1.4;min-height:46px;padding:9px 10px;background:var(--card,#fff);color:var(--ink,#223044);border:1px solid var(--line,#d6e2ec);border-radius:12px;cursor:pointer;overflow-wrap:anywhere}
+.ttai-subject-card.selected{border-color:var(--accent,#2573b4);background:color-mix(in srgb,var(--accent,#2573b4) 12%,var(--card,#fff))}
+.ttai-subject-card:focus-visible{outline:2px solid var(--accent,#2573b4);outline-offset:2px}
+.ttai-subject-picker>.ttai-apply{min-height:44px}
+@media(max-width:360px){.ttai-picker-grid{grid-template-columns:minmax(0,1fr)}}
