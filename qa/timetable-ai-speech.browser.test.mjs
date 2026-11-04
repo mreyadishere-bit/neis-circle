@@ -19,9 +19,9 @@ try{
         }},
         rpc:async()=>({data:[],error:null})
       };
-      window.__aborted=0;
+      window.__aborted=0;window.__starts=0;
       window.SpeechRecognition=class MockRecognition{
-        start(){window.__speech=this}
+        start(){window.__starts++;window.__speech=this}
         abort(){window.__aborted++}
       };
     });
@@ -42,6 +42,14 @@ try{
       });
     });
     assert.equal(await page.locator('.ttai-input').inputValue(),'help me manage my timetable');
+    assert.equal(await page.evaluate(()=>window.__speech.continuous),true,
+      'speech recognition requests continuous listening');
+    await page.evaluate(()=>window.__speech.onend());
+    await page.waitForFunction(()=>window.__starts>=2,null,{timeout:3500});
+    assert.equal(await mic.getAttribute('aria-label'),'Stop dictation',
+      'natural speech pause must not stop recording');
+    assert.equal(await page.locator('.ttai-input').inputValue(),'help me manage my timetable',
+      'restarting after silence must preserve the current transcript');
     assert.equal(await page.evaluate(()=>window.__requests.length),0,'speech-to-text must never auto-send');
     await page.locator('.ttai-input').fill('help me manage my timetable please');
     await page.locator('.ttai-send').click();
