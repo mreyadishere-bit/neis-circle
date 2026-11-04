@@ -61,7 +61,7 @@ def verify_route():
 def main():
  require((STAGE/'index.ts').is_file(),'SOURCE_NOT_STAGED')
  source=(STAGE/'index.ts').read_text()
- require('gemini-3.5-flash-lite' in source and 'inlineData' in source,
+ require('gemini-3.1-flash-lite' in source and 'inlineData' in source,
          'OPTIMIZATION_MISSING')
  run(cmd()+['config','--quiet'])
  before=config()
