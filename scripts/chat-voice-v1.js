@@ -8,8 +8,8 @@ if(window.__neisChatVoiceV1)return;
 window.__neisChatVoiceV1=true;
 const targets=["liveChatInput","circleChatInput","magnusInput"];
 const SUPPORTED=["audio/webm;codecs=opus","audio/webm","audio/mp4","audio/ogg;codecs=opus"];
-const clipLength=4000;
-const maxParallel=2;
+// Keep one uninterrupted recording. Four-second cuts lose words at their edges.
+const MAX_RECORDING_BYTES=1_350_000;
 let active=null;
 const tr=(ar,en)=>document.documentElement.lang?.startsWith("ar")?ar:en;
 const formatError=(err)=>String(err?.message||err||"").slice(0,140);
@@ -56,24 +56,87 @@ function startMeter(s){
   s.meterFrame=requestAnimationFrame(render);
  }catch(_){stopMeter(s)}
 }
+function setVoiceStatus(s,ar,en){
+ if(s.status?.isConnected)s.status.textContent=tr(ar,en);
+}
 function finalize(s){
- if(!s.stopped||!s.recorderEnded||s.pending!==0||s.nextCommit!==s.sequence||s.finalized)return;
+ if(!s.stopped||!s.recorderEnded||s.processing||s.finalized)return;
  s.finalized=true;
- if(s.input.isConnected&&!s.discardPending&&s.transcript.trim()){
-  // Commit once on Stop; never overwrite what the student typed meanwhile.
-  update(s.input,combine(s.input.value.trim(),s.transcript.trim()));
+ if(s.discardPending){
+  setVoiceStatus(s,"","");
+  s.chunks=[];
+  return;
  }
- if(s.status?.isConnected){
-  s.status.textContent=s.totalFailed
-   ?tr("اكتمل التفريغ، لكن في أجزاء صوتية ما اتعرفتش بدقة.","Done, but some audio couldn't be transcribed.")
-   :"";
+ const audio=new Blob(s.chunks,{type:s.mime});
+ s.chunks=[];
+ if(audio.size<1500){
+  setVoiceStatus(s,"لم ألتقط كلامًا واضحًا. جرّب التسجيل تاني.","No speech captured. Please try again.");
+  return;
  }
+ if(audio.size>MAX_RECORDING_BYTES){
+  setVoiceStatus(s,"التسجيل طويل جدًا لهذا الطلب. جرّب كلامًا أقصر.","This recording exceeds the speech service size limit. Try a shorter recording.");
+  return;
+ }
+ // Transcribe the *entire* recording as one coherent utterance. No
+ // artificial four-second cuts or lost words at the clip boundaries.
+ s.processing=true;
+ setVoiceStatus(s,"بجهز كلامك…","Transcribing your speech…");
+ (async()=>{
+  try{
+   const words=await recognizeClip(s,audio);
+   if(!s.discardPending&&s.input.isConnected&&words){
+    update(s.input,combine(s.input.value.trim(),words));
+    setVoiceStatus(s,"","");
+   }else if(!words) setVoiceStatus(s,"لم أسمع كلامًا واضحًا. جرّب تاني.","No clear speech detected. Try again.");
+  }catch(error){
+   console.warn("[NEIS dictation]",formatError(error));
+   // Keep audio in memory for a manual retry. Never show an incomplete text.
+   if(!s.discardPending){
+    s.retryAudio=audio;
+    setVoiceStatus(s,"تعذّر التفريغ مؤقتًا. اضغط إعادة المحاولة بدون تسجيل جديد.","Transcription failed. Tap Retry without recording again.");
+    showRetry(s);
+   }
+  }finally{
+   s.processing=false;
+  }
+ })();
+}
+function showRetry(s){
+ if(!s.retryAudio||!s.status?.isConnected)return;
+ let button=s.status.querySelector?.(".neis-voice-retry");
+ if(!button){
+  button=document.createElement("button");
+  button.type="button";
+  button.className="neis-voice-retry";
+  button.textContent=tr("إعادة المحاولة","Retry");
+  s.status.append(" ",button);
+ }
+ button.onclick=async()=>{
+  if(s.processing||!s.retryAudio)return;
+  s.processing=true;
+  button.disabled=true;
+  const audio=s.retryAudio;
+  try{
+   const words=await recognizeClip(s,audio);
+   if(!s.discardPending&&s.input.isConnected&&words){
+    update(s.input,combine(s.input.value.trim(),words));
+    s.retryAudio=null;
+    setVoiceStatus(s,"","");
+   }else{
+    setVoiceStatus(s,"لم أسمع كلامًا واضحًا. جرّب تاني.","No clear speech detected. Try again.");
+    s.retryAudio=null;
+   }
+  }catch(error){
+   console.warn("[NEIS dictation retry]",formatError(error));
+   setVoiceStatus(s,"التفريغ لسه مش متاح. جرّب تاني.","Speech service is still unavailable. Please retry.");
+   showRetry(s);
+  }finally{s.processing=false;button.disabled=false}
+ };
 }
 function stop(s=active,{discard=false}={}){
  if(!s||s.stopped)return;
  s.discardPending=s.discardPending||discard;
  s.stopped=true;if(active===s)active=null;
- clearTimeout(s.timer);
  if(s.button?.isConnected){
   s.button.classList.remove("is-listening");
   s.button.setAttribute("aria-pressed","false");
@@ -83,16 +146,14 @@ function stop(s=active,{discard=false}={}){
  try{
   if(s.recorder?.state==="recording")s.recorder.stop();
   else if(!s.recorder)s.recorderEnded=true;
-  // An inactive recorder may still have an onstop event pending with its
-  // final audio data. Wait for that event before committing the transcript.
  }catch(_){s.recorderEnded=true}
  try{s.stream?.getTracks().forEach(t=>t.stop())}catch(_){}
- if(s.status?.isConnected)s.status.textContent=tr("جاري تجهيز الكلام…","Finishing transcription…");
+ if(!s.discardPending)setVoiceStatus(s,"بجهز كلامك…","Preparing transcription…");
  finalize(s);
 }
 async function recognizeClip(s,blob){
  if(blob.size<1500)return;
- if(blob.size>1350000){if(s.status.isConnected)s.status.textContent=tr("المقطع كبير جدًا، حاول مرة تانية.","Audio clip too large; please retry.");return}
+ if(blob.size>MAX_RECORDING_BYTES)throw Error("VOICE_TOO_LARGE");
  const bytes=await blob.arrayBuffer();
  const a=new Uint8Array(bytes);
  let base64="";
@@ -110,77 +171,25 @@ async function recognizeClip(s,blob){
  }
  return data.text.trim();
 }
-// Run up to two independent transcription requests at a time, while committing
-// their results in recording order (not response order). This cuts latency on
-// slow networks without scrambling Arabic/English mixed speech.
-function flushResults(s){
- while(s.results.has(s.nextCommit)){
-  const result=s.results.get(s.nextCommit);
-  s.results.delete(s.nextCommit++);
-  if(result.error){
-   s.failedClips++;s.totalFailed++;
-   const detail=formatError(result.error).toLowerCase();
-   console.warn('[NEIS voice clip]',formatError(result.error));
-   if(s.status?.isConnected){
-    s.status.textContent=detail.includes('rate_limit')||detail.includes('429')||detail.includes('provider_limit')
-     ?tr("خدمة التفريغ مشغولة. حاول تاني بعد شوية.","Speech service is busy. Please retry shortly.")
-     :detail.includes('authentication')||detail.includes('401')
-      ?tr("سجّل الدخول من جديد عشان تحول الصوت لكلام.","Sign in again to use speech-to-text.")
-      :tr("تعذر تحويل جزء من الصوت؛ التسجيل مستمر.","A short clip failed; still listening.");
-   }
-  }else{
-   s.failedClips=0;
-   if(result.words&&!s.discardPending){
-    // Hold private interim text until the student taps Stop Dictation.
-    s.transcript=combine(s.transcript,result.words);
-   }
-   if(!s.stopped&&s.status?.isConnected)s.status.textContent=tr("جاري الاستماع…","Listening…");
-  }
- }
- finalize(s);
-}
-function pumpClips(s){
- while(s.inflight<maxParallel&&s.jobs.length){
-  const job=s.jobs.shift();
-  s.inflight++;
-  (async()=>{
-   try{s.results.set(job.id,{words:await recognizeClip(s,job.blob)})}
-   catch(error){s.results.set(job.id,{error})}
-   finally{
-    s.inflight--;s.pending--;
-    // Do not leave a permanently blocking gap when the network fails.
-    flushResults(s);
-    pumpClips(s);
-   }
-  })();
- }
-}
-function queue(s,blob){
- if(!blob||blob.size<1500)return;
- if(s.pending>=6&&!s.stopped){
-  if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ هكمل التسجيل مع تخطي مقطع واحد.","Connection slow; skipping a clip while continuing to listen.");
-  return;
- }
- const id=s.sequence++;
- s.pending++;
- s.jobs.push({id,blob});
- pumpClips(s);
-}
-function nextClip(s){
- if(s.stopped||!s.input.isConnected)return;
- const rec=new MediaRecorder(s.stream,{mimeType:s.mime,audioBitsPerSecond:32000});
- s.recorder=rec;const chunks=[];
- rec.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
- rec.onerror=()=>{if(!s.stopped){s.status.textContent=tr("مشكلة في التسجيل.","Recording error.");stop(s)}};
- rec.onstop=()=>{
-  if(chunks.length)queue(s,new Blob(chunks,{type:s.mime}));
-  if(s.stopped){
-   s.recorderEnded=true;
-   finalize(s);
-  }else if(s.input.isConnected)nextClip(s);
+function startRecording(s){
+ // A single MediaRecorder stays running until Stop. Timeslice blobs are
+ // concatenated to one valid media recording before being sent.
+ const recorder=new MediaRecorder(s.stream,{mimeType:s.mime,audioBitsPerSecond:32000});
+ s.recorder=recorder;
+ recorder.ondataavailable=event=>{
+  if(event.data?.size)s.chunks.push(event.data);
  };
- rec.start();
- s.timer=setTimeout(()=>{if(rec.state==="recording"){try{rec.stop()}catch(_){stop(s)}}},clipLength);
+ recorder.onerror=()=>{
+  if(!s.stopped){
+   setVoiceStatus(s,"حدث خطأ أثناء تسجيل الصوت.","Audio capture encountered an error.");
+   stop(s);
+  }
+ };
+ recorder.onstop=()=>{
+  s.recorderEnded=true;
+  finalize(s);
+ };
+ recorder.start(1000);
 }
 async function start(input,button,status){
  if(active?.input===input){stop();return}
@@ -194,14 +203,14 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,totalFailed:0,stopped:false,discardPending:false,recorderEnded:false,finalized:false,transcript:"",meterFrame:0};
+ const s={input,button,status,stream,mime,recorder:null,chunks:[],stopped:false,discardPending:false,recorderEnded:false,finalized:false,processing:false,retryAudio:null,meterFrame:0};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  button.setAttribute("aria-label",tr("إيقاف الإملاء الصوتي وإظهار الكلام","Stop dictation and insert text"));
  status.textContent=tr("جاري الاستماع… اضغط إيقاف لإظهار الكلام.","Listening… tap Stop to insert the text.");
  startMeter(s);
  stream.getTracks().forEach(t=>t.addEventListener("ended",()=>stop(s),{once:true}));
- try{nextClip(s)}catch(e){status.textContent=tr("تعذر بدء التسجيل.","Could not start recording.");stop(s)}
+ try{startRecording(s)}catch(e){status.textContent=tr("تعذر بدء التسجيل.","Could not start recording.");stop(s)}
 }
 function mount(input){
  const form=input.closest("form");
