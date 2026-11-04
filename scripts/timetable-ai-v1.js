@@ -11,7 +11,7 @@ const editable=["title","day_of_week","start_time","end_time","location","notes"
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
     attach:"Attach PDF or image",placeholder:"Ask about your timetable…",send:"Send",apply:"Save to my timetable",
-    review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
+    review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",thinking:"Thinking about your question…",voice:"Speak your message",voiceStop:"Stop dictation",voiceListening:"Listening…",voiceUnsupported:"Speech-to-text is not supported in this browser. You can use your keyboard microphone.",voiceDenied:"Microphone permission was denied. Please allow microphone access in your browser.",voiceError:"Could not recognize speech. Please try again.",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
     privacy:"AI timetable requests and attached PDF/image schedules are processed by Google Gemini (gemini-3.8-flash). Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 15 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
@@ -19,7 +19,7 @@ const labels={
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
   ar:{title:"مساعد الجدول الذكي",intro:"قولّي مواعيد حصصك أو ارفع صورة أو PDF، وأنا أجهز لك جدول تراجعه قبل الحفظ.",
     attach:"إرفاق صورة أو PDF",placeholder:"اسأل عن جدولك أو عدّله…",send:"إرسال",apply:"حفظ في جدولي",
-    review:"مراجعة التعديلات",discard:"إلغاء المسودة",undo:"تراجع",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
+    review:"مراجعة التعديلات",discard:"إلغاء المسودة",undo:"تراجع",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",thinking:"بجهّز إجابة لسؤالك…",voice:"إملاء صوتي",voiceStop:"إيقاف الإملاء",voiceListening:"بسمعك…",voiceUnsupported:"المتصفح لا يدعم تحويل الصوت إلى نص. ممكن تستخدم ميكروفون لوحة المفاتيح.",voiceDenied:"اسمح باستخدام الميكروفون من إعدادات المتصفح.",voiceError:"لم أتمكن من تحويل الكلام إلى نص. جرّب مرة تانية.",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
     privacy:"الرسائل وملفات الجدول (PDF أو صور) بتتبعت لـGoogle Gemini (gemini-3.8-flash) للمعالجة البصرية المباشرة. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 15 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
@@ -27,7 +27,21 @@ const labels={
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
 const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,draftHistory:[],original:[],baseline:[],
-  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null};
+  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,voiceRecognition:null,advicePending:false};
+function stopVoice(){
+  const recognition=stateAI.voiceRecognition;
+  stateAI.voiceRecognition=null;
+  if(recognition){
+    recognition.onresult=null;
+    recognition.onerror=null;
+    recognition.onend=null;
+    try{recognition.abort()}catch(_){}
+  }
+}
+function isAdviceQuestion(text,file){
+  return !file && /(?:\\b(?:how|help|tips?|advice|recommend|suggest|explain|best|ways?|manage|organize|organise|balance|prioritize|improve)\\b|إزاي|كيف|ساعدني|نصائح|أفضل طريقة|أنظم|تنظيم)/i.test(text) &&
+    /(?:\\b(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|classes|focus|productivity)\\b|ذاكر|تنظيم|جدول|مذاكرة|وقت|دراسة)/i.test(text);
+}
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
 function isTimetable(){return typeof state!=="undefined" && state.view==="timetable"&&
@@ -138,6 +152,7 @@ function ensurePanel(){
   return panel;
 }
 function draw(){
+  stopVoice();
   const panel=ensurePanel();
   if(!stateAI.open){
     panel.hidden=true;
@@ -172,7 +187,7 @@ function draw(){
   chat.setAttribute("role","log");chat.setAttribute("aria-live","polite");
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
-  if(stateAI.busy)chat.append(message(t("busy"),"pending"));
+  if(stateAI.busy)chat.append(message(t(stateAI.advicePending?"thinking":"busy"),"pending"));
   if(stateAI.lastFailed && !stateAI.busy){
     const retry=el("button","ttai-retry",t("retry"));
     retry.type="button";
@@ -250,10 +265,71 @@ function draw(){
       if(!stateAI.busy&&!stateAI.saving)compose.requestSubmit();
     }
   };
+  const speechConstructor=typeof window!=="undefined"?
+    (window.SpeechRecognition||window.webkitSpeechRecognition):null;
+  const mic=el("button","ttai-mic");
+  mic.type="button";
+  mic.setAttribute("aria-label",t("voice"));
+  mic.title=speechConstructor?t("voice"):t("voiceUnsupported");
+  mic.disabled=stateAI.busy||stateAI.saving||!speechConstructor;
+  // Lucide-style outline microphone matches the existing minimal UI.
+  mic.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>';
+  const voiceStatus=el("span","ttai-speech-status");
+  voiceStatus.setAttribute("role","status");
+  voiceStatus.setAttribute("aria-live","polite");
+  mic.onclick=()=>{
+    if(stateAI.voiceRecognition){
+      stopVoice();
+      mic.classList.remove("is-listening");
+      mic.setAttribute("aria-label",t("voice"));
+      mic.title=t("voice");
+      voiceStatus.textContent="";
+      return;
+    }
+    if(!speechConstructor)return;
+    let recognition;
+    try{recognition=new speechConstructor()}catch(_){voiceStatus.textContent=t("voiceError");return}
+    recognition.lang=lang()==="ar"?"ar-EG":"en-US";
+    recognition.continuous=false;
+    recognition.interimResults=true;
+    recognition.maxAlternatives=1;
+    const initial=input.value.trim();
+    stateAI.voiceRecognition=recognition;
+    mic.classList.add("is-listening");
+    mic.setAttribute("aria-label",t("voiceStop"));
+    mic.title=t("voiceStop");
+    voiceStatus.textContent=t("voiceListening");
+    recognition.onresult=event=>{
+      if(stateAI.voiceRecognition!==recognition)return;
+      const spoken=Array.from(event.results||[]).map(item=>item[0]?.transcript||"").join(" ").trim();
+      input.value=[initial,spoken].filter(Boolean).join(" ").slice(0,input.maxLength);
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+      // Deliberately do not submit; students must review recognized words.
+    };
+    recognition.onerror=event=>{
+      if(stateAI.voiceRecognition!==recognition)return;
+      voiceStatus.textContent=event.error==="not-allowed"||event.error==="service-not-allowed"?t("voiceDenied"):
+        event.error==="no-speech"?"":t("voiceError");
+    };
+    recognition.onend=()=>{
+      if(stateAI.voiceRecognition!==recognition)return;
+      stateAI.voiceRecognition=null;
+      mic.classList.remove("is-listening");
+      mic.setAttribute("aria-label",t("voice"));
+      mic.title=t("voice");
+      if(voiceStatus.textContent===t("voiceListening"))voiceStatus.textContent="";
+    };
+    try{recognition.start()}catch(_){
+      stateAI.voiceRecognition=null;
+      mic.classList.remove("is-listening");
+      mic.setAttribute("aria-label",t("voice"));
+      voiceStatus.textContent=t("voiceError");
+    }
+  };
   const send=el("button","ttai-send","➤");
   send.type="submit";send.title=t("send");send.setAttribute("aria-label",t("send"));
   send.disabled=stateAI.busy||stateAI.saving;
-  compose.append(attach,input,send);
+  compose.append(attach,input,mic,send);
   compose.onsubmit=event=>{
     event.preventDefault();const text=input.value.trim();
     if(!text&&!stateAI.file)return;
@@ -261,7 +337,7 @@ function draw(){
     if(window.matchMedia('(max-width:760px)').matches||document.documentElement.classList.contains('neis-native-app'))input.blur();
     void submit(text);
   };
-  footer.append(compose);
+  footer.append(compose,voiceStatus);
   panel.append(footer);
   // Keep the message pane independently scrollable. A visualViewport resize
   // must resize this pane, never drag the entire page or hide the AI messages.
@@ -324,6 +400,8 @@ async function invokeWithDeadline(body){
 async function submit(text,retrying=false){
   if(stateAI.busy||stateAI.saving)return;
   const file=stateAI.file;
+  stopVoice();
+  stateAI.advicePending=isAdviceQuestion(text,file);
   stateAI.busy=true;
   if(retrying && stateAI.lastFailed){
     // Do not duplicate a failed prompt in conversational memory.
@@ -372,7 +450,7 @@ async function submit(text,retrying=false){
     const safe=String(e?.message||t("error"));
     stateAI.history.push({role:"assistant",text:safe,isError:true});
   }finally{
-    stateAI.busy=false;draw();
+    stateAI.busy=false;stateAI.advicePending=false;draw();
   }
 }
 async function applyPlan(){
