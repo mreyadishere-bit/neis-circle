@@ -4439,3 +4439,7 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
     min-width:0;
   }
 }
+
+/* Dark theme clarity: remove the full-screen fractal turbulence texture.
+   Preserve the original smooth surfaces, text rendering, shadows and colors. */
+html[data-theme="dark"] .grain{display:none!important;background-image:none!important}
