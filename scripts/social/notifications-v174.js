@@ -57,6 +57,18 @@
     return true;
   }
 
+  // Chromium / Edge installed PWAs expose the App Badging API on supported
+  // Windows versions. It is separate from notification permissions.
+  let lastBadgeCount=-1;
+  function updateInstalledAppBadge(count){
+    const value=Math.max(0,Math.min(999,Number(count)||0));
+    if(value===lastBadgeCount)return;
+    lastBadgeCount=value;
+    try{
+      const job=value?navigator.setAppBadge?.(value):navigator.clearAppBadge?.();
+      Promise.resolve(job).catch(()=>{lastBadgeCount=-1});
+    }catch(_){lastBadgeCount=-1}
+  }
   function updateTabBadge(){
     if(typeof document==='undefined')return;
     const rows=state.notifications||[];
@@ -76,6 +88,7 @@
     const unread=rows.filter(n=>!n.read_at).length;
     const label=unread>99?'99+':String(unread);
     document.title=unread?'('+label+') '+DEFAULT_TAB_TITLE:DEFAULT_TAB_TITLE;
+    updateInstalledAppBadge(unread);
   }
 
   const same=(a,b)=>String(a)===String(b);
