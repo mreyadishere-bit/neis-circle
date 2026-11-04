@@ -3,13 +3,15 @@
 import copy,json,pathlib,shutil,subprocess,sys,uuid,urllib.request,urllib.error
 ROOT=pathlib.Path('/home/ubuntu/neis-supabase')
 STAGE=pathlib.Path('/home/ubuntu/neis-backups/magnus-speed-20261103')
-OVERLAY=ROOT/'docker-compose.magnus-neis.yml'
+# The active edge mount is currently controlled by the voice release overlay.
+# Put that overlay LAST so parity compares with the running container.
+OVERLAY=ROOT/'docker-compose.chat-voice-transcribe.yml'
 DOCKER=['sudo','-n','/usr/bin/docker']
 BASE=['docker-compose.yml','docker-compose.security.yml','docker-compose.caddy.yml',
       'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml']
 EXTRA=['docker-compose.edge-integrations.yml','docker-compose.timetable-ai.yml',
        'docker-compose.timetable-ai-gemini.yml','docker-compose.timetable-ai-cloudflare.yml',
-       'docker-compose.timetable-fast-chat.yml','docker-compose.chat-voice-transcribe.yml']
+       'docker-compose.timetable-fast-chat.yml','docker-compose.magnus-neis.yml']
 REV=uuid.uuid4().hex[:12]
 def require(value,code):
  if not value:raise RuntimeError(code)
