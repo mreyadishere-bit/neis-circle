@@ -21,6 +21,7 @@ import shutil
 import sys
 import urllib.error
 import urllib.request
+import time
 import uuid
 
 STAGE=Path('/home/ubuntu/neis-backups/timetable-ai-gemini-20261102-v3')
@@ -105,17 +106,31 @@ def write_overlay_atomic(data):
         tmp.unlink(missing_ok=True)
 
 def verify_timetable_auth_gate():
+    # A newly recreated Edge functions service may need several seconds to
+    # mount and begin accepting requests. Never skip the unauthenticated
+    # access check: require 401 (and fail closed on unexpected 2xx).
     req=urllib.request.Request(
        'https://supabase.neiscircle.site/functions/v1/timetable-ai',
        data=b'{"prompt":"ping"}',
        headers={'Content-Type':'application/json'},
        method='POST')
-    try:
-        with urllib.request.urlopen(req,timeout=18) as response:
-            status=response.status
-    except urllib.error.HTTPError as error:
-        status=error.code
-    require(status==401,'TIMETABLE_EDGE_AUTH_GATE_NOT_READY')
+    last='unknown'
+    for attempt in range(12):
+        try:
+            with urllib.request.urlopen(req,timeout=8) as response:
+                last=response.status
+        except urllib.error.HTTPError as error:
+            last=error.code
+        except (urllib.error.URLError,TimeoutError,OSError) as error:
+            last=type(error).__name__
+        if last==401:
+            print('TIMETABLE_EDGE_AUTH_GATE=401_VERIFIED')
+            return
+        if isinstance(last,int) and 200<=last<300:
+            raise RuntimeError('TIMETABLE_EDGE_AUTH_GATE_UNEXPECTED_PUBLIC_ACCESS')
+        if attempt<11:
+            time.sleep(2)
+    raise RuntimeError('TIMETABLE_EDGE_AUTH_GATE_NOT_READY_LAST_STATUS_'+str(last))
 
 def deploy(h,before,active,other):
     old_overlay=OVERLAY.read_bytes()
