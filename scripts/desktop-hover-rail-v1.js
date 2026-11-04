@@ -3,7 +3,7 @@
 (()=>{
 'use strict';
 const KEY='neis-desktop-sidebar-pinned-v1';
-const screen=window.matchMedia('(min-width: 1024px)');
+const screen=window.matchMedia('(min-width: 761px)');
 const hoverCapable=window.matchMedia('(hover: hover) and (pointer: fine)');
 const reduceMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 let initialized=false;
