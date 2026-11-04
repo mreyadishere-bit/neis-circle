@@ -95,16 +95,10 @@
     }
   }
 
-  const APP_INSTALLED_KEY='neis-pwa-installed-on-device-v1';
-  function rememberInstalled(){
-    try{localStorage.setItem(APP_INSTALLED_KEY,'1')}catch(_){}
-  }
-  function knownInstalled(){
-    if(isStandalone()){rememberInstalled();return true}
-    try{return localStorage.getItem(APP_INSTALLED_KEY)==='1'}catch(_){return false}
-  }
+  // The installation prompt is hidden only while running in standalone mode.
+  // A regular browser tab always shows it, even after a previous install.
   function updateInstallUI(){
-    const installed=knownInstalled();
+    const installed=isStandalone();
     document.querySelectorAll('[data-pwa-install-card]').forEach(card=>{
       card.classList.toggle('hidden',installed);
     });
@@ -134,7 +128,6 @@
       const result=await prompt.userChoice.catch(()=>null);
       updateInstallUI();
       if(result?.outcome==='accepted'){
-        rememberInstalled();
         updateInstallUI();
         if(typeof toast==='function')toast(lang('NEIS Circle installed.','تم تثبيت NEIS Circle.'));
       }
@@ -762,7 +755,6 @@
   });
   window.addEventListener('appinstalled',()=>{
     deferredInstallPrompt=null;
-    rememberInstalled();
     updateInstallUI();
     if(typeof toast==='function')toast(lang('NEIS Circle installed.','تم تثبيت NEIS Circle.'));
   });
