@@ -200,3 +200,75 @@ body.mobile-nav-open{overflow:hidden}
  .ttai-panel .ttai-mic{width:32px;height:34px;min-width:32px;flex-basis:32px}
  .ttai-panel .ttai-send{width:34px;flex-basis:34px}
 }
+
+/* 2026-11-04 Admin theme and responsive audit.
+ * Some legacy OVH cards used --surface2 and fell back to #f3f5f7 even
+ * when html[data-theme=dark]. Scope fixes to Admin only; no data logic. */
+#view #neisServerUsage,
+#view #neisDbPanel{
+ box-sizing:border-box!important;max-width:100%;min-width:0;
+ background:var(--card)!important;color:var(--ink)!important;
+ border:1px solid var(--line)!important;
+}
+#view #neisServerUsage *,
+#view #neisDbPanel *{box-sizing:border-box}
+#view #neisServerUsage .neis-usage-card,
+#view #neisDbPanel .nd-card{
+ background:var(--soft)!important;color:var(--ink)!important;
+ border:1px solid var(--line)!important;
+ min-width:0;overflow-wrap:anywhere;
+}
+#view #neisServerUsage :is(h2,h3,b,.neis-usage-value),
+#view #neisDbPanel :is(h2,h3,.nd-value){color:var(--ink)!important}
+#view #neisServerUsage .neis-usage-muted,
+#view #neisServerUsage .neis-usage-label,
+#view #neisDbPanel .nd-sub{color:var(--muted)!important;opacity:1!important}
+#view #neisServerUsage .neis-usage-grid,
+#view #neisServerUsage .neis-usage-lower,
+#view #neisDbPanel .nd-grid{min-width:0}
+#view #neisServerUsage .neis-usage-chart{max-width:100%;overflow:visible}
+#view #neisServerUsage .neis-usage-alert{
+ color:var(--ink);border-color:var(--line);background:var(--soft);
+}
+#view #neisServerUsage .neis-usage-pill{
+ color:var(--ink);border:1px solid var(--line);
+}
+#view #neisServerUsage [data-neis-usage-refresh]{
+ color:var(--ink)!important;border-color:var(--line)!important;
+ background:var(--soft)!important;min-height:36px;
+}
+#view #neisServerUsage [data-neis-usage-refresh]:focus-visible,
+#view #neisDbPanel button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#view #neisDbPanel .nd-table-wrap,
+#view #neisServerUsage .neis-usage-lower > .neis-usage-card:has(table){
+ overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;
+}
+#view .admin-hero,
+#view .admin-hero~.module-card{min-width:0;max-width:100%}
+#view .admin-hero~.module-card input,
+#view .admin-hero~.module-card select,
+#view .admin-hero~.module-card textarea{
+ max-width:100%;min-width:0;color:var(--ink);
+}
+#view .admin-hero~.module-card :is(table,.admin-table){max-width:100%}
+@media(max-width:900px){
+ #view #neisServerUsage .neis-usage-lower{grid-template-columns:minmax(0,1fr)!important}
+ #view #neisServerUsage .neis-usage-grid,
+ #view #neisDbPanel .nd-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:560px){
+ #view #neisServerUsage,
+ #view #neisDbPanel{padding:15px!important;margin-block:12px!important;border-radius:16px}
+ #view #neisServerUsage .neis-usage-grid,
+ #view #neisDbPanel .nd-grid{grid-template-columns:minmax(0,1fr)!important;gap:9px}
+ #view #neisServerUsage .neis-usage-top,
+ #view #neisDbPanel .nd-head{align-items:flex-start;gap:10px}
+ #view #neisServerUsage .neis-usage-card,
+ #view #neisDbPanel .nd-card{padding:13px!important;border-radius:12px}
+ #view #neisServerUsage .neis-usage-value{font-size:clamp(19px,5vw,25px)}
+ #view .admin-banner h1{font-size:clamp(25px,7vw,36px)}
+ #view .admin-hero~.module-card{padding:14px!important;margin-inline:0!important}
+ #view .admin-hero~.module-card :is(input,select,button,textarea){
+  font-size:max(12px,inherit);min-height:34px;
+ }
+}
