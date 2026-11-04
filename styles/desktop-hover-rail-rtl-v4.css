@@ -30,3 +30,40 @@
     text-align: start;
   }
 }
+/* Desktop rail: never expose truncated labels or pin while collapsed.
+   The original hover/pin mechanism controls is-expanded. */
+@media(min-width:1024px){
+ html body .rail.neis-hover-rail:not(.is-expanded){
+   overflow:hidden!important;min-width:0;max-width:var(--neis-rail-closed,84px)
+ }
+ html body .rail.neis-hover-rail:not(.is-expanded) .neis-rail-brand-name,
+ html body .rail.neis-hover-rail:not(.is-expanded) .nav-btn .neis-rail-label,
+ html body .rail.neis-hover-rail:not(.is-expanded) .neis-rail-pin-label{
+   visibility:hidden!important;opacity:0!important;pointer-events:none!important
+ }
+ html body .rail.neis-hover-rail:not(.is-expanded) .neis-rail-brand-name{
+   width:0!important;max-width:0!important;flex:0 0 0!important;
+   white-space:nowrap!important;overflow:hidden!important
+ }
+ html body .rail.neis-hover-rail:not(.is-expanded) .neis-rail-pin{
+   visibility:hidden!important;opacity:0!important;pointer-events:none!important
+ }
+ html body .rail.neis-hover-rail:not(.is-expanded) .rail-nav .nav-btn{
+   justify-self:center!important;max-width:48px!important;
+   overflow:hidden!important
+ }
+ html body .rail.neis-hover-rail.is-expanded{
+   min-width:var(--neis-rail-open,248px);overflow:hidden!important
+ }
+ html body .rail.neis-hover-rail.is-expanded .neis-rail-brand-name,
+ html body .rail.neis-hover-rail.is-expanded .nav-btn .neis-rail-label,
+ html body .rail.neis-hover-rail.is-expanded .neis-rail-pin-label{
+   visibility:visible!important;opacity:1!important
+ }
+ html body .rail.neis-hover-rail.is-expanded .neis-rail-pin{
+   visibility:visible!important;opacity:1!important
+ }
+}
+/* Added search categories wrap rather than clipping on smaller laptops. */
+#view .search-page-tools .tabs{display:flex;flex-wrap:wrap;gap:7px;max-width:100%}
+#view .search-page-tools .tabs button{white-space:nowrap}
