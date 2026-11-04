@@ -31,16 +31,21 @@ assert.equal(check('how should I manage my timetable?',true),false,'PDF attachme
 
 assert.ok(edge.indexOf('if (adviceOnly) {')<edge.indexOf('const response = await callGeminiWithRetry'),
  'plain text advice is routed before the structured extraction path');
-assert.match(edge,/model: PRIMARY_MODEL,[\s\S]*?maxOutputTokens: 450/,'general advice uses Gemini primary as text');
-assert.match(edge,/model: OVERLOAD_FALLBACK_MODEL,[\s\S]*?maxOutputTokens: 450/,'503 falls back to Gemini text mode');
+assert.match(edge,/model: PRIMARY_MODEL, contents: \[textRequest\], config: adviceConfig/,'general advice uses Gemini primary as text');
+assert.match(edge,/model: OVERLOAD_FALLBACK_MODEL, contents: \[textRequest\], config: adviceConfig/,'503 or incomplete answer falls back to Gemini text mode');
 assert.match(edge,/changed: false,\s*entries: draftEntries/,'advice never changes timetable');
 assert.match(edge,/provider: "offline-guidance"/,'dual Gemini 503 still yields transparent generic advice');
 assert.match(edge,/Gemini is temporarily busy, so here are practical general tips/,'offline advice clearly labeled');
 assert.match(edge,/لم أغير أي شيء في جدولك/,'Arabic fallback does not claim schedule changes');
 assert.match(edge,/adviceUnavailable\(fallbackError\)/,'offline advice is limited to transient Gemini 503 or timeouts');
-assert.match(edge,/timeout: 11000, headers: \{\}/,'advice HTTP requests have a bounded 11-second timeout');
+assert.match(edge,/timeout: 14000, headers: \{\}/,'advice HTTP requests have a bounded 14-second timeout');
 assert.match(edge,/if \(!adviceUnavailable\(adviceError\)\)/,'never fallback on authentication or quota errors');
 
+assert.match(edge,/maxOutputTokens: 1800/,'general advice has sufficient output budget');
+assert.match(edge,/finish !== "MAX_TOKENS"/,'reject incomplete model responses');
+assert.match(edge,/if \(!usableAdvice\(advice\)\) advice = null/,'incomplete answers trigger alternative model');
+assert.match(edge,/String\(advice\.text \?\? ""\)\.trim\(\)\.slice\(0, 5000\)/,'advice is not clipped to old 1800 character ceiling');
+assert.match(js,/Safe formatting for Gemini/,'Markdown emphasis is rendered without untrusted HTML');
 assert.match(edge,/responseSchema: TIMETABLE_RESPONSE_SCHEMA/,'PDF and timetable editing remain JSON-structured');
 assert.match(edge,/validateAndNormalizeEntries\(parsed\.entries\)/,'structured answer validation remains');
 assert.match(edge,/client\.auth\.getUser\(jwt\)/,'authenticated access remains');
