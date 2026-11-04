@@ -30,11 +30,12 @@ jobs:
           grep -Fq "MediaRecorder" scripts/chat-voice-v1.js
           grep -Fq "chat-voice-transcribe" scripts/chat-voice-v1.js
           grep -Fq "function mountTimetable()" scripts/chat-voice-v1.js
-          grep -Fq "s.failedClips>=3" scripts/chat-voice-v1.js
-          grep -Fq "s.pending>=3" scripts/chat-voice-v1.js
+          grep -Fq "const clipLength=4000" scripts/chat-voice-v1.js
+          grep -Fq "const maxParallel=2" scripts/chat-voice-v1.js
+          grep -Fq "function flushResults(s)" scripts/chat-voice-v1.js
           ! grep -Fq 'if(document.hidden)stop()' scripts/chat-voice-v1.js
           grep -Fq "styles/chat-voice-v1.css?v=20261104v3" index.html
-          grep -Fq "scripts/chat-voice-v1.js?v=20261104v4" index.html
+          grep -Fq "scripts/chat-voice-v1.js" index.html
       - name: Configure pinned SSH
         env:
           OVH_HOST: ${{ secrets.OVH_HOST }}
@@ -83,7 +84,7 @@ jobs:
           import sys
           p=Path(sys.argv[1]);h=p.read_text()
           css='<link rel="stylesheet" href="styles/chat-voice-v1.css?v=20261104v3">'
-          js='<script src="scripts/chat-voice-v1.js?v=20261104v4" defer></script>'
+          js='<script src="scripts/chat-voice-v1.js?v=voice-fast-${{ github.run_id }}" defer></script>'
           if h.count('styles/chat-voice-v1.css')>1 or h.count('scripts/chat-voice-v1.js')>1:raise SystemExit('DUPLICATE_VOICE_ASSET')
           import re
           if 'styles/chat-voice-v1.css' not in h:
@@ -93,7 +94,7 @@ jobs:
           if 'scripts/chat-voice-v1.js' not in h:
             h=h.replace('</body>',f'  {js}\n</body>')
           else:
-            h=re.sub(r'scripts/chat-voice-v1\.js\?v=[A-Za-z0-9_-]+','scripts/chat-voice-v1.js?v=20261104v4',h)
+            h=re.sub(r'scripts/chat-voice-v1\.js\?v=[A-Za-z0-9_-]+','scripts/chat-voice-v1.js?v=voice-fast-${{ github.run_id }}',h)
           if h.count('styles/chat-voice-v1.css')!=1 or h.count('scripts/chat-voice-v1.js')!=1:raise SystemExit('VOICE_ASSET_MISSING')
           p.write_text(h)
           PY
@@ -117,8 +118,8 @@ jobs:
           "${docker[@]}" exec "$cid" grep -Fq 'circleChatInput' /srv/neis-circle/scripts/chat-voice-v1.js
           "${docker[@]}" exec "$cid" grep -Fq 'liveChatInput' /srv/neis-circle/scripts/chat-voice-v1.js
           "${docker[@]}" exec "$cid" grep -Fq 'magnusInput' /srv/neis-circle/scripts/chat-voice-v1.js
-          "${docker[@]}" exec "$cid" grep -Fq 's.failedClips>=3' /srv/neis-circle/scripts/chat-voice-v1.js
-          "${docker[@]}" exec "$cid" grep -Fq 'scripts/chat-voice-v1.js?v=20261104v4' /srv/neis-circle/index.html
+          "${docker[@]}" exec "$cid" grep -Fq 'function flushResults(s)' /srv/neis-circle/scripts/chat-voice-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq 'scripts/chat-voice-v1.js?v=voice-fast-${{ github.run_id }}' /srv/neis-circle/index.html
           "${docker[@]}" exec "$cid" test -s /srv/neis-circle/styles/chat-voice-v1.css
           trap - ERR
           echo CHAT_VOICE_DEPLOY=SUCCESS
