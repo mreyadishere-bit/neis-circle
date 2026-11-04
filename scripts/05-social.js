@@ -2619,6 +2619,7 @@ const originalAdmin=admin;
 const normalizedReportStatus=value=>String(value||'').trim().toLowerCase();
 const canControlAuthorLikeEmails=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN;
 const canOpenAdminModerationTargets=()=>state.isAdmin&&String(authUser?.email||'').trim().toLowerCase()===AUTHOR_LIKE_EMAIL_ADMIN;
+const canOpenDmSafetyReview=()=>state.isAdmin&&isMainAdminUser();
 async function openAdminModerationTarget(type,id){
   if(!canOpenAdminModerationTargets()||!type||!id)return;
   const targetType=String(type),targetId=String(id),feedItem=adminModerationFeedItem(targetType,targetId);
@@ -2949,7 +2950,7 @@ function setAdminMembersBranchesVisibility(visible){
 
 
 function adminDmSafetyPanel(){
-  if(!canOpenAdminModerationTargets())return '';
+  if(!canOpenDmSafetyReview())return '';
   const selected=adminDmSafetyReview.selectedUser;
   const users=adminDmSafetyReview.users||[];
   const conversations=adminDmSafetyReview.conversations||[];
@@ -2965,7 +2966,7 @@ function adminDmSafetyPanel(){
 }
 
 async function searchAdminDmSafetyUsers(){
-  if(!canOpenAdminModerationTargets())return;
+  if(!canOpenDmSafetyReview())return;
   const input=document.querySelector('#adminDmSafetySearch');
   const query=String(input?.value||adminDmSafetyReview.query||'').trim();
   if(query.length<2){toast(t('Type at least 2 characters.','اكتب حرفين على الأقل.'));return}
@@ -2981,7 +2982,7 @@ async function searchAdminDmSafetyUsers(){
 }
 
 async function loadAdminDmSafetyConversations(userId){
-  if(!canOpenAdminModerationTargets())return;
+  if(!canOpenDmSafetyReview())return;
   const user=(adminDmSafetyReview.users||[]).find(item=>same(item.user_id,userId));
   if(!user)return;
   adminDmSafetyReview.selectedUser=user;
@@ -2994,7 +2995,7 @@ async function loadAdminDmSafetyConversations(userId){
 }
 
 async function openAdminDmSafetyReview(conversationId,targetUserId){
-  if(!canOpenAdminModerationTargets())return;
+  if(!canOpenDmSafetyReview())return;
   const conversation=(adminDmSafetyReview.conversations||[]).find(item=>same(item.conversation_id,conversationId));
   if(!conversation)return;
   openModal(`<div class="modal-head"><div><h2>${t('Request DM safety review','طلب مراجعة أمان الرسائل')}</h2><p>${esc(adminDmSafetyReview.selectedUser?.full_name||'Student')} ↔ ${esc(conversation.other_name||'Student')}</p></div><button class="close" data-close>×</button></div>
@@ -3021,7 +3022,7 @@ async function openAdminDmSafetyReview(conversationId,targetUserId){
 }
 
 async function showAdminDmSafetyMessages(requestId,conversation){
-  if(!canOpenAdminModerationTargets())return;
+  if(!canOpenDmSafetyReview())return;
   const {data,error}=await sb.rpc('admin_get_dm_review_messages',{request_id_input:requestId});
   if(error){toast(safeError(error,'open this safety review'));return}
   const rows=data||[];
@@ -3051,7 +3052,7 @@ admin=function(){
         </div>`;
       }).join('')
       :emptyState(t('No matching content','لا يوجد محتوى مطابق'),t('Try changing the content type, date range, or search.','جرّب تغيير نوع المحتوى أو الفترة الزمنية أو البحث.'));
-  return `${base}${adminControlsPanel()}${canOpenAdminModerationTargets()?adminDmSafetyPanel():''}
+  return `${base}${adminControlsPanel()}${canOpenDmSafetyReview()?adminDmSafetyPanel():''}
     <section class="module-card" style="margin-top:18px">
       <div class="page-title"><div><h2>${t('Reports','البلاغات')}</h2><p>${t('Identity data is private and visible only to authorized administrators.','بيانات الهوية خاصة ولا تظهر إلا للمسؤولين المصرح لهم.')}</p></div></div>
       ${state.reports.length?`<div class="admin-report-list">${state.reports.map(r=>`<article class="admin-report-card"><div class="admin-report-head"><span class="entity-icon">${esc(r.target_type)}</span><div><h3>${esc(r.reason)}</h3><p>${esc(r.target_type)} · ${esc(r.target_id)} · ${when(r.created_at)}</p></div><div class="report-head-actions"><select aria-label="${t('Report status','حالة البلاغ')}" data-report-status="${r.id}">${['open','reviewed','resolved','dismissed'].map(status=>`<option value="${status}" ${normalizedReportStatus(r.status)===status?'selected':''}>${status}</option>`).join('')}</select>${normalizedReportStatus(r.status)==='resolved'?`<button class="secondary danger report-delete" data-delete-report="${esc(r.id)}">${t('Delete report','حذف البلاغ')}</button>`:''}</div></div><div class="admin-identity-grid"><div><small>${t('Reported account','الحساب المُبلّغ عنه')}</small><b>${esc(r.reported_display_name||t('Account no longer exists','الحساب لم يعد موجودًا'))}</b><span>${r.reported_username?`@${esc(r.reported_username)} · `:''}${esc(r.reported_user_id||t('Identity unavailable','الهوية غير متاحة'))}</span></div><div><small>${t('Private identity','الهوية الخاصة')}</small><b>${esc(r.reported_email||t('No verified email','لا يوجد بريد موثق'))} · ${r.reported_email_verified?t('Email verified','البريد موثّق'):t('Email unavailable','البريد غير متاح')}</b><span>${esc(r.reported_phone||t('No registered phone','لا يوجد هاتف مسجّل'))} · ${r.reported_phone_validated?t('Phone registered / validated','الهاتف مسجّل / تم التحقق من صيغته'):t('Phone unavailable','الهاتف غير متاح')}</span></div></div><div class="admin-report-content"><small>${t('Reported content','المحتوى المُبلّغ عنه')}</small><p>${esc(r.reported_content||t('Content unavailable','المحتوى غير متاح'))}</p></div><p class="admin-report-details">${esc(r.details||'')}</p><footer>${t('Reporter','المُبلّغ')}: ${esc(r.reporter_display_name||'Student')} · @${esc(r.reporter_username||'student')}</footer></article>`).join('')}</div>`:emptyState(t('No reports','لا توجد بلاغات'),t('The moderation queue is clear.','قائمة المراجعة فارغة.'))}
