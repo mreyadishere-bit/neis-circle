@@ -1,0 +1,55 @@
+name: OVH multilingual chat voice transcription
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-chat-voice-transcribe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-chat-voice-transcribe-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - name: Validate new route and browser script
+        run: |
+          set -euo pipefail
+          node --check scripts/chat-voice-v1.js
+          python3 -m py_compile scripts/ops/ovh-chat-voice-transcribe-deploy.py
+          bun build supabase/functions/chat-voice-transcribe/index.ts --target=browser --external '*' --outdir=/tmp/chat-voice-transcribe-check
+          grep -Fq 'chat-voice-transcribe' scripts/chat-voice-v1.js
+          grep -Fq 'gemini-3.5-flash-lite' supabase/functions/chat-voice-transcribe/index.ts
+          grep -Fq 'inlineData' supabase/functions/chat-voice-transcribe/index.ts
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage and deploy only new transcription function
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/chat-voice-transcribe-stage"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/functions/chat-voice-transcribe/index.ts "$host:$stage/index.ts"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-chat-voice-transcribe-deploy.py "$host:$stage/deploy.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "python3 '$stage/deploy.py'"
