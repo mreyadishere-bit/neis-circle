@@ -50,7 +50,7 @@ async function recognizeClip(s,blob){
 function queue(s,blob){
  if(!blob||blob.size<1500)return;
  // Bound queued mobile clips when provider/network is slow.
- if(s.pending>=3){
+ if(s.pending>=8){
   if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ سيُستكمل التسجيل مع تجاهل مقطع مؤقت.","Connection slow; continuing to listen while skipping one clip.");
   return;
  }
@@ -78,14 +78,12 @@ function queue(s,blob){
    }
    // A transient network/provider failure must not stop a continuous recording.
    // Stop after repeated failures to avoid an unbounded queue and API requests.
-   if(!s.stopped&&s.failedClips>=3){
-    s.failed=true;
-    stop(s);
-    if(s.status.isConnected)s.status.textContent=tr("تعذر الاتصال بخدمة التفريغ ٣ مرات. اضغط الميكروفون لإعادة المحاولة.","Transcription failed 3 times. Tap the mic to retry.");
+   if(!s.stopped&&s.failedClips>=3&&s.status.isConnected){
+    s.status.textContent=tr("خدمة تحويل الصوت لا تستجيب؛ التسجيل مستمر، لكن النص قد لا يظهر حتى تعود الخدمة.","Transcription service is unavailable. Recording continues, but text may not appear until it recovers.");
    }
   }finally{
    s.pending--;
-   if(s.stopped&&s.pending===0&&s.status.isConnected)s.status.textContent="";
+   if(s.stopped&&s.pending===0&&s.status.isConnected&&!s.failed)s.status.textContent="";
   }
  });
 }
@@ -97,7 +95,7 @@ function nextClip(s){
  rec.onerror=()=>{if(!s.stopped){s.status.textContent=tr("مشكلة في التسجيل.","Recording error.");stop(s)}};
  rec.onstop=()=>{
   if(chunks.length)queue(s,new Blob(chunks,{type:s.mime}));
-  if(!s.stopped&&!s.failed&&s.input.isConnected)nextClip(s);
+  if(!s.stopped&&s.input.isConnected)nextClip(s);
  };
  rec.start();
  s.timer=setTimeout(()=>{if(rec.state==="recording"){try{rec.stop()}catch(_){stop(s)}}},clipLength);
