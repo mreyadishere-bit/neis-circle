@@ -36,6 +36,16 @@ try{
   assert.equal(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop),0,'every open resets scroll');
   await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>r())));
   assert.equal(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop),0,'scroll remains at top after frame/focus');
+  // The installed Android PWA can restore an old scroll offset after the
+  // first animation frame, when the visual viewport settles.
+  await page.evaluate(()=>document.querySelector('.mobile-nav-list').scrollTop=120);
+  await page.waitForTimeout(370);
+  assert.equal(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop),0,
+    'delayed PWA scroll restoration does not clip top rows');
+  await page.locator('.mobile-nav-list').evaluate(el=>{el.dispatchEvent(new Event('touchstart'));el.scrollTop=110});
+  await page.waitForTimeout(180);
+  assert.ok(await page.locator('.mobile-nav-list').evaluate(el=>el.scrollTop)>0,
+    'genuine user scrolling is not reset after interaction');
   assert.ok(await page.locator('.mobile-nav-list button').first().evaluate(el=>{
    const list=el.closest('.mobile-nav-list').getBoundingClientRect();
    const item=el.getBoundingClientRect();
