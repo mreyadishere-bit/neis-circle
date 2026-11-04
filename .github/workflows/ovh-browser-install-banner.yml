@@ -1,0 +1,114 @@
+name: OVH Browser Install Banner Visibility
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-browser-install-banner.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate browser/standalone installation prompt behavior
+        run: |
+          set -euo pipefail
+          node --check scripts/pwa-install-v117.js
+          python3 - <<'PY'
+          from pathlib import Path
+          js=Path('scripts/pwa-install-v117.js').read_text()
+          css=Path('styles/pwa-v117.css').read_text()
+          assert 'const installed=isStandalone();' in js
+          assert "window.matchMedia?.('(display-mode: standalone)')" in js
+          assert 'knownInstalled()' not in js and 'rememberInstalled()' not in js
+          assert '@media(min-width:761px){.pwa-install-card{display:none!important}}' not in css
+          assert '@media(display-mode:standalone){.pwa-install-card{display:none!important}}' in css
+          assert 'html.neis-native-app .pwa-install-card{display:none!important}' in css
+          print('BROWSER_INSTALL_BANNER_TEST=PASS')
+          PY
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage just the install banner files
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/browser-install-banner-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/pwa-install-v117.js "$host:$stage/pwa-install-v117.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/pwa-v117.css "$host:$stage/pwa-v117.css"
+      - name: Atomic OVH deploy with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/browser-install-banner-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/browser-install-banner-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/pwa-install-v117.js" && test -s "$stage/pwa-v117.css" && test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/pwa-install-v117.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/pwa-install-v117.js" "$dest/scripts/pwa-install-v117.js"
+          cp "$stage/pwa-v117.css" "$dest/styles/pwa-v117.css"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          for name in ('scripts/pwa-install-v117.js','styles/pwa-v117.css'):
+            pat=re.escape(name)+r'(?:\?[^"\x27<> ]*)?'
+            hits=len(re.findall(pat,s))
+            expected=2 if name.endswith('.css') else 1
+            if hits!=expected:raise SystemExit('INSTALL_ASSET_REFERENCE_MISMATCH_'+name)
+            s=re.sub(pat,name+'?v=browser-install-banner-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo BROWSER_INSTALL_BANNER=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'const installed=isStandalone();' /srv/neis-circle/scripts/pwa-install-v117.js
+          "${docker[@]}" exec "$cid" grep -Fq '@media(display-mode:standalone)' /srv/neis-circle/styles/pwa-v117.css
+          "${docker[@]}" exec "$cid" grep -Fq 'browser-install-banner-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo BROWSER_INSTALL_BANNER=SUCCESS
+          echo UNRELATED_SERVICES=UNCHANGED
+          REMOTE
