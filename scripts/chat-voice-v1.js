@@ -25,14 +25,14 @@ function setText(input,value){
   input.value=value.slice(0,Number(input.maxLength)>0?input.maxLength:10000);
   input.dispatchEvent(new Event('input',{bubbles:true}));
 }
-function start(input,button,status,select){
+function start(input,button,status){
   if(active?.input===input){stop();return}
   stop();
   if(!speechCtor){status.textContent=label('التعرف على الصوت غير مدعوم في المتصفح ده.','Speech recognition is not supported in this browser.');return}
   let recog;
   try{recog=new speechCtor()}catch(_){status.textContent=label('تعذر تشغيل الميكروفون.','Could not start microphone.');return}
-  recog.lang=select.value;recog.continuous=true;recog.interimResults=true;recog.maxAlternatives=1;
-  const s={input,button,status,select,recognition:recog,stopped:false,timer:null,committed:input.value.trim(),sessionFinal:'',starting:false};
+  recog.lang=activeLanguage();recog.continuous=true;recog.interimResults=true;recog.maxAlternatives=1;
+  const s={input,button,status,recognition:recog,stopped:false,timer:null,committed:input.value.trim(),sessionFinal:'',starting:false};
   active=s;
   button.classList.add('is-listening');button.setAttribute('aria-pressed','true');
   status.textContent=label('جاري الاستماع… اضغط المايك للإيقاف.','Listening… tap microphone to stop.');
@@ -74,24 +74,16 @@ function start(input,button,status,select){
 function mount(input){
   const form=input.closest('form');if(!form||form.querySelector('.neis-voice-controls'))return;
   const wrap=document.createElement('span');wrap.className='neis-voice-controls';
-  const select=document.createElement('select');select.className='neis-voice-language';
-  select.setAttribute('aria-label','Speech language');
-  select.title=label('لغة الإملاء الصوتي','Dictation language');
-  for(const [value,text] of [['ar-EG','AR'],['en-US','EN']]){
-    const opt=document.createElement('option');opt.value=value;opt.textContent=text;select.append(opt);
-  }
-  select.value=activeLanguage();
-  const mic=document.createElement('button');mic.type='button';mic.className='neis-voice-mic';
+  const mic=document.createElement('button');mic.type='button';mic.className='neis-voice-mic ttai-mic';
   mic.setAttribute('aria-label',label('بدء أو إيقاف الإملاء الصوتي','Start or stop voice dictation'));
   mic.setAttribute('aria-pressed','false');
   mic.title=label('اضغط للتحدث واضغط مجددًا للإيقاف','Tap to dictate, tap again to stop');
   mic.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg>';
   const status=document.createElement('span');status.className='neis-voice-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
-  mic.addEventListener('click',()=>start(input,mic,status,select));
-  select.addEventListener('change',()=>{if(active?.input===input){stop();start(input,mic,status,select)}});
+  mic.addEventListener('click',()=>start(input,mic,status));
   // Prevent focus/selection loss on touch; never invoke the composer submit.
   mic.addEventListener('pointerdown',e=>e.preventDefault());
-  wrap.append(select,mic);
+  wrap.append(mic);
   const send=form.querySelector('button[type=submit],[data-chat-send],#magnusSend');
   if(send)form.insertBefore(wrap,send);else form.append(wrap);
   form.insertAdjacentElement('afterend',status);
