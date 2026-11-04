@@ -1,8 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
-const MODEL="gemini-3.5-flash-lite";
-const FAST_MODEL="gemini-3.1-flash-lite";
+const MODEL="gemini-3.1-flash-lite";
+const FAST_MODEL="gemini-3-flash-preview";
 const RESPONSE_HEADERS={
  "content-type":"application/json; charset=utf-8",
  "access-control-allow-origin":"*",
@@ -106,11 +106,11 @@ Deno.serve(async (request:Request)=>{
   if(recent.error)throw new Error("HISTORY_UNAVAILABLE");
   const history=[...(recent.data||[])].reverse() as Row[];
   let generated:{reply:string;reaction:string|null};
-  try{generated=await askGemini(key,MODEL,history,message,8500)}
+  try{generated=await askGemini(key,MODEL,history,message,11000)}
   catch(error){
    if(error instanceof Error&&error.message==="GEMINI_RATE_LIMIT")
     return json({error:"Gemini's free quota is temporarily exhausted. Your message was not saved.",code:"ai_quota"},429);
-   try{generated=await askGemini(key,FAST_MODEL,history,message,8500)}
+   try{generated=await askGemini(key,FAST_MODEL,history,message,9000)}
    catch{return json({error:"Magnus is taking too long to respond. Please retry.",code:"model_timeout"},503)}
   }
   const result=await admin.rpc("magnus_commit_turn",{
