@@ -156,6 +156,14 @@ self.addEventListener("notificationclick", (event) => {
   })());
 });
 
+// When the PWA window is closed we can still signal an unread event to
+// supported desktop launchers. Exact unread count is restored by the app.
+async function signalBackgroundAppBadge(){
+  try{
+    if(typeof self.navigator?.setAppBadge==="function")
+      await self.navigator.setAppBadge();
+  }catch(_){}
+}
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (_) {}
@@ -172,6 +180,7 @@ self.addEventListener("push", (event) => {
   };
   event.waitUntil((async () => {
     await self.registration.showNotification(title, options);
+    await signalBackgroundAppBadge();
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
     const payload = {
       type: "NEIS_PUSH_NOTIFICATION",
