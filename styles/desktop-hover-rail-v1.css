@@ -1,6 +1,6 @@
 /* NEIS Circle desktop rail: desktop-only overlay, zero content reflow.
    Colors are exclusively derived from the existing website theme tokens. */
-@media (min-width: 1024px) {
+@media (min-width: 761px) {
   .rail.neis-hover-rail {
     --neis-rail-closed: 84px;
     --neis-rail-open: 248px;
@@ -215,7 +215,7 @@
   }
   .rail.neis-hover-rail.is-pinned .neis-rail-pin { color: var(--accent); }
 }
-@media (min-width: 1024px) and (prefers-reduced-motion: reduce) {
+@media (min-width: 761px) and (prefers-reduced-motion: reduce) {
   .rail.neis-hover-rail,
   .rail.neis-hover-rail .nav-btn,
   .rail.neis-hover-rail .neis-rail-label,
