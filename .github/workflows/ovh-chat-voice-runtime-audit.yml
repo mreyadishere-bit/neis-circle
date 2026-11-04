@@ -43,6 +43,23 @@ jobs:
             done
           '
           python3 - <<'PY'
+          import subprocess,urllib.request,urllib.error
+          try:
+            p=subprocess.run(['sudo','-n','/usr/bin/docker','exec','supabase-edge-functions','printenv','GEMINI_API_KEY'],capture_output=True,text=True,timeout=12)
+            key=p.stdout.strip() if p.returncode==0 else ''
+            if not key:print('VOICE_PROVIDER_PROBE=NO_KEY')
+            else:
+              for model in ('gemini-3.5-flash-lite','gemini-2.5-flash-lite','gemini-2.5-flash'):
+                req=urllib.request.Request('https://generativelanguage.googleapis.com/v1beta/models/'+model,headers={'x-goog-api-key':key})
+                try:
+                  with urllib.request.urlopen(req,timeout=12) as r:code=r.status
+                except urllib.error.HTTPError as e:code=e.code
+                except Exception:code='NETWORK_ERROR'
+                print('GEMINI_MODEL_'+model+'='+str(code))
+          except Exception:
+            print('VOICE_PROVIDER_PROBE=ERROR')
+          PY
+          python3 - <<'PY'
           import urllib.request,urllib.error
           url='https://supabase.neiscircle.site/functions/v1/chat-voice-transcribe'
           req=urllib.request.Request(url,method='OPTIONS',headers={'Origin':'https://neiscircle.site','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,apikey,content-type,x-client-info'})
