@@ -180,7 +180,7 @@
  background:var(--soft,#eaf3f8)!important;
 }
 #view .neis-connect-chat-trigger span:first-child{font-size:17px;line-height:1}
-.neis-mobile-game-entry .neis-mobile-game-icon{display:grid;place-items:center;width:23px;height:23px;font-size:20px;flex-shrink:0}
+.mobile-nav-list .neis-mobile-game-entry .neis-mobile-game-icon{display:grid;place-items:center;justify-self:center;align-self:center;width:36px;height:36px;min-width:36px;min-height:36px;margin:0;padding:0;font-size:20px;line-height:1;font-weight:400;font-style:normal}
 
 #view .chat-message .message-text[data-neis-game-enhanced="1"]{
  display:grid;
