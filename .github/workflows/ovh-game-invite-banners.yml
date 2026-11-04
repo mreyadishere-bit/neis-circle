@@ -23,7 +23,8 @@ jobs:
         run: |
           set -euo pipefail
           node --check scripts/neis-game-connectors-v1.js
-          node qa/neis-external-game-connectors.browser.test.mjs || {
+          npm install --no-save playwright
+          timeout --signal=TERM --kill-after=15s 180s node qa/neis-external-game-connectors.browser.test.mjs || {
             echo 'Standalone browser test unavailable or failed; deployment stopped.' >&2
             exit 1
           }
