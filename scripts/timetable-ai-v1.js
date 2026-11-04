@@ -39,8 +39,8 @@ function stopVoice(){
   }
 }
 function isAdviceQuestion(text,file){
-  return !file && /(?:\\b(?:how|help|tips?|advice|recommend|suggest|explain|best|ways?|manage|organize|organise|balance|prioritize|improve)\\b|إزاي|كيف|ساعدني|نصائح|أفضل طريقة|أنظم|تنظيم)/i.test(text) &&
-    /(?:\\b(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|classes|focus|productivity)\\b|ذاكر|تنظيم|جدول|مذاكرة|وقت|دراسة)/i.test(text);
+  return !file && /(?:\b(?:how|help|tips?|advice|recommend|suggest|explain|best|ways?|manage|organize|organise|balance|prioritize|improve)\b|إزاي|كيف|ساعدني|نصائح|أفضل طريقة|أنظم|تنظيم)/i.test(text) &&
+    /(?:\b(?:manage|organize|organise|plan|balance|study|time|timetable|schedule|revision|classes|focus|productivity)\b|ذاكر|تنظيم|جدول|مذاكرة|وقت|دراسة)/i.test(text);
 }
 function lang(){return typeof state!=="undefined"&&state.lang==="ar"?"ar":"en"}
 function t(k){return labels[lang()][k]}
