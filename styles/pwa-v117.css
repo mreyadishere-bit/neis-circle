@@ -47,3 +47,6 @@ html.neis-native-app .pwa-install-card{display:none!important}
   .pwa-install-meta{padding:12px}
   .pwa-install-actions .primary{width:100%}
 }
+
+/* The install promotion is intended for mobile; avoid a repeated install card on desktop. */
+@media(min-width:761px){.pwa-install-card{display:none!important}}
