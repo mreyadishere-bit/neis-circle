@@ -4443,3 +4443,58 @@ html[data-style-theme="custom"] :is(.primary,.secondary,.field input,.field text
 /* Dark theme clarity: remove the full-screen fractal turbulence texture.
    Preserve the original smooth surfaces, text rendering, shadows and colors. */
 html[data-theme="dark"] .grain{display:none!important;background-image:none!important}
+
+
+/* Dark mode refinement — home "Your spaces" and post delete controls.
+   Flat slate surfaces, subtle borders, no glass blur or bright light-mode boxes.
+   Intentionally scoped so settings, chat, and other destructive actions keep their styles. */
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"],
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"] {
+  background:#1b2b38!important;
+  color:#e7f2fc!important;
+  border:1px solid #345066!important;
+  border-radius:16px!important;
+  box-shadow:none!important;
+  min-height:62px;
+  padding:13px 17px!important;
+  text-align:start;
+  transition:background-color .16s ease,border-color .16s ease,transform .16s ease;
+}
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"]:hover,
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"]:hover {
+  background:#243949!important;
+  border-color:#51778c!important;
+  transform:translateY(-1px);
+}
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"] > b,
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"] > b {
+  color:#a5d7ed!important;
+}
+html[data-theme="dark"] .post-menu > button.danger[data-delete-post] {
+  width:36px;min-width:36px;height:36px;
+  display:grid;place-items:center;
+  background:#2a2029!important;
+  color:#f5a8ac!important;
+  border:1px solid #5b3945!important;
+  border-radius:11px!important;
+  box-shadow:none!important;
+  font-weight:700;
+  transition:background-color .16s ease,border-color .16s ease;
+}
+html[data-theme="dark"] .post-menu > button.danger[data-delete-post]:hover {
+  background:#3b2732!important;
+  color:#ffd0d2!important;
+  border-color:#96606b!important;
+}
+html[data-theme="dark"] .post-menu > button.danger[data-delete-post]:focus-visible,
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"]:focus-visible,
+html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"]:focus-visible {
+  outline:2px solid #78b9df;outline-offset:2px;
+}
+@media(prefers-reduced-motion:reduce) {
+  html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"],
+  html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"],
+  html[data-theme="dark"] .post-menu > button.danger[data-delete-post] {
+    transition:none;transform:none;
+  }
+}
