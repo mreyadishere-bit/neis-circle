@@ -1,0 +1,54 @@
+name: OVH Chat Voice Runtime Read-Only Audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-chat-voice-runtime-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect deployed voice function and provider model status without disclosing keys
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          sudo -n /usr/bin/docker exec supabase-edge-functions sh -c '
+            if [ -n "${GEMINI_API_KEY:-}" ]; then echo VOICE_GEMINI_KEY_PRESENT=true; else echo VOICE_GEMINI_KEY_PRESENT=false; fi
+            if [ -n "${SUPABASE_ANON_KEY:-}" ]; then echo VOICE_ANON_KEY_PRESENT=true; else echo VOICE_ANON_KEY_PRESENT=false; fi
+            test -s /home/deno/functions/chat-voice-transcribe/index.ts && echo VOICE_FUNCTION_PRESENT=true
+            grep -o "gemini-[A-Za-z0-9.\-]*" /home/deno/functions/chat-voice-transcribe/index.ts | head -1 | sed "s/^/VOICE_MODEL=/"
+            for m in gemini-3.5-flash-lite gemini-2.5-flash-lite gemini-2.5-flash; do
+              if [ -n "${GEMINI_API_KEY:-}" ]; then
+                code=$(curl -L -sS -o /dev/null --connect-timeout 8 --max-time 15 -w "%{http_code}" -H "x-goog-api-key: $GEMINI_API_KEY" "https://generativelanguage.googleapis.com/v1beta/models/$m")
+                echo "MODEL_STATUS_$m=$code"
+              fi
+            done
+          '
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          url='https://supabase.neiscircle.site/functions/v1/chat-voice-transcribe'
+          req=urllib.request.Request(url,method='OPTIONS',headers={'Origin':'https://neiscircle.site','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,apikey,content-type,x-client-info'})
+          try:
+            with urllib.request.urlopen(req,timeout=15) as r:print('VOICE_CORS_PREFLIGHT='+str(r.status))
+          except urllib.error.HTTPError as e:print('VOICE_CORS_PREFLIGHT='+str(e.code))
+          except Exception:print('VOICE_CORS_PREFLIGHT=NETWORK_ERROR')
+          PY
+          REMOTE
