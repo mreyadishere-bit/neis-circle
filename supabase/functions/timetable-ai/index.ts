@@ -278,9 +278,10 @@ CRITICAL RULES:
 async function callGeminiWithRetry(
   ai: GoogleGenAI,
   contents: Array<Record<string, unknown>>,
-  // Preserve one quick primary retry; permit one fallback *only* after a second
-  // fast 503. Never retry 429, malformed files or authentication errors.
-  maxRetries = 1,
+  // Fast failover: one primary request, then one alternative for HTTP 503.
+  // Do not retry a busy primary twice, or retry 429/auth/invalid documents.
+  maxRetries = 0,
+  requestTimeoutMs = 30000,
 ) {
   let lastError: unknown = null;
   const startedAt = Date.now();
@@ -295,6 +296,7 @@ async function callGeminiWithRetry(
           systemInstruction: SYSTEM_INSTRUCTION,
           responseMimeType: "application/json",
           responseSchema: TIMETABLE_RESPONSE_SCHEMA,
+          httpOptions: { timeout: requestTimeoutMs },
         },
       });
     } catch (err: unknown) {
@@ -311,8 +313,8 @@ async function callGeminiWithRetry(
       }
       // Back off briefly before the primary retry and fallback. 429 stays
       // untouched because a quota error should never trigger extra traffic.
-      const baseDelay = attempt < maxRetries ? 900 : 300;
-      const delay = baseDelay + Math.floor(Math.random() * 300);
+      const baseDelay = attempt < maxRetries ? 300 : 150;
+      const delay = baseDelay + Math.floor(Math.random() * 150);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -627,7 +629,7 @@ Your timetable has not been changed.`;
         role: "user",
         parts: userParts,
       },
-    ]);
+    ], 0, multimodalParts.length ? 65000 : 30000);
 
     const rawText = String(response?.text ?? "").trim();
     if (!rawText) {
