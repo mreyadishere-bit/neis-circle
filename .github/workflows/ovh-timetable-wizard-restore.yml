@@ -1,0 +1,108 @@
+name: Deploy restored Timetable AI wizard to OVH
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-timetable-wizard-restore.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify restored wizard and voice
+        run: |
+          set -euo pipefail
+          node --check scripts/timetable-ai-v1.js
+          grep -Fq 'function drawWizard(' scripts/timetable-ai-v1.js
+          grep -Fq 'recognition.continuous=true' scripts/timetable-ai-v1.js
+          grep -Fq 'restore-guided-wizard-20261104' index.html
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only three timetable frontend assets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/timetable-wizard-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/timetable-ai-v1.js "$target:$stage/timetable-ai-v1.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/timetable-ai-v1.css "$target:$stage/timetable-ai-v1.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes index.html "$target:$stage/repo-index.html"
+      - name: Atomic isolated Caddy frontend activation with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/timetable-wizard-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/timetable-wizard-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay="docker-compose.frontend-public.yml"
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/timetable-ai-v1.js" && test -s "$stage/timetable-ai-v1.css" && test -s "$stage/repo-index.html"
+          test -f "$overlay" && test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -f "$old/scripts/timetable-ai-v1.js" && test -f "$old/index.html"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/timetable-ai-v1.js" "$dest/scripts/timetable-ai-v1.js"
+          cp "$stage/timetable-ai-v1.css" "$dest/styles/timetable-ai-v1.css"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);h=p.read_text()
+          for path,version in [('scripts/timetable-ai-v1.js','restore-guided-wizard-20261104'),('styles/timetable-ai-v1.css','guided-wizard-20261104')]:
+              pat=re.escape(path)+r'(?:\?[^"\x27<>]*)?'
+              if len(re.findall(pat,h))!=1:raise SystemExit('TIMETABLE_ASSET_REFERENCE_MISMATCH: '+path)
+              h=re.sub(pat,path+'?v='+version,h)
+          p.write_text(h)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo TIMETABLE_WIZARD_DEPLOY=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy)
+          test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'function drawWizard(' /srv/neis-circle/scripts/timetable-ai-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq 'recognition.continuous=true' /srv/neis-circle/scripts/timetable-ai-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq 'restore-guided-wizard-20261104' /srv/neis-circle/index.html
+          trap - ERR
+          echo TIMETABLE_WIZARD_DEPLOY=SUCCESS
+          echo DATABASE_AND_OTHER_SERVICES=UNCHANGED
+          REMOTE
