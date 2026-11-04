@@ -40,6 +40,10 @@ jobs:
             UNION ALL SELECT 'PUSH_OUTBOX_PENDING='||count(*) FROM public.web_push_outbox WHERE status='pending'
             UNION ALL SELECT 'PUSH_OUTBOX_FAILED='||count(*) FROM public.web_push_outbox WHERE status='failed'
             UNION ALL SELECT 'PUSH_OUTBOX_SENT='||count(*) FROM public.web_push_outbox WHERE status='sent'
+            UNION ALL SELECT 'PUSH_OUTBOX_LAST_HOUR='||count(*) FROM public.web_push_outbox WHERE created_at > now() - interval '1 hour'
+            UNION ALL SELECT 'PUSH_SENT_LAST_HOUR='||count(*) FROM public.web_push_outbox WHERE status='sent' AND created_at > now() - interval '1 hour'
+            UNION ALL SELECT 'PUSH_FAILED_LAST_HOUR='||count(*) FROM public.web_push_outbox WHERE status='failed' AND created_at > now() - interval '1 hour'
+            UNION ALL SELECT 'PUSH_ACTIVE_RECENT_HOUR='||count(*) FROM public.web_push_subscriptions WHERE enabled=true AND last_seen_at > now() - interval '1 hour'
             UNION ALL SELECT 'PUSH_DISPATCH_FUNCTION_OVH='||(CASE WHEN to_regprocedure('private.dispatch_web_push_job()') IS NOT NULL THEN pg_get_functiondef('private.dispatch_web_push_job()'::regprocedure) LIKE '%supabase.neiscircle.site%' ELSE false END)::text;
           "
           REMOTE
