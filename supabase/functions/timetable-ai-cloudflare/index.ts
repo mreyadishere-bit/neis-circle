@@ -478,6 +478,7 @@ async function callCloudflare(token: string, account: string, messages: unknown[
 // Gemini credentials/quotas; never expose either key in the browser.
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const GEMINI_FAST_FALLBACK = "gemini-3.1-flash-lite";
+const GEMINI_FAST_CHAT = "gemini-3.5-flash-lite";
 async function callGemini(key: string, messages: Array<{role:string;content:unknown}>, model=GEMINI_MODEL, timeoutMs=16000) {
   const controller=new AbortController();
   const deadline=setTimeout(()=>controller.abort(),timeoutMs);
@@ -495,7 +496,8 @@ async function callGemini(key: string, messages: Array<{role:string;content:unkn
     const url="https://generativelanguage.googleapis.com/v1beta/models/"+model+":generateContent";
     const response=await fetch(url,{method:"POST",headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
       body:JSON.stringify({systemInstruction:{parts:[{text:system}]},
-        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:8192}}),
+        contents:[{role:"user",parts}],generationConfig:{responseMimeType:"application/json",maxOutputTokens:8192,
+          ...(parts.every((p)=>"text" in p) ? {thinkingConfig:{thinkingLevel:model===GEMINI_FAST_CHAT?"minimal":"low"}} : {})}}),
       signal:controller.signal});
     if(!response.ok){
       const err=new Error("GEMINI_HTTP_ERROR") as Error & {status?:number};
@@ -696,9 +698,12 @@ Deno.serve(async (request: Request) => {
         raw=recovered;actualProvider="pdf-text";
       }
     }else if(geminiKey){
-      try{raw=await callGemini(geminiKey,messages,GEMINI_MODEL,33000);actualProvider="gemini"}
+      // Text-only exchanges use the same low-latency Flash Lite family as Magnus.
+      // Multimodal uploads retain the existing high-fidelity vision path.
+      const fastChat=!discoveryMode && parts.length===0;
+      try{raw=await callGemini(geminiKey,messages,fastChat?GEMINI_FAST_CHAT:GEMINI_MODEL,fastChat?10500:33000);actualProvider=fastChat?"gemini-fast-chat":"gemini"}
       catch(primaryError){
-        try{raw=await callGemini(geminiKey,messages,GEMINI_FAST_FALLBACK,13000);actualProvider="gemini-lite"}
+        try{raw=await callGemini(geminiKey,messages,fastChat?GEMINI_MODEL:GEMINI_FAST_FALLBACK,fastChat?19000:13000);actualProvider=fastChat?"gemini":"gemini-lite"}
         catch(secondaryError){
           console.error("Timetable Gemini inference failed",JSON.stringify({
             primaryStatus:Number((primaryError as {status?:number}).status||0),
