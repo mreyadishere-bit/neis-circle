@@ -95,8 +95,16 @@
     }
   }
 
+  const APP_INSTALLED_KEY='neis-pwa-installed-on-device-v1';
+  function rememberInstalled(){
+    try{localStorage.setItem(APP_INSTALLED_KEY,'1')}catch(_){}
+  }
+  function knownInstalled(){
+    if(isStandalone()){rememberInstalled();return true}
+    try{return localStorage.getItem(APP_INSTALLED_KEY)==='1'}catch(_){return false}
+  }
   function updateInstallUI(){
-    const installed=isStandalone();
+    const installed=knownInstalled();
     document.querySelectorAll('[data-pwa-install-card]').forEach(card=>{
       card.classList.toggle('hidden',installed);
     });
@@ -125,8 +133,10 @@
       await prompt.prompt();
       const result=await prompt.userChoice.catch(()=>null);
       updateInstallUI();
-      if(result?.outcome==='accepted'&&typeof toast==='function'){
-        toast(lang('NEIS Circle installed.','تم تثبيت NEIS Circle.'));
+      if(result?.outcome==='accepted'){
+        rememberInstalled();
+        updateInstallUI();
+        if(typeof toast==='function')toast(lang('NEIS Circle installed.','تم تثبيت NEIS Circle.'));
       }
       return;
     }
@@ -752,6 +762,7 @@
   });
   window.addEventListener('appinstalled',()=>{
     deferredInstallPrompt=null;
+    rememberInstalled();
     updateInstallUI();
     if(typeof toast==='function')toast(lang('NEIS Circle installed.','تم تثبيت NEIS Circle.'));
   });
