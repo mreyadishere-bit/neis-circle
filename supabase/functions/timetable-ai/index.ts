@@ -539,7 +539,10 @@ ${userPrompt.slice(0, 1400)}`,
         });
       } catch (adviceError: unknown) {
         const status = Number((adviceError as { status?: number })?.status || 0);
-        if (status !== 503) throw adviceError;
+        const message = adviceError instanceof Error ? adviceError.message : String(adviceError);
+        if (status !== 503 && !(status === 0 && /\\b503\\b|high demand|service unavailable|overloaded/i.test(message))) {
+          throw adviceError;
+        }
         try {
           advice = await ai.models.generateContent({
             model: OVERLOAD_FALLBACK_MODEL,
@@ -548,7 +551,10 @@ ${userPrompt.slice(0, 1400)}`,
           });
         } catch (fallbackError: unknown) {
           const fallbackStatus = Number((fallbackError as { status?: number })?.status || 0);
-          if (fallbackStatus !== 503) throw fallbackError;
+          const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+          if (fallbackStatus !== 503 && !(fallbackStatus === 0 && /\\b503\\b|high demand|service unavailable|overloaded/i.test(fallbackMessage))) {
+            throw fallbackError;
+          }
           // Both Gemini models are overloaded. Only for general study/time
           // guidance, provide transparent offline help instead of a 503 bubble.
           // This is never used for PDF extraction or actual timetable edits.
