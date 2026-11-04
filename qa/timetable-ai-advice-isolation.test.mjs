@@ -37,12 +37,20 @@ assert.match(edge,/changed: false,\s*entries: draftEntries/,'advice never change
 assert.match(edge,/provider: "offline-guidance"/,'dual Gemini 503 still yields transparent generic advice');
 assert.match(edge,/Gemini is temporarily busy, so here are practical general tips/,'offline advice clearly labeled');
 assert.match(edge,/لم أغير أي شيء في جدولك/,'Arabic fallback does not claim schedule changes');
-assert.match(edge,/fallbackStatus !== 503/,'offline advice only follows both model 503s');
+assert.match(edge,/adviceUnavailable\(fallbackError\)/,'offline advice is limited to transient Gemini 503 or timeouts');
+assert.match(edge,/timeout: 11000, headers: \{\}/,'advice HTTP requests have a bounded 11-second timeout');
+assert.match(edge,/if \(!adviceUnavailable\(adviceError\)\)/,'never fallback on authentication or quota errors');
 
 assert.match(edge,/responseSchema: TIMETABLE_RESPONSE_SCHEMA/,'PDF and timetable editing remain JSON-structured');
 assert.match(edge,/validateAndNormalizeEntries\(parsed\.entries\)/,'structured answer validation remains');
 assert.match(edge,/client\.auth\.getUser\(jwt\)/,'authenticated access remains');
 assert.match(js,/apply_timetable_ai_plan/,'RLS timetable save stays intact');
 assert.match(js,/stateAI\.lastFailed=\{text,file\}/,'retry draft and files stay intact');
+assert.match(js,/SpeechRecognition\|\|window\.webkitSpeechRecognition/,'native speech recognition supported with webkit fallback');
+assert.match(js,/recognition\.lang=lang\(\)===["']ar["']\?["']ar-EG["']:["']en-US["']/,'dictation follows Arabic or English locale');
+assert.match(js,/Deliberately do not submit/,'dictation never automatically sends a message');
+assert.match(js,/recognition\.abort\(\)/,'speech recognition cleans up on redraw');
+assert.match(js,/stateAI\.advicePending=false;draw\(\)/,'advice loading state resets after request');
+
 assert.match(js,/window\.visualViewport\.addEventListener\("resize",syncMobileViewport/,'Android keyboard resizing is handled');
 console.log('TIMETABLE_ADVICE_ISOLATION=PASS');
