@@ -17,3 +17,34 @@
 .neis-voice-mic.ttai-mic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8}
 .neis-voice-mic.ttai-mic:hover{background:color-mix(in srgb,var(--ink,#182b24) 5%,transparent)!important}
 .neis-voice-mic.ttai-mic.is-listening{color:#d33b42!important;background:color-mix(in srgb,#d33b42 9%,transparent)!important}
+
+/* ChatGPT-like tap-to-stop dictation: a voice-level waveform is visible
+   while recording; the composer is updated only after Stop. */
+.neis-voice-controls .neis-voice-wave{
+ display:none;align-items:center;justify-content:center;gap:3px;
+ height:30px;padding-inline:5px;flex:0 0 auto;pointer-events:none;
+ color:var(--accent,#287cb6);
+}
+.neis-voice-controls:has(.is-listening) .neis-voice-wave{display:inline-flex}
+.neis-voice-wave i{
+ display:block;width:3px;height:5px;border-radius:4px;
+ background:currentColor;min-height:4px;
+ transition:height .08s ease-out;
+}
+.neis-voice-mic .neis-voice-stop{display:none;width:12px;height:12px;border-radius:3px;background:currentColor}
+.neis-voice-mic.is-listening .neis-voice-stop{display:block}
+.neis-voice-mic.is-listening svg{display:none!important}
+.neis-voice-mic.ttai-mic.is-listening{
+ background:color-mix(in srgb,#287cb6 11%,transparent)!important;
+ color:#287cb6!important;
+ border-color:transparent!important;
+ animation:none!important;
+}
+html[data-theme="dark"] .neis-voice-mic.ttai-mic.is-listening{
+ color:#89c8ff!important;
+ background:rgba(82,158,222,.15)!important;
+}
+@media(max-width:460px){
+ .neis-voice-controls .neis-voice-wave{gap:2px;padding-inline:3px}
+}
+@media(prefers-reduced-motion:reduce){.neis-voice-wave i{transition:none}}
