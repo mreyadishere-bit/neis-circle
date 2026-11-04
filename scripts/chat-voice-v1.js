@@ -19,14 +19,74 @@ function update(input,value){
  input.dispatchEvent(new Event("input",{bubbles:true}));
 }
 function combine(left,right){return [left,right].filter(Boolean).join(" ").trim()}
-function stop(s=active){
+function stopMeter(s){
+ if(s.meterFrame)cancelAnimationFrame(s.meterFrame);
+ try{s.meterSource?.disconnect()}catch(_){}
+ try{s.meterContext?.close()}catch(_){}
+ s.meterFrame=0;
+}
+function startMeter(s){
+ const bars=s.button?.closest(".neis-voice-controls")?.querySelectorAll(".neis-voice-wave i");
+ const AudioClass=window.AudioContext||window.webkitAudioContext;
+ if(!bars?.length||!AudioClass)return;
+ try{
+  s.meterContext=new AudioClass();
+  s.meterSource=s.meterContext.createMediaStreamSource(s.stream);
+  const analyser=s.meterContext.createAnalyser();
+  analyser.fftSize=256;
+  s.meterSource.connect(analyser);
+  const samples=new Uint8Array(analyser.fftSize);
+  let previous=0;
+  const render=now=>{
+   if(s.stopped)return;
+   if(now-previous>65){
+    previous=now;
+    analyser.getByteTimeDomainData(samples);
+    let sum=0;
+    for(const sample of samples){const value=(sample-128)/128;sum+=value*value}
+    const level=Math.min(1,Math.sqrt(sum/samples.length)*5.5);
+    bars.forEach((bar,i)=>{
+     const factor=.55+.45*Math.abs(Math.sin(now/230+i*1.7));
+     bar.style.height=(4+Math.round(19*level*factor))+"px";
+    });
+   }
+   s.meterFrame=requestAnimationFrame(render);
+  };
+  s.meterFrame=requestAnimationFrame(render);
+ }catch(_){stopMeter(s)}
+}
+function finalize(s){
+ if(!s.stopped||!s.recorderEnded||s.pending!==0||s.nextCommit!==s.sequence||s.finalized)return;
+ s.finalized=true;
+ if(s.input.isConnected&&!s.discardPending&&s.transcript.trim()){
+  // Commit once on Stop; never overwrite what the student typed meanwhile.
+  update(s.input,combine(s.input.value.trim(),s.transcript.trim()));
+ }
+ if(s.status?.isConnected){
+  s.status.textContent=s.failedClips
+   ?tr("اكتمل التفريغ، لكن في أجزاء صوتية ما اتعرفتش بدقة.","Done, but some audio couldn't be transcribed.")
+   :"";
+ }
+}
+function stop(s=active,{discard=false}={}){
  if(!s||s.stopped)return;
+ s.discardPending=s.discardPending||discard;
  s.stopped=true;if(active===s)active=null;
  clearTimeout(s.timer);
- if(s.button?.isConnected){s.button.classList.remove("is-listening");s.button.setAttribute("aria-pressed","false")}
- try{if(s.recorder&&s.recorder.state==="recording")s.recorder.stop()}catch(_){}
+ if(s.button?.isConnected){
+  s.button.classList.remove("is-listening");
+  s.button.setAttribute("aria-pressed","false");
+  s.button.setAttribute("aria-label",tr("بدء الإملاء الصوتي","Start voice dictation"));
+ }
+ stopMeter(s);
+ try{
+  if(s.recorder?.state==="recording")s.recorder.stop();
+  else if(s.recorder?.state!=="inactive")s.recorder?.stop();
+  else s.recorderEnded=true;
+ }catch(_){s.recorderEnded=true}
  try{s.stream?.getTracks().forEach(t=>t.stop())}catch(_){}
- if(s.status?.isConnected)s.status.textContent=s.pending?tr("بكمل تحويل آخر جزء…","Finishing last audio clip…"):"";
+ if(s.status?.isConnected)s.status.textContent=tr("جاري تجهيز الكلام…","Finishing transcription…");
+ finalize(s);
 }
 async function recognizeClip(s,blob){
  if(blob.size<1500)return;
@@ -68,13 +128,14 @@ function flushResults(s){
    }
   }else{
    s.failedClips=0;
-   if(result.words&&s.input.isConnected&&!s.discardPending){
-    update(s.input,combine(s.input.value.trim(),result.words));
+   if(result.words&&!s.discardPending){
+    // Hold private interim text until the student taps Stop Dictation.
+    s.transcript=combine(s.transcript,result.words);
    }
    if(!s.stopped&&s.status?.isConnected)s.status.textContent=tr("جاري الاستماع…","Listening…");
   }
  }
- if(s.stopped&&s.pending===0&&s.status?.isConnected)s.status.textContent="";
+ finalize(s);
 }
 function pumpClips(s){
  while(s.inflight<maxParallel&&s.jobs.length){
@@ -111,7 +172,10 @@ function nextClip(s){
  rec.onerror=()=>{if(!s.stopped){s.status.textContent=tr("مشكلة في التسجيل.","Recording error.");stop(s)}};
  rec.onstop=()=>{
   if(chunks.length)queue(s,new Blob(chunks,{type:s.mime}));
-  if(!s.stopped&&s.input.isConnected)nextClip(s);
+  if(s.stopped){
+   s.recorderEnded=true;
+   finalize(s);
+  }else if(s.input.isConnected)nextClip(s);
  };
  rec.start();
  s.timer=setTimeout(()=>{if(rec.state==="recording"){try{rec.stop()}catch(_){stop(s)}}},clipLength);
@@ -128,10 +192,12 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,stopped:false,discardPending:false};
+ const s={input,button,status,stream,mime,recorder:null,timer:null,jobs:[],results:new Map(),sequence:0,nextCommit:0,inflight:0,pending:0,failed:false,failedClips:0,stopped:false,discardPending:false,recorderEnded:false,finalized:false,transcript:"",meterFrame:0};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
- status.textContent=tr("جاري الاستماع للعربي والإنجليزي…","Listening to Arabic and English…");
+ button.setAttribute("aria-label",tr("إيقاف الإملاء الصوتي وإظهار الكلام","Stop dictation and insert text"));
+ status.textContent=tr("جاري الاستماع… اضغط إيقاف لإظهار الكلام.","Listening… tap Stop to insert the text.");
+ startMeter(s);
  stream.getTracks().forEach(t=>t.addEventListener("ended",()=>stop(s),{once:true}));
  try{nextClip(s)}catch(e){status.textContent=tr("تعذر بدء التسجيل.","Could not start recording.");stop(s)}
 }
@@ -147,11 +213,15 @@ function mount(input){
  const status=document.createElement("span");status.className="neis-voice-status";status.setAttribute("role","status");status.setAttribute("aria-live","polite");
  mic.addEventListener("click",()=>{void start(input,mic,status)});
  mic.addEventListener("pointerdown",e=>e.preventDefault());
- wrap.append(mic);
+ const wave=document.createElement("span");
+ wave.className="neis-voice-wave";wave.setAttribute("aria-hidden","true");
+ wave.innerHTML="<i></i><i></i><i></i><i></i><i></i>";
+ mic.insertAdjacentHTML("beforeend",'<span class="neis-voice-stop" aria-hidden="true"></span>');
+ wrap.append(wave,mic);
  const send=form.querySelector('button[type=submit],[data-chat-send],#magnusSend');
  if(send)form.insertBefore(wrap,send);else form.append(wrap);
  form.insertAdjacentElement("afterend",status);
- form.addEventListener("submit",()=>{if(active?.input===input){active.discardPending=true;stop()}});
+ form.addEventListener("submit",()=>{if(active?.input===input)stop(active,{discard:true})});
 }
 function mountTimetable(){
  const panel=document.getElementById("ttAiPanel");
@@ -168,6 +238,7 @@ function mountTimetable(){
  mic.setAttribute("aria-label",tr("إملاء صوتي عربي وإنجليزي تلقائي","Automatic Arabic and English dictation"));
  mic.title=tr("إملاء عربي وإنجليزي تلقائي","Automatic Arabic and English dictation");
  mic.addEventListener("click",()=>{void start(input,mic,status)});
+ mic.insertAdjacentHTML("beforeend",'<span class="neis-voice-stop" aria-hidden="true"></span>');
 }
 function scan(){
  if(active&&!active.input.isConnected)stop();
