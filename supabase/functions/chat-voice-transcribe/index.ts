@@ -25,8 +25,8 @@ Deno.serve(async(request:Request)=>{
   if(authError||!user)return respond({error:"Authentication required"},401);
   const now=Date.now(),prior=limits.get(user.id);
   const usage=prior&&now-prior.window<60000?prior:{count:0,window:now};
-  // Four-second clips produce about fifteen requests per minute while dictating.
-  // Bound bursts without blocking normal continuous speech.
+  // Single continuous utterances are submitted on Stop, avoiding word loss
+  // at the boundaries of arbitrarily short recording clips.
   if(usage.count>=24)return respond({error:"Voice transcription rate limit. Try again shortly.",code:"RATE_LIMIT"},429);
   const body=await request.json().catch(()=>null);
   const mime=String(body?.mimeType||"").split(";")[0].toLowerCase();
@@ -37,7 +37,7 @@ Deno.serve(async(request:Request)=>{
   usage.count++;limits.set(user.id,usage);
   if(limits.size>2000){for(const [id,item] of limits){if(now-item.window>60000)limits.delete(id)}}
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),18000);
+  const timeout=setTimeout(()=>controller.abort(),27000);
   let response:Response;
   try{
    response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",{
@@ -45,10 +45,10 @@ Deno.serve(async(request:Request)=>{
     headers:{"x-goog-api-key":key,"content-type":"application/json"},
     body:JSON.stringify({
      contents:[{role:"user",parts:[
-      {text:"Transcribe the speech verbatim. Automatically detect Arabic and English, including Egyptian Arabic and mixed Arabic-English sentences. Keep each word in the language actually spoken. Preserve proper nouns, technical terms and numbers. Output ONLY the transcript, with no commentary. If there is no audible speech, output an empty string."},
+      {text:"Transcribe this entire continuous voice recording accurately from beginning to end. Detect Egyptian Arabic, Modern Standard Arabic, English and code-switching. Never omit, summarize, complete or invent words; preserve the exact language spoken, names, technical terms, numbers, and sentence order. Include the final words even if the recording ends abruptly. Return ONLY the transcript with natural punctuation. If there is no intelligible speech, return an empty string."},
       {inlineData:{mimeType:mime,data:audio}},
      ]}],
-     generationConfig:{temperature:0,maxOutputTokens:1000,thinkingConfig:{thinkingLevel:"minimal"}},
+     generationConfig:{temperature:0,maxOutputTokens:2400,thinkingConfig:{thinkingLevel:"minimal"}},
     }),
    });
   }finally{clearTimeout(timeout)}
