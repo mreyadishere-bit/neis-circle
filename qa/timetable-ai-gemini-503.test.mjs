@@ -23,7 +23,7 @@ assert.match(edge,/inlineData:\s*\{/,'raw multimodal PDFs/images unchanged');
 assert.match(edge,/GEMINI_SERVICE_UNAVAILABLE_503/);
 assert.match(edge,/retryAfterSeconds: 20/);
 assert.match(edge,/httpOptions: \{ timeout: 80000/);
-assert.match(edge,/maxRetries = 1/);
+assert.match(edge,/maxRetries = 0/);
 assert.match(client,/stateAI\.lastFailed=\{text,file\}/,'failed PDF and prompt preserved for user Retry');
 assert.match(client,/apply_timetable_ai_plan/,'original private save RPC retained');
 assert.match(client,/const AI_REQUEST_DEADLINE_MS=95000/,'frontend deadline unchanged');
@@ -67,15 +67,15 @@ const contents=[{role:'user',parts:[
  assert.deepEqual(h.requests.map(r=>r.model),['gemini-3.8-flash'],'first attempt remains 3.8');
 }
 {
- const h=harness([unavailable,{text:'primary retry success'}]);
- assert.equal((await h.fn(h.ai,contents)).text,'primary retry success');
- assert.deepEqual(h.requests.map(r=>r.model),['gemini-3.8-flash','gemini-3.8-flash']);
+ const h=harness([unavailable,{text:'fallback success'}]);
+ assert.equal((await h.fn(h.ai,contents)).text,'fallback success');
+ assert.deepEqual(h.requests.map(r=>r.model),['gemini-3.8-flash','gemini-3.6-flash']);
 }
 {
- const h=harness([unavailable,unavailable,{text:'fallback success',modelVersion:'gemini-3.6-flash'}]);
+ const h=harness([unavailable,{text:'fallback success',modelVersion:'gemini-3.6-flash'}]);
  const r=await h.fn(h.ai,contents);
  assert.equal(r.text,'fallback success');
- assert.deepEqual(h.requests.map(r=>r.model),['gemini-3.8-flash','gemini-3.8-flash','gemini-3.6-flash']);
+ assert.deepEqual(h.requests.map(r=>r.model),['gemini-3.8-flash','gemini-3.6-flash']);
  // PDF/image parts, multi-turn conversation, system prompt and schema must
  // pass through without losing information or changing the save contract.
  assert.ok(h.requests.every(req=>req.contents===contents),'same multimodal/context payload passed through');
@@ -84,9 +84,9 @@ const contents=[{role:'user',parts:[
  assert.ok(h.requests.every(req=>req.config.systemInstruction===h.requests[0].config.systemInstruction));
 }
 {
- const h=harness([unavailable,unavailable,unavailable]);
+ const h=harness([unavailable,unavailable]);
  await assert.rejects(h.fn(h.ai,contents),err=>err.status===503);
- assert.equal(h.requests.length,3,'bounded: one primary retry and one fallback only');
+ assert.equal(h.requests.length,2,'bounded: one primary and one fallback only');
 }
 for(const bad of [quota,badDocument,transient]){
  const h=harness([bad]);
