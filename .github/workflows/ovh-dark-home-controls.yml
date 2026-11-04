@@ -1,0 +1,106 @@
+name: OVH Dark Mode Home Controls Polish
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-dark-home-controls.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify dark-specific, scoped, flat home controls
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('styles/app.css').read_text()
+          assert 'html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="gallery"]' in s
+          assert 'html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articles"]' in s
+          assert 'html[data-theme="dark"] .post-menu > button.danger[data-delete-post]' in s
+          assert 'background:#1b2b38!important' in s
+          assert 'background:#2a2029!important' in s
+          assert 'html[data-theme="dark"] .grain{display:none!important' in s
+          assert Path('index.html').read_text().count('styles/app.css')==1
+          print('DARK_HOME_CONTROLS_CSS=PASS')
+          PY
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage app CSS
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/dark-home-controls-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/app.css "$target:$stage/app.css"
+      - name: Atomic CSS-only OVH release with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/dark-home-controls-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/dark-home-controls-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/app.css" && test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/styles/app.css"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/app.css" "$dest/styles/app.css"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          pat=r'styles/app\.css(?:\?[^"\x27<> ]*)?'
+          if len(re.findall(pat,s))!=1:raise SystemExit('MAIN_CSS_ASSET_REFERENCE_MISMATCH')
+          s=re.sub(pat,'styles/app.css?v=dark-home-controls-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo DARK_HOME_CONTROLS=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'background:#1b2b38!important' /srv/neis-circle/styles/app.css
+          "${docker[@]}" exec "$cid" grep -Fq 'button.danger[data-delete-post]' /srv/neis-circle/styles/app.css
+          "${docker[@]}" exec "$cid" grep -Fq 'dark-home-controls-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo DARK_HOME_CONTROLS=SUCCESS
+          echo OTHER_SCRIPTS_AND_DATABASE=UNCHANGED
+          REMOTE
