@@ -1,0 +1,45 @@
+name: OVH Windows PWA push delivery read-only audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-windows-push-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect push subscriptions and message dispatch without modifying data
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          docker=(sudo -n /usr/bin/docker)
+          "${docker[@]}" exec supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atqc "
+            SELECT 'ACTIVE_PUSH_SUBSCRIPTIONS='||count(*) FROM public.web_push_subscriptions WHERE enabled=true
+            UNION ALL SELECT 'PUSH_OUTBOX_PENDING='||count(*) FROM public.web_push_outbox WHERE status='pending'
+            UNION ALL SELECT 'PUSH_OUTBOX_FAILED='||count(*) FROM public.web_push_outbox WHERE status='failed'
+            UNION ALL SELECT 'PUSH_OUTBOX_SENT='||count(*) FROM public.web_push_outbox WHERE status='sent'
+            UNION ALL SELECT 'PUSH_DISPATCH_FUNCTION_OVH='||(CASE WHEN to_regprocedure('private.dispatch_web_push_job()') IS NOT NULL THEN pg_get_functiondef('private.dispatch_web_push_job()'::regprocedure) LIKE '%supabase.neiscircle.site%' ELSE false END)::text;
+          "
+          REMOTE
