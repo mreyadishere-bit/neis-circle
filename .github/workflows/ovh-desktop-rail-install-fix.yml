@@ -1,0 +1,128 @@
+name: OVH Fix desktop rail clipping and repeated install card
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-desktop-rail-install-fix.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify rail breakpoint, install state and unchanged navigation
+        run: |
+          set -euo pipefail
+          node --check scripts/desktop-hover-rail-v1.js
+          node --check scripts/pwa-install-v117.js
+          grep -Fq "(min-width: 761px)" scripts/desktop-hover-rail-v1.js
+          grep -Fq "min-width:761px" styles/desktop-hover-rail-rtl-v4.css
+          grep -Fq "knownInstalled()" scripts/pwa-install-v117.js
+          grep -Fq ".pwa-install-card{display:none!important}" styles/pwa-v117.css
+          ! grep -Fq "(min-width: 1024px)" scripts/desktop-hover-rail-v1.js
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage isolated rail and PWA files
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          host="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/desktop-rail-fix-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$host" "install -d -m 700 '$stage'"
+          for name in desktop-hover-rail-v1.css desktop-hover-rail-density-v2.css desktop-hover-rail-fluid-v3.css desktop-hover-rail-rtl-v4.css pwa-v117.css; do
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "styles/$name" "$host:$stage/$name"
+          done
+          for name in desktop-hover-rail-v1.js pwa-install-v117.js; do
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "scripts/$name" "$host:$stage/$name"
+          done
+      - name: Atomic OVH release with rollback and live checks
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/desktop-rail-fix-${{ github.run_id }}-${{ github.run_attempt }}"
+          new="/home/ubuntu/neis-frontend/releases/desktop-rail-fix-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test ! -e "$new"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$new"
+          for name in desktop-hover-rail-v1.css desktop-hover-rail-density-v2.css desktop-hover-rail-fluid-v3.css desktop-hover-rail-rtl-v4.css pwa-v117.css; do
+            test -s "$stage/$name"
+            cp "$stage/$name" "$new/styles/$name"
+          done
+          for name in desktop-hover-rail-v1.js pwa-install-v117.js; do
+            test -s "$stage/$name"
+            cp "$stage/$name" "$new/scripts/$name"
+          done
+          python3 - "$new/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          names=[
+            'styles/desktop-hover-rail-v1.css',
+            'styles/desktop-hover-rail-density-v2.css',
+            'styles/desktop-hover-rail-fluid-v3.css',
+            'styles/desktop-hover-rail-rtl-v4.css',
+            'styles/pwa-v117.css',
+            'scripts/desktop-hover-rail-v1.js',
+            'scripts/pwa-install-v117.js'
+          ]
+          for name in names:
+            pat=re.escape(name)+r'(?:\?[^"\x27<> ]*)?'
+            # pwa-v117 may appear in both normal and noscript fallback links.
+            matches=list(re.finditer(pat,s))
+            if len(matches) not in (1,2) or (len(matches)==2 and name!='styles/pwa-v117.css'):
+              raise SystemExit('FRONTEND_ASSET_REFERENCE_MISMATCH_'+name)
+            s=re.sub(pat,name+'?v=desktop-rail-fix-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$new" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo DESKTOP_RAIL_INSTALL_FIX=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'min-width:761px' /srv/neis-circle/styles/desktop-hover-rail-rtl-v4.css
+          "${docker[@]}" exec "$cid" grep -Fq '(min-width: 761px)' /srv/neis-circle/scripts/desktop-hover-rail-v1.js
+          "${docker[@]}" exec "$cid" grep -Fq '.pwa-install-card{display:none!important}' /srv/neis-circle/styles/pwa-v117.css
+          "${docker[@]}" exec "$cid" grep -Fq 'desktop-rail-fix-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo DESKTOP_RAIL_INSTALL_FIX=SUCCESS
+          echo DB_AND_CHAT_SERVICES=UNCHANGED
+          REMOTE
