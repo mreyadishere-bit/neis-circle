@@ -35,6 +35,7 @@ function stopVoice(){
     recognition.onresult=null;
     recognition.onerror=null;
     recognition.onend=null;
+    try{recognition.__stopForever?.()}catch(_){}
     try{recognition.abort()}catch(_){}
   }
 }
@@ -302,36 +303,72 @@ function draw(){
     let recognition;
     try{recognition=new speechConstructor()}catch(_){voiceStatus.textContent=t("voiceError");return}
     recognition.lang=lang()==="ar"?"ar-EG":"en-US";
-    recognition.continuous=false;
+    recognition.continuous=true;
     recognition.interimResults=true;
     recognition.maxAlternatives=1;
-    const initial=input.value.trim();
+    let stable=input.value.trim();
+    let lastFinal="";
+    let stopped=false;
+    let restartTimer=null;
+    const showText=(segment)=>{
+      input.value=[stable,segment].filter(Boolean).join(" ").slice(0,input.maxLength);
+      input.dispatchEvent(new Event("input",{bubbles:true}));
+    };
     stateAI.voiceRecognition=recognition;
     mic.classList.add("is-listening");
     mic.setAttribute("aria-label",t("voiceStop"));
     mic.title=t("voiceStop");
     voiceStatus.textContent=t("voiceListening");
     recognition.onresult=event=>{
-      if(stateAI.voiceRecognition!==recognition)return;
-      const spoken=Array.from(event.results||[]).map(item=>item[0]?.transcript||"").join(" ").trim();
-      input.value=[initial,spoken].filter(Boolean).join(" ").slice(0,input.maxLength);
-      input.dispatchEvent(new Event("input",{bubbles:true}));
-      // Deliberately do not submit; students must review recognized words.
+      if(stopped||stateAI.voiceRecognition!==recognition)return;
+      const values=Array.from(event.results||[]);
+      const spoken=values.map(item=>item[0]?.transcript||"").join(" ").trim();
+      lastFinal=values.filter(item=>item.isFinal).map(item=>item[0]?.transcript||"").join(" ").trim();
+      showText(spoken);
+      // The transcript is editable before sending; no automatic submission.
     };
     recognition.onerror=event=>{
-      if(stateAI.voiceRecognition!==recognition)return;
-      voiceStatus.textContent=event.error==="not-allowed"||event.error==="service-not-allowed"?t("voiceDenied"):
-        event.error==="no-speech"?"":t("voiceError");
+      if(stopped||stateAI.voiceRecognition!==recognition)return;
+      const error=String(event?.error||"");
+      if(["not-allowed","service-not-allowed","audio-capture"].includes(error)){
+        voiceStatus.textContent=error==="audio-capture"?t("voiceError"):t("voiceDenied");
+        stopped=true;
+        stateAI.voiceRecognition=null;
+        mic.classList.remove("is-listening");
+        mic.setAttribute("aria-label",t("voice"));
+        mic.title=t("voice");
+        return;
+      }
+      if(error!=="no-speech"&&error!=="aborted")voiceStatus.textContent=t("voiceError");
     };
     recognition.onend=()=>{
-      if(stateAI.voiceRecognition!==recognition)return;
-      stateAI.voiceRecognition=null;
-      mic.classList.remove("is-listening");
-      mic.setAttribute("aria-label",t("voice"));
-      mic.title=t("voice");
-      if(voiceStatus.textContent===t("voiceListening"))voiceStatus.textContent="";
+      if(stopped||stateAI.voiceRecognition!==recognition)return;
+      // Browsers may end a single speech session after silence or a duration
+      // cap. Preserve the final transcript and automatically resume while
+      // the user has not explicitly stopped. The mic remains visibly active.
+      stable=input.value.trim();
+      lastFinal="";
+      restartTimer=setTimeout(()=>{
+        if(stopped||stateAI.voiceRecognition!==recognition||!stateAI.open)return;
+        try{
+          recognition.start();
+          voiceStatus.textContent=t("voiceListening");
+        }catch(_){
+          stopped=true;
+          stateAI.voiceRecognition=null;
+          mic.classList.remove("is-listening");
+          mic.setAttribute("aria-label",t("voice"));
+          mic.title=t("voice");
+          voiceStatus.textContent=t("voiceError");
+        }
+      },500);
+    };
+    recognition.__stopForever=()=>{
+      stopped=true;
+      if(restartTimer!==null)clearTimeout(restartTimer);
     };
     try{recognition.start()}catch(_){
+      stopped=true;
       stateAI.voiceRecognition=null;
       mic.classList.remove("is-listening");
       mic.setAttribute("aria-label",t("voice"));
