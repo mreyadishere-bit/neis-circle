@@ -27,7 +27,7 @@ const labels={
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
 };
 const stateAI={user:"",open:false,busy:false,saving:false,panel:null,history:[],draft:null,draftHistory:[],original:[],baseline:[],
-  source:[],file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,voiceRecognition:null,advicePending:false};
+  source:[],picker:null,file:null,preview:false,scheduled:false,privacyOpen:false,lastFailed:null,voiceRecognition:null,advicePending:false};
 function stopVoice(){
   const recognition=stateAI.voiceRecognition;
   stateAI.voiceRecognition=null;
@@ -61,7 +61,7 @@ function begin(reset=false){
     stateAI.baseline=(state.timetable.rows||[]).map(r=>({id:r.id,updated_at:r.updated_at}));
     stateAI.draft=structuredClone(stateAI.original);
     stateAI.draftHistory=[];
-    stateAI.history=[];stateAI.source=[];stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;
+    stateAI.history=[];stateAI.source=[];stateAI.picker=null;stateAI.file=null;stateAI.preview=false;stateAI.lastFailed=null;
   }
 }
 function diff(){
@@ -124,6 +124,40 @@ function message(body,role){
     }
   }else p.textContent=plain;
   return p;
+}
+
+function pickKey(s){return String(s||"").normalize("NFKC").trim().replace(/\\s+/g," ").toLowerCase()}
+function showPicker(chat){
+ const p=stateAI.picker;if(!p||p.done)return;
+ const panel=el("section","ttai-subject-picker");
+ panel.append(el("strong",null,lang()==="ar"?"اختار المواد اللي بتدرسها":"Choose your subjects"));
+ panel.append(el("p",null,lang()==="ar"?"اختار المواد ومستوياتها من الكروت، وبعدها راجع جدولك قبل الحفظ.":"Tap your subjects and levels, then review before saving."));
+ const grades=el("div","ttai-picker-grid");
+ for(const grade of ["Grade 11","Grade 12"]){
+  const btn=el("button","ttai-subject-card"+(p.grade===grade?" selected":""),grade);
+  btn.type="button";btn.setAttribute("aria-pressed",String(p.grade===grade));
+  btn.onclick=()=>{p.grade=p.grade===grade?"":grade;draw()};grades.append(btn);
+ }
+ panel.append(grades);
+ const grid=el("div","ttai-picker-grid");
+ for(const name of p.names){
+  const key=pickKey(name),active=p.selected.has(key);
+  const btn=el("button","ttai-subject-card"+(active?" selected":""),(active?"✓  ":"＋  ")+name);
+  btn.type="button";btn.setAttribute("aria-pressed",String(active));
+  btn.onclick=()=>{active?p.selected.delete(key):p.selected.add(key);draw()};
+  grid.append(btn);
+ }
+ panel.append(grid);
+ const confirm=el("button","ttai-apply",(lang()==="ar"?"تجهيز جدولي":"Build my timetable")+" ("+p.selected.size+")");
+ confirm.type="button";confirm.disabled=!p.selected.size;
+ confirm.onclick=()=>{
+  const lessons=p.lessons.filter(r=>p.selected.has(pickKey(r.title)));
+  if(!lessons.length){alertUser(lang()==="ar"?"لم يتم استخراج مواعيد مؤكدة لهذه المواد. أعد تحليل الملف.":"No verified times were extracted for these subjects. Please re-analyze the file.");return}
+  try{stateAI.draftHistory.push(structuredClone(stateAI.draft));stateAI.draft=normalizeDraft(lessons)}
+  catch(e){stateAI.draftHistory.pop();alertUser(lang()==="ar"?"بعض الحصص غير مكتملة. راجع الملف.":"Some lesson times are incomplete. Please check the file.");return}
+  p.done=true;stateAI.preview=false;draw();
+ };
+ panel.append(confirm);chat.append(panel);
 }
 function syncMobileViewport(){
   const panel=stateAI.panel;
@@ -200,6 +234,7 @@ function draw(){
   chat.setAttribute("role","log");chat.setAttribute("aria-live","polite");
   chat.append(message(t("intro"),"assistant"));
   for(const m of stateAI.history)chat.append(message(m.text,m.role));
+   showPicker(chat);
   if(stateAI.busy)chat.append(message(t(stateAI.advicePending?"thinking":"busy"),"pending"));
   if(stateAI.lastFailed && !stateAI.busy){
     const retry=el("button","ttai-retry",t("retry"));
@@ -209,7 +244,7 @@ function draw(){
   }
   panel.append(chat);
   const changes=diff();
-  if(total(changes)>0){
+  if(total(changes)>0&&(!stateAI.picker||stateAI.picker.done)){
     const bar=el("div","ttai-reviewbar");
     const summary=el("button","ttai-review-toggle",t("review")+" · +"+changes.add.length+
       " / ~"+changes.update.length+" / −"+changes.remove.length);
@@ -485,13 +520,23 @@ async function submit(text,retrying=false){
       }
       throw new Error(description||error?.message||t("error"));
     }
-    if(data.changed){
-      if(stateAI.draft)stateAI.draftHistory.push(structuredClone(stateAI.draft));
-      stateAI.draft=normalizeDraft(data.entries);
-    }
     if(Array.isArray(data.extracted))stateAI.source=data.extracted.slice(0,80);
     else if(data.extracted&&typeof data.extracted==="object")stateAI.source=data.extracted;
-    stateAI.history.push({role:"assistant",text:String(data.reply||"").slice(0,5000)});
+    if(file){
+      // Upload results are subject discovery, never an automatic destructive draft.
+      const source=stateAI.source||{};
+      const lessons=Array.isArray(source.detected_lessons)&&source.detected_lessons.length?source.detected_lessons:data.entries;
+      const names=[...(Array.isArray(source.all_detected_subjects)?source.all_detected_subjects:[]),...lessons.map(r=>r.title)].map(String).filter(Boolean);
+      const distinct=new Map(names.map(n=>[pickKey(n),n]));
+      if(!distinct.size)throw new Error("No subjects detected. Try a clearer timetable.");
+      stateAI.picker={names:[...distinct.values()].sort(),lessons,grade:"",selected:new Set(),done:false};
+      stateAI.draft=structuredClone(stateAI.original);stateAI.draftHistory=[];
+    }else if(data.changed){
+      if(stateAI.draft)stateAI.draftHistory.push(structuredClone(stateAI.draft));
+      stateAI.draft=normalizeDraft(data.entries);
+      if(stateAI.picker)stateAI.picker.done=true;
+    }
+    stateAI.history.push({role:"assistant",text:file?(lang()==="ar"?"تم تحليل الجدول. اختار المواد من الكروت أدناه.":"Schedule analyzed. Select your subjects using the cards below."):String(data.reply||"").slice(0,5000)});
     stateAI.history[stateAI.history.length-2].failedPrompt=false;
     stateAI.file=null;
   }catch(e){
