@@ -10,7 +10,7 @@ const ID="ttAiOpen";
 const editable=["title","day_of_week","start_time","end_time","location","notes","category"];
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
-    attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
+    attach:"Attach PDF or image",placeholder:"Ask about your timetable…",send:"Send",apply:"Save to my timetable",
     review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
     privacy:"AI timetable requests and attached PDF/image schedules are processed by Google Gemini (gemini-3.8-flash). Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
@@ -18,7 +18,7 @@ const labels={
     error:"Couldn't complete that request. Please retry.",retry:"Retry",removeFile:"Remove attachment",info:"AI data handling",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
   ar:{title:"مساعد الجدول الذكي",intro:"قولّي مواعيد حصصك أو ارفع صورة أو PDF، وأنا أجهز لك جدول تراجعه قبل الحفظ.",
-    attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
+    attach:"إرفاق صورة أو PDF",placeholder:"اسأل عن جدولك أو عدّله…",send:"إرسال",apply:"حفظ في جدولي",
     review:"مراجعة التعديلات",discard:"إلغاء المسودة",undo:"تراجع",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
     privacy:"الرسائل وملفات الجدول (PDF أو صور) بتتبعت لـGoogle Gemini (gemini-3.8-flash) للمعالجة البصرية المباشرة. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
@@ -236,6 +236,14 @@ function draw(){
   const input=el("textarea","ttai-input");
   input.rows=1;input.maxLength=1600;input.placeholder=t("placeholder");
   input.setAttribute("aria-label",t("placeholder"));
+  // Single-line placeholder; grow real typed messages up to four lines.
+  // Prevent Android's native textarea resize grip and half-hidden second row.
+  input.addEventListener("input",()=>{
+    input.style.height="40px";
+    const contentHeight=Math.min(102,Math.max(40,input.scrollHeight));
+    input.style.height=contentHeight+"px";
+    input.style.overflowY=input.scrollHeight>102?"auto":"hidden";
+  });
   input.onkeydown=event=>{
     if(event.key==="Enter"&&!event.shiftKey){
       event.preventDefault();
