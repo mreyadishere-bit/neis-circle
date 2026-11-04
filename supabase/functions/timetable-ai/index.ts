@@ -614,7 +614,7 @@ Your timetable has not been changed.`;
           ambiguous_items: [],
           detected_lessons: [],
         },
-        model: String(advice.modelVersion ?? PRIMARY_MODEL).replace(/^models\\//, ""),
+        model: String(advice.modelVersion ?? PRIMARY_MODEL).replace("models/", ""),
         provider: "gemini",
       });
     }
