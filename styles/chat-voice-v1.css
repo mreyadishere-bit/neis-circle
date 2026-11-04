@@ -1,0 +1,12 @@
+/* Unified DM, Circle and Magnus dictation controls. */
+.neis-voice-controls{display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;min-width:0;vertical-align:middle;align-self:center}
+.neis-voice-language{width:44px;min-width:44px;height:36px;padding:0 3px;border:1px solid var(--line,#d7e0e9);border-radius:9px;background:var(--card,#fff);color:var(--ink,#253546);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.neis-voice-mic{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;min-height:38px;border:1px solid var(--line,#d7e0e9);border-radius:12px;background:var(--card,#fff);color:var(--muted,#62748a);padding:0;cursor:pointer;touch-action:manipulation}
+.neis-voice-mic svg{display:block;pointer-events:none}
+.neis-voice-mic.is-listening{background:color-mix(in srgb,#e34848 13%,var(--card,#fff));border-color:#e34848;color:#d63838;animation:neis-voice-pulse 1.5s ease-in-out infinite}
+.neis-voice-mic:focus-visible,.neis-voice-language:focus-visible{outline:2px solid var(--accent,#2573b4);outline-offset:2px}
+.neis-voice-status{display:block;font-size:11px;line-height:1.4;color:var(--muted,#62748a);padding:0 10px;max-height:46px;overflow-wrap:anywhere}
+.neis-voice-status:empty{display:none}
+@keyframes neis-voice-pulse{50%{box-shadow:0 0 0 4px rgba(227,72,72,.15)}}
+@media(prefers-reduced-motion:reduce){.neis-voice-mic.is-listening{animation:none}}
+@media(max-width:450px){.neis-voice-language{width:39px;min-width:39px;font-size:10px}.neis-voice-mic{width:36px;height:36px;flex-basis:36px}.neis-voice-controls{gap:2px}}
