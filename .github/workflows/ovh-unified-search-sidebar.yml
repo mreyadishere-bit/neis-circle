@@ -1,0 +1,120 @@
+name: OVH unified search and collapsed sidebar fix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-unified-search-sidebar.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Validate search, navigation and CSS
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node --check scripts/desktop-hover-rail-v1.js
+          node --check scripts/desktop-hover-rail-rtl-v4.js
+          node qa/static-check.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/05-social.js').read_text()
+          c=Path('styles/desktop-hover-rail-rtl-v4.css').read_text()
+          h=Path('index.html').read_text()
+          assert "searchAdditionalContent" in s and "type:'article'" in s and "type:'opportunity'" in s
+          assert "type==='article'?\`articles/\${id}\`" not in s or "articles/" in s
+          assert "data-search-tab" in s and "searchAdditionalContent(query)" in s
+          assert "is-expanded" in c and "visibility:hidden!important" in c
+          assert '<kbd>⌘ K</kbd>' not in h
+          assert "Search people, posts, articles, opportunities" in h
+          print('SEARCH_SIDEBAR_STATIC=PASS')
+          PY
+      - name: Prepare secure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only affected frontend assets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/unified-search-sidebar-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/desktop-hover-rail-rtl-v4.css "$target:$stage/desktop-hover-rail-rtl-v4.css"
+      - name: Atomic OVH activation and live verification
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/unified-search-sidebar-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/unified-search-sidebar-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/05-social.js" && test -s "$stage/desktop-hover-rail-rtl-v4.css" && test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/05-social.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/05-social.js" "$dest/scripts/05-social.js"
+          cp "$stage/desktop-hover-rail-rtl-v4.css" "$dest/styles/desktop-hover-rail-rtl-v4.css"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);h=p.read_text()
+          h,n=re.subn(r'<kbd>\s*(?:⌘|Ctrl)\s*K\s*</kbd>','',h,count=1)
+          if n!=1 and '<kbd' in h and 'K</kbd>' in h:raise SystemExit('SEARCH_BADGE_CHANGED')
+          h=h.replace('Search people, posts, circles…','Search people, posts, articles, opportunities…')
+          for name,version in [('scripts/05-social.js','unified-search-${{ github.run_id }}'),('styles/desktop-hover-rail-rtl-v4.css','rail-fix-${{ github.run_id }}')]:
+            pat=re.escape(name)+r'(?:\?[^"\x27<>]*)?'
+            if len(re.findall(pat,h))!=1:raise SystemExit('ASSET_REFERENCE_MISMATCH_'+name)
+            h=re.sub(pat,name+'?v='+version,h)
+          p.write_text(h)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo UNIFIED_SEARCH_SIDEBAR=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'searchAdditionalContent' /srv/neis-circle/scripts/05-social.js
+          "${docker[@]}" exec "$cid" grep -Fq 'visibility:hidden!important' /srv/neis-circle/styles/desktop-hover-rail-rtl-v4.css
+          "${docker[@]}" exec "$cid" grep -Fq 'unified-search-${{ github.run_id }}' /srv/neis-circle/index.html
+          "${docker[@]}" exec "$cid" sh -c "! grep -Fq '<kbd>⌘ K</kbd>' /srv/neis-circle/index.html"
+          trap - ERR
+          echo UNIFIED_SEARCH_SIDEBAR=SUCCESS
+          echo DATABASE_AND_UNRELATED_SERVICES=UNCHANGED
+          REMOTE
