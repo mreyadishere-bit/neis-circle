@@ -538,7 +538,7 @@ ${userPrompt.slice(0, 1400)}`,
         const status = Number((err as { status?: number })?.status || 0);
         const message = err instanceof Error ? err.message : String(err);
         return status === 503 || (status === 0 &&
-          /503|high demand|service unavailable|overloaded|timed?\\s*out|timeout|aborterror|aborted/i.test(message));
+          /503|high demand|service unavailable|overloaded|timed?\s*out|timeout|aborterror|aborted/i.test(message));
       };
       let advice: { text?: string; modelVersion?: string } | null = null;
       try {
