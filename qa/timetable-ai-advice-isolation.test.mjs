@@ -13,6 +13,9 @@ const check=(userPrompt,attached=false)=>vm.runInNewContext(predicate+'; adviceO
 });
 for(const q of [
  'how can I manage my timetable in the best way?',
+ 'help me manage my time',
+ 'Help me balance studying and rest',
+ 'ساعدني أنظم وقت المذاكرة',
  'What is the best way to organize my study timetable?',
  'Give me tips for my revision schedule',
  'كيف أنظم جدول مذاكرتي؟'
@@ -31,6 +34,11 @@ assert.ok(edge.indexOf('if (adviceOnly) {')<edge.indexOf('const response = await
 assert.match(edge,/model: PRIMARY_MODEL,[\s\S]*?maxOutputTokens: 450/,'general advice uses Gemini primary as text');
 assert.match(edge,/model: OVERLOAD_FALLBACK_MODEL,[\s\S]*?maxOutputTokens: 450/,'503 falls back to Gemini text mode');
 assert.match(edge,/changed: false,\s*entries: draftEntries/,'advice never changes timetable');
+assert.match(edge,/provider: "offline-guidance"/,'dual Gemini 503 still yields transparent generic advice');
+assert.match(edge,/Gemini is temporarily busy, so here are practical general tips/,'offline advice clearly labeled');
+assert.match(edge,/لم أغير أي شيء في جدولك/,'Arabic fallback does not claim schedule changes');
+assert.match(edge,/fallbackStatus !== 503/,'offline advice only follows both model 503s');
+
 assert.match(edge,/responseSchema: TIMETABLE_RESPONSE_SCHEMA/,'PDF and timetable editing remain JSON-structured');
 assert.match(edge,/validateAndNormalizeEntries\(parsed\.entries\)/,'structured answer validation remains');
 assert.match(edge,/client\.auth\.getUser\(jwt\)/,'authenticated access remains');
