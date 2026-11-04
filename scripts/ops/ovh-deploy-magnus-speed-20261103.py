@@ -8,7 +8,8 @@ DOCKER=['sudo','-n','/usr/bin/docker']
 BASE=['docker-compose.yml','docker-compose.security.yml','docker-compose.caddy.yml',
       'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml']
 EXTRA=['docker-compose.edge-integrations.yml','docker-compose.timetable-ai.yml',
-       'docker-compose.timetable-ai-gemini.yml','docker-compose.timetable-ai-cloudflare.yml']
+       'docker-compose.timetable-ai-gemini.yml','docker-compose.timetable-ai-cloudflare.yml',
+       'docker-compose.timetable-fast-chat.yml','docker-compose.chat-voice-transcribe.yml']
 REV=uuid.uuid4().hex[:12]
 def require(value,code):
  if not value:raise RuntimeError(code)
