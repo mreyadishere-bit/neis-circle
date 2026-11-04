@@ -28,7 +28,7 @@ jobs:
           python3 -m py_compile scripts/ops/ovh-chat-voice-transcribe-deploy.py
           bun build supabase/functions/chat-voice-transcribe/index.ts --target=browser --external '*' --outdir=/tmp/chat-voice-transcribe-check
           grep -Fq 'chat-voice-transcribe' scripts/chat-voice-v1.js
-          grep -Fq 'gemini-3.5-flash-lite' supabase/functions/chat-voice-transcribe/index.ts
+          grep -Fq 'gemini-3.1-flash-lite' supabase/functions/chat-voice-transcribe/index.ts
           grep -Fq 'inlineData' supabase/functions/chat-voice-transcribe/index.ts
           grep -Fq "(tmp/'chat-voice-transcribe').mkdir" scripts/ops/ovh-chat-voice-transcribe-deploy.py
       - name: Configure pinned SSH
