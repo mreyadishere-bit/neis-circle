@@ -8,7 +8,7 @@ DOCKER=['sudo','-n','/usr/bin/docker']
 BASE=['docker-compose.yml','docker-compose.security.yml','docker-compose.caddy.yml',
       'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml']
 EXTRA=['docker-compose.edge-integrations.yml','docker-compose.timetable-ai.yml',
-       'docker-compose.timetable-ai-gemini.yml','docker-compose.chat-voice-transcribe.yml',
+       'docker-compose.timetable-ai-gemini.yml','docker-compose.timetable-ai-cloudflare.yml',
        'docker-compose.magnus-neis.yml','docker-compose.timetable-fast-chat.yml']
 REV=uuid.uuid4().hex[:12]
 def require(value,code):
@@ -67,11 +67,12 @@ def main():
  before=config()
  active=current()
  require(active==pathlib.Path(mount(before)['source']),'ACTIVE_CONFIG_MISMATCH')
- require((active/'chat-voice-transcribe/index.ts').is_file(),'TIMETABLE_FUNCTION_NOT_ACTIVE')
+ require((active/'main/index.ts').is_file() and (active/'magnus-chat/index.ts').is_file(),'EDGE_FUNCTIONS_INCOMPLETE')
  new=pathlib.Path('/home/ubuntu/neis-backups/chat-voice-transcribe-release-'+REV)
  tmp=pathlib.Path(str(new)+'.building')
  require(not new.exists() and not tmp.exists(),'RELEASE_EXISTS')
  shutil.copytree(active,tmp)
+ (tmp/'chat-voice-transcribe').mkdir(exist_ok=True)
  shutil.copy2(STAGE/'index.ts',tmp/'chat-voice-transcribe/index.ts')
  tmp.rename(new)
  new_mount=copy.deepcopy(mount(before))
