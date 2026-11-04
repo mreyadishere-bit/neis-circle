@@ -36,10 +36,10 @@ async function recognizeClip(s,blob){
  for(let offset=0;offset<a.length;offset+=16384)
   base64+=String.fromCharCode(...a.subarray(offset,offset+16384));
  base64=btoa(base64);
- const sb=window.sb||window.supabaseClient||window.neisSupabase;
- if(!sb?.functions?.invoke)throw Error("VOICE_BACKEND_UNAVAILABLE");
+ const client=(typeof sb!=="undefined"?sb:null)||window.supabaseClient||window.neisSupabase;
+ if(!client?.functions?.invoke)throw Error("VOICE_BACKEND_UNAVAILABLE");
  const type=(blob.type||s.mime||"audio/webm").split(";")[0];
- const {data,error}=await sb.functions.invoke("chat-voice-transcribe",{body:{mimeType:type,audio:base64}});
+ const {data,error}=await client.functions.invoke("chat-voice-transcribe",{body:{mimeType:type,audio:base64}});
  if(error||!data||typeof data.text!=="string"){
   let detail=data?.error||error?.message||"";
   if(error?.context?.json){const payload=await error.context.json().catch(()=>null);detail=payload?.error||detail}
@@ -53,7 +53,7 @@ function queue(s,blob){
  s.chain=s.chain.then(async()=>{
   try{
    const words=await recognizeClip(s,blob);
-   if(words&&s.input.isConnected){
+   if(words&&s.input.isConnected&&!s.discardPending){
     // Respect the user's current edits, rather than replacing the text
     // they typed during an asynchronous transcription.
     update(s.input,combine(s.input.value.trim(),words));
@@ -93,7 +93,7 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,chain:Promise.resolve(),pending:0,failed:false,stopped:false};
+ const s={input,button,status,stream,mime,recorder:null,timer:null,chain:Promise.resolve(),pending:0,failed:false,stopped:false,discardPending:false};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  status.textContent=tr("جاري الاستماع للعربي والإنجليزي…","Listening to Arabic and English…");
@@ -116,7 +116,7 @@ function mount(input){
  const send=form.querySelector('button[type=submit],[data-chat-send],#magnusSend');
  if(send)form.insertBefore(wrap,send);else form.append(wrap);
  form.insertAdjacentElement("afterend",status);
- form.addEventListener("submit",()=>{if(active?.input===input)stop()});
+ form.addEventListener("submit",()=>{if(active?.input===input){active.discardPending=true;stop()}});
 }
 function scan(){
  if(active&&!active.input.isConnected)stop();
