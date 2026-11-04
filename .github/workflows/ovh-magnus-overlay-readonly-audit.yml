@@ -1,0 +1,40 @@
+name: OVH Magnus Edge overlay active mount audit
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-magnus-overlay-readonly-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          ssh -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/neis-supabase
+          echo "ACTIVE_EDGE_VOLUME=$(sudo -n /usr/bin/docker inspect supabase-edge-functions --format '{{range .Mounts}}{{if eq .Destination "/home/deno/functions"}}{{.Source}}{{end}}{{end}}')"
+          files=(docker-compose.yml docker-compose.security.yml docker-compose.caddy.yml docker-compose.frontend-public.yml docker-compose.auth-public-direct.yml)
+          for x in docker-compose.edge-integrations.yml docker-compose.timetable-ai.yml docker-compose.timetable-ai-gemini.yml docker-compose.timetable-ai-cloudflare.yml docker-compose.timetable-fast-chat.yml docker-compose.chat-voice-transcribe.yml docker-compose.magnus-neis.yml; do
+            if test -f "$x"; then files+=("$x");echo "EXTRA_OVERLAY=$x";fi
+          done
+          args=()
+          for f in "${files[@]}";do args+=(-f "$f");done
+          sudo -n /usr/bin/docker compose "${args[@]}" config --format json | python3 -c 'import json,sys;v=json.load(sys.stdin)["services"]["functions"]["volumes"];print("CONFIG_EDGE_VOLUME="+str([x.get("source") for x in v if x.get("target")=="/home/deno/functions"]))'
+          for x in docker-compose.chat-voice-transcribe.yml docker-compose.magnus-neis.yml docker-compose.timetable-fast-chat.yml;do
+            if test -f "$x";then echo "CHECK_OVERLAY=$x";grep -oE '/home/ubuntu/[^ "]*' "$x" | grep 'release\|backup' | head -3 || true;fi
+          done
+          REMOTE
