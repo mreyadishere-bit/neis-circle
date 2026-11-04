@@ -49,10 +49,16 @@ async function recognizeClip(s,blob){
 }
 function queue(s,blob){
  if(!blob||blob.size<1500)return;
+ // Bound queued mobile clips when provider/network is slow.
+ if(s.pending>=3){
+  if(s.status?.isConnected)s.status.textContent=tr("الشبكة بطيئة؛ سيُستكمل التسجيل مع تجاهل مقطع مؤقت.","Connection slow; continuing to listen while skipping one clip.");
+  return;
+ }
  s.pending++;
  s.chain=s.chain.then(async()=>{
   try{
    const words=await recognizeClip(s,blob);
+   s.failedClips=0;
    if(words&&s.input.isConnected&&!s.discardPending){
     // Respect the user's current edits, rather than replacing the text
     // they typed during an asynchronous transcription.
@@ -60,8 +66,23 @@ function queue(s,blob){
    }
    if(!s.stopped&&s.status.isConnected)s.status.textContent=tr("جاري الاستماع…","Listening…");
   }catch(e){
-   if(s.status.isConnected)s.status.textContent=tr("التعرف على الصوت مش متاح حاليًا. حاول مجددًا.","Speech transcription unavailable. Retry.");
-   if(!s.stopped){s.failed=true;stop(s)}
+   s.failedClips=(s.failedClips||0)+1;
+   console.warn('[NEIS voice clip]',formatError(e));
+   if(s.status.isConnected){
+    const detail=formatError(e).toLowerCase();
+    s.status.textContent=detail.includes('rate_limit')||detail.includes('429')
+      ?tr("خدمة تحويل الصوت مشغولة. جرّب تاني بعد شوية.","Speech service is busy. Try again shortly.")
+      :detail.includes('authentication')||detail.includes('401')
+       ?tr("سجل الدخول تاني لتفعيل الإملاء الصوتي.","Please sign in again to use speech-to-text.")
+       :tr("تعذر تحويل آخر جزء. التسجيل مستمر؛ جرّب الكلام تاني.","Could not transcribe the last clip. Still listening; please retry.");
+   }
+   // A transient network/provider failure must not stop a continuous recording.
+   // Stop after repeated failures to avoid an unbounded queue and API requests.
+   if(!s.stopped&&s.failedClips>=3){
+    s.failed=true;
+    stop(s);
+    if(s.status.isConnected)s.status.textContent=tr("تعذر الاتصال بخدمة التفريغ ٣ مرات. اضغط الميكروفون لإعادة المحاولة.","Transcription failed 3 times. Tap the mic to retry.");
+   }
   }finally{
    s.pending--;
    if(s.stopped&&s.pending===0&&s.status.isConnected)s.status.textContent="";
@@ -93,7 +114,7 @@ async function start(input,button,status){
  try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}})}
  catch(e){status.textContent=tr("اسمح بالمايك من إعدادات المتصفح.","Allow microphone access in browser settings.");return}
  if(active){stream.getTracks().forEach(t=>t.stop());return}
- const s={input,button,status,stream,mime,recorder:null,timer:null,chain:Promise.resolve(),pending:0,failed:false,stopped:false,discardPending:false};
+ const s={input,button,status,stream,mime,recorder:null,timer:null,chain:Promise.resolve(),pending:0,failed:false,failedClips:0,stopped:false,discardPending:false};
  active=s;
  button.classList.add("is-listening");button.setAttribute("aria-pressed","true");
  status.textContent=tr("جاري الاستماع للعربي والإنجليزي…","Listening to Arabic and English…");
@@ -143,6 +164,7 @@ let queued=false;
 const schedule=()=>{if(queued)return;queued=true;requestAnimationFrame(()=>{queued=false;scan()})};
 new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",scan,{once:true});else scan();
-document.addEventListener("visibilitychange",()=>{if(document.hidden)stop()});
+// Keep recording while the browser allows the microphone to remain active.
+// Mobile operating systems may still suspend capture when the app is backgrounded.
 window.addEventListener("pagehide",()=>stop());
 })();
