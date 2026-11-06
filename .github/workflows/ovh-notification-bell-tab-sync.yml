@@ -1,0 +1,98 @@
+name: OVH Notification Bell and Tab Sync
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-notification-bell-tab-sync.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify browser tab and bell always share same unread count
+        run: |
+          set -euo pipefail
+          node --check scripts/social/notifications-v174.js
+          node qa/notification-bell-tab-sync.test.mjs
+          grep -Fq "syncNotificationBell(unread)" scripts/social/notifications-v174.js
+      - name: Configure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage notification runtime only
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/notif-bell-tab-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "$target:$stage/notifications-v174.js"
+      - name: Atomic CSS-independent frontend release with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/notif-bell-tab-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/notif-bell-tab-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/notifications-v174.js" && test ! -e "$dest"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && test -s "$old/scripts/social/notifications-v174.js"
+          grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/notifications-v174.js" "$dest/scripts/social/notifications-v174.js"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          pat=r'scripts/social/notifications-v174\.js(?:\?[^"\x27<> ]*)?'
+          if len(re.findall(pat,s))!=1:raise SystemExit('NOTIFICATION_ASSET_REFERENCE_MISMATCH')
+          s=re.sub(pat,'scripts/social/notifications-v174.js?v=bell-sync-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo NOTIFICATION_BELL_FRONTEND=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'syncNotificationBell(unread)' /srv/neis-circle/scripts/social/notifications-v174.js
+          "${docker[@]}" exec "$cid" grep -Fq 'bell-sync-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo NOTIFICATION_BELL_FRONTEND=SUCCESS
+          echo OTHER_FRONTEND_AND_BACKEND=UNCHANGED
+          REMOTE
