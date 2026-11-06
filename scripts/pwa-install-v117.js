@@ -189,7 +189,10 @@
 
   async function ensureWebPush(requestPermission,renewSubscription=false){
     if(!('Notification' in window)||!('PushManager' in window)||!('serviceWorker' in navigator)){
-      if(requestPermission&&typeof toast==='function')toast(lang('Notifications are not supported in this browser.','المتصفح الحالي لا يدعم الإشعارات.'));
+      if(requestPermission&&typeof toast==='function')toast(lang(
+        'For iPhone notifications, add NEIS Circle to the Home Screen in Safari and open the installed app (iOS 16.4+). On Android, use a browser that supports Web Push.',
+        'لاستقبال الإشعارات على الآيفون، أضف NEIS Circle للشاشة الرئيسية من Safari وافتح التطبيق المثبّت (iOS 16.4 أو أحدث). على أندرويد استخدم متصفحًا يدعم Web Push.'
+      ));
       return false;
     }
     if(!(typeof sb!=='undefined'?sb:null)){
@@ -383,7 +386,7 @@
       <div class="modal-actions pwa-notification-actions">
         <button type="button" class="secondary" data-pwa-toggle-all></button>
         <p data-pwa-push-health role="status" style="margin:4px 0;font-size:12px;line-height:1.5"></p>
-        <button type="button" class="secondary" data-test-system-notification>${lang('Test Windows notification','اختبار إشعار ويندوز')}</button>
+        <button type="button" class="secondary" data-test-system-notification>${lang('Test device notification','اختبار إشعار الجهاز')}</button>
         <button type="button" class="secondary" data-pwa-repair-push>${lang('Repair background notifications','إصلاح إشعارات الخلفية')}</button>
         <button type="button" class="secondary" data-test-notification-sound>${lang('Test sound','اختبار الصوت')}</button>
         <button type="button" class="secondary" data-test-incoming-alert>${lang('Test incoming alert','اختبار تنبيه رسالة واردة')}</button>
