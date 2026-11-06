@@ -94,30 +94,40 @@ Deno.serve(async(req:Request)=>{
   let successes=0;
   let filtered=0;
   const errors:string[]=[];
-  for(const sub of subscriptions){
-    const preferences=sub.device_preferences||{};
-    if(preferenceKey && preferences[preferenceKey]===false){filtered++;continue;}
-    const payload=JSON.stringify({
-      title:claimed.title,body:claimed.body,route:claimed.route||"",
-      type:notificationType,notification_id:String(claimed.notification_id),
-      silent:preferences.sound===false
-    });
-    try{
-      await webpush.sendNotification({
-        endpoint:sub.endpoint,
-        keys:{p256dh:sub.p256dh,auth:sub.auth}
-      },payload,{TTL:60*60,urgency:"high"});
-      successes++;
-    }catch(error:any){
-      const status=Number(error?.statusCode||0);
-      errors.push(status?("webpush_"+status):"webpush_error");
-      if(status===404||status===410){
-        await db.from("web_push_subscriptions")
-          .update({enabled:false,updated_at:new Date().toISOString()})
-          .eq("id",sub.id);
+  // Send to each device concurrently, bounded to four requests. Sequential
+  // endpoints could delay healthy Android/iOS devices behind a stale one.
+  const workers=4;
+  let nextIndex=0;
+  const deliver=async()=>{
+    while(nextIndex<subscriptions.length){
+      const sub=subscriptions[nextIndex++];
+      const preferences=sub.device_preferences||{};
+      if(preferenceKey && preferences[preferenceKey]===false){filtered++;continue;}
+      const payload=JSON.stringify({
+        title:claimed.title,body:claimed.body,route:claimed.route||"",
+        type:notificationType,notification_id:String(claimed.notification_id),
+        silent:preferences.sound===false
+      });
+      try{
+        await webpush.sendNotification({
+          endpoint:sub.endpoint,
+          keys:{p256dh:sub.p256dh,auth:sub.auth}
+        },payload,{TTL:60*60,urgency:"high"});
+        successes++;
+      }catch(error:any){
+        const status=Number(error?.statusCode||0);
+        errors.push(status?("webpush_"+status):"webpush_error");
+        if(status===404||status===410){
+          // The next foreground app open detects the disabled endpoint and
+          // renews it. Never keep sending to a known-expired subscription.
+          await db.from("web_push_subscriptions")
+            .update({enabled:false,updated_at:new Date().toISOString()})
+            .eq("id",sub.id);
+        }
       }
     }
-  }
+  };
+  await Promise.all(Array.from({length:Math.min(workers,subscriptions.length)},()=>deliver()));
 
   if(successes>0 || filtered===subscriptions.length){
     await db.from("web_push_outbox").update({
