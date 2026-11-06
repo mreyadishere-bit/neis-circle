@@ -1619,11 +1619,15 @@ function homePostsForRealtimePatch(){
   if(state.filter==='For you'){
     const follows=Array.isArray(state.follows)?state.follows:[];
     const memberships=Array.isArray(state.circleMembers)?state.circleMembers:[];
-    const following=follows.filter(f=>same(f?.follower_id,authUser?.id)&&f?.status==='accepted').map(f=>f.following_id);
-    const joined=memberships.filter(m=>same(m?.user_id,authUser?.id)&&m?.status==='active').map(m=>m.circle_id);
+    const following=new Set(follows.filter(f=>same(f?.follower_id,authUser?.id)&&f?.status==='accepted').map(f=>String(f.following_id)));
+    const joined=new Set(memberships.filter(m=>same(m?.user_id,authUser?.id)&&m?.status==='active').map(m=>String(m.circle_id)));
+    const prioritized=post=>Number(
+      same(post?.author_id,authUser?.id)||
+      following.has(String(post?.author_id))||
+      joined.has(String(post?.circle_id))
+    );
     posts=[...posts].sort((a,b)=>
-      Number(same(b?.author_id,authUser?.id)||following.some(id=>same(id,b?.author_id))||joined.some(id=>same(id,b?.circle_id)))-
-      Number(same(a?.author_id,authUser?.id)||following.some(id=>same(id,a?.author_id))||joined.some(id=>same(id,a?.circle_id)))||
+      prioritized(b)-prioritized(a)||
       new Date(b?.created_at||0)-new Date(a?.created_at||0)
     );
   }
@@ -1644,10 +1648,10 @@ function renderHomePostNode(post){
   template.innerHTML=String(html).trim();
   return template.content.firstElementChild;
 }
-function syncHomePostEngagement(node,post){
+function syncHomePostEngagement(node,post,engagement){
   if(!node||!post)return;
-  const liked=state.liked.map(String).includes(String(post.id));
-  const saved=state.saved.map(String).includes(String(post.id));
+  const liked=engagement?engagement.liked.has(String(post.id)):state.liked.some(id=>same(id,post.id));
+  const saved=engagement?engagement.saved.has(String(post.id)):state.saved.some(id=>same(id,post.id));
   const like=node.querySelector('[data-action="like"]');
   if(like){
     like.classList.toggle('active',liked);
@@ -1690,6 +1694,10 @@ function patchHomeRealtime(options={}){
   const feed=document.querySelector('#view .feed');
   if(!feed)return false;
   const forceIds=new Set((options.forcePostIds||[]).map(String));
+  const engagement={
+    liked:new Set((state.liked||[]).map(String)),
+    saved:new Set((state.saved||[]).map(String))
+  };
   const posts=homePostsForRealtimePatch();
   const wanted=new Set(posts.map(p=>String(p.id)));
   const existing=new Map();
@@ -1714,7 +1722,7 @@ function patchHomeRealtime(options={}){
         changed=true;
       }
     }else if(node){
-      syncHomePostEngagement(node,post);
+      syncHomePostEngagement(node,post,engagement);
     }
 
     if(!node){
@@ -1731,7 +1739,7 @@ function patchHomeRealtime(options={}){
       node=fresh;
       changed=true;
     }
-    if(node)syncHomePostEngagement(node,post);
+    if(node)syncHomePostEngagement(node,post,engagement);
   });
 
   if(!posts.length){
@@ -1773,6 +1781,10 @@ function patchCircleHomeRealtime(options={}){
   const feed=document.querySelector('#view .circle-home-feed');
   if(!feed)return false;
   const forceIds=new Set((options.forcePostIds||[]).map(String));
+  const engagement={
+    liked:new Set((state.liked||[]).map(String)),
+    saved:new Set((state.saved||[]).map(String))
+  };
   const posts=circlePostsForRealtimePatch();
   const wanted=new Set(posts.map(post=>String(post.id)));
   const existing=new Map();
@@ -1797,7 +1809,7 @@ function patchCircleHomeRealtime(options={}){
         changed=true;
       }
     }else if(node){
-      syncHomePostEngagement(node,post);
+      syncHomePostEngagement(node,post,engagement);
     }
 
     if(!node){
@@ -1814,7 +1826,7 @@ function patchCircleHomeRealtime(options={}){
       node=fresh;
       changed=true;
     }
-    if(node)syncHomePostEngagement(node,post);
+    if(node)syncHomePostEngagement(node,post,engagement);
   });
 
   if(!posts.length){
