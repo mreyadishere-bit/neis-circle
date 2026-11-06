@@ -351,9 +351,15 @@
 
   function startFallback(){
     clearInterval(pollTimer);
+    // A socket can stay nominally SUBSCRIBED while mobile connectivity drops
+    // events. Reconcile in the foreground even with a healthy channel.
+    // Background alerts come from Web Push; avoid useless background polling.
     const healthy=realtimeStatus==='SUBSCRIBED';
-    const interval=healthy?120000:10000;
-    pollTimer=setInterval(()=>refresh(true),interval);
+    const interval=typeof document!=='undefined'&&document.hidden?120000:(healthy?30000:10000);
+    pollTimer=setInterval(()=>{
+      if(typeof document!=='undefined'&&document.hidden)return;
+      refresh(true).catch(()=>{});
+    },interval);
   }
 
   async function setup(uid){
@@ -451,6 +457,13 @@
     }).catch(()=>{});
   }
   if(typeof document!=='undefined'){
+    document.addEventListener('visibilitychange',()=>{
+      startFallback();
+      if(!document.hidden&&channelUid)refresh(true,{force:true}).catch(()=>{});
+    });
+    window.addEventListener('online',()=>{
+      if(channelUid)refresh(true,{force:true}).catch(()=>{});
+    });
     document.addEventListener('pointerdown',primeNotificationSound,{capture:true});
     document.addEventListener('keydown',primeNotificationSound,{capture:true});
   }
