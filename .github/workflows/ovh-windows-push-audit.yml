@@ -44,6 +44,16 @@ jobs:
             UNION ALL SELECT 'PUSH_SENT_LAST_HOUR='||count(*) FROM public.web_push_outbox WHERE status='sent' AND created_at > now() - interval '1 hour'
             UNION ALL SELECT 'PUSH_FAILED_LAST_HOUR='||count(*) FROM public.web_push_outbox WHERE status='failed' AND created_at > now() - interval '1 hour'
             UNION ALL SELECT 'PUSH_ACTIVE_RECENT_HOUR='||count(*) FROM public.web_push_subscriptions WHERE enabled=true AND last_seen_at > now() - interval '1 hour'
+            UNION ALL SELECT 'PUSH_SENT_24H='||count(*) FROM public.web_push_outbox WHERE status='sent' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_DELIVERY_SLOW_10S_24H='||count(*) FROM public.web_push_outbox WHERE sent_at-created_at>interval '10 seconds' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_DELIVERY_SLOW_60S_24H='||count(*) FROM public.web_push_outbox WHERE sent_at-created_at>interval '60 seconds' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_DELIVERY_AVG_SECONDS_24H='||coalesce(round(avg(extract(epoch from sent_at-created_at))::numeric,2),0) FROM public.web_push_outbox WHERE sent_at IS NOT NULL AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_QUEUE_STALE_30S='||count(*) FROM public.web_push_outbox WHERE status in ('pending','failed','sending') AND created_at<now()-interval '30 seconds'
+            UNION ALL SELECT 'PUSH_QUEUE_SENDING='||count(*) FROM public.web_push_outbox WHERE status='sending'
+            UNION ALL SELECT 'PUSH_RECENT_ERROR_CLASSES='||coalesce(string_agg(category||':'||number,','),'none') FROM (SELECT coalesce(nullif(regexp_replace(last_error,'[^a-zA-Z0-9_]+','','g'),''),'ok') category,count(*) number FROM public.web_push_outbox WHERE created_at>now()-interval '24 hours' GROUP BY 1 ORDER BY 2 DESC LIMIT 6) z
+            UNION ALL SELECT 'PUSH_24H_DM_NOTIFICATION_COUNT='||count(*) FROM public.notifications WHERE type='message' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_24H_DM_OUTBOX_COUNT='||count(*) FROM public.web_push_outbox WHERE notification_type='message' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_RETRY_CRON='||coalesce((select active::text||':'||schedule from cron.job where jobname='neis-web-push-retry' limit 1),'missing')
             UNION ALL SELECT 'PUSH_DISPATCH_FUNCTION_OVH='||(CASE WHEN to_regprocedure('private.dispatch_web_push_job()') IS NOT NULL THEN pg_get_functiondef('private.dispatch_web_push_job()'::regprocedure) LIKE '%supabase.neiscircle.site%' ELSE false END)::text;
           "
           REMOTE
