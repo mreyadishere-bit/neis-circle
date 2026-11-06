@@ -1,0 +1,111 @@
+name: OVH Post Image Fill Default
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-post-image-fill-default.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Verify Fill default and Fit preservation
+        run: |
+          set -euo pipefail
+          node --check scripts/05-social.js
+          node --check scripts/home-polls-v170.js
+          node --check scripts/public-polls-v161.js
+          node qa/post-image-default-fill.test.mjs
+      - name: Configure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage targeted frontend and SQL
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$OVH_HOST"
+          stage="/home/ubuntu/neis-backups/post-image-fill-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js "$target:$stage/05-social.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/home-polls-v170.js "$target:$stage/home-polls-v170.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/public-polls-v161.js "$target:$stage/public-polls-v161.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261106185000_post_image_fill_default.sql "$target:$stage/fill-default.sql"
+      - name: Apply new-post DB default then publish frontend with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/post-image-fill-${{ github.run_id }}-${{ github.run_attempt }}"
+          dest="/home/ubuntu/neis-frontend/releases/post-image-fill-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -s "$stage/fill-default.sql" && test -s "$stage/05-social.js" && test ! -e "$dest"
+          # Only change the DEFAULT for newly inserted records; no existing posts are updated.
+          "${docker[@]}" exec -i supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -q < "$stage/fill-default.sql"
+          "${docker[@]}" exec supabase-db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atqc "
+            select 'NEW_POST_IMAGE_DEFAULT='||column_default
+            from information_schema.columns where table_schema='public' and table_name='posts' and column_name='image_display_mode';
+          " | grep -Fx "NEW_POST_IMAGE_DEFAULT='fill'::text"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -s "$old/index.html" && grep -Fq "$old" "$overlay"
+          cp "$overlay" "$stage/overlay.backup"
+          cp -a "$old" "$dest"
+          cp "$stage/05-social.js" "$dest/scripts/05-social.js"
+          cp "$stage/home-polls-v170.js" "$dest/scripts/home-polls-v170.js"
+          cp "$stage/public-polls-v161.js" "$dest/scripts/public-polls-v161.js"
+          python3 - "$dest/index.html" <<'PY'
+          from pathlib import Path
+          import re,sys
+          p=Path(sys.argv[1]);s=p.read_text()
+          for asset in ('scripts/05-social.js','scripts/home-polls-v170.js'):
+            pattern=re.escape(asset)+r'(?:\?[^"\x27<> ]*)?'
+            if len(re.findall(pattern,s))!=1:raise SystemExit('POST_IMAGE_ASSET_MISMATCH_'+asset)
+            s=re.sub(pattern,asset+'?v=fill-default-${{ github.run_id }}',s)
+          p.write_text(s)
+          PY
+          python3 - "$overlay" "$old" "$dest" <<'PY'
+          from pathlib import Path
+          import sys
+          p=Path(sys.argv[1]);old,new=sys.argv[2:];s=p.read_text()
+          if s.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          p.write_text(s.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.backup" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo POST_IMAGE_FRONTEND=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy);test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq 'name="cpImageDisplayMode" value="fill" checked' /srv/neis-circle/scripts/05-social.js
+          "${docker[@]}" exec "$cid" grep -Fq 'name="ppImageMode" value="fill" checked' /srv/neis-circle/scripts/home-polls-v170.js
+          "${docker[@]}" exec "$cid" grep -Fq 'fill-default-${{ github.run_id }}' /srv/neis-circle/index.html
+          trap - ERR
+          echo POST_IMAGE_FILL_DEFAULT=SUCCESS
+          echo EXISTING_POST_IMAGE_MODES=UNCHANGED
+          REMOTE
