@@ -69,6 +69,25 @@
       Promise.resolve(job).catch(()=>{lastBadgeCount=-1});
     }catch(_){lastBadgeCount=-1}
   }
+  // The tab title and notification bell must be written in one synchronous
+  // pass from the exact same unread rows. Realtime, Web Push, silent refresh,
+  // and shared-state updates may call only updateTabBadge().
+  function syncNotificationBell(unread){
+    const bell=document.querySelector?.('.top-actions [data-action="notifications"]');
+    if(!bell)return;
+    let badge=bell.querySelector?.(':scope > .count-badge');
+    if(!badge&&unread){
+      badge=document.createElement('i');
+      badge.className='count-badge';
+      badge.setAttribute('aria-hidden','true');
+      bell.append(badge);
+    }
+    if(badge){
+      badge.textContent=unread>99?'99+':String(unread||'');
+      badge.classList.toggle('hidden',unread===0);
+    }
+    bell.dataset.unreadCount=String(unread);
+  }
   function updateTabBadge(){
     if(typeof document==='undefined')return;
     const rows=state.notifications||[];
@@ -88,6 +107,7 @@
     const unread=rows.filter(n=>!n.read_at).length;
     const label=unread>99?'99+':String(unread);
     document.title=unread?'('+label+') '+DEFAULT_TAB_TITLE:DEFAULT_TAB_TITLE;
+    syncNotificationBell(unread);
     updateInstalledAppBadge(unread);
   }
 
