@@ -1,4 +1,5 @@
 name: OVH Notification Bell and Tab Sync
+# Validates browser event mocks, then deploys the notification runtime only.
 on:
   push:
     branches: [main]
