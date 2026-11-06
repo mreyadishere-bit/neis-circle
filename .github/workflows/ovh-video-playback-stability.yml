@@ -1,4 +1,5 @@
 name: OVH Video Playback Stability
+# Protect embedded video players from accidental same-route DOM recreation.
 on:
   push:
     branches: [main]
