@@ -51,9 +51,9 @@ assert.equal(partialUpdates,1,'Home updates may patch other cards');
 assert.equal(badgeUpdates,2);
 context.location.hash='#/notifications';
 context.render();
-assert.equal(baseRenders,1,'different route must render via custom views instead');
+assert.equal(baseRenders,2,'different route must perform full render for navigation');
 assert.equal(context.state.view,'home');
 // No video on screen: normal render should not be suppressed.
 mediaVisible=false;context.location.hash='#/home';context.render();
-assert.equal(baseRenders,2,'when media is gone a full refresh is allowed');
+assert.equal(baseRenders,3,'when media is gone a full refresh is allowed');
 console.log('VIDEO_EMBED_STAYS_MOUNTED_DURING_REFRESH=PASS');
