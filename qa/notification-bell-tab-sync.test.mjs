@@ -32,6 +32,7 @@ const context={
   state:{notifications:[],view:'home'},
   authUser:{id:'test-user'},
   navigator:{},
+  addEventListener(){},
   updateBadges(){},render(){},
   setInterval(){},clearInterval(){},setTimeout(){}
 };
