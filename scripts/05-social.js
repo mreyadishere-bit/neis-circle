@@ -3485,7 +3485,7 @@ function openCirclePost(){
       </section>
 
       <div class="row"><label class="field">${t('Tags','الوسوم')}<input id="cpTags"></label><label class="field">${t('Images (up to 8)','الصور (حتى 8)')}<input id="cpImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
-      <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit" checked><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill"><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
+      <div class="post-image-display-setting"><span>${t('Image display','عرض الصور')}</span><div class="post-image-display-options"><label><input type="radio" name="cpImageDisplayMode" value="fit"><b>Fit</b><small>${t('Show the whole image.','إظهار الصورة كاملة.')}</small></label><label><input type="radio" name="cpImageDisplayMode" value="fill" checked><b>Fill</b><small>${t('Fill the gallery frame; edges may be cropped.','ملء مساحة المعرض وقد يتم قص الأطراف.')}</small></label></div></div>
       <p class="post-image-edit-hint hidden" id="cpImageEditHint">${t('Tap an image to adjust its crop.','اضغط على أي صورة لتعديل القص الخاص بها.')}</p>
       <div id="cpImagePreview" class="post-upload-preview-grid hidden"></div>
       <label class="field" id="cpYoutubeField">${t('Video link — YouTube or Google Drive (optional)','رابط فيديو — YouTube أو Google Drive (اختياري)')}<input id="cpYoutubeUrl" type="url" inputmode="url" maxlength="2048" placeholder="https://youtu.be/… or https://drive.google.com/file/d/…/view"><small>${t('Google Drive videos must be shared as “Anyone with the link”.','يجب ضبط فيديو Google Drive على “Anyone with the link”.')}</small></label>
@@ -3594,7 +3594,7 @@ function openCirclePost(){
       button.disabled=false;return;
     }
     toast(t('Publishing post…','جارٍ نشر المنشور…'));
-    const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fill'?'fill':'fit';
+    const image_url=image_urls[0]||'',image_display_mode=document.querySelector('input[name="cpImageDisplayMode"]:checked')?.value==='fit'?'fit':'fill';
 
     if(isPoll){
       const selection=$('#cpPollSelection').value,rawMax=$('#cpPollMax').value.trim();
