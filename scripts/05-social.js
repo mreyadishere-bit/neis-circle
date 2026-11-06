@@ -1663,6 +1663,28 @@ function syncHomePostEngagement(node,post){
     const label=saveButton.querySelector('span');if(label)label.textContent=saved?t('Saved','محفوظ'):t('Save','حفظ');
   }
 }
+// Never destroy an on-screen embedded player during a background/realtime
+// refresh. Removing and recreating an iframe resets its playback instantly.
+function neisMediaPlayingOrVisible(post){
+  if(!post?.isConnected)return false;
+  const media=post.querySelectorAll?.('.post-youtube iframe, iframe[src*="youtube"], iframe[src*="drive.google.com"], video');
+  if(!media?.length)return false;
+  for(const element of media){
+    if(element.tagName==='VIDEO'&&!element.paused&&!element.ended)return true;
+    if(element.tagName!=='IFRAME')continue;
+    // Cross-origin YouTube/Drive do not expose playing/paused state; treat
+    // their visible player as active rather than assuming it is safe to replace.
+    const rect=element.getBoundingClientRect?.();
+    if(rect&&rect.width>0&&rect.height>0&&rect.bottom>0&&rect.top<window.innerHeight&&rect.right>0&&rect.left<window.innerWidth)return true;
+  }
+  return false;
+}
+function neisVisibleEmbeddedPlayer(){
+  const root=document.querySelector('#view');
+  return !!root&&Array.from(root.querySelectorAll('.post, .gallery-card, .article-card')).some(neisMediaPlayingOrVisible);
+}
+window.NEISMediaPlaybackGuard={isProtected:neisMediaPlayingOrVisible,isActive:neisVisibleEmbeddedPlayer};
+
 function patchHomeRealtime(options={}){
   if(state.view!=='home')return false;
   const feed=document.querySelector('#view .feed');
@@ -1683,7 +1705,7 @@ function patchHomeRealtime(options={}){
   posts.forEach((post,index)=>{
     const id=String(post.id),version=postRealtimeVersion(post);
     let node=existing.get(id)||null;
-    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)){
+    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)&&!neisMediaPlayingOrVisible(node)){
       const replacement=renderHomePostNode(post);
       if(replacement){
         node.replaceWith(replacement);
@@ -1766,7 +1788,7 @@ function patchCircleHomeRealtime(options={}){
   posts.forEach((post,index)=>{
     const id=String(post.id),version=postRealtimeVersion(post);
     let node=existing.get(id)||null;
-    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)){
+    if(node&&(forceIds.has(id)||node.dataset.postVersion!==version)&&!neisMediaPlayingOrVisible(node)){
       const replacement=renderCirclePostNode(post);
       if(replacement){
         node.replaceWith(replacement);
@@ -3699,7 +3721,18 @@ home=function(){
 opportunities=function(){return `${pageTitle(t('Opportunities','الفرص'),t('Verified opportunities will appear here when publishing is enabled.','ستظهر الفرص الموثقة هنا عند تفعيل النشر.'))}${emptyState(t('No verified opportunities yet','لا توجد فرص موثقة بعد'),t('This page no longer displays demo events.','لم تعد هذه الصفحة تعرض فعاليات تجريبية.'))}`};
 
 const baseRender=render;
+let lastMediaRenderRoute=null;
 render=function(){
+  const currentRoute=location.hash;
+  // A same-route state refresh must not reset a playing/visible embedded
+  // player. Explicit navigation changes route and still renders normally.
+  if(lastMediaRenderRoute===currentRoute&&neisVisibleEmbeddedPlayer()){
+    if(state.view==='home')patchHomeRealtime();
+    else if(state.view==='circle-detail'&&state.circleTab==='home')patchCircleHomeRealtime();
+    updateBadges();
+    return;
+  }
+  lastMediaRenderRoute=currentRoute;
   if(!authUser||state.onboardingComplete!==true){baseRender();return}
   const custom={connections:connectionsView,search:searchView,notifications:notificationsView,'profile-detail':profileView,'circle-detail':circleView};
   if(custom[state.view]){document.body.classList.add('app-ready');$('#view').innerHTML=custom[state.view]();$$('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===state.view));bindV6()}
