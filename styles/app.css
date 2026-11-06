@@ -4498,3 +4498,21 @@ html[data-theme="dark"] .side-card .account-menu > .account-row[data-nav="articl
     transition:none;transform:none;
   }
 }
+
+
+/* Feed performance: keep every post and its features in the DOM, but allow
+   Chromium/WebKit engines that support content-visibility to skip layout and
+   paint for posts far outside the viewport. The browser still scrolls and
+   renders the full card normally when it becomes visible. */
+@supports (content-visibility:auto) {
+  #view .feed > .post,
+  #view .circle-home-feed > .post {
+    content-visibility:auto;
+    contain-intrinsic-size:auto 440px;
+  }
+  /* Never defer a player while the user interacts with it. */
+  #view .feed > .post:focus-within,
+  #view .circle-home-feed > .post:focus-within {
+    content-visibility:visible;
+  }
+}
