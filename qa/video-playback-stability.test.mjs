@@ -42,7 +42,7 @@ const context={
 context.window.NEISPublicPolls={};
 vm.createContext(context);
 vm.runInContext(helper+'\n'+renderWrapper,context);
-assert.equal(context.NEISMediaPlaybackGuard.isProtected(player),true);
+assert.equal(context.window.NEISMediaPlaybackGuard.isProtected(player),true);
 context.render();
 assert.equal(baseRenders,1,'initial render must work');
 context.render();
