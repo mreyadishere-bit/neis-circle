@@ -101,5 +101,5 @@ def main():
 if __name__=='__main__':
  try:main()
  except Exception as err:
-  print('CHAT_VOICE_TRANSCRIBE_BACKEND_DEPLOY=FAILED_'+str(err)[:70],file=sys.stderr)
+  print('WEBPUSH_SENDER_BACKEND_DEPLOY=FAILED_'+str(err)[:70],file=sys.stderr)
   raise SystemExit(1)
