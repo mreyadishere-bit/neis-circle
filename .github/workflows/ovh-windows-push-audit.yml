@@ -53,6 +53,15 @@ jobs:
             UNION ALL SELECT 'PUSH_RECENT_ERROR_CLASSES='||coalesce(string_agg(category||':'||number,','),'none') FROM (SELECT coalesce(nullif(regexp_replace(last_error,'[^a-zA-Z0-9_]+','','g'),''),'ok') category,count(*) number FROM public.web_push_outbox WHERE created_at>now()-interval '24 hours' GROUP BY 1 ORDER BY 2 DESC LIMIT 6) z
             UNION ALL SELECT 'PUSH_24H_DM_NOTIFICATION_COUNT='||count(*) FROM public.notifications WHERE type='message' AND created_at>now()-interval '24 hours'
             UNION ALL SELECT 'PUSH_24H_DM_OUTBOX_COUNT='||count(*) FROM public.web_push_outbox WHERE notification_type='message' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'DM_MESSAGES_24H='||count(*) FROM public.messages WHERE created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'DM_MESSAGES_7D='||count(*) FROM public.messages WHERE created_at>now()-interval '7 days'
+            UNION ALL SELECT 'DM_NOTIFICATIONS_7D='||count(*) FROM public.notifications WHERE entity_type='message' AND created_at>now()-interval '7 days'
+            UNION ALL SELECT 'DM_PUSH_OUTBOX_7D='||count(*) FROM public.web_push_outbox WHERE notification_type in ('message','reply') AND created_at>now()-interval '7 days'
+            UNION ALL SELECT 'DM_TRIGGER_STATE='||coalesce(string_agg(tgname||':'||tgenabled,','),'none') FROM pg_trigger WHERE tgrelid='public.messages'::regclass AND not tgisinternal AND (tgname ilike '%notif%' or tgfoid='public.notify_message()'::regprocedure)
+            UNION ALL SELECT 'WEBPUSH_NOTIFICATION_TRIGGER_STATE='||coalesce(string_agg(tgname||':'||tgenabled,','),'none') FROM pg_trigger WHERE tgrelid='public.notifications'::regclass AND not tgisinternal AND tgname ilike '%push%'
+            UNION ALL SELECT 'WEBPUSH_DISPATCH_TRIGGER_STATE='||coalesce(string_agg(tgname||':'||tgenabled,','),'none') FROM pg_trigger WHERE tgrelid='public.web_push_outbox'::regclass AND not tgisinternal
+            UNION ALL SELECT 'PUSH_DELIVERY_ZERO_DEVICE_24H='||count(*) FROM public.web_push_outbox WHERE last_error='no_active_subscriptions' AND created_at>now()-interval '24 hours'
+            UNION ALL SELECT 'PUSH_LAST_7D_DELIVERY_ERROR='||coalesce(string_agg(category||':'||number,','),'none') FROM (SELECT coalesce(last_error,'ok') category,count(*) number FROM public.web_push_outbox WHERE created_at>now()-interval '7 days' GROUP BY 1 ORDER BY 2 DESC LIMIT 8) e
             UNION ALL SELECT 'PUSH_PG_CRON_INSTALLED='||exists(select 1 from pg_extension where extname='pg_cron')::text
             UNION ALL SELECT 'PUSH_DISPATCH_FUNCTION_OVH='||(CASE WHEN to_regprocedure('private.dispatch_web_push_job()') IS NOT NULL THEN pg_get_functiondef('private.dispatch_web_push_job()'::regprocedure) LIKE '%supabase.neiscircle.site%' ELSE false END)::text;
           "
