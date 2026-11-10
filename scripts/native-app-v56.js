@@ -204,14 +204,28 @@
     collapseModeration();
   }
 
+  // Re-run adapters only when a relevant view is mounted/updated.
+  // The old global observer and click handler rescanned the entire comments
+  // tree after unrelated DOM updates, including activity in long threads.
+  const relevant='.tabs,.modal .account-menu,#replyContent,#articleComments,.article-comment-list,.module-card';
+  const changedContent='.reply-card,.reply-tree,.article-comment,.article-comment-list,.account-row';
   let queued=false;
   const queue=()=>{
     if(queued)return;
     queued=true;
     requestAnimationFrame(()=>{queued=false;apply()});
   };
-  new MutationObserver(queue).observe(document.body,{childList:true,subtree:true});
+  const isRelevant=node=>{
+    if(!(node instanceof Element))return false;
+    if(node.matches(relevant))return true;
+    if(node.querySelector(relevant))return true;
+    return node.matches(changedContent)&&!!node.closest(relevant);
+  };
+  new MutationObserver(records=>{
+    for(const record of records){
+      if([...record.addedNodes].some(isRelevant)){queue();return}
+    }
+  }).observe(document.body,{childList:true,subtree:true});
   new MutationObserver(syncNativeTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
-  document.addEventListener('click',()=>setTimeout(queue,0),true);
   apply();
 })();
