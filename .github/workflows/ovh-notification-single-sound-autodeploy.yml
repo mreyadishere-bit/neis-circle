@@ -1,0 +1,107 @@
+name: OVH Single Message Sound Auto Deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/social/notifications-v174.js'
+      - 'neis-pwa-sw.js'
+      - '.github/workflows/ovh-notification-single-sound-autodeploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-frontend-caddy-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate notification and worker changes
+        run: |
+          set -euo pipefail
+          node --check scripts/social/notifications-v174.js
+          node --check neis-pwa-sw.js
+          node qa/notification-sound-device.test.mjs
+          grep -Fq "background-system-owned" scripts/social/notifications-v174.js
+          grep -Fq "options.silent = options.silent || hasVisibleClient" neis-pwa-sw.js
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only notification assets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          stage="/home/ubuntu/neis-backups/single-sound-${{ github.run_id }}-${{ github.run_attempt }}"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/social/notifications-v174.js "ubuntu@$OVH_HOST:$stage/notifications-v174.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes neis-pwa-sw.js "ubuntu@$OVH_HOST:$stage/neis-pwa-sw.js"
+      - name: Atomically deploy frontend assets with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -Eeuo pipefail
+          cd /home/ubuntu/neis-supabase
+          stage="/home/ubuntu/neis-backups/single-sound-${{ github.run_id }}-${{ github.run_attempt }}"
+          new="/home/ubuntu/neis-frontend/releases/single-sound-${{ github.run_id }}-${{ github.run_attempt }}"
+          overlay=docker-compose.frontend-public.yml
+          docker=(sudo -n /usr/bin/docker)
+          compose=("${docker[@]}" compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml)
+          test -f "$overlay" && test -f "$stage/notifications-v174.js" && test -f "$stage/neis-pwa-sw.js" && test ! -e "$new"
+          old=$("${docker[@]}" inspect supabase-caddy --format '{{range .Mounts}}{{if eq .Destination "/srv/neis-circle"}}{{.Source}}{{end}}{{end}}')
+          [[ "$old" == /home/ubuntu/neis-frontend/releases/* ]] && test -d "$old"
+          test -f "$old/index.html" && test -f "$old/neis-pwa-sw.js" && test -f "$old/scripts/social/notifications-v174.js"
+          test "$(grep -Fc "$old" "$overlay")" -eq 1
+          grep -Fq 'scripts/social/notifications-v174.js' "$old/index.html"
+          grep -Fq '/neis-pwa-sw.js?v=' "$old/scripts/pwa-install-v117.js"
+          cp "$overlay" "$stage/overlay.previous"
+          cp -a "$old" "$new"
+          cp "$stage/notifications-v174.js" "$new/scripts/social/notifications-v174.js"
+          cp "$stage/neis-pwa-sw.js" "$new/neis-pwa-sw.js"
+          python3 - "$new/index.html" "$overlay" "$old" "$new" <<'PY'
+          import re,sys
+          from pathlib import Path
+          html,overlay,old,new=sys.argv[1:]
+          p=Path(html);s=p.read_text()
+          pattern=r'scripts/social/notifications-v174\.js(?:\?[^"\x27<>]*)?'
+          matches=list(re.finditer(pattern,s))
+          if len(matches)!=1:raise SystemExit('NOTIFICATION_SCRIPT_REFERENCE_MISMATCH')
+          m=matches[0]
+          s=s[:m.start()]+'scripts/social/notifications-v174.js?single-sound=${{ github.run_id }}'+s[m.end():]
+          p.write_text(s)
+          o=Path(overlay);body=o.read_text()
+          if body.count(old)!=1:raise SystemExit('FRONTEND_MOUNT_MISMATCH')
+          o.write_text(body.replace(old,new))
+          PY
+          rollback(){
+            cp "$stage/overlay.previous" "$overlay"
+            "${compose[@]}" up -d --no-deps caddy || true
+            echo SINGLE_SOUND_RELEASE=ROLLED_BACK
+          }
+          trap rollback ERR
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-deps caddy
+          cid=$("${compose[@]}" ps -q caddy)
+          test -n "$cid"
+          "${docker[@]}" exec "$cid" grep -Fq "background-system-owned" /srv/neis-circle/scripts/social/notifications-v174.js
+          "${docker[@]}" exec "$cid" grep -Fq "options.silent = options.silent || hasVisibleClient" /srv/neis-circle/neis-pwa-sw.js
+          "${docker[@]}" exec "$cid" grep -Fq "single-sound=${{ github.run_id }}" /srv/neis-circle/index.html
+          trap - ERR
+          echo SINGLE_SOUND_RELEASE=SUCCESS_FRONTEND_ONLY
+          REMOTE
