@@ -8,7 +8,7 @@ assert.match(sw,/PUSH_REFRESH_URL = "https:\/\/supabase\.neiscircle\.site\/funct
 assert.match(sw,/hasVisibleClient = windows\.some\(client => client\.visibilityState === "visible"\)/);
 assert.match(sw,/options\.silent = options\.silent \|\| hasVisibleClient/);
 assert.match(src,/document\.hidden\)\{noteChime\('background-system-owned'\);return false\}/);
-assert.match(pwa,/neis-pwa-sw\.js\?v=13/);
+assert.match(pwa,/neis-pwa-sw\.js\?v=15/);
 assert.match(pwa,/data-test-notification-sound/);
 assert.match(pwa,/data-pwa-onboarding-sound/);
 assert.match(pwa,/Notification\.permission==='granted'\)return/);
