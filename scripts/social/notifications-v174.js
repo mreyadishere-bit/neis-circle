@@ -167,6 +167,7 @@
         data:{route:row?.route||''},
         tag:row?.id?'neis-'+row.id:undefined,
         renotify:false,
+        // In a hidden tab, let this notification supply the sound, not Web Audio.
         silent:false
       });
     }catch(error){
@@ -216,6 +217,9 @@
     if(row.read_at){noteChime('already-read');return false}
     if(row.silent===true){noteChime('silent-by-event');return false}
     if(!soundEnabledOnThisDevice()){noteChime('device-sound-disabled');return false}
+    // In background, the system notification is the sole audible owner.
+    // Avoid layering Web Audio over the OS/PWA notification chime.
+    if(typeof document!=='undefined'&&document.hidden){noteChime('background-system-owned');return false}
     const id=String(row.id||'');
     const activityKey=messageActivityKey(row);
     if(id&&(chimedIds.has(id)||inflightChimes.has(id)))return false;
