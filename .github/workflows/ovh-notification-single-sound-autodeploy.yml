@@ -28,6 +28,7 @@ jobs:
           node --check scripts/social/notifications-v174.js
           node --check neis-pwa-sw.js
           node qa/notification-sound-device.test.mjs
+          node qa/notifications-runtime.test.mjs
           grep -Fq "background-system-owned" scripts/social/notifications-v174.js
           grep -Fq "options.silent = options.silent || hasVisibleClient" neis-pwa-sw.js
       - name: Configure pinned SSH
