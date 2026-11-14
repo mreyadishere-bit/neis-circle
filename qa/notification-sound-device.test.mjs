@@ -28,7 +28,7 @@ class MockAudioContext {
   createOscillator(){audible++;return {type:'',frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}};}
 }
 const context={
- window:{AudioContext:MockAudioContext},
+ window:{AudioContext:MockAudioContext,addEventListener:()=>{}},
  document:{addEventListener:(event,listener)=>{actions[event]=listener;},title:''},
  state:{notifications:[],view:'home'},
  localStorage:{getItem:key=>store.get(key)||null},
