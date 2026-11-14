@@ -173,8 +173,12 @@ self.addEventListener("push", (event) => {
     silent: data.silent === true
   };
   event.waitUntil((async () => {
-    await self.registration.showNotification(title, options);
     const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    // Foreground windows play the in-app chime. A background/closed app
+    // leaves the OS notification audible, never both for the same push.
+    const hasVisibleClient = windows.some(client => client.visibilityState === "visible");
+    options.silent = options.silent || hasVisibleClient;
+    await self.registration.showNotification(title, options);
     const payload = {
       type: "NEIS_PUSH_NOTIFICATION",
       notification: {
