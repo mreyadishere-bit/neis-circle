@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ovh-student-only-seo-20261119.yml'
+      - 'scripts/ops/ovh-deploy-student-only-seo-20261119.py'
   workflow_dispatch:
 permissions:
   contents: read
