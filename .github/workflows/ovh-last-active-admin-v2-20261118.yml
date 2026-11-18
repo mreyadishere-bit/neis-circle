@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ovh-last-active-admin-v2-20261118.yml'
+      - 'scripts/ops/ovh-deploy-last-active-ui-v2-20261118.py'
   workflow_dispatch:
 permissions:
   contents: read
