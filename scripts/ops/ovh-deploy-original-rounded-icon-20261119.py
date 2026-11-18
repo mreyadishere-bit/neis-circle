@@ -11,7 +11,8 @@ COMPOSE=DOCKER+['compose']+[v for f in (
  'docker-compose.yml','docker-compose.security.yml','docker-compose.caddy.yml',
  'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml'
 ) for v in ('-f',f)]
-OLD_ICON='<link rel="icon" type="image/svg+xml" href="/assets/neis-circle-favicon.svg?v=20261119">'
+OLD_INDEX_ICON='<link rel="icon" type="image/svg+xml" href="/assets/neis-circle-favicon.svg?v=20261119">'
+OLD_ABOUT_ICON='<link rel="icon" href="/assets/neis-circle-favicon.svg?v=20261119" type="image/svg+xml">'
 NEW_ICON='<link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-rounded-48.png?v=20261119-original-rounded">'
 NEW_ICON_192='<link rel="icon" type="image/png" sizes="192x192" href="/assets/favicon-rounded-192.png?v=20261119-original-rounded">'
 def check(ok,err):
@@ -35,7 +36,7 @@ def main():
  check(overlay.count(str(old))==1,'OVERLAY_CHANGED')
  index=(old/'index.html').read_text()
  about=(old/'about.html').read_text()
- check(index.count(OLD_ICON)==1 and about.count(OLD_ICON)==1,'ICON_VERSION_UNEXPECTED')
+ check(index.count(OLD_INDEX_ICON)==1 and about.count(OLD_ABOUT_ICON)==1,'ICON_VERSION_UNEXPECTED')
  check('seo-v1' in index and 'scripts/user-activity-v1.js' in index and
        'last-active-ui-v2' in index,'PRODUCTION_SITE_UNEXPECTED')
  for p in ('scripts/03-auth-i18n.js','scripts/user-activity-v1.js','scripts/main-admin-auth-studio-v5.js'):
@@ -73,7 +74,7 @@ def main():
   live_index=sh(DOCKER+['exec',cid,'cat','/srv/neis-circle/index.html'],timeout=30)
   live_about=sh(DOCKER+['exec',cid,'cat','/srv/neis-circle/about.html'],timeout=30)
   check(NEW_ICON in live_index and NEW_ICON in live_about and
-        OLD_ICON not in live_index and OLD_ICON not in live_about,'LIVE_ICON_NOT_UPDATED')
+        OLD_INDEX_ICON not in live_index and OLD_ABOUT_ICON not in live_about,'LIVE_ICON_NOT_UPDATED')
   for n in names:
    path=('/srv/neis-circle/'+n) if n=='favicon.ico' else ('/srv/neis-circle/assets/'+n)
    output=sh(DOCKER+['exec',cid,'sha256sum',path],timeout=30)
