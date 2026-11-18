@@ -1,0 +1,80 @@
+name: OVH Last Active Admin UI V2 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-last-active-admin-v2-20261118.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-last-active-admin-v2
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate updated UI and scoped SQL
+        run: |
+          set -euo pipefail
+          node --check scripts/main-admin-auth-studio-v5.js
+          python3 -m py_compile scripts/ops/ovh-deploy-last-active-ui-v2-20261118.py
+          grep -Fq "'active_30d'" scripts/main-admin-auth-studio-v5.js
+          grep -Fq "Last active tracking started 18 Nov 2026" scripts/main-admin-auth-studio-v5.js
+          grep -Fq "f='active_30d'" supabase/migrations/20261118190000_neis_last_active_filter.sql
+      - name: Setup OVH connection
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage scoped admin assets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/last-active-ui-20261118
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v5.js "ubuntu@$HOST:$dst/main-admin-auth-studio-v5.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261118190000_neis_last_active_filter.sql "ubuntu@$HOST:$dst/migration.sql"
+      - name: Apply filter and publish guarded frontend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-last-active-ui-v2-20261118.py
+      - name: External live checks
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          base='https://neiscircle.site'
+          marker='20261118-last-active-ui-v2'
+          for attempt in range(20):
+              try:
+                  h=urllib.request.urlopen(urllib.request.Request(base+'/',headers={'Cache-Control':'no-cache'}),timeout=12).read().decode()
+                  if 'main-admin-auth-studio-v5.js?v='+marker not in h:
+                      time.sleep(3);continue
+                  assert 'scripts/user-activity-v1.js' in h
+                  ui=urllib.request.urlopen(base+'/scripts/main-admin-auth-studio-v5.js?v='+marker,timeout=12).read().decode()
+                  assert 'Not recorded yet' in ui
+                  assert 'Active in last 30 days' in ui
+                  assert '↓ Most recently active' in ui
+                  auth=urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12)
+                  assert auth.status==200
+                  print('LAST_ACTIVE_ADMIN_V2_EXTERNAL=PASS')
+                  break
+              except Exception:
+                  if attempt==19:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Live version not observed')
+          PY
