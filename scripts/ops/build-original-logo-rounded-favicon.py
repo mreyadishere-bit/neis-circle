@@ -24,6 +24,18 @@ def main():
     top=(h-side)//2+inset
     content=original.crop((left,top,left+side-2*inset,top+side-2*inset))
     sz=content.width
+    # Preserve the original letters exactly, but replace the original rounded-
+    # square's off-white fringe with its own sampled green before circular crop.
+    # This fixes white pixels INSIDE the circular contour, not just outside it.
+    green=content.getpixel((sz//2,max(4,sz//12)))[:3]
+    if not (green[1]>green[0]*1.3 and green[1]>green[2]*0.85):
+        raise RuntimeError("Original NC green not detected")
+    cleaned=Image.new("RGBA",(sz,sz),green+(255,))
+    # The white NC letters sit in the central region of the original logo.
+    # Use the original artwork's pixels rather than recreating the letters.
+    region=(int(sz*.09),int(sz*.17),int(sz*.91),int(sz*.83))
+    cleaned.paste(content.crop(region),region[:2])
+    content=cleaned
     # Supersampling makes circular edges clean at tiny Google favicon sizes.
     mask=Image.new("L",(sz*3,sz*3),0)
     draw=ImageDraw.Draw(mask)
