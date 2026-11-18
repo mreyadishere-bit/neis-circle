@@ -42,6 +42,16 @@ def main():
     draw.ellipse((0,0,sz*3-1,sz*3-1),fill=255)
     mask=mask.resize((sz,sz),Image.Resampling.LANCZOS)
     content.putalpha(mask)
+    # Keep the existing green/white NC artwork untouched, but reduce its
+    # diameter to 78% and center it on a transparent square canvas.
+    # Search results may draw their own circular border: the padding prevents
+    # the green artwork from touching that outer border at small sizes.
+    logo_diameter=round(sz*0.78)
+    logo=content.resize((logo_diameter,logo_diameter),Image.Resampling.LANCZOS)
+    canvas=Image.new("RGBA",(sz,sz),(0,0,0,0))
+    offset=((sz-logo_diameter)//2,(sz-logo_diameter)//2)
+    canvas.alpha_composite(logo,offset)
+    content=canvas
     out=Path(args.output_dir)
     out.mkdir(parents=True,exist_ok=True)
     content.resize((512,512),Image.Resampling.LANCZOS).save(out/"favicon-rounded.png",optimize=True)
@@ -52,6 +62,8 @@ def main():
     preview=Image.open(out/"favicon-rounded-192.png")
     assert preview.getpixel((0,0))[3]==0
     assert preview.getpixel((96,96))[3]==255
+    assert preview.getpixel((8,96))[3]==0
+    assert preview.getpixel((184,96))[3]==0
     assert preview.getpixel((96,40))[:3]!=(255,255,255)
     print("ORIGINAL_LOGO_CIRCULAR_FAVICON=PASS")
     print("NO_BRANDING_REDESIGN=TRUE")
