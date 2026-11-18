@@ -1,0 +1,94 @@
+name: OVH SEO Icon and Public Copy 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-seo-brand-refresh-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-seo-brand-refresh
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate SEO copy and favicon
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-seo-brand-refresh-20261119.py
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          x=ET.parse('assets/neis-circle-favicon.svg').getroot()
+          assert x.tag.endswith('svg')
+          assert x.attrib['viewBox']=='0 0 96 96'
+          html=Path('index.html').read_text()
+          about=Path('about.html').read_text()
+          assert '/assets/neis-circle-favicon.svg' in html
+          assert '/assets/neis-circle-favicon.svg' in about
+          assert 'Google sign-in' not in about and 'continue with Google' not in about
+          assert 'باستخدام Google' not in about
+          assert 'Student Community' in about
+          print('ICON_AND_PUBLIC_COPY_STATIC=PASS')
+          PY
+      - name: Configure secured SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only changed public assets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/seo-brand-refresh-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes about.html "ubuntu@$HOST:$dst/about.html"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes assets/neis-circle-favicon.svg "ubuntu@$HOST:$dst/neis-circle-favicon.svg"
+      - name: Deploy OVH favicon and public page via rollback-safe release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-seo-brand-refresh-20261119.py
+      - name: Check live icon, SEO text and auth routing
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,xml.etree.ElementTree as ET
+          base='https://neiscircle.site'
+          last='no response'
+          for i in range(18):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=12) as r:return r.read().decode('utf8','replace'),r.status
+                  home,hs=get('/')
+                  about,ab=get('/about.html')
+                  icon,ic=get('/assets/neis-circle-favicon.svg?v=20261119')
+                  assert hs==ab==ic==200
+                  assert '/assets/neis-circle-favicon.svg?v=20261119' in home
+                  assert '/assets/neis-circle-favicon.svg?v=20261119' in about
+                  ET.fromstring(icon)
+                  assert 'continue with Google' not in about and 'Google sign-in' not in about
+                  assert 'scripts/user-activity-v1.js' in home
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12) as r:assert r.status==200
+                  print('SEO_BRAND_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception as e:
+                  last=repr(e)[:120]
+                  time.sleep(3)
+          else:raise RuntimeError('Live assets not verified: '+last)
+          PY
