@@ -1,0 +1,108 @@
+name: OVH SEO Foundations 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-seo-foundation-20261119.yml'
+      - 'scripts/ops/ovh-deploy-seo-foundation-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-seo-foundation-deployment
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate SEO metadata and scripts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-seo-foundation-20261119.py
+          node --check scripts/03-auth-i18n.js
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          from html.parser import HTMLParser
+          idx=Path('index.html').read_text()
+          about=Path('about.html').read_text()
+          auth=Path('scripts/03-auth-i18n.js').read_text()
+          root=ET.parse('sitemap.xml').getroot()
+          ns={'s':'http://www.sitemaps.org/schemas/sitemap/0.9'}
+          urls=[n.text for n in root.findall('s:url/s:loc',ns)]
+          assert urls==['https://neiscircle.site/','https://neiscircle.site/about.html']
+          assert 'Sitemap: https://neiscircle.site/sitemap.xml' in Path('robots.txt').read_text()
+          assert 'Student Community, Projects & Opportunities' in idx
+          assert '"@type":"WebSite"' in idx and '"@type":"WebPage"' in about
+          assert '<h1>' in about and 'lang="ar"' in about
+          assert 'href="/about.html"' in auth
+          assert all(x not in urls for x in ('/profile','/admin','/messages'))
+          class Parser(HTMLParser):pass
+          Parser().feed(about)
+          print('SEO_STATIC_CHECKS=PASS')
+          PY
+      - name: Configure secured OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage SEO-only public files on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/seo-foundation-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes about.html sitemap.xml robots.txt index.html "ubuntu@$HOST:$dst/"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/03-auth-i18n.js "ubuntu@$HOST:$dst/03-auth-i18n.js"
+      - name: Release isolated SEO improvements on live OVH frontend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-seo-foundation-20261119.py
+      - name: External live SEO, public page, and auth smoke
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          base='https://neiscircle.site'
+          last=''
+          for i in range(22):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache','User-Agent':'NEIS-SEO-Deployment-Validation/1'})
+                      with urllib.request.urlopen(req,timeout=12) as r:
+                          return r.read().decode('utf8','replace'),r.status,r.headers.get('Content-Type','')
+                  home,st,_=get('/')
+                  about,ast,_=get('/about.html')
+                  sitemap,ss,_=get('/sitemap.xml')
+                  robots,rs,_=get('/robots.txt')
+                  auth,as_,_=get('/scripts/03-auth-i18n.js?v=20261119-seo-v1')
+                  assert st==ast==ss==rs==as_==200
+                  assert '<title>NEIS Circle | Student Community, Projects & Opportunities</title>' in home
+                  assert '<h1>Connect curious minds.' in about
+                  assert '<loc>https://neiscircle.site/about.html</loc>' in sitemap
+                  assert 'Sitemap: https://neiscircle.site/sitemap.xml' in robots
+                  assert 'href="/about.html"' in auth
+                  assert 'user-activity-v1.js' in home
+                  assert 'main-admin-auth-studio-v5.js' in home
+                  authsettings=urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12)
+                  assert authsettings.status==200
+                  print('SEO_PUBLIC_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception as ex:
+                  last=type(ex).__name__+':'+str(ex)[:95]
+                  time.sleep(3)
+          else:raise RuntimeError('Live SEO smoke not confirmed: '+last)
+          PY
