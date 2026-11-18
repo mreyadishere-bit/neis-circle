@@ -8,7 +8,7 @@
   const rootId='neisAuthStudio';
   const $=(suffix)=>document.getElementById('naStudio'+suffix);
   let currentPage=0, pageSize=20, viewAll=false, search='', searchField='all', filter='all';
-  let provider='all', sort='created_desc', busy=false, pending=false, nonce=0, loadedRoot=null;
+  let provider='all', sort='last_active_desc', busy=false, pending=false, nonce=0, loadedRoot=null;
   let overview=null, data=null, detailsId=null, detailsGeneration=0;
   const selected=new Set();
   const selectedRows=new Map();
@@ -17,8 +17,8 @@
   const excludedIds=new Set();
   const LIMIT_FULL_EXPORT=10000;
   const available=[
-    ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
-    ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],['last_active_at','Last active'],
+    ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['last_active_at','Last active'],['email','Email'],['phone','Phone'],
+    ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
     ['last_sign_in_at','Last sign in at'],['status','Status'],['actions','Actions']
   ];
   let columns=new Set(available.map(x=>x[0]));
@@ -73,13 +73,13 @@
     '#neisAuthStudio tr:hover td{background:var(--st-hover)}',
     '#neisAuthStudio tr.st-checked td{background:var(--accent2)}',
     '#neisAuthStudio .st-choose{width:47px;min-width:47px;text-align:center}',
-    '#neisAuthStudio .st-uid{width:316px;min-width:316px}',
-    '#neisAuthStudio .st-name{width:210px;min-width:210px}',
+    '#neisAuthStudio .st-uid{width:275px;min-width:275px}',
+    '#neisAuthStudio .st-name{width:185px;min-width:185px}',
     '#neisAuthStudio .st-mail{width:310px;min-width:310px}',
     '#neisAuthStudio .st-phone{width:176px;min-width:176px}',
     '#neisAuthStudio .st-provider{width:165px;min-width:165px}',
     '#neisAuthStudio .st-provider-type{width:122px;min-width:122px}',
-    '#neisAuthStudio .st-datetime{width:242px;min-width:242px}',
+    '#neisAuthStudio .st-datetime{width:195px;min-width:195px}',
     '#neisAuthStudio .st-other{width:145px;min-width:145px}',
     '#neisAuthStudio .st-link{color:var(--ink);text-align:left;border:0;background:none;padding:0;white-space:nowrap;font-weight:620;max-width:100%;overflow:hidden;text-overflow:ellipsis}',
     '#neisAuthStudio .st-link:hover{color:var(--accent);text-decoration:underline}',
@@ -127,16 +127,19 @@
       '<select id="naStudioFilter" aria-label="User status filter"><option value="all">All users</option>'+
         '<option value="confirmed">Confirmed</option><option value="pending">Unconfirmed</option>'+
         '<option value="blocked">Blocked / inactive</option><option value="admins">Admins</option>'+
-        '<option value="no_profile">Missing profile</option><option value="signed_in_30d">Active in 30 days</option></select>'+
+        '<option value="no_profile">Missing profile</option>'+ 
+        '<option value="active_30d">Active in last 30 days</option>'+ 
+        '<option value="signed_in_30d">Signed in within 30 days</option></select>'+ 
       '<select id="naStudioProvider" aria-label="Provider"><option value="all">Provider: All</option>'+
         '<option value="google">Google</option><option value="other">Other providers</option></select>'+
       '<details id="naStudioColumns"><summary>All columns ▾</summary><div class="st-menu" id="naStudioColumnsMenu"></div></details>'+
       '<select id="naStudioSort" aria-label="Sort users">'+
-        '<option value="created_desc">↓ Sorted by created at</option>'+
-        '<option value="created_asc">↑ Oldest first</option>'+
-        '<option value="last_sign_in_desc">↓ Last sign in</option>'+ 
-        '<option value="last_active_desc">↓ Last active</option><option value="last_active_asc">↑ Least recently active</option>'+ 
-        '<option value="last_sign_in_asc">↑ Least recent sign in</option>'+
+        '<option value="last_active_desc">↓ Most recently active</option>'+ 
+        '<option value="last_active_asc">↑ Least recently active</option>'+ 
+        '<option value="created_desc">↓ Newest accounts</option>'+ 
+        '<option value="created_asc">↑ Oldest accounts</option>'+ 
+        '<option value="last_sign_in_desc">↓ Most recent sign in</option>'+ 
+        '<option value="last_sign_in_asc">↑ Oldest sign in</option>'+ 
         '<option value="email_asc">↑ Email A–Z</option><option value="email_desc">↓ Email Z–A</option>'+
         '<option value="name_asc">↑ Display name</option></select>'+
       '<button type="button" class="st-btn st-push" data-st-action="refresh" title="Refresh users">↻ Refresh</button>'+
@@ -240,7 +243,8 @@
     }else if(k==='status'){
       const [text,cls]=statusOf(u);td.appendChild(el('span','st-state '+cls,text));
     }else if(k==='created_at'||k==='last_sign_in_at'||k==='last_active_at'){
-      td.textContent=when(val,true);td.title=when(val,true);
+      td.textContent=k==='last_active_at'&&!val?'Not recorded yet':when(val,true);
+      td.title=k==='last_active_at'&&!val?'No activity recorded since 18 Nov 2026':when(val,true);
     }else{
       td.textContent=val==null||val===''?'—':String(val);
       td.title=td.textContent;
@@ -286,9 +290,8 @@
     const total=Number(data?.total)||0,offset=viewAll?0:currentPage*pageSize;
     const label=$('Page');if(label)label.textContent=total?
       (viewAll?'All '+users.length+' of '+total+' users':(offset+1)+'–'+(offset+users.length)+' of '+total+' users'):'0 users';
-    const summary=$('Summary');if(summary&&overview)summary.textContent=
-      String(overview.confirmed||0)+' confirmed · '+
-      String(overview.google||0)+' Google · '+String(overview.signed_in_30d||0)+' signed in (30d)';
+    const summary=$('Summary');if(summary)summary.textContent=
+      'Last active tracking started 18 Nov 2026 · Last sign in is separate';
     const prev=document.querySelector('#neisAuthStudio [data-st-action="prev"]');
     const next=document.querySelector('#neisAuthStudio [data-st-action="next"]');
     if(prev)prev.disabled=viewAll||currentPage===0;
