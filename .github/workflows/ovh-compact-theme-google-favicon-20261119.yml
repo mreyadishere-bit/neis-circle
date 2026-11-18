@@ -1,0 +1,101 @@
+name: OVH Compact Header Theme and Centered Google Favicon 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-compact-theme-google-favicon-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-compact-theme-google-favicon
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate layout and generate centered original NC favicon
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/build-original-logo-rounded-favicon.py scripts/ops/ovh-deploy-theme-google-icon-20261119.py
+          python3 -m venv /tmp/neis-favicon-venv
+          /tmp/neis-favicon-venv/bin/pip install --quiet pillow
+          /tmp/neis-favicon-venv/bin/python scripts/ops/build-original-logo-rounded-favicon.py --source assets/email-logo.png --output-dir /tmp/neis-icon-centered
+          /tmp/neis-favicon-venv/bin/python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          im=Image.open('/tmp/neis-icon-centered/favicon-rounded-192.png').convert('RGBA')
+          assert im.size==(192,192)
+          assert im.getpixel((0,96))[3]==0 and im.getpixel((191,96))[3]==0
+          assert im.getpixel((96,0))[3]==0 and im.getpixel((96,191))[3]==0
+          b=im.getchannel('A').getbbox()
+          assert abs((b[0]+b[2])/2-96)<1.5 and abs((b[1]+b[3])/2-96)<1.5,b
+          assert 143 <= b[2]-b[0] <= 154,b
+          assert 143 <= b[3]-b[1] <= 154,b
+          style=Path('styles/ui-v14.css').read_text()
+          assert '.round-btn.theme-control > span' in style and 'width:14px!important' in style
+          for page in ('index.html','about.html'):
+              assert 'original-tab-20261119' in Path(page).read_text()
+          print('CENTERED_ICON_TRANSPARENT_PADDING=PASS')
+          PY
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only icon resources and scoped header style
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/theme-and-search-icon-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes styles/ui-v14.css "ubuntu@$HOST:$dst/ui-v14.css"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-icon-centered/* "ubuntu@$HOST:$dst/"
+      - name: Release incremental OVH changes without modifying student data
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-theme-google-icon-20261119.py
+      - name: Verify live centered icon and unchanged browser tab
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,hashlib
+          site='https://neiscircle.site'
+          for attempt in range(20):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(site+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=14) as r:
+                          return r.status,r.read()
+                  sh,html=get('/')
+                  sa,about=get('/about.html')
+                  sc,css=get('/styles/ui-v14.css?v=20261119-compact-theme-icon')
+                  si,ico=get('/favicon.ico')
+                  sp,png=get('/assets/favicon-rounded-192.png')
+                  assert sh==sa==sc==si==sp==200
+                  assert b'original-tab-20261119' in html and b'original-tab-20261119' in about
+                  assert b'styles/ui-v14.css?v=20261119-compact-theme-icon' in html
+                  assert b'width:14px!important' in css
+                  assert ico[:4]==b'\x00\x00\x01\x00' and png[:8]==b'\x89PNG\r\n\x1a\n'
+                  assert b'scripts/pwa-install-v117.js' in html and b'scripts/user-activity-v1.js' in html
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:assert r.status==200
+                  print('CENTERED_GOOGLE_ICON_AND_SMALL_THEME_EXTERNAL=PASS')
+                  break
+              except Exception:
+                  if attempt==19:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Live favicon release not confirmed')
+          PY
