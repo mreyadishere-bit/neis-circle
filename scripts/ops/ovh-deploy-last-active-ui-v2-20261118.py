@@ -30,7 +30,7 @@ def main():
  source=incoming.read_text()
  sql=migration.read_text()
  require(all(x in source for x in (
-  "['last_active_at','Last active']","'active_30d'","'last_active_desc'",
+  "['last_active_at','Last active']","active_30d","last_active_desc",
   'Last active tracking started 18 Nov 2026','Not recorded yet'
  )),'INVALID_ADMIN_SOURCE')
  require("f='active_30d'" in sql and "act.last_active_at" in sql and
