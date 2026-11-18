@@ -272,3 +272,7 @@ body.mobile-nav-open{overflow:hidden}
   min-height:34px;
  }
 }
+
+/* 20261119-compact-theme-icon: shrink the glyph, not the accessible button target. */
+.top-actions .round-btn.theme-control > span {width:14px!important;height:14px!important;border-width:1.5px!important;}
+.top-actions .round-btn.theme-control > span::after {inset:-2px -2px -2px 5px!important;}
