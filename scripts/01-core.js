@@ -13,13 +13,13 @@ const state={
   posts:[], saved:[], liked:[], joined:[], following:[], rsvp:[],
   threads:[], activeThread:null, query:"", filter:"Latest",
   discoverFilter:"Recommended", opportunityFilter:"All",
-  profile:{name:"",username:"",grade:"",branch:"",campus:"",bio:"",interests:""}
+  profile:load("neis-profile-v2",{name:"Eyad",username:"eyad",grade:"Grade 11",campus:"Main Campus",bio:"Curious about physics, technology and design.",interests:"Physics, ICT, Design, AI"})
 };
 let sb=null,authUser=null,realtimeChannel=null,supabaseAuthSubscription=null,supabaseInitPromise=null;
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const icon=id=>`<svg><use href="#i-${id}"/></svg>`;
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
-const save=()=>{localStorage.setItem("neis-posts-v2",JSON.stringify(state.posts));localStorage.setItem("neis-saved-v2",JSON.stringify(state.saved));localStorage.setItem("neis-liked-v2",JSON.stringify(state.liked));localStorage.setItem("neis-joined-v2",JSON.stringify(state.joined));localStorage.setItem("neis-follow-v2",JSON.stringify(state.following));localStorage.setItem("neis-rsvp-v2",JSON.stringify(state.rsvp));localStorage.setItem("neis-threads-v2",JSON.stringify(state.threads));authUser?.id&&localStorage.setItem("neis-profile-v2:"+authUser.id,JSON.stringify(state.profile))};
+const save=()=>{localStorage.setItem("neis-posts-v2",JSON.stringify(state.posts));localStorage.setItem("neis-saved-v2",JSON.stringify(state.saved));localStorage.setItem("neis-liked-v2",JSON.stringify(state.liked));localStorage.setItem("neis-joined-v2",JSON.stringify(state.joined));localStorage.setItem("neis-follow-v2",JSON.stringify(state.following));localStorage.setItem("neis-rsvp-v2",JSON.stringify(state.rsvp));localStorage.setItem("neis-threads-v2",JSON.stringify(state.threads));localStorage.setItem("neis-profile-v2",JSON.stringify(state.profile))};
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove("show"),2200)}
 function applyPrefs(){document.documentElement.dataset.theme=state.theme;document.documentElement.dataset.styleTheme=state.styleTheme||"classic";const customColor=/^#[0-9a-f]{6}$/i.test(state.customThemeColor||"")?state.customThemeColor:"#256da8",rgb=[customColor.slice(1,3),customColor.slice(3,5),customColor.slice(5,7)].map(x=>parseInt(x,16)),luma=(.299*rgb[0]+.587*rgb[1]+.114*rgb[2]);document.documentElement.style.setProperty("--custom-accent",customColor);document.documentElement.style.setProperty("--custom-accent-contrast",luma>165?"#071923":"#ffffff");document.body.classList.toggle("rtl",state.lang==="ar");document.documentElement.lang=state.lang;document.documentElement.dir=state.lang==="ar"?"rtl":"ltr";localStorage.setItem("neis-theme",state.theme);localStorage.setItem("neis-style-theme",state.styleTheme||"classic");localStorage.setItem("neis-custom-theme-color",customColor);localStorage.setItem("neis-lang",state.lang);try{window.NEISPWA?.syncTheme?.()}catch(_){}}
 function nav(v){state.view=v;state.query="";$("#globalSearch").value="";$$("[data-nav]").forEach(b=>b.classList.toggle("active",b.dataset.nav===v));render();scrollTo({top:0,behavior:"smooth"})}
@@ -319,7 +319,6 @@ async function initSupabase(){
         oauthSession=initial?.data?.session||null;
       }
       authUser=oauthSession?.user||null;
-      state.profile={name:"",username:"",grade:"",branch:"",campus:"",bio:"",interests:""};
       if(oauthSession?.user){
         window.__NEISOAuthCallbackPending=false;
         if(neisOAuthCallbackTokens)neisClearOAuthCallbackUrl();
@@ -331,13 +330,10 @@ async function initSupabase(){
           // Auth callback must be synchronous. Awaiting a Supabase query here
           // deadlocks auth initialization and can cause repeated Google sign-ins.
           if(session?.user){
-            if(authUser?.id!==session.user.id){state.profile={name:"",username:"",grade:"",branch:"",campus:"",bio:"",interests:""};state.onboardingComplete=false;}
             authUser=session.user;
             window.__NEISOAuthCallbackPending=false;
           }else if(event==='SIGNED_OUT'){
             authUser=null;
-            state.profile={name:"",username:"",grade:"",branch:"",campus:"",bio:"",interests:""};
-            state.onboardingComplete=false;
           }
           if(event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED')return;
           if(authUser&&(event==='SIGNED_IN'||event==='USER_UPDATED')){
@@ -363,18 +359,16 @@ async function initSupabase(){
 }
 async function loadLiveData(){
   if(!sb||!authUser)return;
-  const requestedUserId=authUser.id;
   const [postRes,commentRes,reactionRes,bookmarkRes,profileRes]=await Promise.all([
     sb.from("posts").select("id,kind,title,body,tags,created_at,author_id,profiles!posts_author_id_fkey(full_name,grade,campus)").order("created_at",{ascending:false}),
     sb.from("comments").select("post_id"),sb.from("reactions").select("post_id,user_id"),sb.from("bookmarks").select("post_id,user_id").eq("user_id",authUser.id),
     sb.from("profiles").select("full_name,username,grade,campus,bio,interests").eq("id",authUser.id).maybeSingle()
   ]);
-  if(authUser?.id!==requestedUserId)return;
   if(postRes.error){console.error(postRes.error);return}
   const commentCount={},reactionCount={};(commentRes.data||[]).forEach(x=>commentCount[x.post_id]=(commentCount[x.post_id]||0)+1);(reactionRes.data||[]).forEach(x=>reactionCount[x.post_id]=(reactionCount[x.post_id]||0)+1);
   state.posts=(postRes.data||[]).map(p=>{const n=p.profiles?.full_name||"NEIS Student";return {id:p.id,user:n,initials:n.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase(),color:"#006f5b",meta:[p.profiles?.grade,p.profiles?.campus].filter(Boolean).join(" · ")||"NEIS Circle",time:new Date(p.created_at).toLocaleDateString(),kind:p.kind,title:p.title,body:p.body,tags:p.tags||[],likes:reactionCount[p.id]||0,comments:commentCount[p.id]||0}});
   state.liked=(reactionRes.data||[]).filter(x=>x.user_id===authUser.id).map(x=>x.post_id);state.saved=(bookmarkRes.data||[]).map(x=>x.post_id);
-  if(profileRes.data){const p=profileRes.data;state.profile={name:p.full_name||"",username:p.username||"",grade:p.grade||"",branch:p.branch||"",campus:p.campus||"",bio:p.bio||"",interests:(p.interests||[]).join(", ")}}else if(!profileRes.error){state.profile={name:"",username:"",grade:"",branch:"",campus:"",bio:"",interests:""}}
+  if(profileRes.data){const p=profileRes.data;state.profile={name:p.full_name||authUser.user_metadata?.full_name||"Student",username:p.username||"",grade:p.grade||"",campus:p.campus||"",bio:p.bio||"",interests:(p.interests||[]).join(", ")}}
   save();
   if(realtimeChannel)await sb.removeChannel(realtimeChannel);realtimeChannel=sb.channel("neis-live").on("postgres_changes",{event:"*",schema:"public",table:"posts"},async()=>{await loadLiveData();render()}).on("postgres_changes",{event:"*",schema:"public",table:"comments"},async()=>{await loadLiveData();render()}).subscribe();
 }
