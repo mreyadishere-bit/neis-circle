@@ -1,0 +1,83 @@
+name: OVH Restore Original Browser Tab Icon 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-restore-original-tab-icon-20261119.yml'
+      - 'scripts/ops/ovh-deploy-original-tab-icon-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-original-browser-tab-icon
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact browser icon restoration
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-original-tab-icon-20261119.py
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in ('index.html','about.html'):
+              s=Path(path).read_text()
+              assert s.count('rel="icon" type="image/png" href="/assets/email-logo.png?v=original-tab-20261119"')==1
+              assert 'favicon-rounded-48.png' not in s and 'neis-circle-favicon.svg?v=20261119' not in s
+          print('ORIGINAL_BROWSER_TAB_SOURCE=PASS')
+          PY
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Publish icon-only release on OVH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-original-tab-icon-20261119.py
+      - name: Verify live tab icon and unchanged circular root favicon
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,hashlib
+          base='https://neiscircle.site'
+          last='unknown'
+          for i in range(20):
+              try:
+                  def fetch(path):
+                      req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=12) as r:
+                          return r.status,r.read()
+                  st,home=fetch('/')
+                  sb,about=fetch('/about.html')
+                  si,ico=fetch('/favicon.ico')
+                  sp,png=fetch('/assets/email-logo.png?v=original-tab-20261119')
+                  assert st==sb==si==sp==200
+                  tag=b'<link rel="icon" type="image/png" href="/assets/email-logo.png?v=original-tab-20261119">'
+                  assert tag in home and tag in about
+                  assert b'favicon-rounded-48.png' not in home and b'favicon-rounded-48.png' not in about
+                  assert ico[:4]==b'\x00\x00\x01\x00'
+                  assert png[:8]==b'\x89PNG\r\n\x1a\n'
+                  assert b'scripts/user-activity-v1.js' in home
+                  assert b'main-admin-auth-studio-v5.js' in home
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12) as r:assert r.status==200
+                  print('ORIGINAL_TAB_ICON_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception as e:
+                  last=repr(e)[:130]
+                  time.sleep(3)
+          else:raise RuntimeError('Live tab icon not verified: '+last)
+          PY
