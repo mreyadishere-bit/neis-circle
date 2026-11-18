@@ -72,18 +72,18 @@ def main():
   shutil.copy2(STAGE/name,tmp/name)
  html=src_index
  html=change_meta(html,r'<title>[^<]*</title>','<title>'+TITLE+'</title>')
- html=change_meta(html,r'<meta\\s+name="description"\\s+content="[^"]*"\\s*/?>',
+ html=change_meta(html,r'<meta\s+name="description"\s+content="[^"]*"\s*/?>',
                   '<meta name="description" content="'+DESC+'">')
  for prop in ('og:title','twitter:title'):
-  html=change_meta(html,r'<meta\\s+(?:property|name)="'+prop+r'"\\s+content="[^"]*"\\s*/?>',
+  html=change_meta(html,r'<meta\s+(?:property|name)="'+prop+r'"\s+content="[^"]*"\s*/?>',
                    '<meta '+('property' if prop.startswith('og:') else 'name')+'="'+prop+'" content="'+TITLE+'">')
  for prop in ('og:description','twitter:description'):
-  html=change_meta(html,r'<meta\\s+(?:property|name)="'+prop+r'"\\s+content="[^"]*"\\s*/?>',
+  html=change_meta(html,r'<meta\s+(?:property|name)="'+prop+r'"\s+content="[^"]*"\s*/?>',
                    '<meta '+('property' if prop.startswith('og:') else 'name')+'="'+prop+'" content="'+DESC+'">')
  schema='<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"NEIS Circle","alternateName":"NEIS Circle Student Community","url":"https://neiscircle.site/","description":"A bilingual student community for sharing ideas, learning projects and opportunities.","inLanguage":["en","ar"]}</script>'
  require(schema in (STAGE/'index.html').read_text(),'STAGED_SCHEMA_INVALID')
- html=html.replace('</head>','  <meta property="og:site_name" content="NEIS Circle">\\n  '+schema+'\\n</head>',1)
- html,n=re.subn(r'(scripts/03-auth-i18n\\.js)(?:\\?[^"\\s]*)?',lambda m:m.group(1)+'?v='+MARKER,html,count=1)
+ html=html.replace('</head>','  <meta property="og:site_name" content="NEIS Circle">\n  '+schema+'\n</head>',1)
+ html,n=re.subn(r'(scripts/03-auth-i18n\.js)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+MARKER,html,count=1)
  require(n==1,'AUTH_CACHE_BUST_FAILED')
  (tmp/'index.html').write_text(html)
  note_start='<p class="auth-note">${bi(\'Google is used only for secure authentication. Your profile is completed in the next step.\',\'يُستخدم Google لتسجيل الدخول الآمن فقط، ثم تكمل ملفك في الخطوة التالية.\')}</p>'
