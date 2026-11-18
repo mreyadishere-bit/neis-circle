@@ -1,0 +1,90 @@
+name: OVH Student-Only SEO Identity 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-student-only-seo-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-student-only-seo
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public copy and deploy script
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-student-only-seo-20261119.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          index=Path('index.html').read_text()
+          about=Path('about.html').read_text()
+          assert 'independent, student-built online community for students' in index
+          assert 'not an official school administration website' in index
+          assert 'not the official website, LinkedIn account' in about
+          assert 'not a platform for teachers or parents' in about
+          assert 'linkedin.com' not in index.lower() and 'linkedin.com' not in about.lower()
+          assert 'favicon' in index and 'user-activity-v1.js' in index
+          print('STUDENT_ONLY_SEO_STATIC=PASS')
+          PY
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage public identity copy only
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/seo-student-identity-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes index.html about.html "ubuntu@$HOST:$dst/"
+      - name: Deploy safely with rollback
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-student-only-seo-20261119.py
+      - name: Verify live website and Auth unchanged
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          base='https://neiscircle.site'
+          for i in range(20):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=14) as r:return r.status,r.read().decode('utf8','replace')
+                  x,home=get('/')
+                  y,about=get('/about.html')
+                  assert x==y==200
+                  assert 'independent, student-built online community for students' in home
+                  assert 'not an official school administration website' in home
+                  assert 'not the official website, LinkedIn account' in about
+                  assert 'not a platform for teachers or parents' in about
+                  assert 'scripts/user-activity-v1.js' in home
+                  assert 'original-tab-20261119' in home
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:assert r.status==200
+                  print('STUDENT_ONLY_SEO_EXTERNAL=PASS')
+                  break
+              except Exception:
+                  if i==19:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Public identity update missing')
+          PY
