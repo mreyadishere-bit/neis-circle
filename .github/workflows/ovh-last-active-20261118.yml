@@ -1,0 +1,86 @@
+name: OVH Last Active 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-last-active-20261118.yml'
+      - 'scripts/ops/ovh-deploy-last-active-20261118.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-last-active-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static validation and privacy rules
+        run: |
+          set -euo pipefail
+          node --check scripts/user-activity-v1.js
+          node --check scripts/main-admin-auth-studio-v5.js
+          python3 -m py_compile scripts/ops/ovh-deploy-last-active-20261118.py
+          grep -Fq "auth.uid()" supabase/migrations/20261118181000_neis_last_active.sql
+          grep -Fq "last_active_desc" supabase/migrations/20261118181000_neis_last_active.sql
+          grep -Fq "['last_active_at','Last active']" scripts/main-admin-auth-studio-v5.js
+          grep -Fq "sb.rpc('neis_mark_active')" scripts/user-activity-v1.js
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage isolated SQL and UI assets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/last-active-20261118
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes supabase/migrations/20261118181000_neis_last_active.sql "ubuntu@$HOST:$dst/migration.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/main-admin-auth-studio-v5.js "ubuntu@$HOST:$dst/main-admin-auth-studio-v5.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/user-activity-v1.js "ubuntu@$HOST:$dst/user-activity-v1.js"
+      - name: Deploy OVH database additions and atomic frontend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-last-active-20261118.py
+      - name: Verify live frontend and Auth APIs
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          base='https://neiscircle.site'
+          marker='20261118-last-active'
+          for attempt in range(20):
+              try:
+                  req=urllib.request.Request(base+'/',headers={'Cache-Control':'no-cache'})
+                  html=urllib.request.urlopen(req,timeout=12).read().decode('utf8','replace')
+                  if 'scripts/user-activity-v1.js?v='+marker not in html:
+                      time.sleep(3);continue
+                  if 'scripts/main-admin-auth-studio-v5.js?v='+marker not in html:
+                      time.sleep(3);continue
+                  a=urllib.request.urlopen(base+'/scripts/user-activity-v1.js?v='+marker,timeout=12).read().decode('utf8','replace')
+                  b=urllib.request.urlopen(base+'/scripts/main-admin-auth-studio-v5.js?v='+marker,timeout=12).read().decode('utf8','replace')
+                  assert "sb.rpc('neis_mark_active')" in a
+                  assert "['last_active_at','Last active']" in b
+                  auth=urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12)
+                  assert auth.status == 200
+                  print('LAST_ACTIVE_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception as exc:
+                  if attempt==19:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Live frontend did not update')
+          PY
