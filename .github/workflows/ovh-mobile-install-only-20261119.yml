@@ -27,7 +27,6 @@ jobs:
           /tmp/neis-iconvenv/bin/python scripts/ops/build-original-logo-rounded-favicon.py --source assets/email-logo.png --output-dir /tmp/neis-icon-output
           python3 - <<'PY'
           from pathlib import Path
-          from PIL import Image
           js=Path('scripts/pwa-install-v117.js').read_text()
           css=Path('styles/pwa-v117.css').read_text()
           assert 'isMobileOrTabletBrowser()' in js
