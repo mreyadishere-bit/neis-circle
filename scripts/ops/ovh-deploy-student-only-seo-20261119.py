@@ -67,7 +67,7 @@ def main():
   must(bool(cid),'CADDY_DOWN')
   live=run(DOCKER+['exec',cid,'cat','/srv/neis-circle/index.html'],timeout=25)
   liveabout=run(DOCKER+['exec',cid,'cat','/srv/neis-circle/about.html'],timeout=25)
-  must(hashlib.sha256(live.encode()).hexdigest()==sha(tmp/'index.html') and
+  must(hashlib.sha256(live.encode()).hexdigest()==sha(dest/'index.html') and
        hashlib.sha256(liveabout.encode()).hexdigest()==sha(STAGE/'about.html'),'PUBLIC_CONTENT_NOT_UPDATED')
   caddy=run(DOCKER+['exec',cid,'cat','/etc/caddy/Caddyfile'],timeout=25)
   must(all(x in caddy for x in ('reverse_proxy rest:3000','reverse_proxy auth:9999','basic_auth')),'AUTH_ROUTING_CHANGED')
