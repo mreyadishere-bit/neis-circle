@@ -1,0 +1,44 @@
+name: OVH Last Active Read-Only Health 20261118
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-last-active-health-20261118.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          test -n "$HOST"
+      - name: Activity aggregate audit, no identities
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'bash -se' <<'REMOTE'
+          cd /home/ubuntu/neis-supabase
+          sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -At <<'SQL'
+          begin transaction read only;
+          select 'activity_rows='||count(*) from public.neis_user_activity;
+          select 'activity_last_hour='||count(*) from public.neis_user_activity where last_active_at>now()-interval '1 hour';
+          select 'activity_latest_utc='||coalesce((max(last_active_at) at time zone 'UTC')::text,'none') from public.neis_user_activity;
+          select 'activity_has_orphans='||count(*) from public.neis_user_activity a left join auth.users u on u.id=a.user_id where u.id is null;
+          select 'directory_rpc_activity_sort='||(pg_get_functiondef('public.main_admin_auth_users(text,text,text,integer,integer,text,text)'::regprocedure) like '%last_active_desc%')::text;
+          select 'actor_only_activity_rpc='||(pg_get_functiondef('public.neis_mark_active()'::regprocedure) like '%auth.uid()%')::text;
+          commit;
+          SQL
+          REMOTE
