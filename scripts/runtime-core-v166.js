@@ -38,14 +38,15 @@
       const rows=safeArray(profiles.data);
       state.members=rows;
       const own=rows.find(row=>same(row.id,authUser?.id));
+      if(!own && authUser?.id){state.profile={name:'',username:'',grade:'',branch:'',campus:'',bio:'',interests:''};state.onboardingComplete=false;}
       if(own){
         if(!profiles.cached){
           state.isAdmin=own.role==='admin'||same(authUser?.id,typeof NEIS_ADMIN_ID!=='undefined'?NEIS_ADMIN_ID:'25b556a3-ec6f-49e7-ac6c-1b09720e3bfd');
           if(own.onboarding_complete===true)state.onboardingComplete=true;
         }
         state.profile={
-          ...state.profile,
-          name:own.full_name||authUser?.user_metadata?.full_name||state.profile?.name||'Student',
+          ...{name:'',username:'',grade:'',branch:'',campus:'',bio:'',interests:''},
+          name:own.full_name||'',
           username:own.username||'',
           grade:own.grade||'',
           branch:own.branch||'',
