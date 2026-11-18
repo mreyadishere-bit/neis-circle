@@ -72,6 +72,11 @@ jobs:
           select 'PROFILE_COUNT='||count(*) from public.profiles;
           select 'ONBOARDED_COUNT='||count(*) from public.profiles where onboarding_complete is true;
           select 'RECENT_PROFILE_CREATIONS_24H='||count(*) from public.profiles where created_at>now()-interval '24 hours';
+          select 'RECENT_PROFILE_HAS_AUTH_USER='||count(*) from public.profiles p join auth.users u on u.id=p.id where p.created_at>now()-interval '24 hours' and u.deleted_at is null;
+          select 'RECENT_PROFILE_AUTH_CREATED_BEFORE_24H='||count(*) from public.profiles p join auth.users u on u.id=p.id where p.created_at>now()-interval '24 hours' and u.created_at<now()-interval '24 hours' and u.deleted_at is null;
+          select 'RECENT_PROFILE_ONBOARDED='||count(*) from public.profiles p where p.created_at>now()-interval '24 hours' and p.onboarding_complete is true;
+          select 'RECENT_PROFILE_AUTH_LAST_SIGN_IN_OLDER_24H='||count(*) from public.profiles p join auth.users u on u.id=p.id where p.created_at>now()-interval '24 hours' and (u.last_sign_in_at<now()-interval '24 hours' or u.last_sign_in_at is null);
+          select 'RECENT_AUTH_UPDATED_LAST_24H='||count(*) from auth.users u where u.updated_at>now()-interval '24 hours' and u.deleted_at is null;
           commit;
           SQL
           REMOTE
