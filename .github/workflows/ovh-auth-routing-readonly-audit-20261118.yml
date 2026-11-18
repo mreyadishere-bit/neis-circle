@@ -1,0 +1,81 @@
+name: OVH Auth Routing Read-Only Audit 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-auth-routing-readonly-audit-20261118.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Read-only auth service and frontend routes checks
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          bash -s <<'SCRIPT'
+          python3 - <<'PY'
+          import json,subprocess,re
+          from pathlib import Path
+          docker=['sudo','-n','/usr/bin/docker']
+          def inspect(name):
+              p=subprocess.run(docker+['inspect',name],capture_output=True,text=True,timeout=15)
+              return json.loads(p.stdout)[0] if p.returncode==0 else {}
+          c=inspect('supabase-caddy')
+          a=inspect('supabase-auth')
+          r=inspect('supabase-rest')
+          print('AUTH_CONTAINER_RUNNING='+str(a.get('State',{}).get('Running')))
+          print('REST_CONTAINER_RUNNING='+str(r.get('State',{}).get('Running')))
+          mounts=[m.get('Source') for m in c.get('Mounts',[]) if m.get('Destination')=='/srv/neis-circle']
+          print('CADDY_FRONTEND_MOUNT_COUNT='+str(len(mounts)))
+          if len(mounts)==1:
+              base=Path(mounts[0])
+              f=base/'scripts/01-core.js'
+              if f.exists():
+                  s=f.read_text()
+                  print('FRONTEND_POINTS_SELFHOSTED='+str('https://supabase.neiscircle.site' in s))
+                  print('FRONTEND_HAS_CLOUD_AUTH='+str('supabase.co' in s))
+              html=(base/'index.html')
+              if html.exists():
+                  h=html.read_text()
+                  print('FRONTEND_ONBOARDING_RELEASE='+str('20261118-onboarding-isolation' in h))
+          def env(obj):
+              return dict(x.split('=',1) for x in obj.get('Config',{}).get('Env',[]) if '=' in x)
+          ae=env(a);re=env(r)
+          print('GOTRUE_SITE_URL_MATCH='+str(ae.get('GOTRUE_SITE_URL','').rstrip('/')=='https://neiscircle.site'))
+          print('GOTRUE_EXTERNAL_API_URL_MATCH='+str(ae.get('GOTRUE_API_EXTERNAL_URL','').rstrip('/')=='https://supabase.neiscircle.site'))
+          print('GOTRUE_GOOGLE_ENABLED='+str(ae.get('GOTRUE_EXTERNAL_GOOGLE_ENABLED','').lower()=='true'))
+          print('GOTRUE_DB_HOST_PRESENT='+str(bool(ae.get('GOTRUE_DB_DATABASE_URL'))))
+          print('REST_DB_URI_PRESENT='+str(bool(re.get('PGRST_DB_URI'))))
+          print('ROUTING_CHECK=NO_SECRETS_OR_IDENTITIES_PRINTED')
+          PY
+          SCRIPT
+          cd /home/ubuntu/neis-supabase
+          sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -At <<'SQL'
+          begin transaction read only;
+          select 'auth_sessions_last_24h='||count(*) from auth.sessions where created_at>now()-interval '24 hours';
+          select 'auth_sessions_last_2h='||count(*) from auth.sessions where created_at>now()-interval '2 hours';
+          select 'refresh_tokens_last_24h='||count(*) from auth.refresh_tokens where created_at>now()-interval '24 hours';
+          commit;
+          SQL
+          REMOTE
