@@ -39,10 +39,12 @@ jobs:
           select 'database_clock_utc=' || (now() at time zone 'UTC')::text;
           select 'auth_users_total=' || count(*) from auth.users where deleted_at is null;
           select 'auth_users_created_last_24h=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '24 hours';
+          select 'auth_users_created_last_3h=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '3 hours';
           select 'auth_users_created_last_2h=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '2 hours';
           select 'auth_users_created_last_30m=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '30 minutes';
           select 'auth_last_created_utc=' || coalesce((max(created_at) at time zone 'UTC')::text,'none') from auth.users where deleted_at is null;
           select 'auth_last_sign_in_utc=' || coalesce((max(last_sign_in_at) at time zone 'UTC')::text,'none') from auth.users where deleted_at is null;
+          select 'auth_last_sign_in_last_3h=' || count(*) from auth.users where deleted_at is null and last_sign_in_at >= now() - interval '3 hours';
           select 'auth_last_sign_in_last_24h=' || count(*) from auth.users where deleted_at is null and last_sign_in_at >= now() - interval '24 hours';
           select 'profiles_total=' || count(*) from public.profiles;
           select 'profiles_onboarded=' || count(*) from public.profiles where onboarding_complete is true;
