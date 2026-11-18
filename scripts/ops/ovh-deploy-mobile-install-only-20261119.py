@@ -56,9 +56,9 @@ def main():
  for name in ICON_NAMES:
   dest=(tmp/name) if name=='favicon.ico' else (tmp/'assets'/name)
   shutil.copy2(STAGE/name,dest)
- patched,n=re.subn(r'(scripts/pwa-install-v117\\.js)(?:\\?[^"\\s]*)?',lambda m:m.group(1)+'?v='+MARKER,html,count=1)
+ patched,n=re.subn(r'(scripts/pwa-install-v117\.js)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+MARKER,html,count=1)
  require(n==1,'PWA_SCRIPT_QUERY_FAILED')
- patched,n=re.subn(r'(styles/pwa-v117\\.css)(?:\\?[^"\\s]*)?',lambda m:m.group(1)+'?v='+MARKER,patched)
+ patched,n=re.subn(r'(styles/pwa-v117\.css)(?:\?[^"\s]*)?',lambda m:m.group(1)+'?v='+MARKER,patched)
  require(n==2,'PWA_STYLES_QUERY_FAILED')
  (tmp/'index.html').write_text(patched)
  require(TAB in patched and TAB in (tmp/'about.html').read_text(),'BROWSER_TAB_CHANGED')
