@@ -1,0 +1,47 @@
+name: OVH Auth Origin Classification Read-Only 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-auth-origin-classify-20261118.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Classify public OAuth origins and DB target without logging secrets
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'python3 -' <<'PY'
+          import json, subprocess, urllib.parse
+          p=subprocess.run(['sudo','-n','/usr/bin/docker','inspect','supabase-auth'],text=True,capture_output=True,check=True)
+          env=dict(x.split('=',1) for x in json.loads(p.stdout)[0]['Config']['Env'] if '=' in x)
+          url=env.get('GOTRUE_API_EXTERNAL_URL','')
+          parsed=urllib.parse.urlsplit(url)
+          print('GOTRUE_EXTERNAL_URL_PRESENT='+str(bool(url)))
+          print('GOTRUE_EXTERNAL_URL_HTTPS='+str(parsed.scheme=='https'))
+          print('GOTRUE_EXTERNAL_URL_EXPECTED_HOST='+str(parsed.hostname=='supabase.neiscircle.site'))
+          print('GOTRUE_EXTERNAL_URL_PATH='+ ('/auth/v1' if parsed.path.rstrip('/')=='/auth/v1' else ('/' if not parsed.path.strip('/') else 'OTHER')))
+          dburl=env.get('GOTRUE_DB_DATABASE_URL','')
+          db=urllib.parse.urlsplit(dburl)
+          print('GOTRUE_DB_HOST_CLASS='+('db' if db.hostname in ('db','supabase-db') else ('none' if not db.hostname else 'OTHER')))
+          print('CONFIG_CHECK=NO_URLS_KEYS_PASSWORDS_OR_IDENTITIES')
+          PY
