@@ -60,12 +60,12 @@ def main():
  phase='prepare_release'
  shutil.copytree(old,temp)
  for a in ASSETS:shutil.copy2(STAGE/Path(a).name,temp/a)
- html,n=re.subn(r'scripts/main-admin-auth-studio-v5\\.js(?:\\?[^"\\s]*)?',
+ html,n=re.subn(r'scripts/main-admin-auth-studio-v5\.js(?:\?[^"\s]*)?',
   'scripts/main-admin-auth-studio-v5.js?v='+MARKER,oldhtml,count=1)
  require(n==1,'ADMIN_SCRIPT_TAG_UNEXPECTED')
  new_script='<script src="scripts/user-activity-v1.js?v='+MARKER+'" defer></script>'
  require(new_script not in html and '</body>' in html,'ACTIVITY_SCRIPT_TAG_INVALID')
- html=html.replace('</body>','  '+new_script+'\\n</body>',1)
+ html=html.replace('</body>','  '+new_script+'\n</body>',1)
  (temp/'index.html').write_text(html)
  require(sum(x.is_file() for x in temp.rglob('*'))==count+1,'COPY_COUNT_INVALID')
  for a in ASSETS:
@@ -74,8 +74,6 @@ def main():
  phase='apply_database_migration'
  run(COMPOSE+['exec','-T','db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],
   stdin=migration,timeout=85)
- security=run(COMPOSE+['exec','-T','db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-Atqc'],
-   stdin=None,timeout=10) if False else None
  checks=run(COMPOSE+['exec','-T','db','psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres','-At'],
   stdin="""select case when to_regclass('public.neis_user_activity') is not null and
      (select relrowsecurity from pg_class where oid='public.neis_user_activity'::regclass) and
