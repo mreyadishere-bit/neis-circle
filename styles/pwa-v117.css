@@ -48,5 +48,6 @@ html.neis-native-app .pwa-install-card{display:none!important}
   .pwa-install-actions .primary{width:100%}
 }
 
-/* Browser tabs show the install card at every size; installed apps do not. */
+/* Show the installation card only in mobile/tablet browsers, never desktop tabs. */
+html.neis-desktop-browser .pwa-install-card{display:none!important}
 @media(display-mode:standalone){.pwa-install-card{display:none!important}}
