@@ -95,12 +95,23 @@
     }
   }
 
-  // The installation prompt is hidden only while running in standalone mode.
-  // A regular browser tab always shows it, even after a previous install.
+  // Only mobile and tablet browsers need the in-feed installation card.
+  // Desktop web browsers still keep all other PWA/notification functionality.
+  function isMobileOrTabletBrowser(){
+    const ua=navigator.userAgent||'';
+    const handheld=/Android|iPad|iPhone|iPod|Mobile|Tablet|Silk|Kindle/i.test(ua);
+    const ipadDesktopUA=/Macintosh/i.test(ua)&&navigator.maxTouchPoints>1;
+    const windowsTouchTablet=/Windows/i.test(ua)&&navigator.maxTouchPoints>1&&
+      window.matchMedia?.('(pointer: coarse)')?.matches===true;
+    return handheld||ipadDesktopUA||windowsTouchTablet;
+  }
+  const showInstallCardOnThisDevice=isMobileOrTabletBrowser();
+  document.documentElement.classList.toggle('neis-desktop-browser',!showInstallCardOnThisDevice);
   function updateInstallUI(){
     const installed=isStandalone();
+    const hideInstallCard=installed||!showInstallCardOnThisDevice;
     document.querySelectorAll('[data-pwa-install-card]').forEach(card=>{
-      card.classList.toggle('hidden',installed);
+      card.classList.toggle('hidden',hideInstallCard);
     });
     document.querySelectorAll('[data-pwa-install]').forEach(button=>{
       if(installed){
