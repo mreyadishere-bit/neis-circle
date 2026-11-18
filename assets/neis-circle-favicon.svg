@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+<title>NEIS Circle</title>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2476BA"/><stop offset=".55" stop-color="#164B93"/><stop offset="1" stop-color="#302F89"/></linearGradient>
+<linearGradient id="edge" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#48B5E8"/><stop offset="1" stop-color="#9288FF"/></linearGradient>
+</defs>
+<rect width="96" height="96" rx="23" fill="url(#bg)"/>
+<path d="M13 76c8.8 9.6 23.2 13 38.8 9.9 12.2-2.3 22.2-9.3 29.2-20.1" fill="none" stroke="url(#edge)" stroke-width="5" stroke-linecap="round" opacity=".95"/>
+<path d="M74 15.5l1.5 4.5 4.5 1.5-4.5 1.5L74 27.5 72.5 23 68 21.5l4.5-1.5z" fill="#DFEBFF"/>
+<text x="48" y="60" text-anchor="middle" fill="#FFFFFF" font-family="Arial,Helvetica,sans-serif" font-size="35" font-weight="800" letter-spacing="-2.2">NC</text>
+</svg>
