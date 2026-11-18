@@ -1,0 +1,77 @@
+name: OVH Onboarding Profile Isolation 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-onboarding-isolation-20261118.yml'
+      - 'scripts/ops/ovh-deploy-onboarding-isolation-20261118.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-onboarding-isolation-release
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate profile onboarding and deploy script
+        run: |
+          set -euo pipefail
+          node --check scripts/03-auth-i18n.js
+          python3 -m py_compile scripts/ops/ovh-deploy-onboarding-isolation-20261118.py
+          grep -Fq "const name=state.profile?.name||'';" scripts/03-auth-i18n.js
+          grep -Fq "name:p.full_name||''" scripts/03-auth-i18n.js
+      - name: Configure secured SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only auth onboarding frontend asset
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'install -d -m 700 /home/ubuntu/neis-backups/onboarding-isolation-20261118'
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/03-auth-i18n.js "ubuntu@$OVH_HOST:/home/ubuntu/neis-backups/onboarding-isolation-20261118/03-auth-i18n.js"
+      - name: Release immutable frontend and verify Caddy mount, with rollback
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-onboarding-isolation-20261118.py
+      - name: Verify production serves new onboarding and unchanged OAuth backend
+        run: |
+          python3 - <<'PY'
+          import urllib.request, time
+          base='https://neiscircle.site'
+          marker='20261118-onboarding-isolation'
+          last=''
+          for _ in range(18):
+              try:
+                  req=urllib.request.Request(base+'/',headers={'Cache-Control':'no-cache'})
+                  html=urllib.request.urlopen(req,timeout=12).read().decode('utf-8','replace')
+                  if 'scripts/03-auth-i18n.js?v='+marker in html:
+                      js=urllib.request.urlopen(base+'/scripts/03-auth-i18n.js?v='+marker,timeout=12).read().decode('utf-8','replace')
+                      assert "const name=state.profile?.name||'';" in js
+                      assert "name:p.full_name||''" in js
+                      response=urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12)
+                      assert response.status == 200
+                      print('OVH_ONBOARDING_EXTERNAL_SMOKE=PASS')
+                      break
+                  last='old_index'
+              except Exception as e: last=type(e).__name__
+              time.sleep(3)
+          else: raise RuntimeError('External live version not verified: '+last)
+          PY
