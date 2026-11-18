@@ -18,7 +18,7 @@
   const LIMIT_FULL_EXPORT=10000;
   const available=[
     ['user_id','UID'],['profile','Profile'],['display_name','Display name'],['email','Email'],['phone','Phone'],
-    ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],
+    ['providers','Providers'],['provider_type','Provider type'],['created_at','Created at'],['last_active_at','Last active'],
     ['last_sign_in_at','Last sign in at'],['status','Status'],['actions','Actions']
   ];
   let columns=new Set(available.map(x=>x[0]));
@@ -134,7 +134,8 @@
       '<select id="naStudioSort" aria-label="Sort users">'+
         '<option value="created_desc">↓ Sorted by created at</option>'+
         '<option value="created_asc">↑ Oldest first</option>'+
-        '<option value="last_sign_in_desc">↓ Last sign in</option>'+
+        '<option value="last_sign_in_desc">↓ Last sign in</option>'+ 
+        '<option value="last_active_desc">↓ Last active</option><option value="last_active_asc">↑ Least recently active</option>'+ 
         '<option value="last_sign_in_asc">↑ Least recent sign in</option>'+
         '<option value="email_asc">↑ Email A–Z</option><option value="email_desc">↓ Email Z–A</option>'+
         '<option value="name_asc">↑ Display name</option></select>'+
@@ -191,7 +192,7 @@
       k==='display_name'?'st-name':k==='profile'?'st-other':k==='actions'?'st-actions':k==='email'?'st-mail':
       k==='phone'?'st-phone':k==='providers'?'st-provider':
       k==='provider_type'?'st-provider-type':
-      ['created_at','last_sign_in_at'].includes(k)?'st-datetime':'st-other';
+      ['created_at','last_sign_in_at','last_active_at'].includes(k)?'st-datetime':'st-other';
   }
   function shown(){return available.filter(x=>columns.has(x[0]));}
   function addCell(tr,k,u){
@@ -238,7 +239,7 @@
       td.textContent=u.google_provider?'Social':'Other';
     }else if(k==='status'){
       const [text,cls]=statusOf(u);td.appendChild(el('span','st-state '+cls,text));
-    }else if(k==='created_at'||k==='last_sign_in_at'){
+    }else if(k==='created_at'||k==='last_sign_in_at'||k==='last_active_at'){
       td.textContent=when(val,true);td.title=when(val,true);
     }else{
       td.textContent=val==null||val===''?'—':String(val);
@@ -260,7 +261,7 @@
     for(const [key,title] of shown()){
       const th=el('th',colClass(key)),sortKey={
         user_id:null,display_name:'name_asc',email:'email_asc',
-        created_at:'created_desc',last_sign_in_at:'last_sign_in_desc'
+        created_at:'created_desc',last_sign_in_at:'last_sign_in_desc',last_active_at:'last_active_desc'
       }[key];
       if(sortKey){
         const b=el('button','',title+' '+(sort===sortKey?'▾':'⌄'));
@@ -569,6 +570,7 @@
       const k=button.dataset.stSort;
       if(k==='created_at')sort=sort==='created_desc'?'created_asc':'created_desc';
       if(k==='last_sign_in_at')sort=sort==='last_sign_in_desc'?'last_sign_in_asc':'last_sign_in_desc';
+      if(k==='last_active_at')sort=sort==='last_active_desc'?'last_active_asc':'last_active_desc';
       if(k==='email')sort=sort==='email_asc'?'email_desc':'email_asc';
       if(k==='display_name')sort='name_asc';
       const select=$('Sort');if(select)select.value=sort;
