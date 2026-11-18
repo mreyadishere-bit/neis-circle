@@ -1,0 +1,52 @@
+name: OVH Auth Users Read-Only Freshness Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-auth-users-readonly-audit-20261118.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure secured SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Aggregate read-only auth data directly from OVH Postgres
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          cd /home/ubuntu/neis-supabase
+          sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -At <<'SQL'
+          begin transaction read only;
+          select 'database_clock_utc=' || (now() at time zone 'UTC')::text;
+          select 'auth_users_total=' || count(*) from auth.users where deleted_at is null;
+          select 'auth_users_created_last_24h=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '24 hours';
+          select 'auth_users_created_last_2h=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '2 hours';
+          select 'auth_users_created_last_30m=' || count(*) from auth.users where deleted_at is null and created_at >= now() - interval '30 minutes';
+          select 'auth_last_created_utc=' || coalesce((max(created_at) at time zone 'UTC')::text,'none') from auth.users where deleted_at is null;
+          select 'auth_last_sign_in_utc=' || coalesce((max(last_sign_in_at) at time zone 'UTC')::text,'none') from auth.users where deleted_at is null;
+          select 'auth_last_sign_in_last_24h=' || count(*) from auth.users where deleted_at is null and last_sign_in_at >= now() - interval '24 hours';
+          select 'profiles_total=' || count(*) from public.profiles;
+          select 'profiles_onboarded=' || count(*) from public.profiles where onboarding_complete is true;
+          select 'auth_without_profile=' || count(*) from auth.users u left join public.profiles p on p.id=u.id where u.deleted_at is null and p.id is null;
+          commit;
+          SQL
+          REMOTE
