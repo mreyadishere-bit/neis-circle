@@ -31,7 +31,7 @@ jobs:
           assert 'not the official website, LinkedIn account' in about
           assert 'not a platform for teachers or parents' in about
           assert 'linkedin.com' not in index.lower() and 'linkedin.com' not in about.lower()
-          assert 'favicon' in index and 'user-activity-v1.js' in index
+          assert 'email-logo.png' in index and 'user-activity-v1.js' in index
           print('STUDENT_ONLY_SEO_STATIC=PASS')
           PY
       - name: Configure OVH SSH
