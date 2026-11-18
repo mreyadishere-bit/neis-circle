@@ -1,0 +1,77 @@
+name: OVH Auth Database Consistency Audit 20261118
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-auth-db-consistency-20261118.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure secured SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Read-only compare Auth and REST database connections
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,urllib.parse
+          docker=['sudo','-n','/usr/bin/docker']
+          def inspect(name):
+              x=subprocess.run(docker+['inspect',name],capture_output=True,text=True,timeout=14,check=True)
+              return json.loads(x.stdout)[0]
+          def env(info):
+              return dict(x.split('=',1) for x in info['Config'].get('Env',[]) if '=' in x)
+          auth=env(inspect('supabase-auth'))
+          rest=env(inspect('supabase-rest'))
+          auth_url=auth.get('GOTRUE_DB_DATABASE_URL') or ''
+          rest_url=rest.get('PGRST_DB_URI') or ''
+          a=urllib.parse.urlparse(auth_url)
+          r=urllib.parse.urlparse(rest_url)
+          print('AUTH_DB_URL_PRESENT='+str(bool(auth_url)))
+          print('REST_DB_URL_PRESENT='+str(bool(rest_url)))
+          print('AUTH_REST_DB_HOST_SAME='+str(bool(a.hostname and r.hostname and a.hostname==r.hostname)))
+          print('AUTH_REST_DB_PORT_SAME='+str(a.port==r.port))
+          print('AUTH_REST_DB_NAME_SAME='+str(bool(a.path and r.path and a.path==r.path)))
+          print('AUTH_DB_HOST_LOCAL='+str(a.hostname in ('db','supabase-db','localhost','127.0.0.1')))
+          print('REST_DB_HOST_LOCAL='+str(r.hostname in ('db','supabase-db','localhost','127.0.0.1')))
+          print('AUTH_DB_NAME_IS_POSTGRES='+str(a.path.strip('/')=='postgres'))
+          print('REST_DB_NAME_IS_POSTGRES='+str(r.path.strip('/')=='postgres'))
+          print('DB_COMPARISON=REDACTED')
+          PY
+      - name: Read-only cross-check actual database and server clock
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'bash -se' <<'REMOTE'
+          cd /home/ubuntu/neis-supabase
+          sudo -n /usr/bin/docker compose -f docker-compose.yml -f docker-compose.security.yml -f docker-compose.caddy.yml -f docker-compose.frontend-public.yml -f docker-compose.auth-public-direct.yml exec -T db psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -At <<'SQL'
+          begin transaction read only;
+          select 'DATABASE_NAME_IS_POSTGRES='||(current_database()='postgres')::text;
+          select 'DATABASE_SERVER_TIME_UTC='||(now() at time zone 'UTC')::text;
+          select 'AUTH_USER_COUNT='||count(*) from auth.users where deleted_at is null;
+          select 'AUTH_NEW_IN_7_DAYS='||count(*) from auth.users where deleted_at is null and created_at>now()-interval '7 days';
+          select 'PROFILE_COUNT='||count(*) from public.profiles;
+          select 'ONBOARDED_COUNT='||count(*) from public.profiles where onboarding_complete is true;
+          select 'RECENT_PROFILE_CREATIONS_24H='||count(*) from public.profiles where created_at>now()-interval '24 hours';
+          commit;
+          SQL
+          REMOTE
