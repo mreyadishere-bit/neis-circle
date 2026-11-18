@@ -1,0 +1,85 @@
+name: OVH Restore Original NC Circular Favicon 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-original-rounded-icon-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-original-round-favicon
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create exact original logo with circular transparent mask
+        run: |
+          set -euo pipefail
+          python3 -m venv /tmp/neis-favicon-venv
+          /tmp/neis-favicon-venv/bin/pip install --quiet pillow
+          /tmp/neis-favicon-venv/bin/python scripts/ops/build-original-logo-rounded-favicon.py --source assets/email-logo.png --output-dir /tmp/neis-rounded-icon
+          python3 -m py_compile scripts/ops/ovh-deploy-original-rounded-icon-20261119.py
+          test -s /tmp/neis-rounded-icon/favicon.ico
+          test -s /tmp/neis-rounded-icon/favicon-rounded-48.png
+      - name: Configure secured OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only original NC rounded favicon
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/original-rounded-favicon-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-rounded-icon/* "ubuntu@$HOST:$dst/"
+      - name: Deploy minimal favicon release preserving Auth and current application
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-original-rounded-icon-20261119.py
+      - name: Test original green NC favicon served by live OVH site
+        run: |
+          python3 - <<'PY'
+          import urllib.request, time,struct
+          base='https://neiscircle.site'
+          for i in range(20):
+              try:
+                  def fetch(path):
+                      req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=14) as r:return r.status,r.read(),r.headers.get('Content-Type','')
+                  sh,home,_=fetch('/')
+                  sa,about,_=fetch('/about.html')
+                  sp,png,mime=fetch('/assets/favicon-rounded-48.png?v=20261119-original-rounded')
+                  si,ico,_=fetch('/favicon.ico')
+                  assert sh==sa==sp==si==200
+                  assert png[:8]==b'\x89PNG\r\n\x1a\n'
+                  assert ico[:4]==b'\x00\x00\x01\x00'
+                  assert b'favicon-rounded-48.png?v=20261119-original-rounded' in home
+                  assert b'favicon-rounded-48.png?v=20261119-original-rounded' in about
+                  assert b'neis-circle-favicon.svg?v=20261119' not in home
+                  assert b'scripts/user-activity-v1.js' in home
+                  assert b'main-admin-auth-studio-v5.js' in home
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:assert r.status==200
+                  print('ORIGINAL_ROUNDED_FAVICON_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception:
+                  if i==19:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Live rounded favicon not observed')
+          PY
