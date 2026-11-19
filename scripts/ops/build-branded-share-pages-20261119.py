@@ -10,7 +10,8 @@ from xml.etree.ElementTree import Element,SubElement,ElementTree,indent
 
 BASE="https://neiscircle.site"
 IMAGES=("feed","discover","study","messages","connections","saved",
-        "opportunities","gallery","articles","circles")
+        "opportunities","gallery","articles","circles","analytics",
+        "timetable","notifications","settings","games")
 ADDITIONAL={
  "feed":("Feed","Discover student posts and conversations on NEIS Circle.",
   "Explore student discussions, shared experiences and helpful ideas.",
@@ -26,7 +27,22 @@ ADDITIONAL={
   "كوّن علاقات مع الطلاب أصحاب الاهتمامات المشتركة."),
  "saved":("Saved","Keep useful student articles and resources organized in NEIS Circle.",
   "Return to the helpful content and resources you choose to save.",
-  "احتفظ بالمقالات والموارد المفيدة للعودة إليها لاحقًا.")
+  "احتفظ بالمقالات والموارد المفيدة للعودة إليها لاحقًا."),
+ "analytics":("Analytics","Explore personal progress and useful activity insights in NEIS Circle.",
+  "Understand progress using student-friendly insights and visual summaries.",
+  "تابع تقدمك واطّلع على إحصاءات وأنشطة مفيدة."),
+ "timetable":("Timetable","Organize class schedules and study time with the NEIS Circle timetable.",
+  "Plan lessons and organize your week with student timetable tools.",
+  "نظّم حصصك ومواعيدك باستخدام الجدول الدراسي."),
+ "notifications":("Notifications","Stay informed about updates and important activity in NEIS Circle.",
+  "Find helpful updates and notifications from your student community.",
+  "تابع الإشعارات والتحديثات المهمة من مجتمع الطلاب."),
+ "settings":("Settings","Customize the NEIS Circle student experience and manage your preferences.",
+  "Adjust appearance and preferences to make your NEIS Circle experience yours.",
+  "خصص إعدادات وتجربة استخدام NEIS Circle."),
+ "games":("Games","Discover interactive student games and challenges in NEIS Circle.",
+  "Explore fun learning challenges and interactive student activities.",
+  "استكشف الألعاب والتحديات التفاعلية للطلاب.")
 }
 def main():
  p=argparse.ArgumentParser()
