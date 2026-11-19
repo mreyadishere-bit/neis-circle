@@ -1,0 +1,89 @@
+name: OVH Explicit Public Section Share Handles 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-explicit-section-share-handles-20261119.yml'
+      - 'scripts/ops/ovh-explicit-section-share-handles-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-explicit-share-section-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scoped Caddy configuration script
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-explicit-section-share-handles-20261119.py scripts/ops/ovh-rollback-explicit-section-handles-20261119.py
+          grep -Fq '@neisShareSection path_regexp' scripts/ops/ovh-explicit-section-share-handles-20261119.py
+          grep -Fq 'AUTH_API_CONFIG=UNTOUCHED' scripts/ops/ovh-explicit-section-share-handles-20261119.py
+      - name: Configure secured SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Activate index.html section paths without changing Auth or existing pages
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-explicit-section-share-handles-20261119.py
+      - name: Test six distinct social previews and existing login
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re,time,xml.etree.ElementTree as ET
+          root='https://neiscircle.site'
+          slugs=('articles','study','circles','opportunities','gallery','timetable')
+          def fetch(path):
+              req=urllib.request.Request(root+path,headers={'User-Agent':'facebookexternalhit/1.1','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=14) as r:return r.status,r.url,r.read().decode('utf8','replace')
+          for attempt in range(8):
+              try:
+                  for slug in slugs:
+                      code,url,doc=fetch('/'+slug+'/')
+                      title=re.findall(r'<meta property="og:title" content="([^"]+)"',doc)
+                      canonical=re.findall(r'<link rel="canonical" href="([^"]+)"',doc)
+                      print(slug,'HTTP',code,'OG_TITLE',title[:1],'CANONICAL',canonical[:1])
+                      assert code==200 and title and slug.capitalize() in title[0],slug
+                      assert canonical==[root+'/'+slug+'/'],slug
+                      assert 'href="/#/'+slug+'"' in doc,slug
+                      assert '<meta property="og:image"' in doc,slug
+                  status,homeurl,home=fetch('/')
+                  assert status==200 and 'scripts/section-share-router-v1.js' in home
+                  assert 'scripts/user-activity-v1.js' in home
+                  status,sitemapurl,sitemap=fetch('/sitemap.xml')
+                  assert status==200
+                  assert len([e for e in ET.fromstring(sitemap) if e.tag.endswith('url')])==8
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:assert r.status==200
+                  print('NEIS_SECTION_SHARING=VERIFIED_PUBLICLY')
+                  break
+              except Exception as error:
+                  print('RETRY',attempt+1,'ERROR',repr(error)[:190])
+                  if attempt==7:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Social preview verification failed')
+          PY
+      - name: Restore original Caddy config if preview checks fail
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' < scripts/ops/ovh-rollback-explicit-section-handles-20261119.py
+          fi
