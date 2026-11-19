@@ -1,0 +1,113 @@
+name: OVH Search Results Show Student and Post Author Avatars 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-search-avatar-photos-20261119.yml'
+      - 'scripts/ops/ovh-deploy-search-avatars-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-search-avatar-photos
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify existing search remains intact and profile/avatar handling is correct
+        run: |
+          set -euo pipefail
+          node --check scripts/search-result-avatars-v1.js
+          node --check scripts/05-social.js
+          node qa/search-result-avatars.test.mjs
+          node qa/unified-search-sidebar.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-search-avatars-20261119.py scripts/ops/ovh-rollback-search-avatars-20261119.py
+          python3 - <<'PY'
+          from pathlib import Path
+          index=Path('index.html').read_text()
+          assert index.count('scripts/search-result-avatars-v1.js?v=20261119-1')==1
+          assert index.count('styles/search-result-avatars-v1.css?v=20261119-1')==1
+          assert index.index('scripts/05-social.js')<index.index('scripts/profile-illustrations-v1.js')<index.index('scripts/search-result-avatars-v1.js')
+          assert 'scripts/03-auth-i18n.js' in index and 'scripts/user-activity-v1.js' in index
+          source=Path('scripts/search-result-avatars-v1.js').read_text()
+          assert "sb.from('posts').select('id,author_id')" in source
+          assert "sb.from('profiles').select('id,full_name,avatar_url')" in source
+          assert "profileAvatar(person)" in source
+          assert "originalSearchRow(item).replace" in source
+          print('SEARCH_AVATAR_INTEGRATION_PRECHECK=PASS')
+          PY
+      - name: Set up known-host-verified OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only new search portrait script and stylesheet
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          stage=/home/ubuntu/neis-backups/search-portraits-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $stage"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/search-result-avatars-v1.js styles/search-result-avatars-v1.css "ubuntu@$HOST:$stage/"
+      - name: Publish guarded OVH frontend release with original app unchanged
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-search-avatars-20261119.py
+      - name: Verify portrait assets and live application from outside OVH
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          root='https://neiscircle.site'
+          def get(path):
+              request=urllib.request.Request(root+path,headers={'Cache-Control':'no-cache'})
+              with urllib.request.urlopen(request,timeout=15) as response:
+                  assert response.status==200,(path,response.status)
+                  return response.read().decode('utf8','replace')
+          for attempt in range(10):
+              try:
+                  home=get('/')
+                  assert 'scripts/search-result-avatars-v1.js?v=20261119-1' in home
+                  assert 'styles/search-result-avatars-v1.css?v=20261119-1' in home
+                  assert 'scripts/05-social.js' in home
+                  assert 'scripts/profile-illustrations-v1.js' in home
+                  assert 'assets/share/home-main.webp' in home
+                  js=get('/scripts/search-result-avatars-v1.js')
+                  css=get('/styles/search-result-avatars-v1.css')
+                  assert 'search-result-avatar' in js and 'profileAvatar(person)' in js
+                  assert 'search-result-avatar' in css and 'border-radius:50%' in css
+                  assert "sb.from('posts').select('id,author_id')" in js
+                  assert "sb.from('profiles').select('id,full_name,avatar_url')" in js
+                  assert 'function searchRow(x)' in get('/scripts/05-social.js')
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=15) as response:
+                      assert response.status==200
+                  print('NEIS_SEARCH_AVATAR_ASSETS_EXTERNAL=PASS')
+                  print('EXISTING_SEARCH_AUTH_APP=HEALTHY')
+                  break
+              except Exception as error:
+                  print('SMOKE_RETRY',attempt+1,repr(error)[:150])
+                  if attempt==9:raise
+                  time.sleep(3)
+          PY
+      - name: Revert only search portrait release if any external check fails
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-search-avatars-20261119.py
+          fi
