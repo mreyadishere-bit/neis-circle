@@ -1,0 +1,116 @@
+name: OVH Install Approved NEIS Circle Share Images 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/NEIS_Circle_Final_Share_Assets.zip'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-approved-share-images
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate archive, approved image mapping and build preview HTML
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/build-branded-share-pages-20261119.py scripts/ops/ovh-deploy-branded-share-assets-20261119.py
+          test -s deploy/NEIS_Circle_Final_Share_Assets.zip
+          mkdir -p /tmp/neis-approved-assets /tmp/neis-approved-pages
+          unzip -q deploy/NEIS_Circle_Final_Share_Assets.zip -d /tmp/neis-approved-assets
+          python3 -m venv /tmp/neis-image-check
+          /tmp/neis-image-check/bin/pip install -q Pillow
+          /tmp/neis-image-check/bin/python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          assets=Path('/tmp/neis-approved-assets/assets/share')
+          names='feed discover study messages connections saved opportunities gallery articles circles home-main'.split()
+          for slug in names:
+              p=assets/(slug+'.webp')
+              assert p.is_file(),str(p)
+              with Image.open(p) as im:
+                  assert im.format=='WEBP' and im.size==(1200,630),(str(p),im.size)
+          print('ALL_ELEVEN_APPROVED_IMAGES_VALIDATED=YES')
+          PY
+          python3 scripts/ops/build-branded-share-pages-20261119.py --assets-dir /tmp/neis-approved-assets/assets/share --output-dir /tmp/neis-approved-pages
+          python3 - <<'PY'
+          from pathlib import Path
+          import re,xml.etree.ElementTree as ET
+          p=Path('/tmp/neis-approved-pages')
+          expected='feed discover study messages connections saved opportunities gallery articles circles'.split()
+          for slug in expected:
+              html=(p/(slug+'.html')).read_text()
+              assert f'<meta property="og:image" content="https://neiscircle.site/assets/share/{slug}.webp?v=20261119-art"' in html,slug
+              assert f'<meta property="og:url" content="https://neiscircle.site/{slug}.html"' in html,slug
+              assert f'href="/#/{slug}"' in html,slug
+          assert 'referral-poster.webp' in (p/'timetable.html').read_text()
+          root=ET.parse(p/'sitemap.xml').getroot()
+          assert len([x for x in root if x.tag.endswith('url')])==13
+          print('TEN_SECTION_SOCIAL_CARDS_AND_TIMETABLE=PASS')
+          PY
+      - name: Configure SSH to the existing OVH server
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage approved assets and independent preview files
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/branded-share-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst/assets $dst/pages"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-approved-assets/assets/share/*.webp "ubuntu@$HOST:$dst/assets/"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-approved-pages/*.html /tmp/neis-approved-pages/sitemap.xml "ubuntu@$HOST:$dst/pages/"
+      - name: Activate immutable image-only OVH release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-branded-share-assets-20261119.py
+      - name: Verify actual independent OG images for all public pages
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,re
+          root='https://neiscircle.site'
+          slugs='feed discover study messages connections saved opportunities gallery articles circles'.split()
+          for attempt in range(10):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(root+path,headers={'User-Agent':'facebookexternalhit/1.1','Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=15) as r:return r.status,r.headers.get('Content-Type',''),r.read()
+                  home_status,home_type,home=get('/')
+                  assert home_status==200
+                  assert b'assets/share/home-main.webp?v=20261119-art' in home
+                  for slug in slugs:
+                      status,ctype,html=get('/'+slug+'.html')
+                      assert status==200 and ctype.startswith('text/html'),(slug,ctype)
+                      assert f'content="{root}/assets/share/{slug}.webp?v=20261119-art"'.encode() in html,slug
+                      assert f'content="{root}/{slug}.html"'.encode() in html,slug
+                      st,typ,img=get('/assets/share/'+slug+'.webp')
+                      assert st==200 and img.startswith(b'RIFF') and b'WEBP' in img[:16],slug
+                  for protected in ('scripts/user-activity-v1.js','scripts/03-auth-i18n.js'):
+                      assert protected in home.decode('utf8','replace')
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=15) as r:assert r.status==200
+                  print('NEIS_SOCIAL_SHARE_ARTWORK_EXTERNAL=PASS')
+                  break
+              except Exception as e:
+                  print('RETRY',attempt+1,repr(e)[:180])
+                  if attempt==9:raise
+                  time.sleep(3)
+          else:raise RuntimeError('External previews failed')
+          PY
