@@ -16,14 +16,12 @@ COMPOSE=DOCKER+['compose']+[v for f in
   'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml')
  for v in ('-f',f)]
 REPLACEMENTS=(
- ('scripts/05-social.js?v=20261104-universal-search-v2',
-  'scripts/05-social.js?v=20261119-search-author-avatars-v2'),
  ('scripts/search-result-avatars-v1.js?v=20261119-1',
   'scripts/search-result-avatars-v1.js?v=20261119-2'),
  ('styles/search-result-avatars-v1.css?v=20261119-1',
   'styles/search-result-avatars-v1.css?v=20261119-2'))
 EXPECTED_ORIGINAL_GIT_BLOBS={
- 'scripts/05-social.js':'36a5c94927c3712bbdc8964536580ffa6f8fcbce',
+ 'scripts/05-social.js':'f5e56d3f615136e175f05ac2ef0f25be960b0519',
  'scripts/search-result-avatars-v1.js':'ba20208bfe298d2d42c86db494d3d82fb38b6983',
 }
 def check(v,msg):
@@ -64,6 +62,9 @@ def main():
  html=(current/'index.html').read_text()
  check(all(html.count(x[0])==1 for x in REPLACEMENTS),
        'LIVE_INDEX_CACHE_VERSIONS_UNEXPECTED')
+ social_tag=re.search(r'scripts/05-social\\.js\\?[^"]+',html)
+ check(social_tag is not None and html.count('scripts/05-social.js?')==1,
+       'LIVE_SOCIAL_SCRIPT_LINK_UNEXPECTED')
  check('scripts/03-auth-i18n.js' in html
        and 'scripts/user-activity-v1.js' in html
        and 'assets/share/home-main.webp' in html,
@@ -83,9 +84,13 @@ def main():
  shutil.copy2(staged_avatar,temp/'scripts/search-result-avatars-v1.js')
  updated=html
  for old,new in REPLACEMENTS:updated=updated.replace(old,new,1)
+ updated=updated.replace(social_tag.group(0),
+      'scripts/05-social.js?v=20261119-search-author-avatars-v2',1)
  (temp/'index.html').write_text(updated)
  for old,new in REPLACEMENTS:
   check(updated.count(new)==1,'CACHE_BUSTER_MISSING_'+new)
+ check(updated.count('scripts/05-social.js?v=20261119-search-author-avatars-v2')==1,
+       'SOCIAL_CACHE_BUSTER_MISSING')
  check(sum(p.is_file() for p in temp.rglob('*'))==before_count,'FILE_COUNT_CHANGED')
  for name in (
   'styles/app.css','styles/search-result-avatars-v1.css','scripts/03-auth-i18n.js',
