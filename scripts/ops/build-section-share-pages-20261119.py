@@ -50,10 +50,10 @@ def tag(title,text):
  return '<meta name="'+html.escape(title,quote=True)+'" content="'+html.escape(text,quote=True)+'">'
 def build(slug, out):
  title,description,intro,arabic,image=SECTIONS[slug]
- canonical=f"{BASE}/{slug}/"
+ canonical=f"{BASE}/{slug}"
  picture=image if image.startswith("https://") else BASE+image
  page_title=f"{title} | NEIS Circle – Student Community"
- nav_tiles="".join(f'<a class="tile{" active" if s==slug else ""}" href="/{s}/">{html.escape(v[0])}</a>'
+ nav_tiles="".join(f'<a class="tile{" active" if s==slug else ""}" href="/{s}">{html.escape(v[0])}</a>'
                    for s,v in SECTIONS.items())
  structure={
   "@context":"https://schema.org","@type":"WebPage","name":page_title,
@@ -107,7 +107,7 @@ def build(slug, out):
 </body>
 </html>
 """
- target=out/slug/"index.html"
+ target=out/slug
  target.parent.mkdir(parents=True,exist_ok=True)
  target.write_text(markup,encoding="utf-8")
  return canonical
@@ -125,7 +125,7 @@ def main():
   SubElement(node,"loc").text=url
  indent(root)
  ElementTree(root).write(out/"sitemap.xml",encoding="utf-8",xml_declaration=True)
- assert len(list(out.glob("*/index.html")))==len(SECTIONS)
+ assert sum((out/slug).is_file() for slug in SECTIONS)==len(SECTIONS)
  print("PUBLIC_SECTION_SHARE_PAGES=GENERATED")
  print("SITEMAP_URL_COUNT="+str(len(urls)))
  print("PRIVATE_CONTENT_EXCLUDED=YES")
