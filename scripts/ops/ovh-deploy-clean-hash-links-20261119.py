@@ -30,22 +30,16 @@ OLD_CADDY = 'try_files {path} /index.html'
 MARKER = '# NEIS CLEAN HASH PREVIEWS (15 static social metadata endpoints)'
 
 def build_caddy(config):
-    """Give exact preview paths priority over the unchanged SPA fallback."""
-    m=re.search(r'(?m)^([ \t]*)try_files \{path\} /index\.html\r?\n([ \t]*)file_server[ \t]*$',config)
-    require(m is not None and m.group(1)==m.group(2),'CADDY_SITE_DIRECTIVES_UNEXPECTED')
-    indent=m.group(1)
-    lines=[indent+MARKER]
+    # Exact rewrites run before try_files according to Caddy directive order.
+    pos=config.index(OLD_CADDY)
+    start=config.rfind('\n',0,pos)+1
+    indent=config[start:pos]
+    require(not indent.strip(),'UNEXPECTED_CADDY_SITE_INDENT')
+    rules=[indent+MARKER]
     for slug in SLUGS:
-        lines.extend((indent+'handle /'+slug+' {',
-                      indent+'  rewrite * /'+slug+'.html',
-                      indent+'  file_server',
-                      indent+'}'))
-    lines.extend((indent+'handle {',
-                  indent+'  try_files {path} /index.html',
-                  indent+'  file_server',
-                  indent+'}'))
-    new=config[:m.start()]+'\n'.join(lines)+config[m.end():]
-    require(new!=config and new.count(MARKER)==1,'CADDY_SCOPED_RULE_FAILED')
+        rules.append(indent+'rewrite /'+slug+' /'+slug+'.html')
+    new=config[:start]+'\n'.join(rules)+'\n'+config[start:]
+    require(new.count(MARKER)==1,'CADDY_SCOPED_RULE_FAILED')
     return new
 
 def require(condition, label):
