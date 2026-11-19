@@ -62,7 +62,7 @@ def main():
  html=(current/'index.html').read_text()
  check(all(html.count(x[0])==1 for x in REPLACEMENTS),
        'LIVE_INDEX_CACHE_VERSIONS_UNEXPECTED')
- social_tag=re.search(r'scripts/05-social\\.js\\?[^"]+',html)
+ social_tag=re.search(re.escape('scripts/05-social.js?')+r'[^"]+',html)
  check(social_tag is not None and html.count('scripts/05-social.js?')==1,
        'LIVE_SOCIAL_SCRIPT_LINK_UNEXPECTED')
  check('scripts/03-auth-i18n.js' in html
