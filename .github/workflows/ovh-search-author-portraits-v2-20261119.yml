@@ -1,0 +1,154 @@
+name: OVH Search Result Author Portraits V2 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-search-author-portraits-v2-20261119.yml'
+      - 'scripts/ops/ovh-deploy-search-portraits-v2-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-search-author-portraits-v2
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scoped search changes and browser JS
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-search-portraits-v2-20261119.py scripts/ops/ovh-rollback-search-portraits-v2-20261119.py
+          node --check scripts/05-social.js
+          node --check scripts/search-result-avatars-v1.js
+          node --check scripts/profile-illustrations-v1.js
+          python3 - <<'PY'
+          from pathlib import Path
+          core=Path('scripts/05-social.js').read_text()
+          portraits=Path('scripts/search-result-avatars-v1.js').read_text()
+          html=Path('index.html').read_text()
+          assert core.count("window.NEISSearchAvatarUi?.markup(x)")==2
+          assert "window.NEISSearchAvatarUi?.hydrate(state.searchResults,requestId)" in core
+          assert "if(typeof searchRow!=='function'" not in portraits
+          assert 'window.NEISSearchAvatarUi={markup:avatarMarkup,hydrate:scheduleHydration,refresh:refreshVisible}' in portraits
+          assert "scripts/05-social.js?v=20261119-search-author-avatars-v2" in html
+          assert "scripts/search-result-avatars-v1.js?v=20261119-2" in html
+          assert "styles/search-result-avatars-v1.css?v=20261119-2" in html
+          print('SEARCH_PROFILES_STATIC_VALIDATION=PASS')
+          PY
+      - name: Test student profiles on post and article search results
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          global.window={};
+          global.state={
+            members:[{id:'author-post',full_name:'Post Author',avatar_url:'https://valid.example/post.svg'}],
+            posts:[{id:'post-one',author_id:'author-post',user:'Post Author'}],
+            articles:[],circleRows:[],opportunities:[],
+            searchResults:[{type:'post',id:'post-one'},{type:'article',id:'article-one'}]
+          };
+          global.authUser={id:'viewer'};
+          global.initials=n=>n.split(' ').map(s=>s[0]).join('').slice(0,2);
+          global.avatar=p=>'<span class="avatar" data-person="'+p.name+'" data-image="'+(p.avatar_url||'')+'"></span>';
+          global.document={querySelectorAll:()=>[]};
+          const calls=[];
+          const rows={
+            articles:[{id:'article-one',author_id:'author-article'}],
+            profiles:[{id:'author-article',full_name:'Article Author',avatar_url:'https://valid.example/article.svg'}]
+          };
+          global.sb={from(name){
+            return {select(fields){
+              return {in(key,ids){
+                calls.push({name,fields,ids});
+                return Promise.resolve({data:(rows[name]||[]).filter(x=>ids.includes(x.id)),error:null});
+              }};
+            }};
+          }};
+          require('./scripts/search-result-avatars-v1.js');
+          const api=window.NEISSearchAvatarUi;
+          assert.ok(api&&typeof api.markup==='function'&&typeof api.hydrate==='function');
+          assert.match(api.markup({type:'post',id:'post-one'}),/post\.svg/);
+          api.hydrate(state.searchResults,1);
+          setTimeout(()=>{
+            try {
+              assert.match(api.markup({type:'article',id:'article-one'}),/article\.svg/);
+              assert.ok(calls.some(x=>x.name==='articles'&&x.ids.includes('article-one')));
+              assert.ok(calls.some(x=>x.name==='profiles'&&x.ids.includes('author-article')));
+              console.log('SEARCH_POST_AND_ARTICLE_AUTHOR_PORTRAITS=PASS');
+            }catch(e){console.error(e);process.exitCode=1;}
+          },80);
+          NODE
+      - name: Configure existing private OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only search and author portrait scripts
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest=/home/ubuntu/neis-backups/search-portrait-v2-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dest"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/05-social.js scripts/search-result-avatars-v1.js "ubuntu@$HOST:$dest/"
+      - name: Publish minimal immutable OVH release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-search-portraits-v2-20261119.py
+      - name: Verify live assets, original app and auth availability
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          base='https://neiscircle.site'
+          def get(path):
+            req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache','User-Agent':'NEIS-Search-Release/1'})
+            with urllib.request.urlopen(req,timeout=16) as r:
+              assert r.status==200
+              return r.read().decode('utf8','replace')
+          for attempt in range(10):
+            try:
+              index=get('/')
+              assert 'scripts/05-social.js?v=20261119-search-author-avatars-v2' in index
+              assert 'scripts/search-result-avatars-v1.js?v=20261119-2' in index
+              assert 'styles/search-result-avatars-v1.css?v=20261119-2' in index
+              assert 'scripts/03-auth-i18n.js' in index
+              assert 'scripts/user-activity-v1.js' in index
+              assert 'assets/share/home-main.webp' in index
+              social=get('/scripts/05-social.js?v=20261119-search-author-avatars-v2')
+              portraits=get('/scripts/search-result-avatars-v1.js?v=20261119-2')
+              css=get('/styles/search-result-avatars-v1.css?v=20261119-2')
+              assert social.count('window.NEISSearchAvatarUi?.markup(x)')==2
+              assert 'window.NEISSearchAvatarUi?.hydrate(state.searchResults,requestId)' in social
+              assert 'window.NEISSearchAvatarUi={markup:avatarMarkup,hydrate:scheduleHydration,refresh:refreshVisible}' in portraits
+              assert 'search-result-avatar' in css and 'border-radius:50%' in css
+              with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=16) as r: assert r.status==200
+              print('LIVE_SEARCH_AVATAR_JS_AND_CSS=PASS')
+              print('ORIGINAL_AUTH_AND_APP_CONTENT=UNCHANGED')
+              break
+            except Exception as error:
+              print('SMOKE_RETRY',attempt+1,repr(error)[:175])
+              if attempt==9:raise
+              time.sleep(3)
+          PY
+      - name: Restore previous release if external checks fail
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-search-portraits-v2-20261119.py
+          fi
