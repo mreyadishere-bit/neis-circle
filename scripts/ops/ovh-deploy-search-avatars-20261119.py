@@ -49,7 +49,7 @@ def main():
  need(html.count(ANCHOR)==1 and ADDITION not in html,
       'AVATAR_SCRIPT_ALREADY_ACTIVE_OR_PREVIOUS_ANCHOR_CHANGED')
  for marker in ('scripts/05-social.js','scripts/03-auth-i18n.js','scripts/user-activity-v1.js',
-                'assets/share/home-main.webp','scripts/hash-route-open-v1.js'):
+                '<meta property="og:image"','scripts/hash-route-open-v1.js'):
   need(marker in html,'LIVE_FEATURE_MISSING_'+marker)
  need(not (source/'scripts/search-result-avatars-v1.js').exists(),'PORTRAIT_SCRIPT_PATH_COLLISION')
  need(not (source/'styles/search-result-avatars-v1.css').exists(),'PORTRAIT_STYLE_PATH_COLLISION')
@@ -69,7 +69,7 @@ def main():
       'UNEXPECTED_FILES_ADDED')
  for path in ('scripts/05-social.js','scripts/03-auth-i18n.js',
               'scripts/profile-illustrations-v1.js','scripts/user-activity-v1.js',
-              'scripts/hash-route-open-v1.js','favicon.ico','assets/share/home-main.webp',
+              'scripts/hash-route-open-v1.js','favicon.ico',
               'styles/app.css','styles/profile-illustrations-v1.css'):
   need(digest(source/path)==digest(building/path),'UNRELATED_APP_FILE_CHANGED_'+path)
  need(digest(js)==digest(building/'scripts/search-result-avatars-v1.js'),
