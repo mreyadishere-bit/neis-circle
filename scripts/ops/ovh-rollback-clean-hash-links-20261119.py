@@ -29,7 +29,7 @@ def main():
  previous=Path(backup.read_text().strip())
  assert previous.parent==RELEASES and previous.is_dir(),'Unexpected previous release'
  mounts=json.loads(run(DOCKER+['inspect','supabase-caddy'],timeout=30))[0]['Mounts']
- conf=[Path(m['Source'])/'Caddyfile' for m in mounts if m.get('Destination')=='/etc/caddy']
+ conf=[Path(m['Source']) for m in mounts if m.get('Destination')=='/etc/caddy/Caddyfile' and m.get('Type')=='bind']
  assert len(conf)==1,'Caddy config missing'
  old_config=config_backup.read_text()
  now=conf[0].read_text()
