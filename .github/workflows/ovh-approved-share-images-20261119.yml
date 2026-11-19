@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'deploy/NEIS_Circle_Complete_Share_Assets.zip'
+      - '.github/workflows/ovh-approved-share-images-20261119.yml'
+      - 'scripts/ops/build-branded-share-pages-20261119.py'
+      - 'scripts/ops/ovh-deploy-branded-share-assets-20261119.py'
   workflow_dispatch:
 permissions:
   contents: read
