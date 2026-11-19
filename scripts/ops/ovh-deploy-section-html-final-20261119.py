@@ -28,7 +28,7 @@ def main():
  for slug in SLUGS:
   p=STAGE/'share-files'/slug
   require(p.is_file() and
-          '<link rel="canonical" href="https://neiscircle.site/'+slug+'"' in p.read_text() and
+          '<link rel="canonical" href="https://neiscircle.site/'+slug+'.html"' in p.read_text() and
           'property="og:title"' in p.read_text(),'BAD_STATIC_SHARE_FILE_'+slug)
  sitemap=STAGE/'sitemap.xml'
  require(sitemap.is_file(),'SITEMAP_NOT_STAGED')
