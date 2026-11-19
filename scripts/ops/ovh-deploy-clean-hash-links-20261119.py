@@ -80,8 +80,10 @@ def main():
     mounts=instance.get('Mounts',[])
     frontends=[Path(m['Source']) for m in mounts
                if m.get('Destination')=='/srv/neis-circle' and m.get('Type')=='bind']
-    configs=[Path(m['Source'])/'Caddyfile' for m in mounts
-             if m.get('Destination')=='/etc/caddy' and m.get('Type')=='bind']
+    # The live container has a nested bind mount for the Caddyfile itself.
+    # Never modify the parent directory's shadow copy.
+    configs=[Path(m['Source']) for m in mounts
+             if m.get('Destination')=='/etc/caddy/Caddyfile' and m.get('Type')=='bind']
     require(len(frontends)==1 and len(configs)==1 and configs[0].is_file(),
             'EXPECTED_CADDY_MOUNTS_MISSING')
     source=frontends[0];config_path=configs[0]
@@ -149,6 +151,7 @@ def main():
         config_path.write_text(updated)
         changed_caddy=True
         container_conf=run(DOCKER+['exec',cid,'cat','/etc/caddy/Caddyfile'],timeout=20)
+        require(container_conf==updated,'CONTAINER_CADDY_MOUNT_NOT_UPDATED')
         print('HOST_CONFIG_HAS_FEED_RULE='+str('rewrite /feed /feed.html' in updated))
         print('CONTAINER_CONFIG_HAS_FEED_RULE='+str('rewrite /feed /feed.html' in container_conf))
 
