@@ -1,0 +1,47 @@
+name: OVH Inspect Live Caddy Admin and Source Mount Read Only
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ovh-inspect-caddy-runtime-20261119.yml']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - name: Private SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+          test -n "$HOST"
+      - name: Inspect runtime config metadata without printing secrets
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess
+          d=['sudo','-n','/usr/bin/docker']
+          def p(cmd,timeout=12):
+              return subprocess.run(cmd,text=True,capture_output=True,timeout=timeout)
+          cmd=p(d+['exec','supabase-caddy','sh','-c','ps -o pid,args'])
+          print('CADDY_PROCESS_LABELS',[line[:150] for line in cmd.stdout.splitlines() if 'caddy' in line][:4])
+          for url in ('http://127.0.0.1:2019/config/','http://localhost:2019/config/'):
+              q=p(d+['exec','supabase-caddy','wget','-qO-',url])
+              print('ADMIN_PROBE',url,'RC',q.returncode,'JSON_BYTES',len(q.stdout),
+                    'INDEX_FALLBACK',q.stdout.count('/index.html'),'HAS_SITE', 'neiscircle.site' in q.stdout)
+          m=json.loads(p(d+['inspect','supabase-caddy']).stdout)[0]['Mounts']
+          conf=[x['Source'] for x in m if x.get('Destination')=='/etc/caddy']
+          print('CADDY_CONFIG_DIR_EXISTS',bool(conf))
+          q=p(d+['exec','supabase-caddy','caddy','adapt','--config','/etc/caddy/Caddyfile'])
+          print('ADAPTED_CONFIG_RC',q.returncode,'JSON_BYTES',len(q.stdout),
+                'INDEX_FALLBACK',q.stdout.count('/index.html'),'HAS_SITE','neiscircle.site' in q.stdout)
+          PY
