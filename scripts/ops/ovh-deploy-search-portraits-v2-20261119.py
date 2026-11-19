@@ -67,7 +67,7 @@ def main():
        'LIVE_SOCIAL_SCRIPT_LINK_UNEXPECTED')
  check('scripts/03-auth-i18n.js' in html
        and 'scripts/user-activity-v1.js' in html
-       and 'assets/share/home-main.webp' in html,
+       and '<meta property="og:image"' in html,
        'LIVE_APP_CORE_MISSING')
  for name,expected in EXPECTED_ORIGINAL_GIT_BLOBS.items():
   check((current/name).is_file() and git_blob(current/name)==expected,
