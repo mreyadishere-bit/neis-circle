@@ -86,7 +86,8 @@ jobs:
           import subprocess,re
           for path in ('/feed','/feed.html','/articles','/articles.html'):
               proc=subprocess.run(['curl','-ksSL','--connect-timeout','8','--max-time','12',
-                                   '-H','Host: neiscircle.site','https://127.0.0.1'+path],
+                                   '--resolve','neiscircle.site:443:127.0.0.1',
+                                   'https://neiscircle.site'+path],
                                    text=True,capture_output=True,timeout=15)
               body=proc.stdout
               titles=re.findall(r'<title>([^<]*)',body,re.I)
