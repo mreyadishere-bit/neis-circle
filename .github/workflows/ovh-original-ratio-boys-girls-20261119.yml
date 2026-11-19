@@ -41,9 +41,9 @@ jobs:
           PY
       - name: Configure protected SSH to OVH
         env:
-          HOST: \${{ secrets.OVH_HOST }}
-          KEY: \${{ secrets.OVH_SSH_KEY }}
-          KNOWN: \${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
@@ -53,7 +53,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Stage only the two approved images on OVH
         env:
-          HOST: \${{ secrets.OVH_HOST }}
+          HOST: ${{ secrets.OVH_HOST }}
         run: |
           set -euo pipefail
           dest=/home/ubuntu/neis-backups/original-ratio-social-20261119
@@ -61,8 +61,8 @@ jobs:
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes assets/share-link/home-boys-original.jpg assets/share-link/circles-girls-original.jpg "ubuntu@$HOST:$dest/"
       - name: Release only index OG and Circles OG with rollback safety
         env:
-          HOST: \${{ secrets.OVH_HOST }}
-          GITHUB_SHA: \${{ github.sha }}
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-original-ratio-root-circles-20261119.py
@@ -126,8 +126,8 @@ jobs:
       - name: Roll back only the two-image update if external tests fail
         if: failure()
         env:
-          HOST: \${{ secrets.OVH_HOST }}
-          GITHUB_SHA: \${{ github.sha }}
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
         run: |
           if [ -f ~/.ssh/id_ed25519 ]; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-original-ratio-root-circles-20261119.py
