@@ -1,0 +1,56 @@
+name: OVH Read Only Clean Share Route Origin Audit 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-clean-share-route-audit-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - name: Install existing OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect only static Caddy site, listeners and public path resolution
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess,re
+          docker=['sudo','-n','/usr/bin/docker']
+          data=json.loads(subprocess.run(docker+['inspect','supabase-caddy'],text=True,capture_output=True,check=True).stdout)[0]
+          print('CADDY_PORTS',str(data.get('NetworkSettings',{}).get('Ports',{}))[:1200])
+          mounts=data.get('Mounts',[])
+          configs=[m['Source']+'/Caddyfile' for m in mounts if m.get('Destination')=='/etc/caddy']
+          if len(configs)==1:
+              from pathlib import Path
+              lines=Path(configs[0]).read_text().splitlines()
+              start=next(i for i,v in enumerate(lines) if 'neiscircle.site, www.neiscircle.site {' in v)
+              for j in range(start,min(len(lines),start+15)):
+                  line=lines[j].strip()
+                  if any(t in line for t in ('root ','try_files','file_server','handle','header','route','rewrite')) or line in ('}','{'):
+                      print('SITE_RULE',j+1,line[:150])
+          for path in ('/','/feed','/feed.html','/articles','/articles.html'):
+              args=['curl','-ksS','--max-time','8','--resolve','neiscircle.site:443:127.0.0.1','-D','-','https://neiscircle.site'+path]
+              p=subprocess.run(args,capture_output=True,text=True,timeout=12)
+              title=re.findall(r'<title>([^<]*)',p.stdout,re.I)[:1]
+              og=re.findall(r'<meta property="og:url" content="([^"]*)"',p.stdout,re.I)[:1]
+              headers=p.stdout.split('\r\n\r\n')[0]
+              ctype=re.findall(r'(?im)^content-type:\s*([^\r\n]+)',headers)[:1]
+              loc=re.findall(r'(?im)^location:\s*([^\r\n]+)',headers)[:1]
+              print('PATH',path,'RC',p.returncode,'CONTENT_TYPE',ctype,'LOCATION',loc,'TITLE',title,'OG',og)
+          PY
