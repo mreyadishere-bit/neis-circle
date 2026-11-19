@@ -152,6 +152,11 @@ def main():
                    '--config','/etc/caddy/Caddyfile'],timeout=50)
         run(DOCKER+['exec',cid,'caddy','reload',
                    '--config','/etc/caddy/Caddyfile'],timeout=55)
+        # Inspect active Caddy admin config to distinguish reload from routing.
+        admin_json=run(DOCKER+['exec',cid,'wget','-qO-',
+                              'http://127.0.0.1:2019/config/'],timeout=20)
+        print('ACTIVE_CADDY_CONFIG_HAS_FEED_REWRITE='+str('/feed.html' in admin_json))
+        print('ACTIVE_CADDY_CONFIG_HAS_SHARE_PROBE='+str('X-Neis-Share-Probe' in admin_json))
         # Diagnose whether the live Caddy process loaded the new site handlers.
         probe=run(['curl','-ksi','--connect-timeout','8','--max-time','12',
                    '--resolve','neiscircle.site:443:127.0.0.1',
