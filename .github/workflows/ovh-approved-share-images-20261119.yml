@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deploy:
+    if: false # Retired: this workflow created unwanted standalone share pages.
     runs-on: ubuntu-24.04
     environment: ovh-staging
     timeout-minutes: 20
