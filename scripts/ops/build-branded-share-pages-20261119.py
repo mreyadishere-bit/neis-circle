@@ -68,6 +68,13 @@ def main():
  out.mkdir(parents=True,exist_ok=True)
  for slug in list(sections):
   original['build'](slug,out)
+  # The base generator writes an extensionless file; the published, crawler-
+  # verified canonical links are .html and require matching real files.
+  source_file=out/slug
+  target_file=out/(slug+'.html')
+  if not source_file.is_file() or target_file.exists():
+   raise RuntimeError('Unexpected generated share page: '+slug)
+  source_file.rename(target_file)
  urls=[BASE+'/',BASE+'/about.html']+[BASE+'/'+slug+'.html' for slug in sections]
  root=Element('urlset',{'xmlns':'http://www.sitemaps.org/schemas/sitemap/0.9'})
  for url in urls:
@@ -81,7 +88,7 @@ def main():
               'image':BASE+sections[k][4] if sections[k][4].startswith('/') else sections[k][4]}
            for k in sections}}
  (out/'mapping.json').write_text(json.dumps(mapping,ensure_ascii=False,indent=2),encoding='utf8')
- assert all((out/slug).is_file() for slug in sections)
+ assert all((out/(slug+'.html')).is_file() for slug in sections)
  print("APPROVED_SHARE_PAGES="+str(len(sections)))
  print("MAIN_AND_HOME_IMAGE_POLICY=MAIN_UPDATED_HOME_PRESERVED")
 if __name__=='__main__':main()
