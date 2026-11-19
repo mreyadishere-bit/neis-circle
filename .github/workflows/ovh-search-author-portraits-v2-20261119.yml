@@ -126,7 +126,7 @@ jobs:
               assert 'styles/search-result-avatars-v1.css?v=20261119-2' in index
               assert 'scripts/03-auth-i18n.js' in index
               assert 'scripts/user-activity-v1.js' in index
-              assert 'assets/share/home-main.webp' in index
+              assert '<meta property="og:image"' in index
               social=get('/scripts/05-social.js?v=20261119-search-author-avatars-v2')
               portraits=get('/scripts/search-result-avatars-v1.js?v=20261119-2')
               css=get('/styles/search-result-avatars-v1.css?v=20261119-2')
