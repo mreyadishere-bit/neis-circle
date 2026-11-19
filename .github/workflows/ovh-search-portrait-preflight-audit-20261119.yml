@@ -1,0 +1,52 @@
+name: OVH Read Only Search Portrait Preflight Audit 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-search-portrait-preflight-audit-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - name: Configure existing OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Inspect only live search assets and script version tags
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          from pathlib import Path
+          import json,re,subprocess,hashlib
+          info=json.loads(subprocess.run(['sudo','-n','/usr/bin/docker','inspect','supabase-caddy'],capture_output=True,text=True,check=True).stdout)[0]
+          mounts=[Path(m['Source']) for m in info['Mounts'] if m.get('Destination')=='/srv/neis-circle']
+          assert len(mounts)==1
+          source=mounts[0]
+          html=(source/'index.html').read_text()
+          print('LIVE_FRONTEND_DIRECTORY_BASENAME',source.name)
+          for line in html.splitlines():
+              if ('05-social.js' in line or 'search-result-avatar' in line or 'profile-illustrations-v1.js' in line
+                  or 'scripts/03-auth-i18n.js' in line):
+                  print('LIVE_SCRIPT_LINK',line.strip()[:210])
+          def gitsha(path):
+              raw=path.read_bytes()
+              return hashlib.sha1(b'blob '+str(len(raw)).encode()+bytes([0])+raw).hexdigest()
+          for name in ('scripts/05-social.js','scripts/search-result-avatars-v1.js',
+                       'styles/search-result-avatars-v1.css','scripts/profile-illustrations-v1.js'):
+              file=source/name
+              print('LIVE_ASSET',name,'EXISTS',file.is_file(),'BLOB_SHA',gitsha(file) if file.is_file() else 'none')
+          print('LIVE_SEARCH_OG_AUDIT_READ_ONLY=PASS')
+          PY
