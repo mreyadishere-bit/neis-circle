@@ -34,7 +34,7 @@ def run(cmd,timeout=100):
  return p.stdout
 def git_blob(path):
  raw=path.read_bytes()
- return hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\\0'+raw).hexdigest()
+ return hashlib.sha1(b'blob '+str(len(raw)).encode()+bytes([0])+raw).hexdigest()
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def main():
  revision=os.environ.get('GITHUB_SHA','')[:12]
