@@ -148,6 +148,10 @@ def main():
         updated=build_caddy(old_config)
         config_path.write_text(updated)
         changed_caddy=True
+        container_conf=run(DOCKER+['exec',cid,'cat','/etc/caddy/Caddyfile'],timeout=20)
+        print('HOST_CONFIG_HAS_FEED_RULE='+str('rewrite /feed /feed.html' in updated))
+        print('CONTAINER_CONFIG_HAS_FEED_RULE='+str('rewrite /feed /feed.html' in container_conf))
+
         run(DOCKER+['exec',cid,'caddy','validate',
                    '--config','/etc/caddy/Caddyfile'],timeout=50)
         run(DOCKER+['exec',cid,'caddy','reload',
