@@ -1,0 +1,85 @@
+name: OVH Restore Original Hash Pages Without Share Landings 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-restore-hash-app-20261119.yml'
+      - 'scripts/ops/ovh-restore-hash-app-no-share-pages-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-restore-hash-app
+  cancel-in-progress: false
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check rollback scope and Python syntax
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-restore-hash-app-no-share-pages-20261119.py
+          python3 - <<'PY'
+          from pathlib import Path
+          script=Path('scripts/ops/ovh-restore-hash-app-no-share-pages-20261119.py').read_text()
+          assert 'allowed_share_page' in script
+          assert 'CURRENT_MAIN_SOCIAL_IMAGE=RETAINED' in script
+          assert 'ORIGINAL_LAYOUT_AND_STUDENT_DATA=UNCHANGED' in script
+          assert 'scripts/03-auth-i18n.js' in script
+          assert 'scripts/user-activity-v1.js' in script
+          app=Path('index.html').read_text()
+          assert 'scripts/section-share-router-v1.js?v=20261119-sharing' not in app
+          assert 'scripts/03-auth-i18n.js' in app
+          print('ORIGINAL_HASH_ROUTING_RESTORATION_SOURCE=PASS')
+          PY
+      - name: Configure private OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Remove invented section pages in guarded immutable OVH release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-restore-hash-app-no-share-pages-20261119.py
+      - name: Verify original app is served, student auth remains healthy and share pages are gone
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          site='https://neiscircle.site'
+          for i in range(15):
+              try:
+                  def get(path):
+                      req=urllib.request.Request(site+path,headers={'Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=12) as r:return r.status,r.read().decode('utf-8','replace')
+                  code,home=get('/')
+                  assert code==200 and 'scripts/03-auth-i18n.js' in home
+                  assert 'scripts/user-activity-v1.js' in home
+                  assert 'section-share-router-v1.js?v=20261119-sharing' not in home
+                  assert 'assets/share/home-main.webp' in home
+                  # Caddy may return the original app shell for unknown paths.
+                  for slug in ('articles','study','messages','settings','games'):
+                      status,content=get('/'+slug+'.html')
+                      assert status==200
+                      assert 'An independent community for students' not in content,(slug,'still public share page')
+                      assert 'scripts/03-auth-i18n.js' in content,(slug,'fallback is not app shell')
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=12) as r:assert r.status==200
+                  print('ORIGINAL_HASH_APP_EXTERNAL=PASS')
+                  break
+              except Exception as e:
+                  if i==14:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Original app not verified')
+          PY
