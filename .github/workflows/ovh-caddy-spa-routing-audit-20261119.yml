@@ -1,0 +1,49 @@
+name: OVH Read-Only Caddy SPA Routing Audit 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-caddy-spa-routing-audit-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 7
+    steps:
+      - name: Prepare SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Print only route shape, never credentials
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import json,subprocess
+          info=json.loads(subprocess.run(['sudo','-n','/usr/bin/docker','inspect','supabase-caddy'],capture_output=True,text=True,check=True).stdout)[0]
+          paths=[m['Source'] for m in info.get('Mounts',[]) if m.get('Destination')=='/etc/caddy']
+          print('CADDY_CONFIG_MOUNTS='+str(len(paths)))
+          if paths:
+              from pathlib import Path
+              config=Path(paths[0])/'Caddyfile'
+              text=config.read_text()
+              blocks=text.splitlines()
+              for i,line in enumerate(blocks):
+                  stripped=line.strip()
+                  if stripped.startswith(('neiscircle.site','www.neiscircle.site','root ','try_files ','file_server','handle ','handle_path ','rewrite ','route ','redir ')):
+                      print('ROUTE_LINE_'+str(i+1)+'='+stripped[:160])
+              print('SPA_TRY_FILES_COUNT='+str(text.count('try_files {path} /index.html')))
+              print('STATIC_ROUTE_AVAILABLE='+str('try_files {path} {path}/index.html /index.html' in text))
+          print('ROUTE_AUDIT_NO_CREDENTIALS=YES')
+          PY
