@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/ovh-verified-section-html-cards-20261119.yml'
+      - 'scripts/ops/ovh-deploy-section-html-final-20261119.py'
   workflow_dispatch:
 permissions:
   contents: read
