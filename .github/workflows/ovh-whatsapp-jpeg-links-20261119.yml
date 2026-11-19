@@ -1,0 +1,120 @@
+name: OVH WhatsApp JPEG OG Cards With Original App Redirect
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-whatsapp-jpeg-links-20261119.yml'
+      - 'scripts/ops/ovh-deploy-whatsapp-jpeg-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-whatsapp-jpeg-links
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate and validate fifteen WhatsApp-compatible JPEG preview cards
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/build-whatsapp-jpeg-previews-20261119.py scripts/ops/ovh-deploy-whatsapp-jpeg-20261119.py scripts/ops/ovh-rollback-whatsapp-jpeg-20261119.py
+          test -s deploy/NEIS_Circle_Complete_Share_Assets.zip
+          install -d /tmp/neis-jpeg-source /tmp/neis-jpeg-pages
+          unzip -q deploy/NEIS_Circle_Complete_Share_Assets.zip -d /tmp/neis-jpeg-source
+          python3 -m venv /tmp/neis-jpeg-env
+          /tmp/neis-jpeg-env/bin/pip -q install Pillow
+          /tmp/neis-jpeg-env/bin/python scripts/ops/build-whatsapp-jpeg-previews-20261119.py --assets-dir /tmp/neis-jpeg-source/assets/share --output-dir /tmp/neis-jpeg-pages
+          /tmp/neis-jpeg-env/bin/python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          root=Path('/tmp/neis-jpeg-pages')
+          slugs='feed discover study messages connections saved opportunities gallery articles circles analytics timetable notifications settings games'.split()
+          for slug in slugs:
+              html=(root/'html'/(slug+'.html')).read_text()
+              assert f'<meta property="og:url" content="https://neiscircle.site/{slug}">' in html
+              assert f'<meta property="og:image" content="https://neiscircle.site/assets/share-link/{slug}.jpg?v=20261119-whatsapp-jpeg">' in html
+              assert f"window.location.replace('/#/{slug}');" in html
+              assert "window.location.search" not in html
+              image=root/'images'/(slug+'.jpg')
+              assert image.stat().st_size<340001
+              with Image.open(image) as im:
+                  assert im.format=='JPEG' and im.size==(1200,630)
+              print('VALIDATED',slug,'JPEG_BYTES',image.stat().st_size)
+          assert len(list((root/'images').glob('*.jpg')))==15
+          print('FIFTEEN_WHATSAPP_JPEG_PREVIEWS=PASS')
+          PY
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only public JPG images and metadata HTML
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest=/home/ubuntu/neis-backups/whatsapp-jpeg-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dest/html $dest/images"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-jpeg-pages/html/*.html "ubuntu@$HOST:$dest/html/"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-jpeg-pages/images/*.jpg "ubuntu@$HOST:$dest/images/"
+      - name: Publish immutable OVH preview-only release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-whatsapp-jpeg-20261119.py
+      - name: Externally verify WhatsApp user-agent, JPEG MIME, fresh cache URL and app home
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          site='https://neiscircle.site'
+          slugs='feed discover study messages connections saved opportunities gallery articles circles analytics timetable notifications settings games'.split()
+          def get(path):
+              request=urllib.request.Request(site+path,headers={
+                  'User-Agent':'WhatsApp/2.24.18.80 A','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(request,timeout=16) as r:
+                  return r.status,r.headers.get('Content-Type',''),r.read()
+          for attempt in range(9):
+              try:
+                  for slug in slugs:
+                      code,mime,body=get('/'+slug+'?preview=20261119-whatsapp-jpeg')
+                      assert code==200 and mime.startswith('text/html'),(slug,mime)
+                      html=body.decode('utf8','replace')
+                      assert f'<meta property="og:title" content="{slug.capitalize()} | NEIS Circle">' in html,slug
+                      assert f'<meta property="og:image" content="{site}/assets/share-link/{slug}.jpg?v=20261119-whatsapp-jpeg">' in html,slug
+                      assert f"window.location.replace('/#/{slug}');" in html,slug
+                      image_code,image_mime,image=get('/assets/share-link/'+slug+'.jpg')
+                      assert image_code==200 and image_mime.startswith('image/jpeg') and image[:3]==b'\xff\xd8\xff',slug
+                  _,_,root=get('/')
+                  assert b'assets/share/home-main.webp' in root
+                  assert b'scripts/hash-route-open-v1.js' in root and b'scripts/03-auth-i18n.js' in root
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:assert r.status==200
+                  print('WHATSAPP_JPEG_OG_EXTERNAL=PASS')
+                  print('ROOT_AND_AUTH_NOT_CHANGED=PASS')
+                  break
+              except Exception as error:
+                  print('RETRY',attempt+1,repr(error)[:180])
+                  if attempt==8:raise
+                  time.sleep(3)
+          PY
+      - name: Revert only this release if public tests fail
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-whatsapp-jpeg-20261119.py
+          fi
