@@ -99,6 +99,9 @@ def main():
  temp.rename(target)
  changed=False
  try:
+  backup=STAGE/'previous-release-path.txt'
+  backup.write_text(str(old))
+  backup.chmod(0o600)
   OVERLAY.write_text(overlay.replace(str(old),str(target),1));changed=True
   run(COMPOSE+['config','--quiet'],timeout=55)
   run(COMPOSE+['up','-d','--no-deps','caddy'],timeout=165)
@@ -112,7 +115,8 @@ def main():
            'LIVE_SHARE_FILE_INVALID_'+slug)
   rules=run(DOCKER+['exec',cid,'cat','/etc/caddy/Caddyfile'],timeout=25)
   require(all(x in rules for x in ('reverse_proxy rest:3000','reverse_proxy auth:9999','basic_auth')),'AUTH_ROUTES_CHANGED')
-  check_public_urls()
+  # Public HTTPS is checked by GitHub's external runner after this release.
+  # The VPS cannot connect to its own public address in this network topology.
  except Exception:
   if changed:
    OVERLAY.write_text(overlay)
