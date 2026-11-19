@@ -11,7 +11,10 @@ def call(args):
 try:
  mounts=json.loads(call(DOCKER+['inspect','supabase-caddy']))[0].get('Mounts',[])
  path=[Path(x['Source'])/'Caddyfile' for x in mounts if x.get('Destination')=='/etc/caddy']
- if len(path)!=1 or not backup.is_file():raise RuntimeError('Backup unavailable')
+ if len(path)!=1:raise RuntimeError('Caddy config mount unavailable')
+ if not backup.is_file():
+  print('SHARE_CADDY_ROLLBACK=SKIPPED_NO_BACKUP')
+  sys.exit(0)
  current=path[0].read_text()
  expected='try_files {path} {path}/index.html /index.html'
  if expected not in current:
