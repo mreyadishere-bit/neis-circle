@@ -1,0 +1,117 @@
+name: OVH Verified Section Share HTML Cards 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-verified-section-html-cards-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-verified-section-html-cards
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate public share HTML and unchanged app router
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/build-section-share-pages-20261119.py scripts/ops/ovh-deploy-section-html-final-20261119.py scripts/ops/ovh-rollback-section-html-final-20261119.py
+          node --check scripts/section-share-router-v1.js
+          python3 scripts/ops/build-section-share-pages-20261119.py --output-dir /tmp/neis-share-files
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root=Path('/tmp/neis-share-files')
+          slugs=('articles','study','circles','opportunities','gallery','timetable')
+          for slug in slugs:
+              p=root/slug
+              assert p.is_file(),slug
+              doc=p.read_text()
+              assert f'<link rel="canonical" href="https://neiscircle.site/{slug}.html"' in doc
+              assert f'<meta property="og:url" content="https://neiscircle.site/{slug}.html"' in doc
+              assert 'property="og:title"' in doc and 'property="og:image"' in doc
+              assert f'href="/#/{slug}"' in doc
+          tree=ET.parse(root/'sitemap.xml')
+          links=[x.text for x in tree.iter() if x.tag.endswith('loc')]
+          assert len(links)==8 and all('https://neiscircle.site/'+slug+'.html' in links for slug in slugs)
+          assert 'neis-share-route-pending' in Path('scripts/section-share-router-v1.js').read_text()
+          print('STATIC_SHARE_FILES_VALIDATED=YES')
+          PY
+      - name: Setup private OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage static share pages for clean paths
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/section-sharing-html-final-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst/share-files"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-share-files/sitemap.xml "ubuntu@$HOST:$dst/sitemap.xml"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-share-files/articles /tmp/neis-share-files/study /tmp/neis-share-files/circles /tmp/neis-share-files/opportunities /tmp/neis-share-files/gallery /tmp/neis-share-files/timetable "ubuntu@$HOST:$dst/share-files/"
+      - name: Publish atomic OVH file-based share pages
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-section-html-final-20261119.py
+      - name: Check social crawler HTML cards for clean public paths
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,re,xml.etree.ElementTree as ET
+          base='https://neiscircle.site'
+          slugs=('articles','study','circles','opportunities','gallery','timetable')
+          for attempt in range(10):
+              try:
+                  for slug in slugs:
+                      req=urllib.request.Request(base+'/'+slug+'.html',headers={'User-Agent':'facebookexternalhit/1.1','Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=14) as r:
+                          assert r.status==200,slug
+                          mime=r.headers.get('content-type','')
+                          content=r.read().decode('utf8','replace')
+                      title=re.search(r'<meta property="og:title" content="([^"]+)"',content)
+                      url=re.search(r'<meta property="og:url" content="([^"]+)"',content)
+                      print('SECTION',slug,'MIME',mime,'OG_TITLE',title.group(1) if title else 'missing')
+                      assert mime.startswith('text/html'),slug
+                      assert title and title.group(1).startswith(slug.capitalize()+' |'),slug
+                      assert url and url.group(1)==base+'/'+slug+'.html',slug
+                      assert f'href="/#/{slug}"' in content,slug
+                  with urllib.request.urlopen(base+'/sitemap.xml',timeout=14) as r:
+                      sitemap=ET.fromstring(r.read())
+                  assert len([x for x in sitemap if x.tag.endswith('url')])==8
+                  with urllib.request.urlopen(base+'/',timeout=14) as r: home=r.read().decode('utf8','replace')
+                  assert 'section-share-router-v1.js' in home and 'user-activity-v1.js' in home
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=14) as r:
+                      assert r.status==200
+                  print('NEIS_CLEAN_SECTION_SHARE_URLS=VERIFIED')
+                  break
+              except Exception as e:
+                  print('RETRY',attempt+1,'ERROR',repr(e)[:180])
+                  if attempt==9:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Clean public URL previews failed')
+          PY
+      - name: Rollback section URLs if any social preview fails
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-section-html-final-20261119.py
+          fi
