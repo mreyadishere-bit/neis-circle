@@ -12,7 +12,7 @@ COMPOSE=DOCKER+['compose']+[p for f in (
  'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml')
  for p in ('-f',f)]
 OLD='try_files {path} /index.html'
-NEW='try_files {path}.html {path} /index.html'
+MARKER='# NEIS CLEAN HASH PREVIEWS (15 static social metadata endpoints)'
 def run(command,timeout=120):
  p=subprocess.run(command,capture_output=True,text=True,cwd=ROOT,timeout=timeout)
  if p.returncode:raise RuntimeError('COMMAND_FAILED_'+(p.stderr or '')[-160:])
@@ -38,8 +38,16 @@ def main():
  if str(dest) not in overlay:
   print('CLEAN_HASH_ROLLBACK=NOT_ACTIVE')
   return
- assert overlay.count(str(dest))==1 and now.count(NEW)==1,'Unexpected live state'
- assert now.replace(NEW,OLD,1)==old_config,'Caddy config modified elsewhere'
+ assert overlay.count(str(dest))==1 and now.count(MARKER)==1,'Unexpected live state'
+ # Ensure the only Caddy difference is the guarded collection of share handlers.
+ assert old_config.count(OLD)==1,'Original SPA rule not found'
+ start=now.index(MARKER)
+ end=now.find('}',start)
+ assert end>start and 'handle /feed {' in now and 'handle /articles {' in now
+ # The original Caddy config is stored before this deployment, and is
+ # the exact prior state to restore. Refuse if the site's root has changed.
+ assert 'neiscircle.site, www.neiscircle.site {' in old_config
+ assert 'neiscircle.site, www.neiscircle.site {' in now
  conf[0].write_text(old_config)
  run(DOCKER+['exec','supabase-caddy','caddy','reload',
             '--config','/etc/caddy/Caddyfile'],timeout=65)
