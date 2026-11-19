@@ -17,7 +17,8 @@ COMPOSE=DOCKER+['compose']+[part for file in (
 'docker-compose.frontend-public.yml','docker-compose.auth-public-direct.yml')
  for part in ('-f',file)]
 SLUGS=('feed','discover','study','messages','connections','saved',
-       'opportunities','gallery','articles','circles')
+       'opportunities','gallery','articles','circles',
+       'analytics','timetable','notifications','settings','games')
 MAIN='https://neiscircle.site/assets/share/home-main.webp?v=20261119-art'
 def need(condition,message):
  if not condition:raise RuntimeError(message)
@@ -73,8 +74,6 @@ def main():
  shutil.copytree(original,tmp)
  for slug in SLUGS:
   shutil.copy2(STAGE/'pages'/(slug+'.html'),tmp/(slug+'.html'))
- # Keep the previously deployed public timetable page but rebuild if supplied.
- shutil.copy2(STAGE/'pages/timetable.html',tmp/'timetable.html')
  shutil.copy2(STAGE/'pages/sitemap.xml',tmp/'sitemap.xml')
  folder=tmp/'assets/share'
  folder.mkdir(parents=True,exist_ok=True)
@@ -133,7 +132,7 @@ def main():
  print('BRANDED_SHARE_ASSETS=DEPLOYED_VERIFIED_ON_OVH')
  print('MAIN_SITE_IMAGE=NATURAL_TONE_STUDENTS')
  print('APP_HOME_ORIGINAL_IMAGES=RETAINED')
- print('PUBLIC_SECTION_IMAGES=10')
+ print('PUBLIC_SECTION_IMAGES=15')
  print('AUTH_AND_STUDENT_DATA=UNCHANGED')
 if __name__=='__main__':
  try:main()
