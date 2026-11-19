@@ -78,6 +78,23 @@ jobs:
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-clean-hash-links-20261119.py
+      - name: Compare origin routing with public preview (read-only diagnosis)
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 -' <<'PY'
+          import subprocess,re
+          for path in ('/feed','/feed.html','/articles','/articles.html'):
+              proc=subprocess.run(['curl','-ksSL','--connect-timeout','8','--max-time','12',
+                                   '-H','Host: neiscircle.site','https://127.0.0.1'+path],
+                                   text=True,capture_output=True,timeout=15)
+              body=proc.stdout
+              titles=re.findall(r'<title>([^<]*)',body,re.I)
+              previews=re.findall(r'<meta property="og:url" content="([^"]*)"',body,re.I)
+              print('ORIGIN_SHARE_CHECK',path,'CURL_RC',proc.returncode,
+                    'TITLE',titles[:1],'OG_URL',previews[:1],
+                    'BYTES',len(body))
+          PY
       - name: Externally verify 15 clean URLs, 15 OG previews and original app
         run: |
           python3 - <<'PY'
