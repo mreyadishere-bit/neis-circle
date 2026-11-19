@@ -1,0 +1,134 @@
+name: OVH Original Proportions — Boys Homepage, Girls Circles
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-original-ratio-boys-girls-20261119.yml'
+      - 'scripts/ops/ovh-deploy-original-ratio-root-circles-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-root-circles-og-only
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify both original unmodified image ratios and deploy script
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/ovh-deploy-original-ratio-root-circles-20261119.py scripts/ops/ovh-rollback-original-ratio-root-circles-20261119.py
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          pairs = {
+              'home-boys-original.jpg': 'Boys / main domain',
+              'circles-girls-original.jpg': 'Girls / circles'
+          }
+          for filename, description in pairs.items():
+              path=Path('assets/share-link')/filename
+              assert path.is_file(), path
+              with Image.open(path) as im:
+                  assert im.format=='JPEG' and im.size==(1491,1055), (path,im.size)
+              assert 30000 < path.stat().st_size < 1000000, (path,path.stat().st_size)
+              print('ORIGINAL_SIZE_ARTWORK',description,filename,'1491x1055')
+          print('ORIGINAL_IMAGE_DIMENSIONS_AND_ASSIGNMENT=PASS')
+          PY
+      - name: Configure protected SSH to OVH
+        env:
+          HOST: \${{ secrets.OVH_HOST }}
+          KEY: \${{ secrets.OVH_SSH_KEY }}
+          KNOWN: \${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage only the two approved images on OVH
+        env:
+          HOST: \${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dest=/home/ubuntu/neis-backups/original-ratio-social-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dest"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes assets/share-link/home-boys-original.jpg assets/share-link/circles-girls-original.jpg "ubuntu@$HOST:$dest/"
+      - name: Release only index OG and Circles OG with rollback safety
+        env:
+          HOST: \${{ secrets.OVH_HOST }}
+          GITHUB_SHA: \${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-original-ratio-root-circles-20261119.py
+      - name: Verify correct original photos and ratio on live public domain
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time,io
+          from PIL import Image
+          root='https://neiscircle.site'
+          suffix='?v=20261119-authentic-proportions'
+          ua='WhatsApp/2.24.18.80 A'
+          def get(path):
+              request=urllib.request.Request(root+path,headers={'User-Agent':ua,'Cache-Control':'no-cache'})
+              with urllib.request.urlopen(request,timeout=15) as r:
+                  return r.status,r.headers.get('Content-Type',''),r.read()
+          targets=[
+              ('/', 'home-boys-original.jpg','NEIS Circle'),
+              ('/circles', 'circles-girls-original.jpg','Circles | NEIS Circle'),
+              ('/circles?v=20261119-authentic-proportions', 'circles-girls-original.jpg','Circles | NEIS Circle')
+          ]
+          for attempt in range(10):
+              try:
+                  for path,asset,title in targets:
+                      status,mime,html_bytes=get(path)
+                      html=html_bytes.decode('utf-8','replace')
+                      expected=root+'/assets/share-link/'+asset+suffix
+                      assert status==200 and mime.startswith('text/html'),(path,mime)
+                      assert '<meta property="og:image" content="'+expected+'">' in html, path
+                      assert '<meta name="twitter:image" content="'+expected+'">' in html, path
+                      assert '<meta property="og:image:width" content="1491">' in html, path
+                      assert '<meta property="og:image:height" content="1055">' in html, path
+                      assert '<meta property="og:image:type" content="image/jpeg">' in html, path
+                      if path.startswith('/circles'):
+                          assert '<meta property="og:title" content="'+title+'">' in html, path
+                          assert "window.location.replace('/#/circles');" in html, path
+                      else:
+                          assert 'scripts/hash-route-open-v1.js' in html
+                          assert 'scripts/03-auth-i18n.js' in html
+                          assert 'scripts/user-activity-v1.js' in html
+                          assert 'original-tab-20261119' in html
+                      print('OG_PREVIEW_VALID',path,'IMAGE',asset,'1491x1055')
+                  for asset in ['home-boys-original.jpg','circles-girls-original.jpg']:
+                      status,mime,raw=get('/assets/share-link/'+asset)
+                      assert status==200 and mime.startswith('image/jpeg'),(asset,mime)
+                      with Image.open(io.BytesIO(raw)) as image:
+                          assert image.format=='JPEG' and image.size==(1491,1055)
+                      print('LIVE_JPEG_VALID',asset,len(raw))
+                  _,_,other=get('/study')
+                  other=other.decode('utf-8','replace')
+                  assert 'study.jpg?v=20261119-whatsapp-jpeg' in other
+                  assert 'circles-girls-original.jpg' not in other
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=15) as r:
+                      assert r.status==200
+                  print('BOYS_ROOT_GIRLS_CIRCLES_AND_APP_UNCHANGED_EXTERNAL=PASS')
+                  break
+              except Exception as error:
+                  print('RETRY',attempt+1,repr(error)[:240])
+                  if attempt==9:raise
+                  time.sleep(3)
+          PY
+      - name: Roll back only the two-image update if external tests fail
+        if: failure()
+        env:
+          HOST: \${{ secrets.OVH_HOST }}
+          GITHUB_SHA: \${{ github.sha }}
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-original-ratio-root-circles-20261119.py
+          fi
