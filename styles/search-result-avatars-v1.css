@@ -1,0 +1,67 @@
+/* Search results use the same student portraits as profiles and posts. */
+.search-suggest .suggest-item>.search-result-avatar,
+.search-results-list .result-row>.search-result-avatar{
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 42px;
+  width:42px;
+  height:42px;
+  min-width:42px;
+  padding:0;
+  border-radius:50%;
+  overflow:visible;
+  box-sizing:border-box;
+  vertical-align:middle;
+}
+.search-results-list .result-row>.search-result-avatar{
+  width:45px;
+  height:45px;
+  flex-basis:45px;
+}
+.search-suggest .suggest-item>.search-result-avatar>.avatar,
+.search-results-list .result-row>.search-result-avatar>.avatar{
+  display:inline-flex!important;
+  align-items:center;
+  justify-content:center;
+  width:100%!important;
+  height:100%!important;
+  flex:0 0 auto;
+  border-radius:50%!important;
+  box-sizing:border-box;
+  font-size:12px;
+  line-height:1;
+  overflow:hidden;
+}
+.search-result-avatar>.avatar.neis-illustrated-avatar>img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  border-radius:50%;
+}
+.search-suggest .suggest-item>.search-result-avatar--symbol,
+.search-results-list .result-row>.search-result-avatar--symbol{
+  overflow:hidden;
+  background:var(--soft);
+  border:1px solid var(--line);
+  color:var(--accent);
+}
+.search-result-avatar--symbol svg{
+  display:block;
+  width:19px;
+  height:19px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+@media(max-width:600px){
+  .search-suggest .suggest-item>.search-result-avatar{
+    width:40px;
+    height:40px;
+    min-width:40px;
+    flex-basis:40px;
+  }
+}
