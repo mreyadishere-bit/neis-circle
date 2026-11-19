@@ -82,7 +82,7 @@ def build(slug, out):
 <meta name="twitter:title" content="{html.escape(page_title,quote=True)}">
 <meta name="twitter:description" content="{html.escape(description,quote=True)}">
 <meta name="twitter:image" content="{html.escape(picture,quote=True)}">
-<script type="application/ld+json">{json.dumps(structure,ensure_ascii=False,separators=(',',':')).replace('</','<\\/')}</script>
+<script type="application/ld+json">{schema_json}</script>
 <style>{CSS}</style>
 </head>
 <body>
