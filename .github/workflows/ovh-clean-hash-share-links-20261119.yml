@@ -95,6 +95,11 @@ jobs:
                   for slug in slugs:
                       status,url,mime,bytes_=fetch('/'+slug)
                       html=bytes_.decode('utf8','replace')
+                      print('LIVE_SHARE_DEBUG',slug,'HTTP',status,'MIME',mime,
+                            'TITLE',re.findall(r'<title>([^<]*)',html)[:1],
+                            'OG_URL',re.findall(r'<meta property="og:url" content="([^"]*)"',html)[:1],
+                            'OG_IMAGE',re.findall(r'<meta property="og:image" content="([^"]*)"',html)[:1],
+                            'REDIRECT', ('window.location.replace' in html))
                       assert status==200 and mime.startswith('text/html'),(slug,mime)
                       assert f'<meta property="og:url" content="{base}/{slug}">' in html,slug
                       assert f'<meta property="og:image" content="{base}/assets/share-link/{slug}.webp?v=20261119-proportions">' in html,slug
