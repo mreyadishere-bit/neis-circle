@@ -84,7 +84,7 @@ jobs:
                   assert 'styles/search-result-avatars-v1.css?v=20261119-1' in home
                   assert 'scripts/05-social.js' in home
                   assert 'scripts/profile-illustrations-v1.js' in home
-                  assert 'assets/share/home-main.webp' in home
+                  assert '<meta property="og:image"' in home
                   js=get('/scripts/search-result-avatars-v1.js')
                   css=get('/styles/search-result-avatars-v1.css')
                   assert 'search-result-avatar' in js and 'profileAvatar(person)' in js
