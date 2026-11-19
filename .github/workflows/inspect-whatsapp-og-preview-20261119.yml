@@ -1,0 +1,49 @@
+name: Inspect WhatsApp OG Preview Caching and Image Types
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-whatsapp-og-preview-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Inspect public metadata with WhatsApp and Meta bot headers
+        run: |
+          python3 - <<'PY'
+          import re,urllib.request,urllib.parse
+          base='https://neiscircle.site'
+          useragents={
+            'WhatsApp':'WhatsApp/2.24.18.80 A',
+            'MetaBot':'facebookexternalhit/1.1',
+            'Generic':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+          }
+          paths=['/articles','/study','/articles?og_probe_20261119=9073','/study?og_probe_20261119=9073','/']
+          for path in paths:
+            for agent,ua in useragents.items():
+              try:
+                req=urllib.request.Request(base+path,headers={'User-Agent':ua,'Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=14) as r:
+                  body=r.read().decode('utf8','replace')
+                  print('CHECK',agent,path,'STATUS',r.status,'URL',r.url,'CONTENT_TYPE',r.headers.get('Content-Type'),
+                    'CACHE',r.headers.get('Cache-Control'),'AGE',r.headers.get('Age'),'CF_CACHE',r.headers.get('CF-Cache-Status'))
+                  print('META_OG_TITLE',re.findall(r'<meta property="og:title" content="([^"]+)',body)[:1],
+                    'META_OG_IMAGE',re.findall(r'<meta property="og:image" content="([^"]+)',body)[:1],
+                    'CANONICAL',re.findall(r'<link rel="canonical" href="([^"]+)',body)[:1])
+              except Exception as error:
+                print('ERROR',agent,path,type(error).__name__,str(error)[:100])
+          for path in ['/assets/share-link/articles.webp?v=20261119-proportions',
+                       '/assets/share-link/study.webp?v=20261119-proportions']:
+            try:
+              req=urllib.request.Request(base+path,headers={'User-Agent':'WhatsApp/2.24.18.80 A'})
+              with urllib.request.urlopen(req,timeout=14) as r:
+                blob=r.read()
+                print('IMAGE',path,'STATUS',r.status,'TYPE',r.headers.get('Content-Type'),'BYTES',len(blob),
+                  'MAGIC',blob[:12].hex(),'CACHE',r.headers.get('Cache-Control'))
+            except Exception as error:
+              print('IMAGE_ERROR',path,str(error)[:130])
+          PY
