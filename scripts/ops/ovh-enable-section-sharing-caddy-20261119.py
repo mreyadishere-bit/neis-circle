@@ -30,7 +30,7 @@ def main():
  if target.replace(NEW,OLD,1)!=config:fail('CONFIG_SCOPE_CHECK_FAILED')
  if not all(s in config for s in ('reverse_proxy rest:3000','reverse_proxy auth:9999','basic_auth')):
   fail('PROTECTED_ROUTES_MISSING')
- files=json.loads(run(DOCKER+['inspect','supabase-caddy'],timeout=25))[0])
+ files=json.loads(run(DOCKER+['inspect','supabase-caddy'],timeout=25))[0]
  source=[Path(m['Source']) for m in files.get('Mounts',[]) if m.get('Destination')=='/srv/neis-circle']
  if len(source)!=1:fail('FRONTEND_SOURCE_UNKNOWN')
  for section in ('articles','study','circles','opportunities','gallery','timetable'):
