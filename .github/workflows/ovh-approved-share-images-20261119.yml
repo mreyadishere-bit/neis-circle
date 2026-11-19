@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'deploy/NEIS_Circle_Final_Share_Assets.zip'
+      - 'deploy/NEIS_Circle_Complete_Share_Assets.zip'
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,38 +21,38 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m py_compile scripts/ops/build-branded-share-pages-20261119.py scripts/ops/ovh-deploy-branded-share-assets-20261119.py
-          test -s deploy/NEIS_Circle_Final_Share_Assets.zip
+          test -s deploy/NEIS_Circle_Complete_Share_Assets.zip
           mkdir -p /tmp/neis-approved-assets /tmp/neis-approved-pages
-          unzip -q deploy/NEIS_Circle_Final_Share_Assets.zip -d /tmp/neis-approved-assets
+          unzip -q deploy/NEIS_Circle_Complete_Share_Assets.zip -d /tmp/neis-approved-assets
           python3 -m venv /tmp/neis-image-check
           /tmp/neis-image-check/bin/pip install -q Pillow
           /tmp/neis-image-check/bin/python - <<'PY'
           from pathlib import Path
           from PIL import Image
           assets=Path('/tmp/neis-approved-assets/assets/share')
-          names='feed discover study messages connections saved opportunities gallery articles circles home-main'.split()
+          names='feed discover study messages connections saved opportunities gallery articles circles analytics timetable notifications settings games home-main'.split()
           for slug in names:
               p=assets/(slug+'.webp')
               assert p.is_file(),str(p)
               with Image.open(p) as im:
                   assert im.format=='WEBP' and im.size==(1200,630),(str(p),im.size)
-          print('ALL_ELEVEN_APPROVED_IMAGES_VALIDATED=YES')
+          print('ALL_SIXTEEN_APPROVED_IMAGES_VALIDATED=YES')
           PY
           python3 scripts/ops/build-branded-share-pages-20261119.py --assets-dir /tmp/neis-approved-assets/assets/share --output-dir /tmp/neis-approved-pages
           python3 - <<'PY'
           from pathlib import Path
           import re,xml.etree.ElementTree as ET
           p=Path('/tmp/neis-approved-pages')
-          expected='feed discover study messages connections saved opportunities gallery articles circles'.split()
+          expected='feed discover study messages connections saved opportunities gallery articles circles analytics timetable notifications settings games'.split()
           for slug in expected:
               html=(p/(slug+'.html')).read_text()
               assert f'<meta property="og:image" content="https://neiscircle.site/assets/share/{slug}.webp?v=20261119-art"' in html,slug
               assert f'<meta property="og:url" content="https://neiscircle.site/{slug}.html"' in html,slug
               assert f'href="/#/{slug}"' in html,slug
-          assert 'referral-poster.webp' in (p/'timetable.html').read_text()
+          assert 'assets/share/timetable.webp?v=20261119-art' in (p/'timetable.html').read_text()
           root=ET.parse(p/'sitemap.xml').getroot()
-          assert len([x for x in root if x.tag.endswith('url')])==13
-          print('TEN_SECTION_SOCIAL_CARDS_AND_TIMETABLE=PASS')
+          assert len([x for x in root if x.tag.endswith('url')])==17
+          print('FIFTEEN_SECTION_SOCIAL_CARDS=PASS')
           PY
       - name: Configure SSH to the existing OVH server
         env:
@@ -87,7 +87,7 @@ jobs:
           python3 - <<'PY'
           import urllib.request,time,re
           root='https://neiscircle.site'
-          slugs='feed discover study messages connections saved opportunities gallery articles circles'.split()
+          slugs='feed discover study messages connections saved opportunities gallery articles circles analytics timetable notifications settings games'.split()
           for attempt in range(10):
               try:
                   def get(path):
