@@ -21,7 +21,7 @@ jobs:
       - name: Generate static section previews and verify metadata/privacy
         run: |
           set -euo pipefail
-          python3 -m py_compile scripts/ops/build-section-share-pages-20261119.py scripts/ops/ovh-deploy-section-sharing-20261119.py
+          python3 -m py_compile scripts/ops/build-section-share-pages-20261119.py scripts/ops/ovh-deploy-section-sharing-20261119.py scripts/ops/ovh-rollback-section-sharing-20261119.py
           node --check scripts/section-share-router-v1.js
           python3 scripts/ops/build-section-share-pages-20261119.py --output-dir /tmp/neis-section-pages
           python3 - <<'PY'
@@ -111,3 +111,13 @@ jobs:
                   time.sleep(3)
           else:raise RuntimeError('Share pages did not become available')
           PY
+      - name: Automatically rollback if live sharing pages fail public tests
+        if: failure()
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-rollback-section-sharing-20261119.py
+          fi
