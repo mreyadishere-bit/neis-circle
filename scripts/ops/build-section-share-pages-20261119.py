@@ -60,6 +60,7 @@ def build(slug, out):
   "url":canonical,"description":description,"inLanguage":["en","ar"],
   "isPartOf":{"@type":"WebSite","name":"NEIS Circle","url":BASE+"/"}
  }
+ schema_json=json.dumps(structure,ensure_ascii=False,separators=(',',':'))
  markup=f"""<!doctype html>
 <html lang="en">
 <head>
