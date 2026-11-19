@@ -1,0 +1,32 @@
+name: Verify Public Section Share URLs 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/check-section-share-pages-20261119.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Report public sharing endpoints without identity data
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,re
+          base='https://neiscircle.site'
+          for path in ('/','/articles/','/study/','/circles/','/opportunities/','/gallery/','/timetable/','/sitemap.xml'):
+              try:
+                  req=urllib.request.Request(base+path,headers={'User-Agent':'facebookexternalhit/1.1','Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=15) as r:
+                      txt=r.read().decode('utf8','replace')
+                      print('PATH',path,'STATUS',r.status,'FINAL',r.url,'TYPE',r.headers.get('content-type'),'BYTES',len(txt))
+                      print('HTML_TITLE',re.findall(r'<title>([^<]+)',txt,re.I)[:1])
+                      print('OG_URL',re.findall(r'<meta property="og:url" content="([^"]+)"',txt,re.I)[:1])
+                      print('CANONICAL',re.findall(r'<link rel="canonical" href="([^"]+)"',txt,re.I)[:1])
+                      print('APP_ROUTER', 'section-share-router-v1.js' in txt)
+              except Exception as e:
+                  print('PATH',path,'ERROR',repr(e))
+          PY
