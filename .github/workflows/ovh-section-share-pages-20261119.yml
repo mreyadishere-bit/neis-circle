@@ -1,0 +1,113 @@
+name: OVH Section Share Pages 20261119
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ovh-section-share-pages-20261119.yml'
+      - 'scripts/ops/ovh-deploy-section-sharing-20261119.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-share-section-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate static section previews and verify metadata/privacy
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/ops/build-section-share-pages-20261119.py scripts/ops/ovh-deploy-section-sharing-20261119.py
+          node --check scripts/section-share-router-v1.js
+          python3 scripts/ops/build-section-share-pages-20261119.py --output-dir /tmp/neis-section-pages
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from html.parser import HTMLParser
+          from pathlib import Path
+          folder=Path('/tmp/neis-section-pages')
+          slugs=('articles','study','circles','opportunities','gallery','timetable')
+          urls=[]
+          for slug in slugs:
+              html=(folder/slug/'index.html').read_text()
+              assert f'<link rel="canonical" href="https://neiscircle.site/{slug}/">' in html
+              assert f'<meta property="og:url" content="https://neiscircle.site/{slug}/">' in html
+              assert f'href="/#/{slug}"' in html
+              assert '<meta property="og:image" content="https://neiscircle.site/assets/referral-poster.webp?v=49.4">' in html
+              assert 'private messages' not in html.lower()
+              HTMLParser().feed(html)
+              urls.append(f'https://neiscircle.site/{slug}/')
+          root=ET.parse(folder/'sitemap.xml').getroot()
+          loc=[el.text for el in root.iter() if el.tag.endswith('loc')]
+          assert loc==['https://neiscircle.site/','https://neiscircle.site/about.html']+urls
+          assert len(loc)==8
+          app=Path('index.html').read_text()
+          assert 'section-share-router-v1.js?v=20261119-sharing' in app
+          assert 'scripts/03-auth-i18n.js' in app and 'scripts/user-activity-v1.js' in app
+          print('SECTION_SHARE_PAGE_STATIC_CHECKS=PASS')
+          PY
+      - name: Configure OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage public metadata-only pages and authenticated deep-link router
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          dst=/home/ubuntu/neis-backups/section-sharing-20261119
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "install -d -m 700 $dst/share-pages"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-section-pages/sitemap.xml "ubuntu@$HOST:$dst/sitemap.xml"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/section-share-router-v1.js "ubuntu@$HOST:$dst/section-share-router-v1.js"
+          scp -qr -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/neis-section-pages/articles /tmp/neis-section-pages/study /tmp/neis-section-pages/circles /tmp/neis-section-pages/opportunities /tmp/neis-section-pages/gallery /tmp/neis-section-pages/timetable "ubuntu@$HOST:$dst/share-pages/"
+      - name: Publish guarded OVH frontend release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "GITHUB_SHA='$GITHUB_SHA' python3 -" < scripts/ops/ovh-deploy-section-sharing-20261119.py
+      - name: Verify actual public URLs with independent social crawler requests
+        run: |
+          python3 - <<'PY'
+          import urllib.request,time
+          from xml.etree import ElementTree as ET
+          base='https://neiscircle.site'
+          slugs=('articles','study','circles','opportunities','gallery','timetable')
+          for attempt in range(15):
+              try:
+                  for slug in slugs:
+                      request=urllib.request.Request(base+'/'+slug+'/',headers={
+                          'User-Agent':'facebookexternalhit/1.1','Cache-Control':'no-cache'
+                      })
+                      with urllib.request.urlopen(request,timeout=13) as response:
+                          assert response.status==200
+                          html=response.read().decode('utf8','replace')
+                      assert '<meta property="og:title"' in html
+                      assert f'content="{base}/{slug}/"' in html
+                      assert f'href="/#/{slug}"' in html
+                  with urllib.request.urlopen(base+'/sitemap.xml',timeout=13) as r:
+                      xml=r.read()
+                  assert len([t for t in ET.fromstring(xml).iter() if t.tag.endswith('loc')])==8
+                  with urllib.request.urlopen(base+'/',timeout=13) as r: app=r.read().decode('utf8','replace')
+                  assert 'scripts/section-share-router-v1.js?v=20261119-sharing' in app
+                  assert 'scripts/user-activity-v1.js' in app
+                  with urllib.request.urlopen('https://supabase.neiscircle.site/auth/v1/settings',timeout=13) as r:assert r.status==200
+                  print('SECTION_SHARE_PUBLIC_EXTERNAL_SMOKE=PASS')
+                  break
+              except Exception:
+                  if attempt==14:raise
+                  time.sleep(3)
+          else:raise RuntimeError('Share pages did not become available')
+          PY
