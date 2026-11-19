@@ -35,7 +35,7 @@ def build_caddy(config):
     start=config.rfind('\n',0,pos)+1
     indent=config[start:pos]
     require(not indent.strip(),'UNEXPECTED_CADDY_SITE_INDENT')
-    rules=[indent+MARKER]
+    rules=[indent+MARKER,indent+'header /feed X-Neis-Share-Probe active']
     for slug in SLUGS:
         rules.append(indent+'rewrite /'+slug+' /'+slug+'.html')
     new=config[:start]+'\n'.join(rules)+'\n'+config[start:]
@@ -152,6 +152,12 @@ def main():
                    '--config','/etc/caddy/Caddyfile'],timeout=50)
         run(DOCKER+['exec',cid,'caddy','reload',
                    '--config','/etc/caddy/Caddyfile'],timeout=55)
+        # Diagnose whether the live Caddy process loaded the new site handlers.
+        probe=run(['curl','-ksi','--connect-timeout','8','--max-time','12',
+                   '--resolve','neiscircle.site:443:127.0.0.1',
+                   'https://neiscircle.site/feed'],timeout=18)
+        print('LIVE_CADDY_PROBE_HEADER='+str('x-neis-share-probe: active' in probe.lower()))
+        print('LIVE_CADDY_PROBE_OG_HOME='+str('content="https://neiscircle.site/"' in probe))
         # Verify the direct OVH origin before exposing the new release publicly.
         for slug in ('feed','articles','study','messages','games'):
             page=run(['curl','-ksSL','--connect-timeout','8','--max-time','12',
