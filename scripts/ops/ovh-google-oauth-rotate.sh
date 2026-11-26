@@ -44,7 +44,9 @@ for line in lines:
   if key not in seen: out.append(f'{key}={values[key]}'); seen.add(key)
  else: out.append(line)
 for key,value in values.items():
- if key not in seen: out.append(f'{key}={value}')
+ if key not in seen:
+  encoded = "'" + value.replace("'", "'\\''") + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else value
+  out.append(f'{key}={encoded}')
 data='\n'.join(out)+'\n'
 fd,tmp=tempfile.mkstemp(prefix='.env.google-oauth.',dir='.')
 try:
