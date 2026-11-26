@@ -1,0 +1,39 @@
+name: Rotate NEIS Circle Google OAuth credentials
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rotate:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned SSH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          OVH_SSH_KEY: ${{ secrets.OVH_SSH_KEY }}
+          OVH_SSH_KNOWN_HOSTS: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$OVH_HOST" && test -n "$OVH_SSH_KEY" && test -n "$OVH_SSH_KNOWN_HOSTS"
+          install -d -m 700 ~/.ssh
+          printf '%s\\n' "$OVH_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\\n' "$OVH_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Install one-purpose rotation script on OVH
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'sudo install -d -m 700 /opt/neis-oauth-ops && sudo tee /opt/neis-oauth-ops/rotate-google-oauth.sh >/dev/null && sudo chmod 700 /opt/neis-oauth-ops/rotate-google-oauth.sh' < scripts/ops/ovh-google-oauth-rotate.sh
+      - name: Rotate only the Supabase Auth Google provider and verify
+        env:
+          OVH_HOST: ${{ secrets.OVH_HOST }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.NEIS_GOOGLE_OAUTH_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$GOOGLE_OAUTH_CLIENT_SECRET"
+          printf '%s' "$GOOGLE_OAUTH_CLIENT_SECRET" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$OVH_HOST" 'sudo -n bash /opt/neis-oauth-ops/rotate-google-oauth.sh'
