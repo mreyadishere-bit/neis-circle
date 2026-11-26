@@ -69,12 +69,10 @@ from pathlib import Path
 for line in Path('.env').read_text().splitlines():
  if line.startswith('GOOGLE_CLIENT_ID='):
   print('OAUTH_ENV_FILE_CLIENT_ID='+line.split('=',1)[1].strip().strip("'\\\""))
- for line in Path('.env').read_text().splitlines():
-  if line.startswith('GOOGLE_SECRET='):
-   print('OAUTH_ENV_FILE_SECRET_LENGTH='+str(len(line.split('=',1)[1].strip().strip("'\\\""))))
+ if line.startswith('GOOGLE_SECRET='):
+  print('OAUTH_ENV_FILE_SECRET_LENGTH='+str(len(line.split('=',1)[1].strip().strip("'\\\""))))
 PY
 # Ensure the Compose model actually picked up the new values before touching the container.
-"${COMPOSE[@]}" config --environment | python3 -c 'import sys; d=dict(x.rstrip("\\n").split("=",1) for x in sys.stdin if "=" in x); print("OAUTH_COMPOSE_INPUT_SECRET_LENGTH="+str(len(d.get("GOOGLE_SECRET",""))))'
 for f in docker-compose.yml docker-compose.security.yml docker-compose.caddy.yml docker-compose.edge-integrations.yml; do
  grep -HnE 'GOOGLE_CLIENT|GOTRUE_EXTERNAL_GOOGLE|ENABLE_GOOGLE' "$f" | sed -E 's/=.*/=<configured>/' || true
 done
@@ -89,11 +87,7 @@ expected_client=os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
 print("OAUTH_COMPOSE_CLIENT_ID="+actual_client)
 print("OAUTH_EXPECTED_CLIENT_ID="+expected_client)
 assert actual_client==expected_client
-actual=e.get("GOOGLE_SECRET","")
-expected=os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
-print("OAUTH_COMPOSE_SECRET_LENGTH="+str(len(actual)))
-print("OAUTH_INPUT_SECRET_LENGTH="+str(len(expected)))
-assert actual==expected
+# Secret values may be redacted in Compose config; compare the actual container environment below.
 '
 unset CONFIG
 if ! "${COMPOSE[@]}" up -d --no-deps auth >/dev/null; then
@@ -115,7 +109,7 @@ sudo -n /usr/bin/docker inspect --format '{{range .Config.Env}}{{println .}}{{en
 import os,sys
 env=dict(x.rstrip("\n").split("=",1) for x in sys.stdin if "=" in x)
 assert env.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID")==os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
-assert env.get("GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
+assert env.get("GOTRUE_EXTERNAL_GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
 assert env.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
 '
 # Verify the public Auth settings and the Google authorize redirect without following it.
