@@ -77,6 +77,7 @@ client_id=urllib.parse.parse_qs(urllib.parse.urlsplit(location).query).get('clie
 project_number=client_id.split('-',1)[0] if client_id else ''
 print('GOOGLE_OAUTH_CLIENT_PROJECT_NUMBER='+(project_number if project_number.isdigit() else 'UNKNOWN'))
 print('GOOGLE_OAUTH_CLIENT_PREFIX_IS_583032642665='+('YES' if project_number=='583032642665' else 'NO'))
+print('GOOGLE_OAUTH_CLIENT_MATCHES_PREVIOUS_ID='+('YES' if client_id=='583032642665-uv6s3cjgfanbdjdrl01kcvf7csggbqlf.apps.googleusercontent.com' else 'NO'))
 print('GOOGLE_AUTH_AUTHORIZE_HTTP='+str(code if code is not None else 'NETWORK_ERROR'))
 print('GOOGLE_AUTH_AUTHORIZE_GOOGLE_REDIRECT='+('YES' if code in (301,302,303,307,308) and where in ('accounts.google.com','accounts.googleusercontent.com') else 'NO'))
 print('GOOGLE_OAUTH_EMAIL_OTP_TESTS=NOT_USED')
