@@ -139,7 +139,7 @@ except urllib.error.HTTPError as e:
  if e.code not in (301,302,303,307,308) or parsed.hostname!='accounts.google.com' or cid!=os.environ['OAUTH_EXPECTED_CLIENT_ID']:
   print('OAUTH_ROTATION=APPLIED_GOOGLE_REDIRECT_MISMATCH');sys.exit(1)
 print('OAUTH_ROTATION=SUCCESS')
-print('OAUTH_CLIENT_ID='+os.environ['CLIENT_ID'])
+print('OAUTH_CLIENT_ID='+os.environ['OAUTH_EXPECTED_CLIENT_ID'])
 print('OAUTH_AUTH_CONTAINER=RUNNING')
 print('OAUTH_GOOGLE_REDIRECT=VERIFIED')
 PY
