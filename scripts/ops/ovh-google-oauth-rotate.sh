@@ -32,9 +32,9 @@ import os, pathlib, tempfile
 p=pathlib.Path('.env')
 lines=p.read_text().splitlines()
 values={
- 'GOTRUE_EXTERNAL_GOOGLE_ENABLED':'true',
- 'GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID':os.environ['GOOGLE_OAUTH_ROTATION_CLIENT_ID'],
- 'GOTRUE_EXTERNAL_GOOGLE_SECRET':os.environ['GOOGLE_OAUTH_ROTATION_SECRET'],
+ 'GOOGLE_ENABLED':'true',
+ 'GOOGLE_CLIENT_ID':os.environ['GOOGLE_OAUTH_ROTATION_CLIENT_ID'],
+ 'GOOGLE_SECRET':os.environ['GOOGLE_OAUTH_ROTATION_SECRET'],
 }
 seen=set(); out=[]
 for line in lines:
@@ -42,7 +42,7 @@ for line in lines:
  key=stripped.split('=',1)[0] if '=' in stripped and not stripped.startswith('#') else None
  if key in values:
   if key not in seen:
-   if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' and "'" in values[key]:
+   if key == 'GOOGLE_SECRET' and "'" in values[key]:
     raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
    encoded = "'" + values[key] + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else values[key]
    out.append(f'{key}={encoded}'); seen.add(key)
@@ -67,7 +67,7 @@ unset GOOGLE_OAUTH_ROTATION_SECRET
 python3 - <<'PY'
 from pathlib import Path
 for line in Path('.env').read_text().splitlines():
- if line.startswith('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID='):
+ if line.startswith('GOOGLE_CLIENT_ID='):
   print('OAUTH_ENV_FILE_CLIENT_ID='+line.split('=',1)[1].strip().strip("'\\\""))
 PY
 # Ensure the Compose model actually picked up the new values before touching the container.
