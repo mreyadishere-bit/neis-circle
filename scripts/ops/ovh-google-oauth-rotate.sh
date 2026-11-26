@@ -41,7 +41,11 @@ for line in lines:
  stripped=line.strip()
  key=stripped.split('=',1)[0] if '=' in stripped and not stripped.startswith('#') else None
  if key in values:
-  if key not in seen: out.append(f'{key}={values[key]}'); seen.add(key)
+  if key not in seen:
+  if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' and "'" in values[key]:
+   raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
+  encoded = "'" + values[key] + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else values[key]
+  out.append(f'{key}={encoded}'); seen.add(key)
  else: out.append(line)
 for key,value in values.items():
  if key not in seen:
@@ -68,8 +72,8 @@ d=json.load(sys.stdin); e=d["services"]["auth"]["environment"]
 if isinstance(e,list): e=dict(x.split("=",1) for x in e if "=" in x)
 assert e.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
 assert e.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID")==os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
-assert bool(e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET"))
-print("OAUTH_COMPOSE_SECRET_PRESENT=YES")
+assert e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
+print("OAUTH_COMPOSE_SECRET_MATCH=YES")
 '
 unset CONFIG
 if ! "${COMPOSE[@]}" up -d --no-deps auth >/dev/null; then
