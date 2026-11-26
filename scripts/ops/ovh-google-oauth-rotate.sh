@@ -72,7 +72,7 @@ for line in Path('.env').read_text().splitlines():
 PY
 # Ensure the Compose model actually picked up the new values before touching the container.
 for f in docker-compose.yml docker-compose.security.yml docker-compose.caddy.yml docker-compose.edge-integrations.yml; do
- grep -Hn 'GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID' "$f" | sed -E 's/=.*/=<configured>/' || true
+ grep -HnE 'GOOGLE_CLIENT|GOTRUE_EXTERNAL_GOOGLE|ENABLE_GOOGLE' "$f" | sed -E 's/=.*/=<configured>/' || true
 done
 CONFIG="$("${COMPOSE[@]}" config --format json)"
 printf '%s' "$CONFIG" | GOOGLE_OAUTH_ROTATION_CLIENT_ID="$CLIENT_ID" GOOGLE_OAUTH_ROTATION_SECRET="$SECRET" python3 -c '
