@@ -71,7 +71,11 @@ import json,os,sys
 d=json.load(sys.stdin); e=d["services"]["auth"]["environment"]
 if isinstance(e,list): e=dict(x.split("=",1) for x in e if "=" in x)
 assert e.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
-assert e.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID")==os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
+actual_client=e.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID","")
+expected_client=os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
+print("OAUTH_COMPOSE_CLIENT_ID="+actual_client)
+print("OAUTH_EXPECTED_CLIENT_ID="+expected_client)
+assert actual_client==expected_client
 actual=e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET","")
 expected=os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
 print("OAUTH_COMPOSE_SECRET_LENGTH="+str(len(actual)))
