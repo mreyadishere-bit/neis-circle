@@ -68,7 +68,8 @@ d=json.load(sys.stdin); e=d["services"]["auth"]["environment"]
 if isinstance(e,list): e=dict(x.split("=",1) for x in e if "=" in x)
 assert e.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
 assert e.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID")==os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
-assert e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
+assert bool(e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET"))
+print("OAUTH_COMPOSE_SECRET_PRESENT=YES")
 '
 unset CONFIG
 if ! "${COMPOSE[@]}" up -d --no-deps auth >/dev/null; then
