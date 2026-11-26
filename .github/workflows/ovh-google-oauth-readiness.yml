@@ -1,3 +1,4 @@
+# Read-only re-run trigger after the 2026-11-26 Google disabled_client diagnosis.
 name: OVH Google OAuth Readiness
 on:
   workflow_dispatch:
