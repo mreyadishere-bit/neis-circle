@@ -42,10 +42,10 @@ for line in lines:
  key=stripped.split('=',1)[0] if '=' in stripped and not stripped.startswith('#') else None
  if key in values:
   if key not in seen:
-  if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' and "'" in values[key]:
-   raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
-  encoded = "'" + values[key] + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else values[key]
-  out.append(f'{key}={encoded}'); seen.add(key)
+   if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' and "'" in values[key]:
+    raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
+   encoded = "'" + values[key] + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else values[key]
+   out.append(f'{key}={encoded}'); seen.add(key)
  else: out.append(line)
 for key,value in values.items():
  if key not in seen:
