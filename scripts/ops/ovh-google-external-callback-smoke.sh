@@ -28,9 +28,16 @@ try:
    code=g.status;body=g.read(300000).decode('utf-8','replace')
  except urllib.error.HTTPError as e:
   code=e.code;body=e.read(300000).decode('utf-8','replace')
- problem=any(x in body.lower() for x in ('redirect_uri_mismatch','error 400: redirect_uri_mismatch','invalid_client'))
+ lowered=body.lower()
+ disabled=any(x in lowered for x in ('disabled_client','oauth client was disabled','the oauth client was disabled'))
+ invalid=any(x in lowered for x in ('invalid_client','invalid client'))
+ mismatch=any(x in lowered for x in ('redirect_uri_mismatch','error 400: redirect_uri_mismatch'))
+ problem=disabled or invalid or mismatch
  print('GOOGLE_LOGIN_ENTRY_HTTP='+str(code))
- print('GOOGLE_OAUTH_REGISTERED_CALLBACK='+('REJECTED' if problem else 'NO_MISMATCH_DETECTED'))
+ print('GOOGLE_PAGE_MARKS_DISABLED_CLIENT='+('YES' if disabled else 'NO'))
+ print('GOOGLE_PAGE_MARKS_INVALID_CLIENT='+('YES' if invalid else 'NO'))
+ print('GOOGLE_PAGE_MARKS_REDIRECT_URI_MISMATCH='+('YES' if mismatch else 'NO'))
+ print('GOOGLE_OAUTH_REGISTERED_CALLBACK='+('REJECTED' if problem else 'NO_ERROR_MARKERS_OBSERVED'))
  print('GOOGLE_USER_LOGIN_COMPLETED=NO')
  print('GOOGLE_CREDENTIALS_LOGGED=NO')
  if problem:sys.exit(1)
