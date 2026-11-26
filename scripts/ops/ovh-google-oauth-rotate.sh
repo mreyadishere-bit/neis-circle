@@ -44,14 +44,14 @@ for line in lines:
   if key not in seen:
    if key == 'GOOGLE_SECRET' and "'" in values[key]:
     raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
-   encoded = "'" + values[key] + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else values[key]
+   encoded = "'" + values[key] + "'" if key == 'GOOGLE_SECRET' else values[key]
    out.append(f'{key}={encoded}'); seen.add(key)
  else: out.append(line)
 for key,value in values.items():
  if key not in seen:
-  if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' and "'" in value:
+  if key == 'GOOGLE_SECRET' and "'" in value:
    raise SystemExit("OAuth secret contains unsupported quote character; refusing to write")
-  encoded = "'" + value + "'" if key == 'GOTRUE_EXTERNAL_GOOGLE_SECRET' else value
+  encoded = "'" + value + "'" if key == 'GOOGLE_SECRET' else value
   out.append(f'{key}={encoded}')
 data='\n'.join(out)+'\n'
 fd,tmp=tempfile.mkstemp(prefix='.env.google-oauth.',dir='.')
@@ -85,7 +85,7 @@ expected_client=os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
 print("OAUTH_COMPOSE_CLIENT_ID="+actual_client)
 print("OAUTH_EXPECTED_CLIENT_ID="+expected_client)
 assert actual_client==expected_client
-actual=e.get("GOTRUE_EXTERNAL_GOOGLE_SECRET","")
+actual=e.get("GOOGLE_SECRET","")
 expected=os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
 print("OAUTH_COMPOSE_SECRET_LENGTH="+str(len(actual)))
 print("OAUTH_INPUT_SECRET_LENGTH="+str(len(expected)))
@@ -111,7 +111,7 @@ sudo -n /usr/bin/docker inspect --format '{{range .Config.Env}}{{println .}}{{en
 import os,sys
 env=dict(x.rstrip("\n").split("=",1) for x in sys.stdin if "=" in x)
 assert env.get("GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID")==os.environ["GOOGLE_OAUTH_ROTATION_CLIENT_ID"]
-assert env.get("GOTRUE_EXTERNAL_GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
+assert env.get("GOOGLE_SECRET")==os.environ["GOOGLE_OAUTH_ROTATION_SECRET"]
 assert env.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
 '
 # Verify the public Auth settings and the Google authorize redirect without following it.
