@@ -13,8 +13,18 @@ if [[ ! -f .env ]]; then echo "OAUTH_ROTATION=BLOCKED_ENV_FILE_MISSING"; exit 2;
 BACKUP=".env.backup-google-oauth-$(date -u +%Y%m%dT%H%M%SZ)"
 umask 077
 cp -p .env "$BACKUP"
-cleanup_secret(){ unset SECRET; }
-trap cleanup_secret EXIT
+CHANGED=0
+COMMITTED=0
+rollback_on_exit(){
+  rc=$?
+  if [[ "$rc" -ne 0 && "$CHANGED" == 1 && "$COMMITTED" != 1 ]]; then
+    cp -p "$BACKUP" .env
+    "${COMPOSE[@]}" up -d --no-deps auth >/dev/null 2>&1 || true
+    echo "OAUTH_ROTATION=ROLLED_BACK_AFTER_ERROR"
+  fi
+  unset SECRET GOOGLE_OAUTH_ROTATION_SECRET
+}
+trap rollback_on_exit EXIT
 export GOOGLE_OAUTH_ROTATION_SECRET="$SECRET"
 export GOOGLE_OAUTH_ROTATION_CLIENT_ID="$CLIENT_ID"
 python3 - <<'PY'
@@ -44,6 +54,7 @@ finally:
  try: os.unlink(tmp)
  except FileNotFoundError: pass
 PY
+CHANGED=1
 unset GOOGLE_OAUTH_ROTATION_SECRET
 # Ensure the Compose model actually picked up the new values before touching the container.
 CONFIG="$("${COMPOSE[@]}" config --format json)"
@@ -109,3 +120,4 @@ print('OAUTH_CLIENT_ID='+os.environ['CLIENT_ID'])
 print('OAUTH_AUTH_CONTAINER=RUNNING')
 print('OAUTH_GOOGLE_REDIRECT=VERIFIED')
 PY
+COMMITTED=1
