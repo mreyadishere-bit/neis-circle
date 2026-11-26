@@ -64,7 +64,16 @@ finally:
 PY
 CHANGED=1
 unset GOOGLE_OAUTH_ROTATION_SECRET
+python3 - <<'PY'
+from pathlib import Path
+for line in Path('.env').read_text().splitlines():
+ if line.startswith('GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID='):
+  print('OAUTH_ENV_FILE_CLIENT_ID='+line.split('=',1)[1].strip().strip("'\\\""))
+PY
 # Ensure the Compose model actually picked up the new values before touching the container.
+for f in docker-compose.yml docker-compose.security.yml docker-compose.caddy.yml docker-compose.edge-integrations.yml; do
+ grep -Hn 'GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID' "$f" | sed -E 's/=.*/=<configured>/' || true
+done
 CONFIG="$("${COMPOSE[@]}" config --format json)"
 printf '%s' "$CONFIG" | GOOGLE_OAUTH_ROTATION_CLIENT_ID="$CLIENT_ID" GOOGLE_OAUTH_ROTATION_SECRET="$SECRET" python3 -c '
 import json,os,sys
