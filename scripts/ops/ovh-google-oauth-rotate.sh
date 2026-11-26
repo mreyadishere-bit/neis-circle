@@ -115,7 +115,7 @@ assert env.get("GOTRUE_EXTERNAL_GOOGLE_ENABLED","").lower()=="true"
 # Verify the public Auth settings and the Google authorize redirect without following it.
 ANON_KEY="$(sed -n 's/^ANON_KEY=//p' .env | tail -n1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")"
 if [[ -z "$ANON_KEY" ]]; then echo "OAUTH_ROTATION=APPLIED_AUTH_RUNNING_SETTINGS_UNVERIFIED"; exit 1; fi
-ANON_KEY="$ANON_KEY" CLIENT_ID="$CLIENT_ID" python3 - <<'PY'
+ANON_KEY="$ANON_KEY" OAUTH_EXPECTED_CLIENT_ID="$CLIENT_ID" python3 - <<'PY'
 import json,os,urllib.request,urllib.error,urllib.parse,sys
 base='https://supabase.neiscircle.site'
 h={'apikey':os.environ['ANON_KEY'],'Authorization':'Bearer '+os.environ['ANON_KEY']}
@@ -136,7 +136,7 @@ except urllib.error.HTTPError as e:
  loc=e.headers.get('Location','')
  parsed=urllib.parse.urlsplit(loc)
  cid=urllib.parse.parse_qs(parsed.query).get('client_id',[''])[0]
- if e.code not in (301,302,303,307,308) or parsed.hostname!='accounts.google.com' or cid!=os.environ['CLIENT_ID']:
+ if e.code not in (301,302,303,307,308) or parsed.hostname!='accounts.google.com' or cid!=os.environ['OAUTH_EXPECTED_CLIENT_ID']:
   print('OAUTH_ROTATION=APPLIED_GOOGLE_REDIRECT_MISMATCH');sys.exit(1)
 print('OAUTH_ROTATION=SUCCESS')
 print('OAUTH_CLIENT_ID='+os.environ['CLIENT_ID'])
