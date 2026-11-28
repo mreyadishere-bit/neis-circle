@@ -13,10 +13,14 @@
 .gallery-pin-open{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in;line-height:0}
 .gallery-pin img{display:block;width:100%;height:auto;max-height:none;object-fit:contain;transition:transform .28s ease}
 .gallery-pin:hover img{transform:scale(1.018)}
-.gallery-pin-featured{position:absolute;top:10px;left:10px;padding:5px 8px;border-radius:999px;background:rgba(15,25,22,.76);color:#fff;font-size:9px;font-weight:750;pointer-events:none}
+
 .gallery-pin-tools{position:absolute;top:9px;right:9px;display:flex;gap:6px;opacity:0;transition:opacity .18s ease}
 .gallery-pin:hover .gallery-pin-tools,.gallery-pin-tools:focus-within{opacity:1}
-.gallery-pin-tools button{padding:7px 9px;border:0;border-radius:9px;background:rgba(255,255,255,.94);color:#18231f;font-size:10px;font-weight:750;box-shadow:0 2px 10px #0002}
+.gallery-pin-tools button{padding:7px 9px;border:0;border-radius:9px;background:rgba(255,255,255,.94);color:#18231f;font-size:10px;font-weight:750;box-shadow:0 2px 10px #0002;cursor:pointer}
+.gallery-pin-tools .gallery-delete-button,.gallery-lightbox-actions .gallery-delete-button{background:#fff1f0;color:#a32d27}
+.gallery-pin-tools button:disabled,.gallery-lightbox-actions button:disabled{opacity:.55;cursor:wait}
+.gallery-lightbox-actions{display:flex;justify-content:flex-end;margin-top:12px}
+.gallery-lightbox-actions .gallery-delete-button{padding:9px 13px;border:1px solid #f2d0cd;border-radius:11px;font-size:11px;font-weight:750;cursor:pointer}
 .gallery-empty{min-height:270px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:30px;border:1px dashed var(--line);border-radius:22px;text-align:center}
 .gallery-empty-icon,.gallery-dropzone-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:var(--accent2);color:var(--accent);font-size:26px}
 .gallery-empty span{max-width:360px;color:var(--muted);font-size:12px}
@@ -52,3 +56,13 @@
 .gallery-pin-meta-separator{opacity:.58;font-size:8px}
 @media(max-width:760px){.gallery-pin-meta{gap:2px;padding:7px 8px 8px}.gallery-pin-meta-name{font-size:10px}.gallery-pin-meta-details{font-size:8.4px;column-gap:4px}}
 @media(max-width:380px){.gallery-pin-meta{padding:6px 7px 7px}.gallery-pin-meta-name{font-size:9.5px}.gallery-pin-meta-details{font-size:8px}}
+
+
+/* Gallery filter and chronological sorting controls. */
+.gallery-filter-controls{display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap}
+.gallery-control{display:flex;align-items:center;gap:7px;min-width:0;color:var(--muted);font-size:10px;font-weight:700}
+.gallery-control select{height:36px;min-width:132px;padding:0 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;font-size:10.5px;outline:none}
+.gallery-control select:focus-visible{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+.gallery-toolbar{align-items:center}
+@media(max-width:600px){.gallery-toolbar{align-items:flex-start;gap:10px;flex-direction:column}.gallery-filter-controls{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.gallery-control{display:grid;gap:4px}.gallery-control select{width:100%;min-width:0}.gallery-count{align-self:flex-end}}
+@media(max-width:380px){.gallery-filter-controls{grid-template-columns:1fr}.gallery-control{grid-template-columns:70px minmax(0,1fr);align-items:center}.gallery-control select{height:34px}}

@@ -84,6 +84,8 @@
         '<button type="button" data-gallery-next aria-label="Next image" '+(index===visible.length-1?'disabled':'')+'>›</button></div></div>',true);
       const prev=document.querySelector('[data-gallery-prev]');
       const next=document.querySelector('[data-gallery-next]');
+      const deleteButton=document.querySelector('[data-delete-gallery-modal]');
+      if(deleteButton)deleteButton.onclick=()=>deleteGalleryImage(deleteButton.dataset.deleteGalleryModal);
       if(prev)prev.onclick=()=>{if(index>0){index--;show()}};
       if(next)next.onclick=()=>{if(index<visible.length-1){index++;show()}};
       const stage=document.querySelector('.gallery-lightbox-stage');

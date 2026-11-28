@@ -20,10 +20,11 @@ ASSETS=(
     "styles/gallery-pinterest-v1.css",
     "styles/navigation-accent-v1.css",
 )
+MIGRATION="20261128170000_main_admin_gallery_delete_storage.sql"
 phase="preflight"
 
-def run(argv,timeout=90,check=True):
-    p=subprocess.run(argv,cwd=ROOT,text=True,capture_output=True,timeout=timeout)
+def run(argv,timeout=90,check=True,input_data=None):
+    p=subprocess.run(argv,cwd=ROOT,input=input_data,text=True,capture_output=True,timeout=timeout)
     if check and p.returncode:
         detail=(p.stderr.strip().splitlines() or [""])[-1][:180]
         detail=re.sub(r"(?i)(password|secret|token|key)=\S+",r"\1=[redacted]",detail)
@@ -33,6 +34,9 @@ def run(argv,timeout=90,check=True):
 
 def output(argv,timeout=45):
     return run(argv,timeout=timeout).strip()
+
+def sql(statement):
+    return output(COMPOSE+["exec","-T","db","psql","-X","-U","postgres","-d","postgres","-Atqc",statement],timeout=60)
 
 def require(ok,code):
     if not ok:
@@ -71,15 +75,22 @@ def main():
         source=STAGE/Path(asset).name
         require(source.is_file() and not source.is_symlink() and source.stat().st_size>0,
                 "MISSING_STAGE_FILE")
+    migration_path=STAGE/MIGRATION
+    require(migration_path.is_file() and not migration_path.is_symlink() and migration_path.stat().st_size>0,
+            "MISSING_STORAGE_MIGRATION")
     js=(STAGE/"gallery-pinterest-v1.js").read_text()
     gallery_css=(STAGE/"gallery-pinterest-v1.css").read_text()
     navigation_css=(STAGE/"navigation-accent-v1.css").read_text()
+    migration=migration_path.read_text()
     require("gallery-pin-meta" in js and "item.created_at" in js and "author.branch" in js,
             "GALLERY_METADATA_CONTRACT")
     require(".gallery-masonry{columns:" in gallery_css and ".gallery-pin-meta" in gallery_css,
             "GALLERY_STYLE_CONTRACT")
     require(".nav-btn.active" in navigation_css and "background: var(--accent)" in navigation_css
             and "fill: none" in navigation_css,"NAVIGATION_ACCENT_CONTRACT")
+    require("neis_community_media_select_main_admin_gallery_v1" in migration and
+            "neis_community_media_delete_main_admin_gallery_v1" in migration,
+            "GALLERY_STORAGE_MIGRATION_CONTRACT")
     run(["node","--check",str(STAGE/"gallery-pinterest-v1.js")],timeout=20)
 
     require(ROOT.is_dir() and OVERLAY.is_file() and FRONTENDS.is_dir() and BACKUPS.is_dir(),
@@ -97,6 +108,35 @@ def main():
     require(not TARGET.exists() and not Path(str(TARGET)+".building").exists(),
             "TARGET_RELEASE_ALREADY_EXISTS")
     require(shutil.disk_usage(FRONTENDS).free>256*1024*1024,"LOW_FRONTEND_DISK_SPACE")
+
+    phase="database_preflight"
+    storage_ready=sql("""select
+      (select relrowsecurity from pg_class where oid='storage.objects'::regclass)
+      and exists(select 1 from storage.buckets where id='community-media'
+        and public=true and file_size_limit=8388608)
+      and has_table_privilege('authenticated','storage.objects','SELECT')
+      and has_table_privilege('authenticated','storage.objects','DELETE')
+      and exists(select 1 from pg_policies where schemaname='storage'
+        and tablename='objects' and policyname='neis_community_media_select_own_v1')
+      and exists(select 1 from pg_policies where schemaname='storage'
+        and tablename='objects' and policyname='neis_community_media_delete_own_v1')
+      and to_regprocedure('public.admin_delete_moderation_content(text,text)') is not null""")
+    require(storage_ready=="t","GALLERY_STORAGE_BASELINE_UNEXPECTED")
+
+    phase="database_migration"
+    run(COMPOSE+["exec","-T","db","psql","-X","-v","ON_ERROR_STOP=1",
+        "--single-transaction","-U","postgres","-d","postgres"],
+        timeout=90,input_data=migration)
+    policies=sql("""select count(*)=2 from pg_policies
+      where schemaname='storage' and tablename='objects'
+        and policyname in (
+          'neis_community_media_select_main_admin_gallery_v1',
+          'neis_community_media_delete_main_admin_gallery_v1')
+        and coalesce(qual,'') like '%community-media%'
+        and coalesce(qual,'') like '%/gallery/%'
+        and coalesce(qual,'') like '%neis_main_admin_gallery_delete_allowed%'""")
+    require(policies=="t","GALLERY_STORAGE_POLICY_VERIFY_FAILED")
+    print("GALLERY_STORAGE_ADMIN_POLICIES=VERIFIED")
 
     phase="prepare_frontend"
     backup=BACKUPS/("gallery-visual-release-"+RUN_ID)
@@ -184,7 +224,9 @@ if __name__=="__main__":
         main()
     except Exception as error:
         safe={
-            "INVALID_RUN_ID","MISSING_STAGE_FILE","GALLERY_METADATA_CONTRACT",
+            "INVALID_RUN_ID","MISSING_STAGE_FILE","MISSING_STORAGE_MIGRATION","GALLERY_METADATA_CONTRACT",
+            "GALLERY_STORAGE_MIGRATION_CONTRACT","GALLERY_STORAGE_BASELINE_UNEXPECTED",
+            "GALLERY_STORAGE_POLICY_VERIFY_FAILED",
             "GALLERY_STYLE_CONTRACT","NAVIGATION_ACCENT_CONTRACT","OVH_FRONTEND_ROOT_MISSING",
             "ACTIVE_FRONTEND_MOUNT_UNEXPECTED","ACTIVE_FRONTEND_INCOMPLETE",
             "FRONTEND_OVERLAY_MISMATCH","TARGET_RELEASE_ALREADY_EXISTS","LOW_FRONTEND_DISK_SPACE",

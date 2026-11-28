@@ -10,6 +10,7 @@ on:
       - 'styles/navigation-accent-v1.css'
       - 'qa/gallery-pinterest.test.mjs'
       - 'scripts/ops/ovh-deploy-gallery-visual-v2.py'
+      - 'supabase/migrations/20261128170000_main_admin_gallery_delete_storage.sql'
       - '.github/workflows/ovh-gallery-visual-v2.yml'
   push:
     branches: [main]
@@ -20,6 +21,7 @@ on:
       - 'styles/navigation-accent-v1.css'
       - 'qa/gallery-pinterest.test.mjs'
       - 'scripts/ops/ovh-deploy-gallery-visual-v2.py'
+      - 'supabase/migrations/20261128170000_main_admin_gallery_delete_storage.sql'
       - '.github/workflows/ovh-gallery-visual-v2.yml'
   workflow_dispatch:
 permissions:
@@ -81,7 +83,7 @@ jobs:
           target="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/gallery-visual-$RUN_ID"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 /home/ubuntu/neis-backups/locks '$stage'"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/gallery-pinterest-v1.js styles/gallery-pinterest-v1.css styles/navigation-accent-v1.css scripts/ops/ovh-deploy-gallery-visual-v2.py "$target:$stage/"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/gallery-pinterest-v1.js styles/gallery-pinterest-v1.css styles/navigation-accent-v1.css supabase/migrations/20261128170000_main_admin_gallery_delete_storage.sql scripts/ops/ovh-deploy-gallery-visual-v2.py "$target:$stage/"
       - name: Atomically activate frontend-only release
         env:
           HOST: ${{ secrets.OVH_HOST }}
@@ -92,19 +94,35 @@ jobs:
       - name: Verify public Gallery shell and navigation CSS
         run: |
           python3 - <<'PY'
-          import re, urllib.request
+          import re, time, urllib.request
           base='https://neiscircle.site/'
-          req=urllib.request.Request(base,headers={'Cache-Control':'no-cache'})
-          with urllib.request.urlopen(req,timeout=25) as response:
-              html=response.read().decode('utf8','replace')
-              assert response.status==200
+          html=''
+          last_error=None
+          for attempt in range(6):
+              try:
+                  req=urllib.request.Request(base,headers={'Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=25) as response:
+                      assert response.status==200
+                      html=response.read().decode('utf8','replace')
+                  break
+              except Exception as error:
+                  last_error=error
+                  if attempt==5:
+                      raise
+                  time.sleep(3)
           match=re.search(r'href="(styles/navigation-accent-v1[.]css[?]v=accent-nav-[^"]+)"',html)
           assert match, 'PUBLIC_NAVIGATION_CSS_LINK_MISSING'
           with urllib.request.urlopen(base+match.group(1),timeout=25) as response:
               css=response.read().decode('utf8','replace')
               assert response.status==200
+          js_match=re.search(r'src="(scripts/gallery-pinterest-v1[.]js[?]v=gallery-[^"]+)"',html)
+          assert js_match, 'PUBLIC_GALLERY_SCRIPT_LINK_MISSING'
+          with urllib.request.urlopen(base+js_match.group(1),timeout=25) as response:
+              js=response.read().decode('utf8','replace')
+              assert response.status==200
           assert '.nav-btn.active' in css and 'fill: none' in css
-          assert 'gallery-pinterest-v1.js?v=gallery-' in html
+          assert 'data-gallery-uploader-filter' in js and 'admin_delete_moderation_content' in js
+          assert 'data-feature-gallery' not in js
           assert 'gallery-pinterest-v1.css?v=gallery-' in html
-          print('PUBLIC_GALLERY_VISUAL_RELEASE=PASS')
+          print('PUBLIC_GALLERY_ADMIN_FILTER_SORT_RELEASE=PASS')
           PY

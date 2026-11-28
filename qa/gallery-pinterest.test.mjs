@@ -6,6 +6,8 @@ const root=process.cwd();
 const script=fs.readFileSync(root+'/scripts/gallery-pinterest-v1.js','utf8');
 const css=fs.readFileSync(root+'/styles/gallery-pinterest-v1.css','utf8');
 const navigationCss=fs.readFileSync(root+'/styles/navigation-accent-v1.css','utf8');
+const storageDeleteMigration=fs.readFileSync(root+'/supabase/migrations/20261128170000_main_admin_gallery_delete_storage.sql','utf8');
+const deployScript=fs.readFileSync(root+'/scripts/ops/ovh-deploy-gallery-visual-v2.py','utf8');
 const html=fs.readFileSync(root+'/index.html','utf8');
 const migration=fs.readFileSync(root+'/supabase/migrations/20261128120000_gallery_categories.sql','utf8');
 
@@ -29,6 +31,14 @@ assert.match(script,/author\.full_name/,'Gallery metadata must prefer the upload
 assert.match(script,/author\.branch/,'Gallery metadata must include the uploader branch');
 assert.match(script,/author\.grade/,'Gallery metadata must include the uploader grade');
 assert.match(script,/item\.created_at/,'Gallery metadata must show the upload date');
+assert.match(script,/data-gallery-uploader-filter/,'Gallery must expose the Everyone uploader filter');
+assert.match(script,/value="everyone"/,'Everyone must be the default uploader filter');
+assert.match(script,/data-gallery-sort/,'Gallery must expose a sort selector');
+assert.match(script,/value="latest"/,'Latest upload must be the default sort order');
+assert.match(script,/galleryVisibleItems/,'Gallery grid and lightbox must share the filtered, sorted image list');
+assert.match(script,/admin_delete_moderation_content/,'Admin deletion must use the protected moderation RPC');
+assert.match(script,/storage\.from\('community-media'\)\.remove/,'Gallery deletion must clean up the matching Storage object');
+assert.doesNotMatch(script,/data-feature-gallery|Featured|Unfeature/,'Feature controls and badges must be removed');
 assert.match(css,/\.gallery-masonry\{columns:/,'Gallery must use masonry columns');
 assert.match(css,/@media\(max-width:760px\)/,'Tablet layout breakpoint must exist');
 assert.match(css,/@media\(max-width:480px\)/,'Mobile layout breakpoint must exist');
@@ -40,4 +50,9 @@ assert.match(navigationCss,/fill: none/,'Active navigation icons must preserve o
 assert.match(html,/styles\/navigation-accent-v1\.css\?v=/,'Navigation accent stylesheet must be loaded');
 assert.match(migration,/add column if not exists category text not null default 'photograph'/i,'Existing rows must migrate safely to Photograph');
 assert.match(migration,/check \(category in \('photograph','art'\)\)/i,'Only the two supported categories should be stored');
+assert.match(storageDeleteMigration,/neis_community_media_select_main_admin_gallery_v1/,'Main admin must be able to inspect only Gallery object metadata');
+assert.match(storageDeleteMigration,/neis_community_media_delete_main_admin_gallery_v1/,'Main admin must be able to delete Gallery objects');
+assert.match(storageDeleteMigration,/name like '%\/gallery\/%'/i,'Storage permission must be scoped to Gallery paths');
+assert.match(storageDeleteMigration,/mreyadishere@gmail\.com/i,'Storage permission must use the established main-admin identity');
+assert.match(deployScript,/GALLERY_STORAGE_ADMIN_POLICIES=VERIFIED/,'Deployment must verify storage policies before reporting success');
 console.log('Gallery Pinterest checks passed.');
