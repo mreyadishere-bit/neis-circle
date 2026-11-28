@@ -1635,9 +1635,6 @@ if (warnings.length) {
   for (const warning of warnings) console.log(`- ${warning}`);
 }
 
-console.error('QUALITY_GATE_FAILURE_COUNT='+failures.length);
-console.error('QUALITY_GATE_FAILURES_JSON='+JSON.stringify(failures));
-
 if (failures.length) {
   console.error('\nQuality gate failed:');
   for (const failure of failures) console.error(`\n- ${failure}`);
