@@ -116,5 +116,6 @@
       button.onclick=()=>openGalleryImage(button.dataset.galleryOpen);
     });
   };
-  window.newGallery=newGallery;\n  window.NEISGalleryPinterest={version:'1.1.0',openImage:openGalleryImage};
+  window.newGallery=newGallery;
+  window.NEISGalleryPinterest={version:'1.1.0',openImage:openGalleryImage};
 })();
