@@ -69,7 +69,8 @@ def main():
         raise RuntimeError("TARGET_RELEASE_ALREADY_EXISTS")
     if len(list(source.glob("scripts/*"))) < 20:
         raise RuntimeError("SOURCE_RELEASE_TOO_SMALL")
-    if shutil.disk_usage(BACKUPS).free < 1073741824:
+    db_size=int(sql("select pg_database_size('postgres')"))
+    if shutil.disk_usage(BACKUPS).free < int(db_size*1.3)+536870912:
         raise RuntimeError("LOW_DISK_SPACE")
 
     # Database preflight is read-only. Existing category column is accepted only
@@ -151,8 +152,8 @@ def main():
     switched=False
     try:
         run(COMPOSE+["config","--quiet"],timeout=45)
-        run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=120)
         switched=True
+        run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=120)
         cid=output(COMPOSE+["ps","-q","caddy"])
         if not cid:
             raise RuntimeError("CADDY_CONTAINER_MISSING")
