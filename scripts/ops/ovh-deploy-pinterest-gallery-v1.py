@@ -129,10 +129,10 @@ def main():
         raise RuntimeError("GALLERY_ASSETS_ALREADY_REFERENCED")
     if html.count("</head>")!=1:
         raise RuntimeError("HEAD_ANCHOR_MISMATCH")
-    if len(re.findall(r'<script[^>]+src=["\\']scripts/data-coordinator-v\\d+\\.js[^"\\']*["\\'][^>]*></script>',html))!=1:
+    if len(re.findall(r"""<script[^>]+src=["']scripts/data-coordinator-v\d+\.js[^"']*["'][^>]*></script>""",html))!=1:
         raise RuntimeError("DATA_COORDINATOR_ANCHOR_MISMATCH")
     html=html.replace("</head>",'  <link rel="stylesheet" href="'+css_ref+'">\\n</head>')
-    html,n=re.subn(r'(?m)^(\\s*<script[^>]+src=["\\']scripts/data-coordinator-v\\d+\\.js[^"\\']*["\\'][^>]*></script>)',
+    html,n=re.subn(r"""(?m)^(\s*<script[^>]+src=["']scripts/data-coordinator-v\d+\.js[^"']*["'][^>]*></script>)""",
        '  <script src="'+js_ref+'" defer></script>\\n\\1',html)
     if n!=1:
         raise RuntimeError("GALLERY_SCRIPT_INSERT_FAILED")
