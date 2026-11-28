@@ -555,8 +555,8 @@ else {
 }
 
 
-const literalScriptNewlines = (runtimeHtml.match(/<\/script>\n/g) || []).length;
-if (literalScriptNewlines) failures.push('index.html must not contain literal \n text between script tags.');
+const literalScriptNewlines = (runtimeHtml.match(/<\/script>\\n/g) || []).length;
+if (literalScriptNewlines) failures.push('index.html must not contain literal \\n text between script tags.');
 
 const appCssPath = path.join(root, 'styles', 'app.css');
 if (fs.existsSync(appCssPath)) {
