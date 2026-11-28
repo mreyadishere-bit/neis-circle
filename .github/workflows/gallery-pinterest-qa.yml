@@ -1,0 +1,35 @@
+name: Gallery Pinterest QA
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'supabase/migrations/20261128120000_gallery_categories.sql'
+      - 'qa/gallery-pinterest.test.mjs'
+      - '.github/workflows/gallery-pinterest-qa.yml'
+  push:
+    branches: [feature/pinterest-gallery-20261128]
+    paths:
+      - 'index.html'
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'supabase/migrations/20261128120000_gallery_categories.sql'
+      - 'qa/gallery-pinterest.test.mjs'
+      - '.github/workflows/gallery-pinterest-qa.yml'
+permissions:
+  contents: read
+jobs:
+  gallery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate Gallery script syntax
+        run: node --check scripts/gallery-pinterest-v1.js
+      - name: Run focused Gallery assertions
+        run: node qa/gallery-pinterest.test.mjs
