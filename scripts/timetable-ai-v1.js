@@ -168,9 +168,14 @@ function syncMobileViewport(){
 function bindMobileViewport(){
   if(mobileViewportEventsBound||typeof window==="undefined")return;
   mobileViewportEventsBound=true;
-  window.addEventListener("resize",syncMobileViewport,{passive:true});
-  window.visualViewport?.addEventListener("resize",syncMobileViewport,{passive:true});
-  window.visualViewport?.addEventListener("scroll",syncMobileViewport,{passive:true});
+  if(typeof window.addEventListener==="function"){
+    window.addEventListener("resize",syncMobileViewport,{passive:true});
+  }
+  const viewport=window.visualViewport;
+  if(typeof viewport?.addEventListener==="function"){
+    viewport.addEventListener("resize",syncMobileViewport,{passive:true});
+    viewport.addEventListener("scroll",syncMobileViewport,{passive:true});
+  }
 }
 function ensurePanel(){
   if(stateAI.panel)return stateAI.panel;
