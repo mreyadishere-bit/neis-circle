@@ -1,0 +1,98 @@
+name: OVH Main Admin Gallery Storage
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/gallery-storage-admin-v1.js'
+      - 'supabase/migrations/20261128150000_main_admin_gallery_storage.sql'
+      - 'scripts/ops/ovh-deploy-main-admin-gallery-storage.py'
+      - 'qa/gallery-storage-admin.test.mjs'
+      - '.github/workflows/ovh-main-admin-gallery-storage.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gallery-storage-admin-v1.js'
+      - 'supabase/migrations/20261128150000_main_admin_gallery_storage.sql'
+      - 'scripts/ops/ovh-deploy-main-admin-gallery-storage.py'
+      - 'qa/gallery-storage-admin.test.mjs'
+      - '.github/workflows/ovh-main-admin-gallery-storage.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-main-admin-gallery-storage
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate UI, SQL access guards and OVH deployment
+        run: |
+          set -euo pipefail
+          node --check scripts/gallery-storage-admin-v1.js
+          node qa/gallery-storage-admin.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-main-admin-gallery-storage.py
+          python3 - <<'PY'
+          from pathlib import Path
+          sql=Path('supabase/migrations/20261128150000_main_admin_gallery_storage.sql').read_text().lower()
+          deploy=Path('scripts/ops/ovh-deploy-main-admin-gallery-storage.py').read_text()
+          for signature in ("security definer","auth.uid()","auth.role()","storage.objects",
+                            "o.bucket_id = 'community-media'","o.name like '%/gallery/%'",
+                            "revoke all on function public.main_admin_gallery_storage()",
+                            "grant execute on function public.main_admin_gallery_storage()"):
+              assert signature in sql,signature
+          for signature in ("pg_dump","pg_restore","main_admin_gallery_storage",
+                            "gallery-storage-admin-v1.js","OTHER_SERVICES_AND_TABLES=UNCHANGED",
+                            "reverse_proxy rest:3000","reverse_proxy auth:9999","basic_auth"):
+              assert signature in deploy,signature
+          print("GALLERY_STORAGE_DEPLOY_VALIDATION=PASS")
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: @${ secrets.OVH_HOST }}
+          KEY: @${ secrets.OVH_SSH_KEY }}
+          KNOWN: @${ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage private migration and isolated admin UI
+        env:
+          HOST: @${ secrets.OVH_HOST }}
+          RUN_ID: @${ github.run_id }}-@${ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/gallery-storage-$RUN_ID"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 /home/ubuntu/neis-backups/locks '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            supabase/migrations/20261128150000_main_admin_gallery_storage.sql "$target:$stage/schema.sql"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/gallery-storage-admin-v1.js "$target:$stage/ui.js"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            scripts/ops/ovh-deploy-main-admin-gallery-storage.py "$target:$stage/deploy.py"
+      - name: Apply protected storage-size RPC and activate frontend release
+        env:
+          HOST: @${ secrets.OVH_HOST }}
+          RUN_ID: @${ github.run_id }}-@${ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" \
+            "flock -w 600 /home/ubuntu/neis-backups/locks/frontend-release.lock env NEIS_GALLERY_STORAGE_RUN_ID='$RUN_ID' python3 -" \
+            < scripts/ops/ovh-deploy-main-admin-gallery-storage.py
