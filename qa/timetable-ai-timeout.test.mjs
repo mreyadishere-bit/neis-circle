@@ -26,6 +26,8 @@ async function runScenario({language='en',network='hang'}){
     lang:()=>language,
     AbortController,
     timerState,
+    testSetTimeout:(callback)=>{timerState.callback=callback;return 1},
+    testClearTimeout:()=>{timerState.cleared=true},
     sb:{functions:{invoke:(name,opts)=>{
       assert.equal(name,'timetable-ai');
       capturedSignal=opts.signal;
@@ -33,16 +35,13 @@ async function runScenario({language='en',network='hang'}){
       return Promise.resolve({data:{reply:'OK',entries:[]}});
     }}},
   };
+  // Rename the clock bindings in the extracted helper to private test
+  // functions so VM/host timer globals cannot shadow the deterministic clock.
+  const isolatedHelper=helper
+    .replace(/\\bsetTimeout\\(/g,'testSetTimeout(')
+    .replace(/\\bclearTimeout\\(/g,'testClearTimeout(');
   vm.createContext(context);
-  // Bind a lexical fake clock in the same VM realm as the extracted helper.
-  // This deliberately avoids host/global timer resolution differences.
-  vm.runInContext(
-    'const setTimeout=(callback)=>{timerState.callback=callback;return 1};' +
-    'const clearTimeout=()=>{timerState.cleared=true};' +
-    helper +
-    ';globalThis.invokeTest=invokeWithDeadline;',
-    context
-  );
+  vm.runInContext(isolatedHelper+';globalThis.invokeTest=invokeWithDeadline;',context);
   const promise=context.invokeTest({message:'Physics L2'});
   if(network==='hang'){
     const timeoutCallback=context.timerState.callback;
