@@ -12,7 +12,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/gallery-storage-admin-v1.js'
-      - 'supabase/migrations/20261128150000_main_admin_gallery-storage.sql'
+      - 'supabase/migrations/20261128150000_main_admin_gallery_storage.sql'
       - 'scripts/ops/ovh-deploy-main-admin-gallery-storage.py'
       - 'qa/gallery-storage-admin.test.mjs'
       - '.github/workflows/ovh-main-admin-gallery-storage.yml'
