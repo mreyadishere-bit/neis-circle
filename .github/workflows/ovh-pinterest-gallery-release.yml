@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-frontend-release-queue
+  group: ovh-pinterest-gallery-release
   cancel-in-progress: false
 jobs:
   verify:
@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
           target="ubuntu@$HOST"
           stage="/home/ubuntu/neis-backups/gallery-pinterest-$RUN_ID"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 /home/ubuntu/neis-backups/locks '$stage'"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/gallery-pinterest-v1.js styles/gallery-pinterest-v1.css supabase/migrations/20261128120000_gallery_categories.sql scripts/ops/ovh-deploy-pinterest-gallery-v1.py "$target:$stage/"
       - name: Apply additive DB migration and atomically activate frontend
         env:
@@ -74,7 +74,7 @@ jobs:
           RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "NEIS_GALLERY_RUN_ID='$RUN_ID' python3 -" < scripts/ops/ovh-deploy-pinterest-gallery-v1.py
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "flock -w 600 /home/ubuntu/neis-backups/locks/frontend-release.lock env NEIS_GALLERY_RUN_ID='$RUN_ID' python3 -" < scripts/ops/ovh-deploy-pinterest-gallery-v1.py
       - name: Verify public Gallery app shell
         run: |
           python3 - <<'PY'
