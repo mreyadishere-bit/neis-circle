@@ -43,7 +43,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-external-game-connectors
+  group: ovh-frontend-release-queue
   cancel-in-progress: false
 jobs:
   static:
