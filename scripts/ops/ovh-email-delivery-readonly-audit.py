@@ -1,3 +1,4 @@
+# Post-Auth-SMTP-fix verification run: read only, no outbound mail.
 #!/usr/bin/env python3
 """Read-only NEIS Circle email diagnostics. Never sends an email or prints secrets/recipients."""
 import json, re, socket, ssl, smtplib, subprocess, sys, urllib.request, urllib.error
