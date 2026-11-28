@@ -38,8 +38,8 @@ async function runScenario({language='en',network='hang'}){
   // Rename the clock bindings in the extracted helper to private test
   // functions so VM/host timer globals cannot shadow the deterministic clock.
   const isolatedHelper=helper
-    .replace(/\\bsetTimeout\\(/g,'testSetTimeout(')
-    .replace(/\\bclearTimeout\\(/g,'testClearTimeout(');
+    .split('setTimeout(').join('testSetTimeout(')
+    .split('clearTimeout(').join('testClearTimeout(');
   vm.createContext(context);
   vm.runInContext(isolatedHelper+';globalThis.invokeTest=invokeWithDeadline;',context);
   const promise=context.invokeTest({message:'Physics L2'});
