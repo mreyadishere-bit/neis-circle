@@ -11,7 +11,6 @@
   const categories=[{id:'photograph',en:'Photograph',ar:'تصوير فوتوغرافي',desc:'Photography, places, people and moments.'},{id:'art',en:'Art',ar:'فن',desc:'Illustrations, sketches, paintings and creative work.'}];
   const categoryLabel=id=>{const item=categories.find(x=>x.id===id)||categories[0];return t(item.en,item.ar)};
   const t=(en,ar)=>state.lang==='ar'?ar:en;
-  const byId=id=>(state.gallery||[]).find(item=>String(item.id)===String(id));
   const canSee=item=>!!(item.approved||isMine(item)||state.isAdmin);
 
   function galleryCard(item){
@@ -56,6 +55,8 @@
       const next=document.querySelector('[data-gallery-next]');
       if(prev)prev.onclick=()=>{if(index>0){index--;show()}};
       if(next)next.onclick=()=>{if(index<visible.length-1){index++;show()}};
+      const stage=document.querySelector('.gallery-lightbox-stage');
+      if(stage){let touchStart=0;stage.ontouchstart=event=>{touchStart=event.changedTouches[0]?.clientX||0};stage.ontouchend=event=>{const delta=(event.changedTouches[0]?.clientX||0)-touchStart;if(Math.abs(delta)>55){if(delta<0&&index<visible.length-1){index++;show()}else if(delta>0&&index>0){index--;show()}}};}
     };
     show();
   }
@@ -75,13 +76,16 @@
     const input=document.getElementById('galleryBatchFiles');
     const preview=document.getElementById('galleryBatchPreview');
     const submit=document.getElementById('galleryBatchSubmit');
-    let chosen=[];
+    let chosen=[],previewUrls=[];
     input.onchange=()=>{
+      previewUrls.forEach(url=>URL.revokeObjectURL(url));
+      previewUrls=[];
       chosen=Array.from(input.files||[]).slice(0,MAX_FILES);
       if((input.files||[]).length>MAX_FILES)toast(t('You can upload up to 20 images at once.','يمكنك رفع 20 صورة كحد أقصى في المرة الواحدة.'));
       preview.innerHTML=chosen.map((file,index)=>{
         const valid=file.type.startsWith('image/')&&file.size>0&&file.size<=MAX_BYTES;
-        return '<div class="gallery-batch-item '+(valid?'':'invalid')+'"><img src="'+URL.createObjectURL(file)+'" alt="">'+
+        const previewUrl=URL.createObjectURL(file);previewUrls.push(previewUrl);
+        return '<div class="gallery-batch-item '+(valid?'':'invalid')+'"><img src="'+previewUrl+'" alt="">'+
           '<span>'+(valid?'Ready':(file.size>MAX_BYTES?'Over 8 MB':'Invalid image'))+'</span></div>';
       }).join('');
       submit.disabled=!chosen.length||chosen.some(file=>!file.type.startsWith('image/')||!file.size||file.size>MAX_BYTES);
@@ -91,16 +95,19 @@
       if(!chosen.length||submit.disabled)return;
       submit.disabled=true;
       input.disabled=true;
+      const selectedCategory=document.getElementById('galleryUploadCategory').value==='art'?'art':'photograph';
+      state.galleryCategory=selectedCategory;
       let uploaded=0,failed=0;
       for(const file of chosen){
         const image_url=await uploadMedia(file,'gallery');
         if(!image_url){failed++;continue}
         const {error}=await sb.from('gallery_items').insert({
-          author_id:authUser.id,image_url,category:document.getElementById('galleryUploadCategory').value,caption_en:'',caption_ar:'',tags:[],approved:state.isAdmin
+          author_id:authUser.id,image_url,category:selectedCategory,caption_en:'',caption_ar:'',tags:[],approved:state.isAdmin
         });
         if(error){console.error('[NEIS gallery insert]',error);failed++}
         else uploaded++;
       }
+      previewUrls.forEach(url=>URL.revokeObjectURL(url));
       closeModal();
       if(window.NEISSecondaryData)await window.NEISSecondaryData.loadGallery({force:true,useCache:false});
       nav('gallery');
