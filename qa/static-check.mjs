@@ -112,13 +112,20 @@ if (activeHomePollModules.length !== 1) {
   failures.push(`Expected exactly one active Home poll module, found ${activeHomePollModules.length}: ${activeHomePollModules.join(', ')}`);
 }
 
-const dataCoordinators = localScriptSrcs.filter(src => /data-coordinator-v\d+\.js/i.test(src));
+const dataCoordinators = localScriptSrcs.filter(src => /data-coordinator-v\\d+\\.js/i.test(src));
 if (dataCoordinators.length !== 1) {
   failures.push(`Expected exactly one active data coordinator, found ${dataCoordinators.length}: ${dataCoordinators.join(', ')}`);
 } else {
-  const localRuntimeScripts = localScriptSrcs.filter(src => src.startsWith('scripts/'));
-  if (localRuntimeScripts.at(-1) !== dataCoordinators[0]) {
-    failures.push(`Data coordinator must be the last local runtime script. Last script is ${localRuntimeScripts.at(-1)}`);
+  const coordinatorIndex = localScriptSrcs.indexOf(dataCoordinators[0]);
+  const secondaryIndex = localScriptSrcs.findIndex(src => /secondary-data-v\\d+\\.js/i.test(src));
+  const runtimeIndex = localScriptSrcs.findIndex(src => /runtime-core-v\\d+\\.js/i.test(src));
+  const activityIndex = localScriptSrcs.findIndex(src => /user-activity-v\\d+\\.js/i.test(src));
+  const routeIndex = localScriptSrcs.findIndex(src => /hash-route-open-v\\d+\\.js/i.test(src));
+  if (secondaryIndex < 0 || runtimeIndex < 0 || secondaryIndex > runtimeIndex || runtimeIndex > coordinatorIndex) {
+    failures.push('Data coordinator must load after secondary-data and runtime-core.');
+  }
+  if (activityIndex < 0 || routeIndex < 0 || coordinatorIndex > activityIndex || activityIndex > routeIndex) {
+    failures.push('User activity and clean-route handlers must load after the data coordinator.');
   }
 }
 
@@ -614,7 +621,7 @@ else {
 
 const circleCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 const circleCreateStart = circleCreateSource.indexOf("$('#createCircleForm').onsubmit=async");
-const circleCreateEnd = circleCreateStart >= 0 ? circleCreateSource.indexOf('\n\nfunction localSearchFallback', circleCreateStart) : -1;
+const circleCreateEnd = circleCreateStart >= 0 ? circleCreateSource.indexOf('\\n\\nfunction additionalSearchFallback', circleCreateStart) : -1;
 const circleCreateSection = circleCreateStart >= 0 && circleCreateEnd > circleCreateStart
   ? circleCreateSource.slice(circleCreateStart, circleCreateEnd)
   : '';
@@ -692,7 +699,6 @@ if (fs.existsSync(notificationTabCountRuntimePath)) {
 
 const pwaPushSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=13'",
   "rememberSubscriptionInWorker",
   "ensurePushHealth",
   "window.addEventListener('focus'",
@@ -707,7 +713,6 @@ const pwaSwPath = path.join(root, 'neis-pwa-sw.js');
 if (fs.existsSync(pwaSwPath)) {
   const pwaSwSource = fs.readFileSync(pwaSwPath, 'utf8');
   for (const token of [
-    'const VERSION = "neis-pwa-ovh-v13"',
     'pushsubscriptionchange',
     'refresh-web-push-subscription',
     'NEIS_PUSH_SUBSCRIPTION',
@@ -807,7 +812,6 @@ if (!notificationSoundSource.includes('async function playSound(test=false)')) f
 
 const pushTabSyncSwSource = fs.readFileSync(path.join(root, 'neis-pwa-sw.js'), 'utf8');
 for (const token of [
-  'const VERSION = "neis-pwa-ovh-v13"',
   'NEIS_PUSH_NOTIFICATION',
   'self.clients.matchAll({ type: "window", includeUncontrolled: true })',
   'client.postMessage(payload)'
@@ -821,8 +825,14 @@ for (const token of ['function ingestPush(payload)','renderNotificationsIfVisibl
 }
 
 const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
+const pushWorkerRegistration = pushClientSource.match(/navigator\\.serviceWorker\\.register\\(['"]\\/neis-pwa-sw\\.js\\?v=(\\d+)['"]/);
+const workerVersionMatch = pushTabSyncSwSource.match(/const VERSION = ['"]neis-pwa-ovh-v(\\d+)['"]/);
+const workerCacheVersionMatch = pushTabSyncSwSource.match(/const STATIC_CACHE = ['"]neis-static-ovh-v(\\d+)['"]/);
+if (!pushWorkerRegistration || !workerVersionMatch || !workerCacheVersionMatch ||
+    pushWorkerRegistration[1] !== workerVersionMatch[1] || workerVersionMatch[1] !== workerCacheVersionMatch[1]) {
+  failures.push('PWA registration, service-worker version and static-cache version must stay synchronized.');
+}
 for (const token of [
-  "navigator.serviceWorker.register('/neis-pwa-sw.js?v=13'",
   "event.data?.type==='NEIS_PUSH_NOTIFICATION'",
   "NEISNotificationRuntime?.ingestPush"
 ]) {
@@ -1041,7 +1051,9 @@ for (const token of [
 ]) {
   if (!dmSafetySource.includes(token)) failures.push('Main-admin DM safety review UI missing: ' + token);
 }
-if (!dmSafetySource.includes("canOpenAdminModerationTargets()?adminDmSafetyPanel():''")) failures.push('DM safety review must remain main-admin-only in the Admin view.');
+if (!dmSafetySource.includes("const canOpenDmSafetyReview=()=>state.isAdmin&&isMainAdminUser();")) failures.push('DM safety review must require the main administrator identity.');
+if (!dmSafetySource.includes("if(!canOpenDmSafetyReview())return ''")) failures.push('DM safety panel must guard rendering with the main-admin check.');
+if (!dmSafetySource.includes("canOpenDmSafetyReview()?adminDmSafetyPanel():''")) failures.push('DM safety panel must be injected into the Admin view only after authorization.');
 
 const dmSafetyMigrationPath = path.join(root, 'supabase', 'migrations', '20261007023000_main_admin_dm_safety_review.sql');
 if (!fs.existsSync(dmSafetyMigrationPath)) failures.push('DM safety review migration is missing.');
