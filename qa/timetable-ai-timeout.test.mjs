@@ -20,14 +20,12 @@ assert.match(edge,/Date\.now\(\) - startedAt >= 9000/,'late errors must not laun
 assert.match(edge,/fallback \|\| Date\.now\(\)/,'fallback must never retry recursively');
 
 async function runScenario({language='en',network='hang'}){
-  const timerState={callback:null,cleared:false};
-  let capturedSignal=null;
+  let pendingTimeout=null, timerCleared=false, capturedSignal=null;
   const context={
     lang:()=>language,
     AbortController,
-    timerState,
-    testSetTimeout:(callback)=>{timerState.callback=callback;return 1},
-    testClearTimeout:()=>{timerState.cleared=true},
+    testSetTimeout:(callback)=>{pendingTimeout=callback;return 1},
+    testClearTimeout:()=>{timerCleared=true},
     sb:{functions:{invoke:(name,opts)=>{
       assert.equal(name,'timetable-ai');
       capturedSignal=opts.signal;
@@ -35,8 +33,7 @@ async function runScenario({language='en',network='hang'}){
       return Promise.resolve({data:{reply:'OK',entries:[]}});
     }}},
   };
-  // Rename the clock bindings in the extracted helper to private test
-  // functions so VM/host timer globals cannot shadow the deterministic clock.
+  // Keep the fake clock in the host closure to avoid cross-realm object writes.
   const isolatedHelper=helper
     .split('setTimeout(').join('testSetTimeout(')
     .split('clearTimeout(').join('testClearTimeout(');
@@ -44,9 +41,8 @@ async function runScenario({language='en',network='hang'}){
   vm.runInContext(isolatedHelper+';globalThis.invokeTest=invokeWithDeadline;',context);
   const promise=context.invokeTest({message:'Physics L2'});
   if(network==='hang'){
-    const timeoutCallback=context.timerState.callback;
-    assert.equal(typeof timeoutCallback,'function','fake clock must capture timeout callback');
-    timeoutCallback();
+    assert.equal(typeof pendingTimeout,'function','fake clock must capture timeout callback');
+    pendingTimeout();
     await assert.rejects(promise,new RegExp(language==='ar'?'استغرق':'timed out'));
     assert.equal(capturedSignal.aborted,true,'fetch must be aborted');
   }else{
@@ -54,7 +50,7 @@ async function runScenario({language='en',network='hang'}){
     assert.equal(result.data.reply,'OK');
     assert.equal(capturedSignal.aborted,false);
   }
-  assert.equal(context.timerState.cleared,true,'timer must be cleared');
+  assert.equal(timerCleared,true,'timer must be cleared');
 }
 await runScenario({network:'hang'});
 await runScenario({language:'ar',network:'hang'});
