@@ -34,14 +34,15 @@ async function runScenario({language='en',network='hang'}){
     }}},
   };
   vm.createContext(context);
-  // Install the fake clock inside the VM global itself. This avoids relying on
-  // cross-context global timer lookup and lets the test trigger expiry exactly.
+  // Bind a lexical fake clock in the same VM realm as the extracted helper.
+  // This deliberately avoids host/global timer resolution differences.
   vm.runInContext(
-    'globalThis.setTimeout=(callback)=>{timerState.callback=callback;return 1};' +
-    'globalThis.clearTimeout=()=>{timerState.cleared=true};',
+    'const setTimeout=(callback)=>{timerState.callback=callback;return 1};' +
+    'const clearTimeout=()=>{timerState.cleared=true};' +
+    helper +
+    ';globalThis.invokeTest=invokeWithDeadline;',
     context
   );
-  vm.runInContext(helper+';globalThis.invokeTest=invokeWithDeadline;',context);
   const promise=context.invokeTest({message:'Physics L2'});
   if(network==='hang'){
     const timeoutCallback=context.timerState.callback;
