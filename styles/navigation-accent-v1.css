@@ -1,0 +1,17 @@
+/* NEIS Circle — active desktop navigation follows the selected Accent color. */
+@media (min-width: 761px) {
+  html body .rail.neis-hover-rail .nav-btn.active {
+    background: var(--accent) !important;
+    color: var(--accent-contrast, #fff) !important;
+    border-color: transparent !important;
+  }
+  /* Keep SVG paths outlined instead of filling the entire icon silhouette. */
+  html body .rail.neis-hover-rail .nav-btn.active > svg {
+    fill: none !important;
+    stroke: currentColor !important;
+  }
+  html body .rail.neis-hover-rail .nav-btn.active > svg use {
+    fill: none !important;
+    stroke: currentColor !important;
+  }
+}

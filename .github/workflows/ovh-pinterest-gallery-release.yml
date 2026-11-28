@@ -11,12 +11,10 @@ on:
       - '.github/workflows/ovh-pinterest-gallery-release.yml'
   push:
     branches: [main]
+    # One-time schema/bootstrap deploy only. Visual changes use the frontend-only workflow.
     paths:
-      - 'scripts/gallery-pinterest-v1.js'
-      - 'styles/gallery-pinterest-v1.css'
       - 'supabase/migrations/20261128120000_gallery_categories.sql'
       - 'scripts/ops/ovh-deploy-pinterest-gallery-v1.py'
-      - '.github/workflows/ovh-pinterest-gallery-release.yml'
   workflow_dispatch:
 permissions:
   contents: read

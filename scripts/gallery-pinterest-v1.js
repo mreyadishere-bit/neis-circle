@@ -13,7 +13,37 @@
   const t=(en,ar)=>state.lang==='ar'?ar:en;
   const canSee=item=>!!(item.approved||isMine(item)||state.isAdmin);
 
+  function formatGalleryDate(value){
+    if(!value)return '';
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime()))return '';
+    try{
+      return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{
+        day:'numeric',month:'short',year:'numeric'
+      }).format(date);
+    }catch(_){
+      return date.toLocaleDateString();
+    }
+  }
+
   function galleryCard(item){
+    const author=Array.isArray(item.author)?(item.author[0]||{}):(item.author||{});
+    const authorName=String(author.full_name||author.username||t('NEIS student','طالب NEIS')).trim();
+    const branch=String(author.branch||author.campus||'').trim();
+    const rawGrade=String(author.grade||'').trim();
+    let grade='';
+    if(/^graduate$/i.test(rawGrade))grade=t('Graduate','خريج');
+    else if(/^grade\s*/i.test(rawGrade))grade=state.lang==='ar'?'الصف '+rawGrade.replace(/^grade\s*/i,''):rawGrade;
+    else if(rawGrade)grade=state.lang==='ar'?'الصف '+rawGrade:'Grade '+rawGrade;
+    const dateLabel=formatGalleryDate(item.created_at);
+    const details=[];
+    if(branch)details.push('<span>'+esc(branch)+'</span>');
+    if(grade)details.push('<span>'+esc(grade)+'</span>');
+    if(dateLabel)details.push('<time datetime="'+esc(item.created_at||'')+'">'+esc(dateLabel)+'</time>');
+    const metadata='<div class="gallery-pin-meta">'+
+      '<b class="gallery-pin-meta-name">'+esc(authorName)+'</b>'+
+      (details.length?'<div class="gallery-pin-meta-details">'+details.join('<span class="gallery-pin-meta-separator" aria-hidden="true">·</span>')+'</div>':'')+
+      '</div>';
     const actions=state.isAdmin
       ? '<div class="gallery-pin-tools">'+
         (!item.approved?'<button type="button" data-approve-gallery="'+item.id+'" aria-label="Approve image">Approve</button>':'')+
@@ -23,6 +53,7 @@
     return '<article class="gallery-pin" data-gallery-pin="'+item.id+'">'+
       '<button type="button" class="gallery-pin-open" data-gallery-open="'+item.id+'" aria-label="Open image">'+
       '<img src="'+esc(item.image_url)+'" alt="" loading="lazy" decoding="async"></button>'+
+      metadata+
       (item.featured?'<span class="gallery-pin-featured">Featured</span>':'')+actions+
       '</article>';
   }
@@ -136,5 +167,5 @@
     });
   };
   window.newGallery=newGallery;
-  window.NEISGalleryPinterest={version:'1.1.0',openImage:openGalleryImage};
+  window.NEISGalleryPinterest={version:'1.2.0',openImage:openGalleryImage};
 })();

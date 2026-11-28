@@ -1,0 +1,110 @@
+
+name: OVH Gallery Visual Polish
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'styles/navigation-accent-v1.css'
+      - 'qa/gallery-pinterest.test.mjs'
+      - 'scripts/ops/ovh-deploy-gallery-visual-v2.py'
+      - '.github/workflows/ovh-gallery-visual-v2.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'styles/navigation-accent-v1.css'
+      - 'qa/gallery-pinterest.test.mjs'
+      - 'scripts/ops/ovh-deploy-gallery-visual-v2.py'
+      - '.github/workflows/ovh-gallery-visual-v2.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-gallery-visual-polish
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Gallery and navigation behavior
+        run: |
+          set -euo pipefail
+          node --check scripts/gallery-pinterest-v1.js
+          node qa/gallery-pinterest.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-gallery-visual-v2.py
+          python3 - <<'PY'
+          from pathlib import Path
+          css=Path('styles/navigation-accent-v1.css').read_text()
+          html=Path('index.html').read_text()
+          assert '.nav-btn.active' in css
+          assert 'background: var(--accent)' in css
+          assert 'fill: none' in css
+          assert 'styles/navigation-accent-v1.css?v=' in html
+          print('GALLERY_VISUAL_STATIC=PASS')
+          PY
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage visual-only release bundle
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/gallery-visual-$RUN_ID"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 /home/ubuntu/neis-backups/locks '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/gallery-pinterest-v1.js styles/gallery-pinterest-v1.css styles/navigation-accent-v1.css scripts/ops/ovh-deploy-gallery-visual-v2.py "$target:$stage/"
+      - name: Atomically activate frontend-only release
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "flock -w 600 /home/ubuntu/neis-backups/locks/frontend-release.lock env NEIS_GALLERY_VISUAL_RUN_ID='$RUN_ID' python3 -" < scripts/ops/ovh-deploy-gallery-visual-v2.py
+      - name: Verify public Gallery shell and navigation CSS
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request
+          base='https://neiscircle.site/'
+          req=urllib.request.Request(base,headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=25) as response:
+              html=response.read().decode('utf8','replace')
+              assert response.status==200
+          match=re.search(r'href="(styles/navigation-accent-v1[.]css[?]v=accent-nav-[^"]+)"',html)
+          assert match, 'PUBLIC_NAVIGATION_CSS_LINK_MISSING'
+          with urllib.request.urlopen(base+match.group(1),timeout=25) as response:
+              css=response.read().decode('utf8','replace')
+              assert response.status==200
+          assert '.nav-btn.active' in css and 'fill: none' in css
+          assert 'gallery-pinterest-v1.js?v=gallery-' in html
+          assert 'gallery-pinterest-v1.css?v=gallery-' in html
+          print('PUBLIC_GALLERY_VISUAL_RELEASE=PASS')
+          PY

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const root=process.cwd();
 const script=fs.readFileSync(root+'/scripts/gallery-pinterest-v1.js','utf8');
 const css=fs.readFileSync(root+'/styles/gallery-pinterest-v1.css','utf8');
+const navigationCss=fs.readFileSync(root+'/styles/navigation-accent-v1.css','utf8');
 const html=fs.readFileSync(root+'/index.html','utf8');
 const migration=fs.readFileSync(root+'/supabase/migrations/20261128120000_gallery_categories.sql','utf8');
 
@@ -23,10 +24,20 @@ assert.match(script,/\[data-approve-gallery\][\s\S]*moderateGallery/,'Admin appr
 assert.match(script,/\[data-feature-gallery\][\s\S]*moderateGallery/,'Admin featured controls must remain wired');
 assert.match(script,/MAX_BYTES=8\*1024\*1024/,'Per-image size limit must remain 8 MB');
 assert.ok(script.includes('loading=') && script.includes('lazy'),'Gallery images must lazy-load');
+assert.match(script,/gallery-pin-meta/,'Gallery cards must show compact uploader metadata');
+assert.match(script,/author\.full_name/,'Gallery metadata must prefer the uploader full name');
+assert.match(script,/author\.branch/,'Gallery metadata must include the uploader branch');
+assert.match(script,/author\.grade/,'Gallery metadata must include the uploader grade');
+assert.match(script,/item\.created_at/,'Gallery metadata must show the upload date');
 assert.match(css,/\.gallery-masonry\{columns:/,'Gallery must use masonry columns');
 assert.match(css,/@media\(max-width:760px\)/,'Tablet layout breakpoint must exist');
 assert.match(css,/@media\(max-width:480px\)/,'Mobile layout breakpoint must exist');
 assert.match(css,/\.gallery-pin img\{display:block;width:100%;height:auto/,'Gallery images must preserve intrinsic aspect ratio');
+assert.match(css,/\.gallery-pin-meta/,'Gallery metadata must remain compact beneath the image');
+assert.match(navigationCss,/\.nav-btn\.active/,'Active desktop navigation must have an explicit theme override');
+assert.match(navigationCss,/background: var\(--accent\)/,'Active navigation must use the currently selected accent');
+assert.match(navigationCss,/fill: none/,'Active navigation icons must preserve outline geometry');
+assert.match(html,/styles\/navigation-accent-v1\.css\?v=/,'Navigation accent stylesheet must be loaded');
 assert.match(migration,/add column if not exists category text not null default 'photograph'/i,'Existing rows must migrate safely to Photograph');
 assert.match(migration,/check \(category in \('photograph','art'\)\)/i,'Only the two supported categories should be stored');
 console.log('Gallery Pinterest checks passed.');

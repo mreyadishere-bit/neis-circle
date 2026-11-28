@@ -42,3 +42,13 @@
 @media(max-width:760px){.gallery-masonry{columns:3 145px;column-gap:10px}.gallery-pin{margin-bottom:10px;border-radius:14px}.gallery-category-switch{gap:9px}.gallery-category-tab{padding:14px;border-radius:15px}}
 @media(max-width:480px){.gallery-masonry{columns:2 120px;column-gap:8px}.gallery-pin{margin-bottom:8px;border-radius:12px}.gallery-category-switch{gap:8px;margin-bottom:17px}.gallery-category-tab{padding:12px 11px}.gallery-category-tab b{font-size:13px}.gallery-category-tab span{font-size:10px}.gallery-lightbox-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px}.gallery-lightbox-stage>button{width:28px;height:32px;font-size:20px}}
 @media(prefers-reduced-motion:reduce){.gallery-pin img,.gallery-pin-tools,.gallery-category-tab{transition:none!important}}
+
+
+/* Small, Pinterest-style author details beneath each Gallery image. */
+.gallery-pin-meta{display:grid;gap:3px;min-width:0;padding:8px 10px 10px;background:var(--card);border-top:1px solid color-mix(in srgb,var(--line) 62%,transparent);text-align:start}
+.gallery-pin-meta-name{display:block;min-width:0;overflow:hidden;color:var(--ink);font-size:10.5px;font-weight:750;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
+.gallery-pin-meta-details{display:flex;flex-wrap:wrap;align-items:center;gap:2px 5px;min-width:0;color:var(--muted);font-size:8.8px;font-weight:550;line-height:1.4}
+.gallery-pin-meta-details>span:not(.gallery-pin-meta-separator),.gallery-pin-meta-details time{overflow-wrap:anywhere}
+.gallery-pin-meta-separator{opacity:.58;font-size:8px}
+@media(max-width:760px){.gallery-pin-meta{gap:2px;padding:7px 8px 8px}.gallery-pin-meta-name{font-size:10px}.gallery-pin-meta-details{font-size:8.4px;column-gap:4px}}
+@media(max-width:380px){.gallery-pin-meta{padding:6px 7px 7px}.gallery-pin-meta-name{font-size:9.5px}.gallery-pin-meta-details{font-size:8px}}
