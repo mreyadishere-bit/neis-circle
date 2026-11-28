@@ -16,7 +16,7 @@ STAGE=BACKUPS/("gallery-pinterest-"+os.environ.get("NEIS_GALLERY_RUN_ID",""))
 FILES=("docker-compose.yml","docker-compose.security.yml","docker-compose.caddy.yml",
        "docker-compose.frontend-public.yml","docker-compose.auth-public-direct.yml")
 DOCKER=["sudo","-n","/usr/bin/docker"]
-COMPOSE=DOCKER+["compose"]+[v for f in FILES for v in ("-f",f)]
+COMPOSE=DOCKER+["compose"]+[v for f in FILES for v in ("-f",str(ROOT/f))]
 phase="preflight"
 
 def run(argv, *, data=None, timeout=120, check=True):
