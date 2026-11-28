@@ -431,8 +431,6 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
 {
   let serverSimulate429Once = true;
   let uploadedBinaryCount = 0;
-  let e2eModelCalls = 0;
-  let e2eHttpResults = [];
 
   const app = createApp({
     env: { GEMINI_API_KEY: 'test-browser-gemini-key' },
@@ -440,7 +438,6 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
     aiClientFactory: () => ({
       models: {
         generateContent: async (req) => {
-          e2eModelCalls += 1;
           const hasInlineData = req.contents?.[0]?.parts?.some((p) => p.inlineData);
           if (hasInlineData) uploadedBinaryCount += 1;
 
@@ -523,13 +520,11 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
         observe() {}
       },
       FileReader: MockFileReader,
-      fetch: async (url, opts) => {
+      fetch: (url, opts) => {
         const resolvedUrl = String(url).startsWith('/')
           ? `http://127.0.0.1:${port}${url}`
           : url;
-        const response = await globalThis.fetch(resolvedUrl, opts);
-        e2eHttpResults.push({url:String(resolvedUrl),status:response.status,body:await response.clone().text()});
-        return response;
+        return globalThis.fetch(resolvedUrl, opts);
       },
       authUser: { id: TEST_USER_ID },
       CONFIG: {
@@ -607,7 +602,6 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
 
     // First send hits 429 — preserves attachment and lastFailedPayload
     const firstAttempt = await api.send('I only take English and Physics L2.');
-    console.log('[GEMINI E2E DEBUG first]',JSON.stringify({serverSimulate429Once,e2eModelCalls,uploadedBinaryCount,e2eHttpResults,firstAttempt}));
     assert.equal(firstAttempt, null, 'Failed 429 attempt returns null');
     assert.ok(api.getState().lastFailedPayload, 'Failed payload must be preserved for Retry');
     assert.ok(api.getState().pendingAttachment, 'Attachment must remain preserved on 429 failure');
@@ -619,7 +613,6 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
 
     // Retry succeeds and populates draft
     const retryResponse = await api.send('', true);
-    console.log('[GEMINI E2E DEBUG retry]',JSON.stringify({serverSimulate429Once,e2eModelCalls,uploadedBinaryCount,e2eHttpResults,retryResponse,lastFailedPayload:api.getState().lastFailedPayload,pending:!!api.getState().pendingAttachment,messages:api.getState().messages.slice(-2)}));
     assert.ok(retryResponse, 'Retry must succeed');
     assert.equal(api.getState().draft.length, 2, 'Draft must contain 2 extracted lessons');
     assert.equal(api.getState().pendingAttachment, null, 'Attachment cleared after successful analysis');
