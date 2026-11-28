@@ -34,8 +34,9 @@ for (const file of jsFiles) {
 const htmlPath = path.join(root, 'index.html');
 const html = fs.readFileSync(htmlPath, 'utf8');
 
-const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)]
-  .map(match => match[1])
+const inlineScripts = [...html.matchAll(/<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi)]
+  .filter(match => !/\btype\s*=\s*["']application\/ld\+json["']/i.test(match[1]))
+  .map(match => match[2])
   .filter(code => code.trim());
 
 inlineScripts.forEach((code, index) => {
