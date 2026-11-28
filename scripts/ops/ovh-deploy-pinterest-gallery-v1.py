@@ -184,7 +184,7 @@ def main():
         if not cid:
             raise RuntimeError("CADDY_CONTAINER_MISSING")
         for path,needle in [
-          ("/srv/neis-circle/index.html","gallery-pinterest-"+run_id),
+          ("/srv/neis-circle/index.html","gallery-pinterest-v1.js?v=gallery-"+run_id),
           ("/srv/neis-circle/scripts/gallery-pinterest-v1.js","id:'art'"),
           ("/srv/neis-circle/styles/gallery-pinterest-v1.css",".gallery-masonry")]:
             run(DOCKER+["exec",cid,"grep","-Fq",needle,path],timeout=25)
