@@ -7,6 +7,9 @@
 
   const MAX_FILES=20;
   const MAX_BYTES=8*1024*1024;
+  state.galleryCategory=state.galleryCategory||'photograph';
+  const categories=[{id:'photograph',en:'Photograph',ar:'تصوير فوتوغرافي',desc:'Photography, places, people and moments.'},{id:'art',en:'Art',ar:'فن',desc:'Illustrations, sketches, paintings and creative work.'}];
+  const categoryLabel=id=>{const item=categories.find(x=>x.id===id)||categories[0];return t(item.en,item.ar)};
   const t=(en,ar)=>state.lang==='ar'?ar:en;
   const byId=id=>(state.gallery||[]).find(item=>String(item.id)===String(id));
   const canSee=item=>!!(item.approved||isMine(item)||state.isAdmin);
@@ -26,16 +29,15 @@
   }
 
   gallery=function(){
-    let items=(state.gallery||[]).filter(canSee);
-    if(state.galleryFilter==='Featured')items=items.filter(item=>item.featured);
-    if(state.galleryFilter==='Mine')items=items.filter(isMine);
+    const category=state.galleryCategory==='art'?'art':'photograph';
+    const items=(state.gallery||[]).filter(canSee).filter(item=>(item.category||'photograph')===category);
+    const tabs=categories.map(item=>'<button type="button" class="gallery-category-tab '+(category===item.id?'active':'')+'" data-gallery-category="'+item.id+'"><b>'+t(item.en,item.ar)+'</b><span>'+t(item.desc,item.id==='art'?'رسومات ولوحات وأعمال إبداعية.':'صور فوتوغرافية وأماكن ولحظات.')+'</span></button>').join('');
     return pageTitle('Gallery','A visual collection shared by the NEIS community.',
-      '<button class="primary" data-action="new-gallery">＋ Upload images</button>')+
-      '<div class="gallery-toolbar"><div class="tabs">'+
-      ['All','Featured','Mine'].map(value=>'<button class="'+(state.galleryFilter===value?'active':'')+'" data-gallery-filter="'+value+'">'+value+'</button>').join('')+
-      '</div><span class="gallery-count">'+items.length+' '+(items.length===1?'image':'images')+'</span></div>'+
+      '<button class="primary" data-action="new-gallery">＋ '+t('Upload images','رفع الصور')+'</button>')+
+      '<div class="gallery-category-switch" role="tablist" aria-label="Gallery category">'+tabs+'</div>'+
+      '<div class="gallery-toolbar"><span class="gallery-category-heading">'+categoryLabel(category)+'</span><span class="gallery-count">'+items.length+' '+t('images','صور')+'</span></div>'+
       (items.length?'<div class="gallery-masonry">'+items.map(galleryCard).join('')+'</div>':
-      '<div class="gallery-empty"><div class="gallery-empty-icon">＋</div><b>'+t('Your gallery starts here','معرض الصور يبدأ من هنا')+'</b><span>'+t('Upload images. No titles, captions or tags needed.','ارفع صورك مباشرة، من غير عناوين أو أوصاف أو تصنيفات.')+'</span><button class="primary" data-action="new-gallery">'+t('Choose images','اختر الصور')+'</button></div>');
+      '<div class="gallery-empty"><div class="gallery-empty-icon">＋</div><b>'+t('This gallery is waiting for its first image','هذا المعرض بانتظار أول صورة')+'</b><span>'+t('Upload images here. No titles, captions or tags needed.','ارفع الصور هنا مباشرة، من غير عناوين أو أوصاف أو تصنيفات.')+'</span><button class="primary" data-action="new-gallery">'+t('Choose images','اختر الصور')+'</button></div>');
   };
 
   function openGalleryImage(id){
@@ -62,7 +64,7 @@
     openModal('<div class="modal-head"><div><p class="kicker"><i></i>Gallery</p><h2>'+t('Upload images','رفع الصور')+'</h2>'+
       '<p>'+t('Choose up to 20 images. No title, caption or tags required.','اختر حتى 20 صورة. لا تحتاج إلى كتابة عنوان أو وصف أو تصنيفات.')+'</p></div>'+
       '<button class="close" data-close aria-label="Close">×</button></div>'+
-      '<form id="galleryBatchForm"><label class="gallery-dropzone" for="galleryBatchFiles">'+
+      '<form id="galleryBatchForm"><label class="gallery-category-select-label" for="galleryUploadCategory">'+t('Add images to','أضف الصور إلى')+'</label><select id="galleryUploadCategory" class="gallery-category-select">'+categories.map(item=>'<option value="'+item.id+'" '+(item.id===state.galleryCategory?'selected':'')+'>'+t(item.en,item.ar)+'</option>').join('')+'</select><label class="gallery-dropzone" for="galleryBatchFiles">'+
       '<span class="gallery-dropzone-icon">＋</span><b>'+t('Choose images','اختر الصور')+'</b>'+
       '<small>'+t('JPG, PNG, WebP or other image formats · up to 8 MB each','صور JPG وPNG وWebP وغيرها · حتى 8 ميجابايت للصورة')+'</small></label>'+
       '<input id="galleryBatchFiles" class="gallery-file-input" type="file" accept="image/*" multiple>'+
@@ -93,7 +95,7 @@
         const image_url=await uploadMedia(file,'gallery');
         if(!image_url){failed++;continue}
         const {error}=await sb.from('gallery_items').insert({
-          author_id:authUser.id,image_url,caption_en:'',caption_ar:'',tags:[],approved:state.isAdmin
+          author_id:authUser.id,image_url,category:document.getElementById('galleryUploadCategory').value,caption_en:'',caption_ar:'',tags:[],approved:state.isAdmin
         });
         if(error){console.error('[NEIS gallery insert]',error);failed++}
         else uploaded++;
@@ -110,9 +112,9 @@
   const previousBind=bindDynamic;
   bindDynamic=function(){
     previousBind();
-    document.querySelectorAll('[data-gallery-open]').forEach(button=>{
+    document.querySelectorAll('[data-gallery-category]').forEach(button=>{button.onclick=()=>{state.galleryCategory=button.dataset.galleryCategory==='art'?'art':'photograph';render()}});\n    document.querySelectorAll('[data-gallery-open]').forEach(button=>{
       button.onclick=()=>openGalleryImage(button.dataset.galleryOpen);
     });
   };
-  window.NEISGalleryPinterest={version:'1.0.0',openImage:openGalleryImage};
+  window.NEISGalleryPinterest={version:'1.1.0',openImage:openGalleryImage};
 })();
