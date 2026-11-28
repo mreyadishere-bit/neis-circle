@@ -21,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ovh-pinterest-gallery-release
+  group: ovh-frontend-release-queue
   cancel-in-progress: false
 jobs:
   verify:
