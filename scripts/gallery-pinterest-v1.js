@@ -120,6 +120,7 @@
   const previousBind=bindDynamic;
   bindDynamic=function(){
     previousBind();
+    document.querySelectorAll('[data-action="new-gallery"]').forEach(button=>{button.onclick=newGallery;});
     document.querySelectorAll('[data-gallery-category]').forEach(button=>{button.onclick=()=>{state.galleryCategory=button.dataset.galleryCategory==='art'?'art':'photograph';render()}});
     document.querySelectorAll('[data-gallery-open]').forEach(button=>{
       button.onclick=()=>openGalleryImage(button.dataset.galleryOpen);
