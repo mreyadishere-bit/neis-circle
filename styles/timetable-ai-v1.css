@@ -84,9 +84,13 @@
 .ttai-send:disabled{opacity:.35;cursor:wait}
 .ttai-privacy{margin:9px 4px 0;color:var(--ttai-muted);font-size:10px;line-height:1.55}
 @media(max-width:620px){
-  .ttai-panel{inset:auto 0 0 0;width:100%;height:min(83dvh,730px);max-height:calc(100dvh - 30px);
+  .ttai-panel{
+    --ttai-panel-height:min(83dvh,730px,calc(var(--ttai-visible-height,100dvh) - 16px));
+    inset:auto 0 auto 0;top:calc(var(--ttai-visible-top,0px) + var(--ttai-visible-height,100dvh) - var(--ttai-panel-height));
+    width:100%;height:var(--ttai-panel-height);max-height:calc(var(--ttai-visible-height,100dvh) - 16px);
     border-radius:24px 24px 0 0;padding-bottom:env(safe-area-inset-bottom,0px);
-    box-shadow:0 -12px 55px rgba(0,0,0,.22)}
+    box-shadow:0 -12px 55px rgba(0,0,0,.22)
+  }
   .ttai-header{padding:12px 15px}.ttai-chat{padding:14px}
   .tt-head-actions .ttai-launch{min-width:58px;padding-inline:11px}
 }
