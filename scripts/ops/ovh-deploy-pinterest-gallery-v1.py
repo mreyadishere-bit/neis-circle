@@ -88,7 +88,9 @@ def main():
     backup.mkdir(mode=0o700)
     dump=backup/"pre-gallery.dump"
     with dump.open("wb") as f:
-        p=subprocess.run(COMPOSE+["exec","-T","db","pg_dump","-U","postgres","-d","postgres",
+        # Run pg_dump as the database container's postgres OS user. This avoids
+        # root-vs-postgres local socket/peer-auth differences on self-hosted OVH.
+        p=subprocess.run(COMPOSE+["exec","-T","-u","postgres","db","pg_dump","-U","postgres","-d","postgres",
           "--format=custom","--no-owner","--no-acl"],stdin=subprocess.DEVNULL,
           stdout=f,stderr=subprocess.PIPE,timeout=240)
     if p.returncode:
@@ -110,7 +112,7 @@ def main():
     if not dump.is_file() or dump.stat().st_size==0:
         print("GALLERY_DB_BACKUP_DIAG=EMPTY_DUMP", file=sys.stderr)
         raise RuntimeError("DATABASE_BACKUP_FAILED")
-    check=subprocess.run(COMPOSE+["exec","-T","db","pg_restore","--list"],
+    check=subprocess.run(COMPOSE+["exec","-T","-u","postgres","db","pg_restore","--list"],
         stdin=dump.open("rb"),stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=90)
     if check.returncode:
         raise RuntimeError("DATABASE_BACKUP_INVALID")
