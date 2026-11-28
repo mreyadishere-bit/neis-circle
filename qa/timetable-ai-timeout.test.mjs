@@ -34,12 +34,12 @@ async function runScenario({language='en',network='hang'}){
     }}},
   };
   // Keep the fake clock in the host closure to avoid cross-realm object writes.
-  const isolatedHelper=helper
-    .split('setTimeout(').join('testSetTimeout(')
-    .split('clearTimeout(').join('testClearTimeout(');
   vm.createContext(context);
-  vm.runInContext(isolatedHelper+';globalThis.invokeTest=invokeWithDeadline;',context);
-  const promise=context.invokeTest({message:'Physics L2'});
+  vm.runInContext(helper+';globalThis.invokeTest=invokeWithDeadline;',context);
+  const promise=context.invokeTest(
+    {message:'Physics L2'},
+    {setTimeout:context.testSetTimeout,clearTimeout:context.testClearTimeout}
+  );
   if(network==='hang'){
     assert.equal(typeof pendingTimeout,'function','fake clock must capture timeout callback');
     pendingTimeout();
