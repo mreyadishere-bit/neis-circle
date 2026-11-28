@@ -1,0 +1,35 @@
+/* NEIS Circle — Pinterest-style gallery, scoped to Gallery only. */
+.gallery-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 18px}
+.gallery-count{color:var(--muted);font-size:11px;font-weight:650}
+.gallery-masonry{columns:5 190px;column-gap:15px;column-fill:balance}
+.gallery-pin{position:relative;display:inline-block;width:100%;margin:0 0 15px;break-inside:avoid;overflow:hidden;border-radius:17px;background:var(--soft);vertical-align:top}
+.gallery-pin-open{display:block;width:100%;padding:0;border:0;background:transparent;cursor:zoom-in;line-height:0}
+.gallery-pin img{display:block;width:100%;height:auto;max-height:none;object-fit:contain;transition:transform .28s ease}
+.gallery-pin:hover img{transform:scale(1.018)}
+.gallery-pin-featured{position:absolute;top:10px;left:10px;padding:5px 8px;border-radius:999px;background:rgba(15,25,22,.76);color:#fff;font-size:9px;font-weight:750;pointer-events:none}
+.gallery-pin-tools{position:absolute;top:9px;right:9px;display:flex;gap:6px;opacity:0;transition:opacity .18s ease}
+.gallery-pin:hover .gallery-pin-tools,.gallery-pin-tools:focus-within{opacity:1}
+.gallery-pin-tools button{padding:7px 9px;border:0;border-radius:9px;background:rgba(255,255,255,.94);color:#18231f;font-size:10px;font-weight:750;box-shadow:0 2px 10px #0002}
+.gallery-empty{min-height:270px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:30px;border:1px dashed var(--line);border-radius:22px;text-align:center}
+.gallery-empty-icon,.gallery-dropzone-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:var(--accent2);color:var(--accent);font-size:26px}
+.gallery-empty span{max-width:360px;color:var(--muted);font-size:12px}
+.gallery-empty .primary{margin-top:8px}
+.gallery-dropzone{min-height:155px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:1.5px dashed var(--line);border-radius:18px;background:var(--soft);cursor:pointer;text-align:center}
+.gallery-dropzone small{max-width:90%;color:var(--muted);font-size:10px}
+.gallery-file-input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+.gallery-batch-preview{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:9px;margin-top:14px;max-height:260px;overflow:auto}
+.gallery-batch-item{position:relative;min-width:0;overflow:hidden;border-radius:12px;background:var(--soft)}
+.gallery-batch-item img{display:block;width:100%;height:112px;object-fit:contain}
+.gallery-batch-item span{display:block;padding:5px 7px;color:var(--muted);font-size:9px}
+.gallery-batch-item.invalid{outline:2px solid #c64e42}
+.gallery-batch-item.invalid span{color:#c64e42}
+.gallery-lightbox{width:min(100%,1000px);margin:auto}
+.gallery-lightbox-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;color:var(--muted);font-size:11px}
+.gallery-lightbox-stage{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;align-items:center;gap:8px}
+.gallery-lightbox-stage img{display:block;max-width:100%;max-height:78vh;width:auto;height:auto;object-fit:contain;margin:auto;border-radius:12px}
+.gallery-lightbox-stage>button{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--ink);font-size:24px}
+.gallery-lightbox-stage>button:disabled{opacity:.25}
+@media(max-width:1050px){.gallery-masonry{columns:4 170px;column-gap:12px}.gallery-pin{margin-bottom:12px}}
+@media(max-width:700px){.gallery-masonry{columns:3 130px;column-gap:9px}.gallery-pin{margin-bottom:9px;border-radius:13px}.gallery-toolbar{margin-bottom:13px}.gallery-pin-tools{opacity:1}}
+@media(max-width:430px){.gallery-masonry{columns:2 120px;column-gap:8px}.gallery-pin{margin-bottom:8px}.gallery-lightbox-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px}.gallery-lightbox-stage>button{width:28px;height:32px;font-size:20px}}
+@media(prefers-reduced-motion:reduce){.gallery-pin img,.gallery-pin-tools{transition:none!important}}
