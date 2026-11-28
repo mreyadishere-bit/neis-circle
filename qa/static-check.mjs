@@ -112,15 +112,15 @@ if (activeHomePollModules.length !== 1) {
   failures.push(`Expected exactly one active Home poll module, found ${activeHomePollModules.length}: ${activeHomePollModules.join(', ')}`);
 }
 
-const dataCoordinators = localScriptSrcs.filter(src => /data-coordinator-v\\d+\\.js/i.test(src));
+const dataCoordinators = localScriptSrcs.filter(src => /data-coordinator-v\d+\.js/i.test(src));
 if (dataCoordinators.length !== 1) {
   failures.push(`Expected exactly one active data coordinator, found ${dataCoordinators.length}: ${dataCoordinators.join(', ')}`);
 } else {
   const coordinatorIndex = localScriptSrcs.indexOf(dataCoordinators[0]);
-  const secondaryIndex = localScriptSrcs.findIndex(src => /secondary-data-v\\d+\\.js/i.test(src));
-  const runtimeIndex = localScriptSrcs.findIndex(src => /runtime-core-v\\d+\\.js/i.test(src));
-  const activityIndex = localScriptSrcs.findIndex(src => /user-activity-v\\d+\\.js/i.test(src));
-  const routeIndex = localScriptSrcs.findIndex(src => /hash-route-open-v\\d+\\.js/i.test(src));
+  const secondaryIndex = localScriptSrcs.findIndex(src => /secondary-data-v\d+\.js/i.test(src));
+  const runtimeIndex = localScriptSrcs.findIndex(src => /runtime-core-v\d+\.js/i.test(src));
+  const activityIndex = localScriptSrcs.findIndex(src => /user-activity-v\d+\.js/i.test(src));
+  const routeIndex = localScriptSrcs.findIndex(src => /hash-route-open-v\d+\.js/i.test(src));
   if (secondaryIndex < 0 || runtimeIndex < 0 || secondaryIndex > runtimeIndex || runtimeIndex > coordinatorIndex) {
     failures.push('Data coordinator must load after secondary-data and runtime-core.');
   }
@@ -555,8 +555,8 @@ else {
 }
 
 
-const literalScriptNewlines = (runtimeHtml.match(/<\/script>\\n/g) || []).length;
-if (literalScriptNewlines) failures.push('index.html must not contain literal \\n text between script tags.');
+const literalScriptNewlines = (runtimeHtml.match(/<\/script>\n/g) || []).length;
+if (literalScriptNewlines) failures.push('index.html must not contain literal \n text between script tags.');
 
 const appCssPath = path.join(root, 'styles', 'app.css');
 if (fs.existsSync(appCssPath)) {
@@ -621,7 +621,7 @@ else {
 
 const circleCreateSource = fs.readFileSync(path.join(root, 'scripts', '05-social.js'), 'utf8');
 const circleCreateStart = circleCreateSource.indexOf("$('#createCircleForm').onsubmit=async");
-const circleCreateEnd = circleCreateStart >= 0 ? circleCreateSource.indexOf('\\n\\nfunction additionalSearchFallback', circleCreateStart) : -1;
+const circleCreateEnd = circleCreateStart >= 0 ? circleCreateSource.indexOf('\n\nfunction additionalSearchFallback', circleCreateStart) : -1;
 const circleCreateSection = circleCreateStart >= 0 && circleCreateEnd > circleCreateStart
   ? circleCreateSource.slice(circleCreateStart, circleCreateEnd)
   : '';
@@ -825,9 +825,9 @@ for (const token of ['function ingestPush(payload)','renderNotificationsIfVisibl
 }
 
 const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
-const pushWorkerRegistration = pushClientSource.match(/navigator\\.serviceWorker\\.register\\(['"]\\/neis-pwa-sw\\.js\\?v=(\\d+)['"]/);
-const workerVersionMatch = pushTabSyncSwSource.match(/const VERSION = ['"]neis-pwa-ovh-v(\\d+)['"]/);
-const workerCacheVersionMatch = pushTabSyncSwSource.match(/const STATIC_CACHE = ['"]neis-static-ovh-v(\\d+)['"]/);
+const pushWorkerRegistration = pushClientSource.match(/navigator\.serviceWorker\.register\\(['"]\\/neis-pwa-sw\.js\\?v=(\d+)['"]/);
+const workerVersionMatch = pushTabSyncSwSource.match(/const VERSION = ['"]neis-pwa-ovh-v(\d+)['"]/);
+const workerCacheVersionMatch = pushTabSyncSwSource.match(/const STATIC_CACHE = ['"]neis-static-ovh-v(\d+)['"]/);
 if (!pushWorkerRegistration || !workerVersionMatch || !workerCacheVersionMatch ||
     pushWorkerRegistration[1] !== workerVersionMatch[1] || workerVersionMatch[1] !== workerCacheVersionMatch[1]) {
   failures.push('PWA registration, service-worker version and static-cache version must stay synchronized.');
