@@ -24,6 +24,7 @@ async function runScenario({language='en',network='hang'}){
   const context={
     lang:()=>language,
     AbortController,
+    stateAI:{abort:null},
     testSetTimeout:(callback)=>{pendingTimeout=callback;return 1},
     testClearTimeout:()=>{timerCleared=true},
     sb:{functions:{invoke:(name,opts)=>{
