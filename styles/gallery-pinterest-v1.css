@@ -1,5 +1,12 @@
-/* NEIS Circle — Pinterest-style gallery, scoped to Gallery only. */
-.gallery-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 18px}
+/* NEIS Circle — Pinterest-style Gallery, isolated from all other sections. */
+.gallery-category-switch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:10px 0 22px}
+.gallery-category-tab{min-width:0;display:flex;flex-direction:column;gap:6px;padding:17px 19px;border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);text-align:start;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+.gallery-category-tab b{font-size:15px;font-weight:800}
+.gallery-category-tab span{color:var(--muted);font-size:11px;line-height:1.5}
+.gallery-category-tab.active{border-color:var(--accent);background:var(--accent2);box-shadow:0 7px 22px rgba(0,0,0,.035)}
+.gallery-category-tab:hover{transform:translateY(-1px)}
+.gallery-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 15px}
+.gallery-category-heading{font-size:13px;font-weight:800}
 .gallery-count{color:var(--muted);font-size:11px;font-weight:650}
 .gallery-masonry{columns:5 190px;column-gap:15px;column-fill:balance}
 .gallery-pin{position:relative;display:inline-block;width:100%;margin:0 0 15px;break-inside:avoid;overflow:hidden;border-radius:17px;background:var(--soft);vertical-align:top}
@@ -14,6 +21,8 @@
 .gallery-empty-icon,.gallery-dropzone-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:var(--accent2);color:var(--accent);font-size:26px}
 .gallery-empty span{max-width:360px;color:var(--muted);font-size:12px}
 .gallery-empty .primary{margin-top:8px}
+.gallery-category-select-label{display:block;margin:8px 0 7px;font-size:11px;font-weight:750}
+.gallery-category-select{width:100%;height:44px;margin-bottom:13px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}
 .gallery-dropzone{min-height:155px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:1.5px dashed var(--line);border-radius:18px;background:var(--soft);cursor:pointer;text-align:center}
 .gallery-dropzone small{max-width:90%;color:var(--muted);font-size:10px}
 .gallery-file-input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
@@ -29,7 +38,7 @@
 .gallery-lightbox-stage img{display:block;max-width:100%;max-height:78vh;width:auto;height:auto;object-fit:contain;margin:auto;border-radius:12px}
 .gallery-lightbox-stage>button{width:38px;height:38px;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--ink);font-size:24px}
 .gallery-lightbox-stage>button:disabled{opacity:.25}
-@media(max-width:1050px){.gallery-masonry{columns:4 170px;column-gap:12px}.gallery-pin{margin-bottom:12px}}
-@media(max-width:700px){.gallery-masonry{columns:3 130px;column-gap:9px}.gallery-pin{margin-bottom:9px;border-radius:13px}.gallery-toolbar{margin-bottom:13px}.gallery-pin-tools{opacity:1}}
-@media(max-width:430px){.gallery-masonry{columns:2 120px;column-gap:8px}.gallery-pin{margin-bottom:8px}.gallery-lightbox-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px}.gallery-lightbox-stage>button{width:28px;height:32px;font-size:20px}}
-@media(prefers-reduced-motion:reduce){.gallery-pin img,.gallery-pin-tools{transition:none!important}}
+@media(max-width:1100px){.gallery-masonry{columns:4 175px;column-gap:12px}.gallery-pin{margin-bottom:12px}}
+@media(max-width:760px){.gallery-masonry{columns:3 145px;column-gap:10px}.gallery-pin{margin-bottom:10px;border-radius:14px}.gallery-category-switch{gap:9px}.gallery-category-tab{padding:14px;border-radius:15px}}
+@media(max-width:480px){.gallery-masonry{columns:2 120px;column-gap:8px}.gallery-pin{margin-bottom:8px;border-radius:12px}.gallery-category-switch{gap:8px;margin-bottom:17px}.gallery-category-tab{padding:12px 11px}.gallery-category-tab b{font-size:13px}.gallery-category-tab span{font-size:10px}.gallery-lightbox-stage{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px}.gallery-lightbox-stage>button{width:28px;height:32px;font-size:20px}}
+@media(prefers-reduced-motion:reduce){.gallery-pin img,.gallery-pin-tools,.gallery-category-tab{transition:none!important}}
