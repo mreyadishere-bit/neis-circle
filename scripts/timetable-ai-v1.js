@@ -156,6 +156,22 @@ function alertUser(msg){
   if(typeof toast==="function")toast(msg);
   else window.alert(msg);
 }
+let mobileViewportEventsBound=false;
+function syncMobileViewport(){
+  if(typeof window==="undefined"||!stateAI.panel)return;
+  const viewport=window.visualViewport;
+  const height=Math.max(240,Math.round(viewport?.height||window.innerHeight||document.documentElement.clientHeight||0));
+  const top=Math.max(0,Math.round(viewport?.offsetTop||0));
+  stateAI.panel.style.setProperty("--ttai-visible-height",height+"px");
+  stateAI.panel.style.setProperty("--ttai-visible-top",top+"px");
+}
+function bindMobileViewport(){
+  if(mobileViewportEventsBound||typeof window==="undefined")return;
+  mobileViewportEventsBound=true;
+  window.addEventListener("resize",syncMobileViewport,{passive:true});
+  window.visualViewport?.addEventListener("resize",syncMobileViewport,{passive:true});
+  window.visualViewport?.addEventListener("scroll",syncMobileViewport,{passive:true});
+}
 function ensurePanel(){
   if(stateAI.panel)return stateAI.panel;
   const panel=el("section","ttai-panel");
@@ -611,6 +627,8 @@ function draw(){
   stateAI.lastDrawnWizardStep=step;
   if(!stateAI.open){panel.hidden=true;return}
   panel.hidden=false;
+  bindMobileViewport();
+  syncMobileViewport();
   panel.dir=lang()==="ar"?"rtl":"ltr";
   panel.setAttribute("aria-label",t("title"));
   panel.replaceChildren();
@@ -1076,7 +1094,7 @@ function openPanel(){
   begin();
   stateAI.open=true;draw();
   const field=stateAI.panel?.querySelector("textarea");
-  if(field)field.focus();
+  if(field && !window.matchMedia?.("(pointer: coarse)").matches)field.focus();
 }
 function mount(){
   if(!isTimetable()){
@@ -1100,6 +1118,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&stateAI.open){stateAI.open=false;draw()}
 });
 function start(){
+  bindMobileViewport();
   const root=document.querySelector("#view")||document.body;
   new MutationObserver(scheduleMount).observe(root,{childList:true});
   scheduleMount();
