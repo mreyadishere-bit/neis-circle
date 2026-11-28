@@ -656,7 +656,7 @@ function draw(){
   clearBtn.onclick=()=>{begin(true);draw()};
   const close=el("button","ttai-icon-btn","×");
   close.type="button";close.setAttribute("aria-label",t("close"));
-  close.onclick=()=>{stateAI.open=false;draw()};
+  close.onclick=()=>{stopVoice();stateAI.open=false;draw()};
   const controls=el("div","ttai-header-controls");controls.append(clearBtn,close);
   head.append(title,controls);panel.append(head);
 
@@ -1114,7 +1114,7 @@ function openPanel(){
 }
 function mount(){
   if(!isTimetable()){
-    if(stateAI.open){stateAI.open=false;draw()}
+    if(stateAI.open){stopVoice();stateAI.open=false;draw()}
     return;
   }
   const actions=document.querySelector("#view .tt-head-actions");
@@ -1131,7 +1131,7 @@ function scheduleMount(){
   requestAnimationFrame(()=>{stateAI.scheduled=false;mount()});
 }
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&stateAI.open){stateAI.open=false;draw()}
+  if(e.key==="Escape"&&stateAI.open){stopVoice();stateAI.open=false;draw()}
 });
 function start(){
   bindMobileViewport();
