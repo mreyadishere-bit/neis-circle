@@ -1,0 +1,53 @@
+name: OVH Email Delivery Readonly Audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/ops/ovh-email-delivery-readonly-audit.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-email-delivery-readonly-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage read-only audit script
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage=/home/ubuntu/neis-backups/email-delivery-audit
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/ops/ovh-email-delivery-readonly-audit.py "$target:$stage/audit.py"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "chmod 600 '$stage/audit.py'"
+      - name: Audit SMTP, queue and Brevo delivery events without sending
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          SMTP_LOGIN: ${{ secrets.BREVO_SMTP_LOGIN }}
+          SMTP_KEY: ${{ secrets.BREVO_SMTP_KEY }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" 'python3 /home/ubuntu/neis-backups/email-delivery-audit/audit.py'
+          import json,os,sys
+          json.dump({"smtp_login":os.environ.get("SMTP_LOGIN",""),
+                     "smtp_key":os.environ.get("SMTP_KEY","")},sys.stdout)
+          PY
