@@ -99,7 +99,7 @@ def main():
     require(shutil.disk_usage(FRONTENDS).free>256*1024*1024,"LOW_FRONTEND_DISK_SPACE")
 
     phase="prepare_frontend"
-    backup=BACKUPS/("gallery-visual-"+RUN_ID)
+    backup=BACKUPS/("gallery-visual-release-"+RUN_ID)
     backup.mkdir(mode=0o700)
     overlay_backup=backup/"frontend-overlay.before"
     overlay_backup.write_text(original_overlay)
