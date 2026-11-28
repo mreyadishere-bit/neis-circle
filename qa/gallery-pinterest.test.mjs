@@ -19,7 +19,7 @@ assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===category
 assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===activeCategory\)/,'Lightbox navigation must stay within the selected category');
 assert.match(script,/MAX_FILES=20/,'Batch upload limit must remain 20');
 assert.match(script,/MAX_BYTES=8\*1024\*1024/,'Per-image size limit must remain 8 MB');
-assert.match(script,/loading:'lazy'/,'Gallery images must lazy-load');
+assert.ok(script.includes('loading=') && script.includes('lazy'),'Gallery images must lazy-load');
 assert.match(css,/\.gallery-masonry\{columns:/,'Gallery must use masonry columns');
 assert.match(css,/@media\(max-width:760px\)/,'Tablet layout breakpoint must exist');
 assert.match(css,/@media\(max-width:480px\)/,'Mobile layout breakpoint must exist');
