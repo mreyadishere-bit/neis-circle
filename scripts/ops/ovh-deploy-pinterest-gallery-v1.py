@@ -108,6 +108,13 @@ def main():
         else:
             code="COMMAND_EXIT_"+str(p.returncode)
         print("GALLERY_DB_BACKUP_DIAG="+code, file=sys.stderr)
+        detail=p.stderr.decode("utf-8","replace").strip().splitlines()
+        if detail:
+            safe=detail[-1][:240]
+            safe=re.sub(r"(?i)(password|secret|token|key)=\\S+",r"\\1=[redacted]",safe)
+            safe=re.sub(r"(?i)(postgres(?:ql)?://)[^@\\s]+@",r"\\1[redacted]@",safe)
+            safe=re.sub(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b","[ip]",safe)
+            print("GALLERY_DB_BACKUP_DETAIL="+safe, file=sys.stderr)
         raise RuntimeError("DATABASE_BACKUP_FAILED")
     if not dump.is_file() or dump.stat().st_size==0:
         print("GALLERY_DB_BACKUP_DIAG=EMPTY_DUMP", file=sys.stderr)
