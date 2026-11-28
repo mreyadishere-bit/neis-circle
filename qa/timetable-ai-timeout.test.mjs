@@ -12,7 +12,7 @@ assert.match(helper,/Promise\.race/,'network must be bounded even if AbortSignal
 assert.match(helper,/controller\.abort\(\)/,'timeout should abort remote request');
 assert.match(frontend,/const \{data,error\}=await invokeWithDeadline\(body\)/);
 assert.match(frontend,/stateAI\.lastFailed=\{text,file\}/,'retry must preserve PDF');
-assert.match(frontend,/stateAI\.busy=false;stateAI\.advicePending=false;draw\(\)/,'loading state must always clear');
+assert.match(frontend,/stateAI\.phase="";stateAI\.busy=false;stateAI\.abort=null;draw\(\)/,'loading phase, busy flag and abort reference must always clear');
 assert.match(edge,/httpOptions:\s*\{\s*timeout:\s*80000,/,'backend must have network timeout');
 assert.match(edge,/maxRetries = 0,/,'backend skips costly repeated primary 503 retries');
 assert.match(edge,/OVERLOAD_FALLBACK_MODEL = "gemini-3\.6-flash"/,'backend uses only verified secondary model');
