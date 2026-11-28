@@ -91,7 +91,24 @@ def main():
         p=subprocess.run(COMPOSE+["exec","-T","db","pg_dump","-U","postgres","-d","postgres",
           "--format=custom","--no-owner","--no-acl"],stdin=subprocess.DEVNULL,
           stdout=f,stderr=subprocess.PIPE,timeout=240)
-    if p.returncode or not dump.is_file() or dump.stat().st_size==0:
+    if p.returncode:
+        diagnostic=p.stderr.decode("utf-8","replace").lower()
+        if "password authentication failed" in diagnostic or "authentication failed" in diagnostic:
+            code="AUTH"
+        elif "permission denied" in diagnostic:
+            code="PERMISSION"
+        elif "no space left" in diagnostic or "disk full" in diagnostic:
+            code="DISK"
+        elif "pg_dump: not found" in diagnostic or "executable file not found" in diagnostic:
+            code="PG_DUMP_MISSING"
+        elif "server version" in diagnostic and "pg_dump version" in diagnostic:
+            code="VERSION_MISMATCH"
+        else:
+            code="COMMAND_EXIT_"+str(p.returncode)
+        print("GALLERY_DB_BACKUP_DIAG="+code, file=sys.stderr)
+        raise RuntimeError("DATABASE_BACKUP_FAILED")
+    if not dump.is_file() or dump.stat().st_size==0:
+        print("GALLERY_DB_BACKUP_DIAG=EMPTY_DUMP", file=sys.stderr)
         raise RuntimeError("DATABASE_BACKUP_FAILED")
     check=subprocess.run(COMPOSE+["exec","-T","db","pg_restore","--list"],
         stdin=dump.open("rb"),stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,timeout=90)
