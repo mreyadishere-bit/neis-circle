@@ -46,7 +46,7 @@ function suggestedColor(subject,index=0){
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
-    voice:"Speak your message",voiceStop:"Stop dictation",voiceListening:"Listening…",voiceUnsupported:"Speech recognition unavailable",voiceDenied:"Microphone permission denied",voiceError:"Speech recognition failed",review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
+    voice:"Speak your message",voiceStop:"Stop dictation",voiceListening:"Listening…",voiceUnsupported:"Speech recognition not supported",voiceDenied:"Microphone permission denied",voiceError:"Speech recognition failed",review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
     privacy:"AI timetable requests and attached PDF/image schedules are processed by Google Gemini 3.8 Flash. Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 15 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
