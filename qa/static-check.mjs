@@ -825,7 +825,7 @@ for (const token of ['function ingestPush(payload)','renderNotificationsIfVisibl
 }
 
 const pushClientSource = fs.readFileSync(path.join(root, 'scripts', 'pwa-install-v117.js'), 'utf8');
-const pushWorkerRegistration = pushClientSource.match(/navigator\.serviceWorker\.register\\(['"]\\/neis-pwa-sw\.js\\?v=(\d+)['"]/);
+const pushWorkerRegistration = pushClientSource.match(/neis-pwa-sw\.js\?v=(\d+)/);
 const workerVersionMatch = pushTabSyncSwSource.match(/const VERSION = ['"]neis-pwa-ovh-v(\d+)['"]/);
 const workerCacheVersionMatch = pushTabSyncSwSource.match(/const STATIC_CACHE = ['"]neis-static-ovh-v(\d+)['"]/);
 if (!pushWorkerRegistration || !workerVersionMatch || !workerCacheVersionMatch ||
