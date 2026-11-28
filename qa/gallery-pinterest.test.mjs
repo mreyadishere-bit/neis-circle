@@ -19,8 +19,8 @@ assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===category
 assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===activeCategory\)/,'Lightbox navigation must stay within the selected category');
 assert.match(script,/MAX_FILES=20/,'Batch upload limit must remain 20');
 assert.match(script,/\[data-action="new-gallery"\].*newGallery/,'Gallery upload buttons must open the uploader');
-assert.match(script,/\[data-approve-gallery\][\\s\\S]*moderateGallery/,'Admin approval controls must remain wired');
-assert.match(script,/\[data-feature-gallery\][\\s\\S]*moderateGallery/,'Admin featured controls must remain wired');
+assert.match(script,/\[data-approve-gallery\][\s\S]*moderateGallery/,'Admin approval controls must remain wired');
+assert.match(script,/\[data-feature-gallery\][\s\S]*moderateGallery/,'Admin featured controls must remain wired');
 assert.match(script,/MAX_BYTES=8\*1024\*1024/,'Per-image size limit must remain 8 MB');
 assert.ok(script.includes('loading=') && script.includes('lazy'),'Gallery images must lazy-load');
 assert.match(css,/\.gallery-masonry\{columns:/,'Gallery must use masonry columns');
