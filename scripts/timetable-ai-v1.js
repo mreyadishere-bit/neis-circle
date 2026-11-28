@@ -142,7 +142,18 @@ function el(tag,cls,textValue){
   return node;
 }
 function message(body,role){
-  const p=el("div","ttai-bubble ttai-"+role,body);
+  const p=el("div","ttai-bubble ttai-"+role);
+  const text=String(body??"");
+  // Render only the supported strong-text marker with DOM nodes. Do not
+  // inject model/user content through innerHTML.
+  const strongPattern=/\\*\\*([^*]+)\\*\\*/g;
+  let cursor=0,match;
+  while((match=strongPattern.exec(text))){
+    if(match.index>cursor)p.append(document.createTextNode(text.slice(cursor,match.index)));
+    p.append(el("strong",null,match[1]));
+    cursor=strongPattern.lastIndex;
+  }
+  if(cursor<text.length)p.append(document.createTextNode(text.slice(cursor)));
   return p;
 }
 function dayName(n){
