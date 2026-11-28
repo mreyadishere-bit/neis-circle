@@ -23,7 +23,12 @@ def run(argv, *, data=None, timeout=120, check=True):
     p=subprocess.run(argv,cwd=ROOT,input=data,stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,timeout=timeout)
     if check and p.returncode:
-        raise RuntimeError("COMMAND_FAILED_"+str(argv[-1])[:35])
+        lines=p.stderr.decode("utf-8","replace").strip().splitlines()
+        detail=lines[-1][:220] if lines else ""
+        detail=re.sub(r"(?i)(password|secret|token|key)=\\S+",r"\\1=[redacted]",detail)
+        detail=re.sub(r"(?i)(postgres(?:ql)?://)[^@\\s]+@",r"\\1[redacted]@",detail)
+        detail=re.sub(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b","[ip]",detail)
+        raise RuntimeError("COMMAND_FAILED_"+str(p.returncode)+"_"+str(argv[-1])[:20]+":"+detail)
     return p
 
 def output(argv, timeout=45):
@@ -174,24 +179,48 @@ def main():
     phase="activate_frontend"
     overlay_backup=backup/"frontend-overlay.before"
     shutil.copy2(OVERLAY,overlay_backup)
-    OVERLAY.write_text(overlay.replace(str(source),str(target)))
+    OVERLAY.write_text(overlay.replace(str(source),str(target),1))
     switched=False
     try:
-        run(COMPOSE+["config","--quiet"],timeout=45)
+        phase="activate_compose_config"
+        run(COMPOSE+["config","--quiet"],timeout=55)
         switched=True
-        run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=120)
-        cid=output(COMPOSE+["ps","-q","caddy"])
+        phase="activate_caddy_service"
+        run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=165)
+
+        phase="verify_caddy_mount"
+        info=json.loads(output(DOCKER+["inspect","supabase-caddy"],timeout=30))[0]
+        mounts=[Path(m["Source"]) for m in info.get("Mounts",[])
+                if m.get("Type")=="bind" and m.get("Destination")=="/srv/neis-circle"]
+        if len(mounts)!=1 or mounts[0]!=target:
+            raise RuntimeError("NEW_CADDY_MOUNT_NOT_ACTIVE")
+
+        phase="verify_caddy_container"
+        cid=output(COMPOSE+["ps","-q","caddy"],timeout=25)
         if not cid:
             raise RuntimeError("CADDY_CONTAINER_MISSING")
-        for path,needle in [
-          ("/srv/neis-circle/index.html","gallery-pinterest-v1.js?v=gallery-"+run_id),
-          ("/srv/neis-circle/scripts/gallery-pinterest-v1.js","id:'art'"),
-          ("/srv/neis-circle/styles/gallery-pinterest-v1.css",".gallery-masonry")]:
-            run(DOCKER+["exec",cid,"grep","-Fq",needle,path],timeout=25)
+
+        phase="verify_live_html"
+        deployed_html=output(DOCKER+["exec",cid,"cat","/srv/neis-circle/index.html"],timeout=25)
+        if "gallery-pinterest-v1.js?v=gallery-"+run_id not in deployed_html or "gallery-pinterest-v1.css?v=gallery-"+run_id not in deployed_html:
+            raise RuntimeError("LIVE_GALLERY_HTML_MISMATCH")
+
+        phase="verify_live_gallery_assets"
+        deployed_js=output(DOCKER+["exec",cid,"cat","/srv/neis-circle/scripts/gallery-pinterest-v1.js"],timeout=25)
+        deployed_css=output(DOCKER+["exec",cid,"cat","/srv/neis-circle/styles/gallery-pinterest-v1.css"],timeout=25)
+        if "id:'photograph'" not in deployed_js or "id:'art'" not in deployed_js:
+            raise RuntimeError("LIVE_GALLERY_SCRIPT_MISMATCH")
+        if ".gallery-masonry{columns:" not in deployed_css or "height:auto" not in deployed_css:
+            raise RuntimeError("LIVE_GALLERY_STYLE_MISMATCH")
+
+        phase="verify_caddy_routes"
+        caddy=output(DOCKER+["exec",cid,"cat","/etc/caddy/Caddyfile"],timeout=25)
+        if not all(value in caddy for value in ("reverse_proxy rest:3000","reverse_proxy auth:9999","basic_auth")):
+            raise RuntimeError("CADDY_AUTH_OR_PROXY_CONFIG_CHANGED")
     except Exception:
         OVERLAY.write_text(overlay_backup.read_text())
         if switched:
-            run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=120,check=False)
+            run(COMPOSE+["up","-d","--no-deps","caddy"],timeout=155,check=False)
         print("GALLERY_FRONTEND=ROLLED_BACK")
         raise
     print("GALLERY_FRONTEND=ACTIVE")
@@ -214,5 +243,11 @@ if __name__=="__main__":
           "GALLERY_ASSET_COPY_FAILED","RELEASE_FILE_PARITY_FAILED","CADDY_CONTAINER_MISSING",
           "COMMAND_FAILED"}
         message=str(e)
-        print("GALLERY_DEPLOY=BLOCKED_"+(message if message in allowed else phase.upper()+"_UNEXPECTED"),file=sys.stderr)
+        safe=message[:300]
+        safe=re.sub(r"(?i)(password|secret|token|key)=\\S+",r"\\1=[redacted]",safe)
+        safe=re.sub(r"(?i)(postgres(?:ql)?://)[^@\\s]+@",r"\\1[redacted]@",safe)
+        safe=re.sub(r"\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b","[ip]",safe)
+        print("GALLERY_DEPLOY=BLOCKED_"+phase.upper(),file=sys.stderr)
+        print("GALLERY_DEPLOY_ERROR="+type(e).__name__,file=sys.stderr)
+        print("GALLERY_DEPLOY_DETAIL="+safe,file=sys.stderr)
         raise SystemExit(1)
