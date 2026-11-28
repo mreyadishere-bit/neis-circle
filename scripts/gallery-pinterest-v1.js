@@ -125,6 +125,15 @@
     document.querySelectorAll('[data-gallery-open]').forEach(button=>{
       button.onclick=()=>openGalleryImage(button.dataset.galleryOpen);
     });
+    document.querySelectorAll('[data-approve-gallery]').forEach(button=>{
+      button.onclick=()=>window.moderateGallery?.(button.dataset.approveGallery,{approved:true});
+    });
+    document.querySelectorAll('[data-feature-gallery]').forEach(button=>{
+      button.onclick=()=>{
+        const item=(state.gallery||[]).find(row=>String(row.id)===String(button.dataset.featureGallery));
+        if(item)window.moderateGallery?.(item.id,{featured:!item.featured});
+      };
+    });
   };
   window.newGallery=newGallery;
   window.NEISGalleryPinterest={version:'1.1.0',openImage:openGalleryImage};
