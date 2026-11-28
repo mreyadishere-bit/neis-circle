@@ -7,6 +7,7 @@ if(typeof window!=="undefined"){
   window.__neisTimetableAiMounted="timetable-ai-v1";
 }
 const ID="ttAiOpen";
+const TIMETABLE_AI_MODEL="gemini-3.8-flash";
 const editable=["title","day_of_week","start_time","end_time","location","notes","category","color"];
 const SUBJECT_COLORS=["#2f7db8","#7a52d8","#10a879","#efb83f","#ec6fb7","#e56d57","#5e6a78","#22a6b3"];
 function subjectKey(title){
@@ -45,9 +46,9 @@ function suggestedColor(subject,index=0){
 const labels={
   en:{title:"Timetable AI",intro:"Tell me about your classes or attach a schedule. I'll prepare a timetable you can review before saving.",
     attach:"Attach PDF or image",placeholder:"Ask me to create or change your timetable…",send:"Send",apply:"Save to my timetable",
-    voice:"Speak your message",voiceStop:"Stop dictation",voiceListening:"Listening…",voiceUnsupported:"Speech recognition unavailable",voiceDenied:"Microphone permission denied",voiceError:"Speech recognition failed",review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
+    voice:"Speak your message",voiceStop:"Stop dictation",voiceListening:"Listening…",voiceUnsupported:"Speech recognition not supported",voiceDenied:"Microphone permission denied",voiceError:"Speech recognition failed",review:"Review changes",discard:"Discard draft",undo:"Undo",clear:"New chat",close:"Close",busy:"Understanding your timetable…",
     saving:"Saving your timetable…",added:"added",edited:"updated",removed:"removed",nochanges:"Your timetable has no unsaved changes.",
-    privacy:"AI timetable requests and attached PDF/image schedules are processed by Cloudflare Workers AI (Llama 4 Scout). Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
+    privacy:"AI timetable requests and attached PDF/image schedules are processed by Google Gemini 3.8 Flash. Avoid including names or other identifying details. Uploaded files are not stored in NEIS Circle.",
     file:"Selected file:",tooLarge:"Choose a PDF or image smaller than 15 MB.",invalidFile:"Only PDF, PNG, JPG or WebP files are supported.",
     error:"Couldn't complete that request. Please retry.",retry:"Retry",removeFile:"Remove attachment",info:"AI data handling",success:"Your timetable was updated.",changed:"Your timetable changed elsewhere. Start a new chat to avoid overwriting changes.",
     confirm:"Save these proposed changes to your private timetable?",cancel:"Cancel",reviewTitle:"Proposed changes",pdf:"PDF or image"},
@@ -55,7 +56,7 @@ const labels={
     attach:"إرفاق صورة أو PDF",placeholder:"اكتب حصصك أو اطلب تعديل جدولك…",send:"إرسال",apply:"حفظ في جدولي",
     voice:"إملاء صوتي",voiceStop:"إيقاف الإملاء",voiceListening:"بسمعك…",voiceUnsupported:"تحويل الكلام لنص غير مدعوم",voiceDenied:"اسمح باستخدام الميكروفون",voiceError:"فشل التعرف على الكلام",review:"مراجعة التعديلات",discard:"إلغاء المسودة",undo:"تراجع",clear:"محادثة جديدة",close:"إغلاق",busy:"بحلل جدولك…",
     saving:"بحفظ جدولك…",added:"إضافة",edited:"تعديل",removed:"حذف",nochanges:"مفيش تعديلات غير محفوظة.",
-    privacy:"الرسائل وملفات الجدول (PDF أو صور) بتتبعت لـCloudflare Workers AI (Llama 4 Scout) للمعالجة البصرية المباشرة. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
+    privacy:"طلبات مساعد الجدول وملفات PDF والصور بتتجهز باستخدام Google Gemini 3.8 Flash. تجنب البيانات الشخصية. NEIS Circle مش بيخزن الملفات المرفوعة.",
     file:"الملف المختار:",tooLarge:"اختار صورة أو PDF أقل من 15 ميجابايت.",invalidFile:"المدعوم PDF أو PNG أو JPG أو WebP فقط.",
     error:"حصلت مشكلة في الطلب. جرّب تاني.",retry:"إعادة المحاولة",removeFile:"إزالة الملف",info:"خصوصية مساعد الجدول",success:"تم تحديث جدولك.",changed:"الجدول اتغير من مكان تاني. ابدأ محادثة جديدة عشان متفقدش أي تعديلات.",
     confirm:"تحفظ التعديلات دي على جدولك الخاص؟",cancel:"إلغاء",reviewTitle:"التعديلات المقترحة",pdf:"صورة أو PDF"}
@@ -141,7 +142,18 @@ function el(tag,cls,textValue){
   return node;
 }
 function message(body,role){
-  const p=el("div","ttai-bubble ttai-"+role,body);
+  const p=el("div","ttai-bubble ttai-"+role);
+  const text=String(body??"");
+  // Render only the supported strong-text marker with DOM nodes. Do not
+  // inject model/user content through innerHTML.
+  const segments=text.split("**");
+  for(let i=0;i<segments.length;i++){
+    const unmatched=i%2===1&&i===segments.length-1;
+    const value=(unmatched?"**":"")+segments[i];
+    if(!value)continue;
+    if(i%2===1&&!unmatched)p.append(el("strong",null,value));
+    else p.append(document.createTextNode(value));
+  }
   return p;
 }
 function dayName(n){
@@ -154,6 +166,27 @@ function rowText(r){return dayName(r.day_of_week)+" · "+r.start_time+"–"+r.en
 function alertUser(msg){
   if(typeof toast==="function")toast(msg);
   else window.alert(msg);
+}
+let mobileViewportEventsBound=false;
+function syncMobileViewport(){
+  if(typeof window==="undefined"||!stateAI.panel)return;
+  const viewport=window.visualViewport;
+  const height=Math.max(240,Math.round(viewport?.height||window.innerHeight||document.documentElement.clientHeight||0));
+  const top=Math.max(0,Math.round(viewport?.offsetTop||0));
+  stateAI.panel.style.setProperty("--ttai-visible-height",height+"px");
+  stateAI.panel.style.setProperty("--ttai-visible-top",top+"px");
+}
+function bindMobileViewport(){
+  if(mobileViewportEventsBound||typeof window==="undefined")return;
+  mobileViewportEventsBound=true;
+  if(typeof window.addEventListener==="function"){
+    window.addEventListener("resize",syncMobileViewport,{passive:true});
+  }
+  const viewport=window.visualViewport;
+  if(typeof viewport?.addEventListener==="function"){
+    viewport.addEventListener("resize",syncMobileViewport,{passive:true});
+    viewport.addEventListener("scroll",syncMobileViewport,{passive:true});
+  }
 }
 function ensurePanel(){
   if(stateAI.panel)return stateAI.panel;
@@ -610,6 +643,8 @@ function draw(){
   stateAI.lastDrawnWizardStep=step;
   if(!stateAI.open){panel.hidden=true;return}
   panel.hidden=false;
+  bindMobileViewport();
+  syncMobileViewport();
   panel.dir=lang()==="ar"?"rtl":"ltr";
   panel.setAttribute("aria-label",t("title"));
   panel.replaceChildren();
@@ -621,7 +656,7 @@ function draw(){
   clearBtn.onclick=()=>{begin(true);draw()};
   const close=el("button","ttai-icon-btn","×");
   close.type="button";close.setAttribute("aria-label",t("close"));
-  close.onclick=()=>{stateAI.open=false;draw()};
+  close.onclick=()=>{stopVoice();stateAI.open=false;draw()};
   const controls=el("div","ttai-header-controls");controls.append(clearBtn,close);
   head.append(title,controls);panel.append(head);
 
@@ -873,206 +908,44 @@ async function readData(blob){
     reader.readAsDataURL(blob);
   });
 }
-const PDFJS_VERSION = "5.5.207";
-const PDFJS_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@" + PDFJS_VERSION + "/build/pdf.min.mjs";
-const PDFJS_WORKER_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@" + PDFJS_VERSION + "/build/pdf.worker.min.mjs";
-const MAX_RENDERED_PAGES = 5;
-let pdfjsPromise = null;
-async function loadPdfRenderer(){
-  if(!pdfjsPromise){
-    pdfjsPromise = import(PDFJS_URL).then(module=>{
-      module.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
-      return module;
-    }).catch(error=>{
-      pdfjsPromise=null;
-      throw new Error(lang()==="ar"?"تعذر تحميل قارئ PDF. حاول تاني أو ارفع صورة للجدول.":"Couldn't load the PDF renderer. Retry or upload a timetable image.");
-    });
-  }
-  return pdfjsPromise;
-}
-// Never persist student documents. A two-file in-memory LRU avoids repeated
-// PDF rendering on Retry, without cookies, IndexedDB or database uploads.
-const preparedFileCache=new Map();
-const fileKeyCache=new WeakMap();
-const fileBytesCache=new WeakMap();
-async function fileFingerprint(file){
-  if(fileKeyCache.has(file))return fileKeyCache.get(file);
-  const bytes=await file.arrayBuffer();
-  fileBytesCache.set(file,bytes);
-  const hash=await crypto.subtle.digest("SHA-256",bytes);
-  const key=Array.from(new Uint8Array(hash),n=>n.toString(16).padStart(2,"0")).join("");
-  fileKeyCache.set(file,key);return key;
-}
-function extractReadableTextFallback(evidence){
-  // Local fallback is only a SUBJECT PICKER. A visual grid's day/time may
-  // be impossible to reconstruct from text order, so NEVER guess sessions.
-  const found=new Map();
-  const pattern=/\b(?:Mathematics|Maths?|Physics|English|French|Religion|ICT|Chemistry|Biology|Arabic|German|Spanish|History|Geography|Economics|Business|Computer Science|Computer|Science|Statistics|Psychology|Accounting|Art|Music|PE|Digital Marketing)(?:\s*(?:L\s*[12]|Gr(?:ade)?\s*(?:11|12)|G\s*(?:11|12)))?\b/gi;
-  for(const match of String(evidence||"").matchAll(pattern)){
-    const title=match[0].replace(/\s+/g," ").trim();
-    if(!found.has(subjectKey(title)))found.set(subjectKey(title),title);
-  }
-  const footerLessons=[];
-  const DAYS={sun:0,mon:1,tue:2,wed:3,thu:4,fri:5,sat:6};
-  const as24=(clock,period)=>{
-    const bits=clock.split(":").map(Number);
-    if(bits.length!==2||bits[0]<1||bits[0]>12||bits[1]>59)return "";
-    let hour=bits[0]%12;if(period.toLowerCase()==="pm")hour+=12;
-    return String(hour).padStart(2,"0")+":"+String(bits[1]).padStart(2,"0");
-  };
-  for(const raw of String(evidence||"").split("\n").slice(0,750)){
-    const clean=raw.replace(/\bx=-?\d+:/g,"").replace(/\s*\|\s*/g," ").replace(/\s+/g," ");
-    const note=clean.match(/\*\s*([^()]{2,90})\s*\(([^)]{8,140})\)/);
-    if(!note)continue;
-    const title=note[1].trim();
-    const dayWords=[...note[2].matchAll(/\b(sun|mon|tue|wed|thu|fri|sat)(?:day|sday|nesday|rsday|urday)?\b/gi)];
-    const times=[...note[2].matchAll(/\b(\d{1,2}:\d{2})\s*(am|pm)\b/gi)];
-    if(dayWords.length!==1||times.length!==2||!title)continue;
-    const start=as24(times[0][1],times[0][2]),end=as24(times[1][1],times[1][2]);
-    if(!start||!end||end<=start)continue;
-    const day=DAYS[dayWords[0][1].slice(0,3).toLowerCase()];
-    if(day===undefined)continue;
-    const key=subjectKey(title);
-    if(!found.has(key))found.set(key,title);
-    if(!footerLessons.some(x=>x.title===title&&x.day_of_week===day)){
-      footerLessons.push({title,day_of_week:day,start_time:start,end_time:end,
-        location:"",notes:"",category:"Class"});
-    }
-  }
-  return {
-    all_detected_subjects:[...found.values()].slice(0,60),
-    detected_lessons:footerLessons.slice(0,30),
-    ambiguous_items:[wizardText(
-      "The visual AI is unavailable. Grid times are not verified; only explicitly dated footnote lessons may be suggested. Check all entries before saving.",
-      "التحليل البصري غير متاح. أوقات الجدول الرئيسي غير مؤكدة، لكن يمكن قراءة حصص الملاحظات المكتوبة صراحة. راجع كل الحصص قبل الحفظ.")],
-    summary:"Partial local text extraction only; no AI timetable mapping",
-    source:"local-text-fallback"
-  };
-}
-async function prepareVisualPages(file){
-  if(file.type!=="application/pdf"){
-    setPhase(wizardText("Preparing image…","بجهز الصورة…"));
-    return {attachments:[{name:file.name,mimeType:file.type,data:await readData(file)}]};
-  }
-  setPhase(wizardText("Opening PDF…","بفتح ملف الـPDF…"));
-  const pdfjs=await loadPdfRenderer();
-  let doc;
-  try{
-    const sourceBytes=fileBytesCache.get(file)||await file.arrayBuffer();
-    // PDF.js consumes a transferable copy; never give it the fingerprint cache buffer.
-    doc=await pdfjs.getDocument({data:new Uint8Array(sourceBytes.slice(0))}).promise;
-    if(doc.numPages>MAX_RENDERED_PAGES)
-      throw new Error(wizardText(
-        "This PDF has more than five pages. Please split it into sections of five pages.",
-        "الـPDF فيه أكتر من 5 صفحات. قسمه لمجموعات من 5 صفحات."));
-    const result=new Array(doc.numPages);
-    async function onePage(pageNum){
-      if(stateAI.cancelled)throw new Error("Cancelled");
-      const page=await doc.getPage(pageNum);
-      try{
-        const original=page.getViewport({scale:1});
-        // Read text coordinates while rasterization is in flight: neither task
-        // needs the other. The image remains the visual source of truth.
-        const textPromise=(async()=>{
-        const textEvidence=[];
-        // PDF text and image are complementary: images retain the grid;
-        // normalized XY coordinates clarify repeating day headings.
-        try{
-          const content=await page.getTextContent();
-          const positioned=[];
-          for(const item of content.items||[]){
-            if(typeof item.str!=="string"||!item.str.trim()||!item.transform)continue;
-            const point=original.convertToViewportPoint(item.transform[4],item.transform[5]);
-            const x=Math.round(point[0]/original.width*1000);
-            const y=Math.round(point[1]/original.height*1000);
-            if(x>=-20&&x<=1020&&y>=-20&&y<=1020){
-              // PDF.js often combines adjacent visual columns into one text
-              // item (e.g. "Arabic Math" or "ICT L1 Histor"). Split words
-              // into individually positioned evidence tokens before AI review.
-              const raw=item.str.replace(/[\r\n]+/g," ");
-              const parts=[...raw.matchAll(/\S+/g)];
-              const fullWidth=Number(item.width)||0;
-              if(parts.length>1&&fullWidth>0){
-                for(const part of parts){
-                  const offset=part.index/Math.max(raw.length,1)*fullWidth/original.width*1000;
-                  positioned.push({x:Math.round(x+offset),y,text:part[0].slice(0,160)});
-                }
-              }else positioned.push({x,y,text:raw.trim().slice(0,160)});
-            }
-          }
-          positioned.sort((a,b)=>a.y-b.y||a.x-b.x);
-          const lines=[];
-          for(const item of positioned){
-            const last=lines[lines.length-1];
-            if(!last||Math.abs(last.y-item.y)>6)lines.push({y:item.y,parts:[item]});
-            else last.parts.push(item);
-          }
-          for(const line of lines){
-            line.parts.sort((a,b)=>a.x-b.x);
-            textEvidence.push("y="+line.y+" "+
-              line.parts.map(item=>"x="+item.x+":"+item.text).join(" | "));
-          }
-        }catch{ /* Scanned image PDF: visual path still works. */ }
-        return textEvidence.join("\n").slice(0,10000);
-        })();
-        if(stateAI.cancelled)throw new Error("Cancelled");
-        // Keep small images for affordable, quick Workers AI inference.
-        // Two pages at a time balances CPU time and mobile memory.
-        const scale=Math.min(2.2,1400/original.width,1900/original.height);
-        const viewport=page.getViewport({scale});
-        const canvas=document.createElement("canvas");
-        canvas.width=Math.max(1,Math.round(viewport.width));
-        canvas.height=Math.max(1,Math.round(viewport.height));
-        const context=canvas.getContext("2d",{alpha:false});
-        if(!context)throw new Error("Canvas rendering unavailable");
-        try{
-          await page.render({canvasContext:context,viewport}).promise;
-          const blob=await new Promise((resolve,reject)=>canvas.toBlob(
-            result=>result?resolve(result):reject(new Error("Image compression failed")),
-            "image/jpeg",0.72));
-          const data=await readData(blob);
-          result[pageNum-1]={
-            attachment:{name:"page-"+pageNum+".jpg",mimeType:"image/jpeg",data},
-            evidence:"PAGE "+pageNum+" POSITIONED PDF TEXT\n"+await textPromise
-          };
-        }finally{
-          canvas.width=0;canvas.height=0;
-        }
-      }finally{page.cleanup()}
-    }
-    for(let i=1;i<=doc.numPages;i+=2){
-      setPhase(wizardText("Preparing pages ","بجهز الصفحات ")+i+
-        (i+1<=doc.numPages?"–"+(i+1):"")+"/"+doc.numPages+"…");
-      await Promise.all(Array.from({length:Math.min(2,doc.numPages-i+1)},
-        (_,j)=>onePage(i+j)));
-    }
-    return {attachments:result.map(x=>x.attachment),
-      textEvidence:result.map(x=>x.evidence).join("\n\n").slice(0,38000)};
-  }finally{if(doc)await doc.destroy()}
-}
+// Native multimodal upload: send the original PDF/image bytes to Gemini.
+// Attachments stay in memory only; a WeakMap preserves the same payload for Retry.
+const preparedFileCache=new WeakMap();
 async function toData(file){
-  const hash=await fileFingerprint(file);
-  if(preparedFileCache.has(hash)){
-    setPhase(wizardText("Using prepared pages…","بستخدم الصفحات المجهزة…"));
-    return await preparedFileCache.get(hash);
+  if(!file)return {attachments:[]};
+  if(preparedFileCache.has(file)){
+    setPhase(wizardText("Using the original file again…","بستخدم نفس الملف مرة تانية…"));
+    return await preparedFileCache.get(file);
   }
-  const prepared=prepareVisualPages(file);
-  preparedFileCache.set(hash,prepared);
-  while(preparedFileCache.size>2)preparedFileCache.delete(preparedFileCache.keys().next().value);
-  try{return await prepared}
-  catch(error){preparedFileCache.delete(hash);throw error}
-  finally{fileBytesCache.delete(file)}
+  const mimeType=String(file.type||"").toLowerCase();
+  if(!["application/pdf","image/png","image/jpeg","image/webp"].includes(mimeType)){
+    throw new Error(wizardText("Unsupported file type. Use PDF, PNG, JPEG or WebP.","نوع الملف غير مدعوم. استخدم PDF أو PNG أو JPEG أو WebP."));
+  }
+  const pending=(async()=>{
+    setPhase(wizardText("Preparing the original file for Gemini…","بجهز الملف الأصلي لإرساله إلى Gemini…"));
+    const data=await readData(file);
+    if(!data)throw new Error(wizardText("The file could not be read. Choose it again.","تعذرت قراءة الملف. اختره مرة أخرى."));
+    return {attachments:[{
+      name:file.name||"timetable",
+      mimeType,
+      size:file.size||0,
+      data
+    }]};
+  })();
+  preparedFileCache.set(file,pending);
+  try{return await pending}
+  catch(error){preparedFileCache.delete(file);throw error}
 }
 // Keep the chat responsive even if a large PDF or the Edge relay stalls.
 // Supabase supports AbortSignal; Promise.race is a second safety net if
 // a browser/network implementation ignores the abort request.
-const AI_REQUEST_DEADLINE_MS=52000;
-async function invokeWithDeadline(body){
+const AI_REQUEST_DEADLINE_MS=95000;
+async function invokeWithDeadline(body,timerApi={setTimeout:(...args)=>window.setTimeout(...args),clearTimeout:(...args)=>window.clearTimeout(...args)}){
   const controller=new AbortController();
   stateAI.abort=controller;
   let deadline;
   const timeout=new Promise((_,reject)=>{
-    deadline=setTimeout(()=>{
+    deadline=timerApi.setTimeout(()=>{
       // Reject first so an AbortError from the SDK cannot hide our
       // helpful timeout message or cause the UI to remain pending.
       reject(new Error(lang()==="ar"
@@ -1083,11 +956,11 @@ async function invokeWithDeadline(body){
   });
   try{
     return await Promise.race([
-      sb.functions.invoke("timetable-ai-cloudflare",{body,signal:controller.signal}),
+      sb.functions.invoke("timetable-ai",{body,signal:controller.signal}),
       timeout
     ]);
   }finally{
-    clearTimeout(deadline);
+    timerApi.clearTimeout(deadline);
     if(stateAI.abort===controller)stateAI.abort=null;
   }
 }
@@ -1122,6 +995,8 @@ async function submit(text,retrying=false){
       source:stateAI.source,
       extracted:stateAI.source,
       mode:file?"discover":"edit",
+      provider:"gemini",
+      model:TIMETABLE_AI_MODEL,
       history:prior,
       messages:prior
     };
@@ -1178,19 +1053,7 @@ async function submit(text,retrying=false){
     }else{
       stateAI.lastFailed={text,file};
       const safe=String(e?.message||t("error"));
-      const partial=file&&prepared?.textEvidence?
-        extractReadableTextFallback(prepared.textEvidence):null;
-      if(partial?.all_detected_subjects?.length){
-        stateAI.source=partial;
-        stateAI.wizard=null;
-        stateAI.file=file;
-        stateAI.history.push({role:"assistant",text:wizardText(
-          "Visual analysis failed: "+safe+". No timetable was saved. Retry the same PDF.",
-          "فشل التحليل البصري: "+safe+". لم يُحفظ أي جدول. تقدر تعيد المحاولة بنفس الملف."
-        ),isError:true});
-      }else{
-        stateAI.history.push({role:"assistant",text:safe,isError:true});
-      }
+      stateAI.history.push({role:"assistant",text:safe,isError:true});
     }
   }finally{
     stateAI.phase="";stateAI.busy=false;stateAI.abort=null;draw();
@@ -1247,11 +1110,11 @@ function openPanel(){
   begin();
   stateAI.open=true;draw();
   const field=stateAI.panel?.querySelector("textarea");
-  if(field)field.focus();
+  if(field && !window.matchMedia?.("(pointer: coarse)").matches)field.focus();
 }
 function mount(){
   if(!isTimetable()){
-    if(stateAI.open){stateAI.open=false;draw()}
+    if(stateAI.open){stopVoice();stateAI.open=false;draw()}
     return;
   }
   const actions=document.querySelector("#view .tt-head-actions");
@@ -1268,9 +1131,10 @@ function scheduleMount(){
   requestAnimationFrame(()=>{stateAI.scheduled=false;mount()});
 }
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&stateAI.open){stateAI.open=false;draw()}
+  if(e.key==="Escape"&&stateAI.open){stopVoice();stateAI.open=false;draw()}
 });
 function start(){
+  bindMobileViewport();
   const root=document.querySelector("#view")||document.body;
   new MutationObserver(scheduleMount).observe(root,{childList:true});
   scheduleMount();

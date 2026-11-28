@@ -6,7 +6,7 @@ try{
   for(const viewport of [{width:390,height:844},{width:1280,height:820}]){
     const page=await browser.newPage({viewport});
     const errors=[];
-    page.on('pageerror',e=>errors.push(e.message));
+    page.on('pageerror',e=>errors.push({message:e.message,stack:e.stack}));
     await page.setContent('<meta name="viewport" content="width=device-width,initial-scale=1"><main id="view"><div class="tt-head-actions"></div></main>');
     await page.evaluate(()=>{
       window.state={view:'timetable',lang:'en',onboardingComplete:true,timetable:{ready:true,rows:[]}};
@@ -63,7 +63,7 @@ try{
         errors:window.__requests.length,
         panel:document.querySelector('.ttai-panel')?.hidden,
       }));
-      throw new Error('Speech test reply was not rendered: '+JSON.stringify(details)+'; '+error.message);
+      throw new Error('Speech test reply was not rendered: '+JSON.stringify({details,pageErrors:errors})+'; '+error.message);
     }
     const assistantBubble=page.locator('.ttai-bubble.ttai-assistant').last();
     assert.equal((await assistantBubble.textContent()).trim(),'Here is a plan.',

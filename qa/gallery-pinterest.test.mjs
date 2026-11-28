@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const root=process.cwd();
+const script=fs.readFileSync(root+'/scripts/gallery-pinterest-v1.js','utf8');
+const css=fs.readFileSync(root+'/styles/gallery-pinterest-v1.css','utf8');
+const html=fs.readFileSync(root+'/index.html','utf8');
+const migration=fs.readFileSync(root+'/supabase/migrations/20261128120000_gallery_categories.sql','utf8');
+
+new vm.Script(script,{filename:'gallery-pinterest-v1.js'});
+assert.match(html,/styles\/gallery-pinterest-v1\.css\?v=/,'Gallery CSS must be loaded');
+assert.match(html,/scripts\/gallery-pinterest-v1\.js\?v=/,'Gallery script must be loaded');
+assert.match(script,/id:'photograph'/,'Photograph category must exist');
+assert.match(script,/id:'art'/,'Art category must exist');
+assert.match(script,/category:selectedCategory/,'Uploads must save the selected category');
+assert.match(script,/state\.galleryCategory=selectedCategory/,'After upload, the selected gallery must remain active');
+assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===category\)/,'Gallery view must isolate each category');
+assert.match(script,/filter\(item=>\(item\.category\|\|'photograph'\)===activeCategory\)/,'Lightbox navigation must stay within the selected category');
+assert.match(script,/MAX_FILES=20/,'Batch upload limit must remain 20');
+assert.match(script,/\[data-action="new-gallery"\].*newGallery/,'Gallery upload buttons must open the uploader');
+assert.match(script,/\[data-approve-gallery\][\s\S]*moderateGallery/,'Admin approval controls must remain wired');
+assert.match(script,/\[data-feature-gallery\][\s\S]*moderateGallery/,'Admin featured controls must remain wired');
+assert.match(script,/MAX_BYTES=8\*1024\*1024/,'Per-image size limit must remain 8 MB');
+assert.ok(script.includes('loading=') && script.includes('lazy'),'Gallery images must lazy-load');
+assert.match(css,/\.gallery-masonry\{columns:/,'Gallery must use masonry columns');
+assert.match(css,/@media\(max-width:760px\)/,'Tablet layout breakpoint must exist');
+assert.match(css,/@media\(max-width:480px\)/,'Mobile layout breakpoint must exist');
+assert.match(css,/\.gallery-pin img\{display:block;width:100%;height:auto/,'Gallery images must preserve intrinsic aspect ratio');
+assert.match(migration,/add column if not exists category text not null default 'photograph'/i,'Existing rows must migrate safely to Photograph');
+assert.match(migration,/check \(category in \('photograph','art'\)\)/i,'Only the two supported categories should be stored');
+console.log('Gallery Pinterest checks passed.');

@@ -1,0 +1,90 @@
+name: OVH Pinterest Gallery Release
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'supabase/migrations/20261128120000_gallery_categories.sql'
+      - 'scripts/ops/ovh-deploy-pinterest-gallery-v1.py'
+      - 'qa/gallery-pinterest.test.mjs'
+      - '.github/workflows/ovh-pinterest-gallery-release.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gallery-pinterest-v1.js'
+      - 'styles/gallery-pinterest-v1.css'
+      - 'supabase/migrations/20261128120000_gallery_categories.sql'
+      - 'scripts/ops/ovh-deploy-pinterest-gallery-v1.py'
+      - '.github/workflows/ovh-pinterest-gallery-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-pinterest-gallery-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated Gallery implementation
+        run: |
+          set -euo pipefail
+          node --check scripts/gallery-pinterest-v1.js
+          node qa/gallery-pinterest.test.mjs
+          python3 -m py_compile scripts/ops/ovh-deploy-pinterest-gallery-v1.py
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-24.04
+    environment: ovh-staging
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure pinned OVH SSH
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          KEY: ${{ secrets.OVH_SSH_KEY }}
+          KNOWN: ${{ secrets.OVH_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
+          install -d -m 700 ~/.ssh
+          printf '%s\\n' "$KEY" > ~/.ssh/id_ed25519
+          printf '%s\\n' "$KNOWN" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Stage Gallery-only deployment bundle
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          target="ubuntu@$HOST"
+          stage="/home/ubuntu/neis-backups/gallery-pinterest-$RUN_ID"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$target" "install -d -m 700 /home/ubuntu/neis-backups/locks '$stage'"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes scripts/gallery-pinterest-v1.js styles/gallery-pinterest-v1.css supabase/migrations/20261128120000_gallery_categories.sql scripts/ops/ovh-deploy-pinterest-gallery-v1.py "$target:$stage/"
+      - name: Apply additive DB migration and atomically activate frontend
+        env:
+          HOST: ${{ secrets.OVH_HOST }}
+          RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" "flock -w 600 /home/ubuntu/neis-backups/locks/frontend-release.lock env NEIS_GALLERY_RUN_ID='$RUN_ID' python3 -" < scripts/ops/ovh-deploy-pinterest-gallery-v1.py
+      - name: Verify public Gallery app shell
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          base='https://neiscircle.site/'
+          req=urllib.request.Request(base,headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=20) as response:
+              html=response.read().decode('utf8','replace')
+              assert response.status==200
+          assert 'gallery-pinterest-v1.js?v=gallery-' in html
+          assert 'gallery-pinterest-v1.css?v=gallery-' in html
+          print('PUBLIC_GALLERY_APP_SHELL=PASS')
+          PY
