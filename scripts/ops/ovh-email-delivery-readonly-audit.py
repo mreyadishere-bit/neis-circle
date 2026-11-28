@@ -82,7 +82,11 @@ def main():
     keys=("GOTRUE_SMTP_HOST","GOTRUE_SMTP_PORT","GOTRUE_SMTP_USER","GOTRUE_SMTP_PASS",
           "GOTRUE_SMTP_ADMIN_EMAIL","GOTRUE_SMTP_SENDER_NAME")
     for name in keys:print("ACTIVE_"+name+"_NONEMPTY="+("YES" if auth.get(name) else "NO"))
-    print("ACTIVE_SMTP_HOST_EXPECTED="+("YES" if auth.get("GOTRUE_SMTP_HOST")=="smtp-relay.brevo.com" else "NO"))
+    active_host=str(auth.get("GOTRUE_SMTP_HOST") or "")
+    active_port=str(auth.get("GOTRUE_SMTP_PORT") or "")
+    print("ACTIVE_SMTP_HOST="+(active_host if re.fullmatch(r"[A-Za-z0-9.-]{1,253}",active_host) else "INVALID_FORMAT"))
+    print("ACTIVE_SMTP_PORT="+(active_port if active_port.isdigit() else "INVALID_FORMAT"))
+    print("ACTIVE_SMTP_HOST_EXPECTED="+("YES" if active_host=="smtp-relay.brevo.com" else "NO"))
     actual={}
     if all(auth.get(k) for k in ("GOTRUE_SMTP_HOST","GOTRUE_SMTP_PORT","GOTRUE_SMTP_USER","GOTRUE_SMTP_PASS")):
         actual=smtp_check(auth["GOTRUE_SMTP_HOST"],auth["GOTRUE_SMTP_PORT"],auth["GOTRUE_SMTP_USER"],auth["GOTRUE_SMTP_PASS"])
@@ -158,6 +162,17 @@ def main():
             dstatus,domain_data=api_get(api_key,"senders/domains/"+domain)
             print("BREVO_SENDER_DOMAIN_HTTP="+str(dstatus))
             if dstatus==200:
+                records=domain_data.get("dns_records") or domain_data.get("dnsRecords") or {}
+                for record_name,record in records.items() if isinstance(records,dict) else []:
+                    if isinstance(record,dict):
+                        host_name=record.get("host_name") or record.get("hostName") or record.get("name") or ""
+                        record_type=record.get("type") or "TXT"
+                        value=record.get("value") or ""
+                        status_flag=record.get("status")
+                        if host_name:print("BREVO_DNS_RECORD_"+str(record_name).upper()+"_HOST="+str(host_name))
+                        if record_type:print("BREVO_DNS_RECORD_"+str(record_name).upper()+"_TYPE="+str(record_type))
+                        if value:print("BREVO_DNS_RECORD_"+str(record_name).upper()+"_VALUE="+str(value))
+                        print("BREVO_DNS_RECORD_"+str(record_name).upper()+"_PUBLISHED="+str(bool(status_flag)).upper())
                 flags=[]
                 def walk(obj,prefix=""):
                     if isinstance(obj,dict):
