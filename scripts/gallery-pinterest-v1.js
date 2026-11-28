@@ -41,7 +41,8 @@
   };
 
   function openGalleryImage(id){
-    const visible=(state.gallery||[]).filter(canSee);
+    const activeCategory=state.galleryCategory==='art'?'art':'photograph';
+    const visible=(state.gallery||[]).filter(canSee).filter(item=>(item.category||'photograph')===activeCategory);
     let index=visible.findIndex(item=>String(item.id)===String(id));
     if(index<0)return;
     const show=()=>{
