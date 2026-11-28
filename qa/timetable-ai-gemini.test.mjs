@@ -499,7 +499,7 @@ assert.ok(coreSource.includes("url.hostname!=='supabase.neiscircle.site'"), '01-
   const port = server.address().port;
 
   try {
-    const token = makeValidJwt();
+    const token = VALID_JWT;
     let savedDbRows = null;
     const modalElement = {
       innerHTML: '',
