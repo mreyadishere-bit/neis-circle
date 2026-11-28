@@ -146,14 +146,14 @@ function message(body,role){
   const text=String(body??"");
   // Render only the supported strong-text marker with DOM nodes. Do not
   // inject model/user content through innerHTML.
-  const strongPattern=/\\*\\*([^*]+)\\*\\*/g;
-  let cursor=0,match;
-  while((match=strongPattern.exec(text))){
-    if(match.index>cursor)p.append(document.createTextNode(text.slice(cursor,match.index)));
-    p.append(el("strong",null,match[1]));
-    cursor=strongPattern.lastIndex;
+  const segments=text.split("**");
+  for(let i=0;i<segments.length;i++){
+    const unmatched=i%2===1&&i===segments.length-1;
+    const value=(unmatched?"**":"")+segments[i];
+    if(!value)continue;
+    if(i%2===1&&!unmatched)p.append(el("strong",null,value));
+    else p.append(document.createTextNode(value));
   }
-  if(cursor<text.length)p.append(document.createTextNode(text.slice(cursor)));
   return p;
 }
 function dayName(n){
