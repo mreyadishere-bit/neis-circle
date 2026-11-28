@@ -8,6 +8,8 @@
   const MAX_FILES=20;
   const MAX_BYTES=8*1024*1024;
   state.galleryCategory=state.galleryCategory||'photograph';
+  state.galleryUploaderFilter=state.galleryUploaderFilter==='mine'?'mine':'everyone';
+  state.gallerySortOrder=state.gallerySortOrder==='oldest'?'oldest':'latest';
   const categories=[{id:'photograph',en:'Photograph',ar:'تصوير فوتوغرافي',desc:'Photography, places, people and moments.'},{id:'art',en:'Art',ar:'فن',desc:'Illustrations, sketches, paintings and creative work.'}];
   const categoryLabel=id=>{const item=categories.find(x=>x.id===id)||categories[0];return t(item.en,item.ar)};
   const t=(en,ar)=>state.lang==='ar'?ar:en;
@@ -26,6 +28,31 @@
     }
   }
 
+  const MAIN_ADMIN_ID='25b556a3-ec6f-49e7-ac6c-1b09720e3bfd';
+
+  function galleryVisibleItems(category){
+    let items=(state.gallery||[]).filter(canSee).filter(item=>(item.category||'photograph')===category);
+    if(state.galleryUploaderFilter==='mine')items=items.filter(isMine);
+    const direction=state.gallerySortOrder==='oldest'?1:-1;
+    return items.slice().sort((a,b)=>{
+      const aTime=Date.parse(a.created_at||'')||0;
+      const bTime=Date.parse(b.created_at||'')||0;
+      return (aTime-bTime)*direction;
+    });
+  }
+
+  function formatGalleryDate(value){
+    if(!value)return '';
+    const date=new Date(value);
+    if(Number.isNaN(date.getTime()))return '';
+    try{return new Intl.DateTimeFormat(state.lang==='ar'?'ar-EG':'en-GB',{day:'numeric',month:'short',year:'numeric'}).format(date)}
+    catch(_){return date.toLocaleDateString()}
+  }
+
+  function canDeleteGallery(){
+    return !!(state.isAdmin&&authUser&&String(authUser.id)===MAIN_ADMIN_ID);
+  }
+
   function galleryCard(item){
     const author=Array.isArray(item.author)?(item.author[0]||{}):(item.author||{});
     const authorName=String(author.full_name||author.username||t('NEIS student','طالب NEIS')).trim();
@@ -40,39 +67,45 @@
     if(branch)details.push('<span>'+esc(branch)+'</span>');
     if(grade)details.push('<span>'+esc(grade)+'</span>');
     if(dateLabel)details.push('<time datetime="'+esc(item.created_at||'')+'">'+esc(dateLabel)+'</time>');
-    const metadata='<div class="gallery-pin-meta">'+
-      '<b class="gallery-pin-meta-name">'+esc(authorName)+'</b>'+
+    const metadata='<div class="gallery-pin-meta"><b class="gallery-pin-meta-name">'+esc(authorName)+'</b>'+
       (details.length?'<div class="gallery-pin-meta-details">'+details.join('<span class="gallery-pin-meta-separator" aria-hidden="true">·</span>')+'</div>':'')+
       '</div>';
     const actions=state.isAdmin
       ? '<div class="gallery-pin-tools">'+
-        (!item.approved?'<button type="button" data-approve-gallery="'+item.id+'" aria-label="Approve image">Approve</button>':'')+
-        '<button type="button" data-feature-gallery="'+item.id+'">'+(item.featured?'Unfeature':'Feature')+'</button>'+
+        (!item.approved?'<button type="button" data-approve-gallery="'+item.id+'" aria-label="Approve image">'+t('Approve','موافقة')+'</button>':'')+
+        (canDeleteGallery()?'<button type="button" class="gallery-delete-button" data-delete-gallery="'+item.id+'" aria-label="Delete image">'+t('Delete','حذف')+'</button>':'')+
         '</div>'
       : '';
     return '<article class="gallery-pin" data-gallery-pin="'+item.id+'">'+
       '<button type="button" class="gallery-pin-open" data-gallery-open="'+item.id+'" aria-label="Open image">'+
       '<img src="'+esc(item.image_url)+'" alt="" loading="lazy" decoding="async"></button>'+
-      metadata+
-      (item.featured?'<span class="gallery-pin-featured">Featured</span>':'')+actions+
-      '</article>';
+      metadata+actions+'</article>';
   }
 
   gallery=function(){
     const category=state.galleryCategory==='art'?'art':'photograph';
-    const items=(state.gallery||[]).filter(canSee).filter(item=>(item.category||'photograph')===category);
+    const items=galleryVisibleItems(category);
     const tabs=categories.map(item=>'<button type="button" class="gallery-category-tab '+(category===item.id?'active':'')+'" data-gallery-category="'+item.id+'"><b>'+t(item.en,item.ar)+'</b><span>'+t(item.desc,item.id==='art'?'رسومات ولوحات وأعمال إبداعية.':'صور فوتوغرافية وأماكن ولحظات.')+'</span></button>').join('');
+    const controls='<div class="gallery-filter-controls">'+
+      '<label class="gallery-control"><span>'+t('Filter','تصفية')+'</span><select data-gallery-uploader-filter aria-label="'+t('Filter gallery images','تصفية صور المعرض')+'">'+
+        '<option value="everyone" '+(state.galleryUploaderFilter==='everyone'?'selected':'')+'>'+t('Everyone','الجميع')+'</option>'+
+        '<option value="mine" '+(state.galleryUploaderFilter==='mine'?'selected':'')+'>'+t('My uploads','صوري')+'</option>'+
+      '</select></label>'+
+      '<label class="gallery-control"><span>'+t('Sort by','ترتيب حسب')+'</span><select data-gallery-sort aria-label="'+t('Sort gallery images','ترتيب صور المعرض')+'">'+
+        '<option value="latest" '+(state.gallerySortOrder==='latest'?'selected':'')+'>'+t('Latest upload','أحدث رفع')+'</option>'+
+        '<option value="oldest" '+(state.gallerySortOrder==='oldest'?'selected':'')+'>'+t('Oldest upload','أقدم رفع')+'</option>'+
+      '</select></label></div>';
     return pageTitle('Gallery','A visual collection shared by the NEIS community.',
       '<button class="primary" data-action="new-gallery">＋ '+t('Upload images','رفع الصور')+'</button>')+
       '<div class="gallery-category-switch" role="tablist" aria-label="Gallery category">'+tabs+'</div>'+
-      '<div class="gallery-toolbar"><span class="gallery-category-heading">'+categoryLabel(category)+'</span><span class="gallery-count">'+items.length+' '+t('images','صور')+'</span></div>'+
+      '<div class="gallery-toolbar">'+controls+'<span class="gallery-count">'+items.length+' '+t('images','صور')+'</span></div>'+
       (items.length?'<div class="gallery-masonry">'+items.map(galleryCard).join('')+'</div>':
-      '<div class="gallery-empty"><div class="gallery-empty-icon">＋</div><b>'+t('This gallery is waiting for its first image','هذا المعرض بانتظار أول صورة')+'</b><span>'+t('Upload images here. No titles, captions or tags needed.','ارفع الصور هنا مباشرة، من غير عناوين أو أوصاف أو تصنيفات.')+'</span><button class="primary" data-action="new-gallery">'+t('Choose images','اختر الصور')+'</button></div>');
+      '<div class="gallery-empty"><div class="gallery-empty-icon">＋</div><b>'+t('No images found','لا توجد صور')+'</b><span>'+t('Try another filter or upload the first image.','جرّب فلترًا آخر أو ارفع أول صورة.')+'</span><button class="primary" data-action="new-gallery">'+t('Upload images','رفع الصور')+'</button></div>');
   };
 
   function openGalleryImage(id){
     const activeCategory=state.galleryCategory==='art'?'art':'photograph';
-    const visible=(state.gallery||[]).filter(canSee).filter(item=>(item.category||'photograph')===activeCategory);
+    const visible=galleryVisibleItems(activeCategory);
     let index=visible.findIndex(item=>String(item.id)===String(id));
     if(index<0)return;
     const show=()=>{
@@ -81,7 +114,9 @@
         '<div class="gallery-lightbox-top"><span>'+(index+1)+' / '+visible.length+'</span><button type="button" class="close" data-close aria-label="Close">×</button></div>'+
         '<div class="gallery-lightbox-stage"><button type="button" data-gallery-prev aria-label="Previous image" '+(index===0?'disabled':'')+'>‹</button>'+
         '<img src="'+esc(item.image_url)+'" alt="" decoding="async">'+
-        '<button type="button" data-gallery-next aria-label="Next image" '+(index===visible.length-1?'disabled':'')+'>›</button></div></div>',true);
+        '<button type="button" data-gallery-next aria-label="Next image" '+(index===visible.length-1?'disabled':'')+'>›</button></div>'+
+        (canDeleteGallery()?'<div class="gallery-lightbox-actions"><button type="button" class="gallery-delete-button" data-delete-gallery-modal="'+item.id+'">'+t('Delete image','حذف الصورة')+'</button></div>':'')+
+        '</div>',true);
       const prev=document.querySelector('[data-gallery-prev]');
       const next=document.querySelector('[data-gallery-next]');
       const deleteButton=document.querySelector('[data-delete-gallery-modal]');
@@ -150,24 +185,96 @@
     };
   }
 
+  function galleryStoragePath(imageUrl){
+    try{
+      const url=new URL(String(imageUrl||''));
+      const marker='/storage/v1/object/public/community-media/';
+      const index=url.pathname.indexOf(marker);
+      if(index<0)return '';
+      const encoded=url.pathname.slice(index+marker.length);
+      if(!encoded)return '';
+      return encoded.split('/').map(segment=>decodeURIComponent(segment)).join('/');
+    }catch(_){return ''}
+  }
+
+  async function deleteGalleryImage(id){
+    if(!canDeleteGallery()||!sb)return;
+    const item=(state.gallery||[]).find(row=>String(row.id)===String(id));
+    if(!item)return;
+    const confirmed=window.confirm(t(
+      'Delete this image permanently from the Gallery? This cannot be undone.',
+      'هل تريد حذف هذه الصورة نهائيًا من المعرض؟ لا يمكن التراجع عن هذا الإجراء.'
+    ));
+    if(!confirmed)return;
+
+    const safeId=String(id).replace(/[^0-9]/g,'');
+    const buttons=Array.from(document.querySelectorAll('[data-delete-gallery="'+safeId+'"],[data-delete-gallery-modal="'+safeId+'"]'));
+    buttons.forEach(button=>{button.disabled=true;button.textContent=t('Deleting…','جارٍ الحذف…')});
+
+    try{
+      const {data,error}=await sb.rpc('admin_delete_moderation_content',{
+        content_type_input:'gallery',
+        content_id_input:String(id)
+      });
+      if(error)throw error;
+      if(data!==true)throw new Error(t('The image was not found or was already deleted.','لم يتم العثور على الصورة أو أنها حُذفت بالفعل.'));
+
+      state.gallery=(state.gallery||[]).filter(row=>String(row.id)!==String(id));
+      window.NEISSecondaryData?.invalidate?.('gallery');
+      closeModal();
+
+      const path=galleryStoragePath(item.image_url);
+      let cleanupError=null;
+      if(path){
+        const {error:storageError}=await sb.storage.from('community-media').remove([path]);
+        if(storageError)cleanupError=storageError;
+      }else{
+        cleanupError=new Error('Storage URL was not a recognized community-media public URL');
+      }
+
+      try{
+        if(window.NEISSecondaryData)await window.NEISSecondaryData.loadGallery({force:true,useCache:false});
+      }catch(loadError){
+        console.warn('[NEIS gallery] refresh after delete failed',loadError);
+      }
+      render();
+      if(cleanupError){
+        console.warn('[NEIS gallery] database row removed but Storage cleanup failed',cleanupError);
+        toast(t('Image removed from the Gallery. Storage cleanup needs attention.','تم حذف الصورة من المعرض، لكن تنظيف ملف التخزين يحتاج إلى مراجعة.'));
+      }else{
+        toast(t('Image deleted from the Gallery.','تم حذف الصورة من المعرض.'));
+      }
+    }catch(error){
+      console.error('[NEIS gallery delete]',error);
+      buttons.forEach(button=>{button.disabled=false;button.textContent=t('Delete','حذف')});
+      toast(t('Could not delete this image: ','تعذر حذف الصورة: ')+String(error?.message||error).slice(0,170));
+    }
+  }
+
   const previousBind=bindDynamic;
   bindDynamic=function(){
     previousBind();
     document.querySelectorAll('[data-action="new-gallery"]').forEach(button=>{button.onclick=newGallery;});
     document.querySelectorAll('[data-gallery-category]').forEach(button=>{button.onclick=()=>{state.galleryCategory=button.dataset.galleryCategory==='art'?'art':'photograph';render()}});
+    document.querySelectorAll('[data-gallery-uploader-filter]').forEach(select=>{
+      select.onchange=()=>{state.galleryUploaderFilter=select.value==='mine'?'mine':'everyone';render()};
+    });
+    document.querySelectorAll('[data-gallery-sort]').forEach(select=>{
+      select.onchange=()=>{state.gallerySortOrder=select.value==='oldest'?'oldest':'latest';render()};
+    });
     document.querySelectorAll('[data-gallery-open]').forEach(button=>{
       button.onclick=()=>openGalleryImage(button.dataset.galleryOpen);
     });
     document.querySelectorAll('[data-approve-gallery]').forEach(button=>{
       button.onclick=()=>window.moderateGallery?.(button.dataset.approveGallery,{approved:true});
     });
-    document.querySelectorAll('[data-feature-gallery]').forEach(button=>{
-      button.onclick=()=>{
-        const item=(state.gallery||[]).find(row=>String(row.id)===String(button.dataset.featureGallery));
-        if(item)window.moderateGallery?.(item.id,{featured:!item.featured});
-      };
+    document.querySelectorAll('[data-delete-gallery]').forEach(button=>{
+      button.onclick=()=>deleteGalleryImage(button.dataset.deleteGallery);
+    });
+    document.querySelectorAll('[data-delete-gallery-modal]').forEach(button=>{
+      button.onclick=()=>deleteGalleryImage(button.dataset.deleteGalleryModal);
     });
   };
   window.newGallery=newGallery;
-  window.NEISGalleryPinterest={version:'1.2.0',openImage:openGalleryImage};
+  window.NEISGalleryPinterest={version:'1.3.0',openImage:openGalleryImage,deleteImage:deleteGalleryImage};
 })();
