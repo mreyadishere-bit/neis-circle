@@ -62,9 +62,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Configure pinned OVH SSH
         env:
-          HOST: @${ secrets.OVH_HOST }}
-          KEY: @${ secrets.OVH_SSH_KEY }}
-          KNOWN: @${ secrets.OVH_SSH_KNOWN_HOSTS }}
+          HOST: ${ secrets.OVH_HOST }}
+          KEY: ${ secrets.OVH_SSH_KEY }}
+          KNOWN: ${ secrets.OVH_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           test -n "$HOST" && test -n "$KEY" && test -n "$KNOWN"
@@ -74,8 +74,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Stage private migration and isolated admin UI
         env:
-          HOST: @${ secrets.OVH_HOST }}
-          RUN_ID: @${ github.run_id }}-@${ github.run_attempt }}
+          HOST: ${ secrets.OVH_HOST }}
+          RUN_ID: ${ github.run_id }}-${ github.run_attempt }}
         run: |
           set -euo pipefail
           target="ubuntu@$HOST"
@@ -89,8 +89,8 @@ jobs:
             scripts/ops/ovh-deploy-main-admin-gallery-storage.py "$target:$stage/deploy.py"
       - name: Apply protected storage-size RPC and activate frontend release
         env:
-          HOST: @${ secrets.OVH_HOST }}
-          RUN_ID: @${ github.run_id }}-@${ github.run_attempt }}
+          HOST: ${ secrets.OVH_HOST }}
+          RUN_ID: ${ github.run_id }}-${ github.run_attempt }}
         run: |
           set -euo pipefail
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "ubuntu@$HOST" \
