@@ -929,12 +929,12 @@ async function toData(file){
 // Supabase supports AbortSignal; Promise.race is a second safety net if
 // a browser/network implementation ignores the abort request.
 const AI_REQUEST_DEADLINE_MS=95000;
-async function invokeWithDeadline(body){
+async function invokeWithDeadline(body,timerApi={setTimeout,clearTimeout}){
   const controller=new AbortController();
   stateAI.abort=controller;
   let deadline;
   const timeout=new Promise((_,reject)=>{
-    deadline=setTimeout(()=>{
+    deadline=timerApi.setTimeout(()=>{
       // Reject first so an AbortError from the SDK cannot hide our
       // helpful timeout message or cause the UI to remain pending.
       reject(new Error(lang()==="ar"
@@ -949,7 +949,7 @@ async function invokeWithDeadline(body){
       timeout
     ]);
   }finally{
-    clearTimeout(deadline);
+    timerApi.clearTimeout(deadline);
     if(stateAI.abort===controller)stateAI.abort=null;
   }
 }
