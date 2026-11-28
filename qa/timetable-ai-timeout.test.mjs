@@ -20,12 +20,12 @@ assert.match(edge,/Date\.now\(\) - startedAt >= 9000/,'late errors must not laun
 assert.match(edge,/fallback \|\| Date\.now\(\)/,'fallback must never retry recursively');
 
 async function runScenario({language='en',network='hang'}){
-  let pendingTimeout=null, cleared=false, capturedSignal=null;
+  const timerState={callback:null,cleared:false};
+  let capturedSignal=null;
   const context={
     lang:()=>language,
     AbortController,
-    setTimeout:(callback)=>{pendingTimeout=callback;return 1},
-    clearTimeout:()=>{cleared=true},
+    timerState,
     sb:{functions:{invoke:(name,opts)=>{
       assert.equal(name,'timetable-ai');
       capturedSignal=opts.signal;
@@ -34,11 +34,19 @@ async function runScenario({language='en',network='hang'}){
     }}},
   };
   vm.createContext(context);
+  // Install the fake clock inside the VM global itself. This avoids relying on
+  // cross-context global timer lookup and lets the test trigger expiry exactly.
+  vm.runInContext(
+    'globalThis.setTimeout=(callback)=>{timerState.callback=callback;return 1};' +
+    'globalThis.clearTimeout=()=>{timerState.cleared=true};',
+    context
+  );
   vm.runInContext(helper+';globalThis.invokeTest=invokeWithDeadline;',context);
   const promise=context.invokeTest({message:'Physics L2'});
   if(network==='hang'){
-    assert.equal(typeof pendingTimeout,'function');
-    pendingTimeout();
+    const timeoutCallback=context.timerState.callback;
+    assert.equal(typeof timeoutCallback,'function','fake clock must capture timeout callback');
+    timeoutCallback();
     await assert.rejects(promise,new RegExp(language==='ar'?'استغرق':'timed out'));
     assert.equal(capturedSignal.aborted,true,'fetch must be aborted');
   }else{
@@ -46,7 +54,7 @@ async function runScenario({language='en',network='hang'}){
     assert.equal(result.data.reply,'OK');
     assert.equal(capturedSignal.aborted,false);
   }
-  assert.equal(cleared,true,'timer must be cleared');
+  assert.equal(context.timerState.cleared,true,'timer must be cleared');
 }
 await runScenario({network:'hang'});
 await runScenario({language:'ar',network:'hang'});
